@@ -1,5 +1,5 @@
 import { BW_TEMPLATE, CostRecoverySettings, missingConfiguration, VOKEFW_VEHICLE_RATES } from './cost-recovery.js';
-import { billableHours, cleanLocation, missingReasons, paidOf, totalOf, vehicleRateOn } from './calculation.js';
+import { billableHours, cleanLocation, missingReasons, paidOf, parseAmount, refundDueOf, totalOf, vehicleRateOn } from './calculation.js';
 
 const t = (minutes: number) => new Date(Date.UTC(2026, 0, 1, 10, minutes)).toISOString();
 
@@ -45,5 +45,30 @@ describe('cost recovery calculation', () => {
     expect(empty).toMatchObject({ offenses: [], vehicleRates: [], defaultLegalBasis: '', regulation: '', remedy: '' });
     expect(missingConfiguration(empty)).toEqual(['offenses', 'defaultLegalBasis', 'regulation', 'remedy']);
     expect(missingConfiguration(CostRecoverySettings.parse(BW_TEMPLATE))).toEqual([]);
+  });
+
+  it('reads amounts of payment files in German and international notation', () => {
+    expect(parseAmount('1.000')).toBe(1000);
+    expect(parseAmount('1.234,50 €')).toBe(1234.5);
+    expect(parseAmount('1234,5')).toBe(1234.5);
+    expect(parseAmount('100,00')).toBe(100);
+    expect(parseAmount('1234.50')).toBe(1234.5);
+    expect(parseAmount('1,234.50')).toBe(1234.5);
+    expect(parseAmount('12.5')).toBe(12.5);
+    expect(parseAmount('2.000.000')).toBe(2000000);
+    expect(parseAmount('abc')).toBeNull();
+    expect(parseAmount('1.2.3,4')).toBe(123.4);
+  });
+
+  it('refunds overpayments, and everything paid on a cancelled notice', () => {
+    const payments = [{ amount: 120, reversal: null }];
+    const positions = [{ amount: 100 }];
+    expect(refundDueOf({ status: 'paid', positions, payments })).toBe(20);
+    expect(refundDueOf({ status: 'handed-over', positions, payments: [{ amount: 50, reversal: null }] })).toBe(0);
+    expect(refundDueOf({ status: 'cancelled', positions, payments })).toBe(120);
+    // Replaced by an amendment: the payments went over to it.
+    expect(refundDueOf({ status: 'amended', positions, payments })).toBe(0);
+    // A refund recorded as negative payment settles it.
+    expect(refundDueOf({ status: 'paid', positions, payments: [...payments, { amount: -20, reversal: null }] })).toBe(0);
   });
 });

@@ -9,7 +9,7 @@ import { DataTable, Panel } from '@forga/web-ui';
 import { keys } from '../api';
 import { Amount, ItemLabel } from '../parts';
 
-/** "Mein Bereich": own compensation of a year, open and paid out (extension point `core.me.sections`). */
+/** "Mein Bereich": own compensation of a year, open, settled ("abgerechnet") and paid out (extension point `core.me.sections`). */
 export function MyCompensation() {
   const { t, i18n } = useTranslation('compensation');
   const [thisYear] = useState(() => new Date().getFullYear());
@@ -20,7 +20,7 @@ export function MyCompensation() {
       title={t('my.title')}
       aside={
         <Group gap="md">
-          {data && <Text size="sm">{t('my.totals', { open: formatMoney(data.open, i18n.language), paid: formatMoney(data.paid, i18n.language) })}</Text>}
+          {data && <Text size="sm">{t('my.totals', { open: formatMoney(data.open, i18n.language), settled: formatMoney(data.settled, i18n.language), paid: formatMoney(data.paid, i18n.language) })}</Text>}
           <Select aria-label={t('functions.yearLabel')} w={100} size="xs" data={[0, 1, 2, 3].map((n) => String(thisYear - n))} value={year} onChange={(v) => v && setYear(v)} allowDeselect={false} />
         </Group>
       }
@@ -34,7 +34,7 @@ export function MyCompensation() {
           { key: 'date', header: t('items.date'), render: (i) => formatDate(i.date, i18n.language) },
           { key: 'label', header: t('items.label'), render: (i) => <ItemLabel item={i} /> },
           { key: 'amount', header: t('items.amount'), align: 'right', render: (i) => <Amount item={i} /> },
-          { key: 'status', header: t('person.status'), render: (i) => t(i.paidOut ? 'my.paid' : 'my.open') },
+          { key: 'status', header: t('person.status'), render: (i) => t(`my.states.${i.state}`) },
         ]}
       />
     </Panel>

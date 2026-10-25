@@ -83,11 +83,17 @@ export const DEFAULT_COURSE_ALLOWANCES: CourseAllowance[] = [
 export const HouseholdRate = z.object({ validFrom: date, amount: money.min(0) });
 export type HouseholdRate = z.infer<typeof HouseholdRate>;
 
+/** Statuses of the person file whose attendance at training sessions is compensated (statute). */
+export const PaidStatus = z.enum(['probation', 'active', 'passive', 'youth', 'veterans']);
+export type PaidStatus = z.infer<typeof PaidStatus>;
+
 /** Settings section `compensation.general`. The incident report computes its amounts with `incidentRates` while the module is active. */
 export const CompensationSettings = z.object({
   /** Statute values start empty; the sample statute is only taken over explicitly (`SAMPLE_STATUTE`). */
   trainingRates: z.array(TrainingRate).default([]),
   trainingRounding: Rounding.default('started-hour'),
+  /** Statuses of the persons whose training attendance is compensated; youth members only when the statute says so. */
+  paidStatuses: z.array(PaidStatus).default(['active', 'probation']),
   /** Hourly rates for incidents; while empty, the incident reports compute with their own settings. */
   incidentRates: z.array(IncidentRate).default([]),
   incidentRounding: Rounding.default('started-hour'),
@@ -187,8 +193,15 @@ export type AmountsInput = z.input<typeof AmountsInput>;
 export const CloseInput = z.object({ acceptMissingIban: z.boolean().default(false) });
 export type CloseInput = z.input<typeof CloseInput>;
 
-/** "Meine Entschädigung": the own items of a year, open and paid out. */
-export const MyCompensation = z.object({ year: z.number(), items: z.array(Item.extend({ paidOut: z.boolean() })), open: z.number(), paid: z.number() });
+/**
+ * State of an own item: `open` (in no closed run), `settled` ("abgerechnet": in a closed run, not transferred yet, also
+ * when the payout is still due another way), `paid-out` (run paid and transferred, or the other payout confirmed).
+ */
+export const MyItemState = z.enum(['open', 'settled', 'paid-out']);
+export type MyItemState = z.infer<typeof MyItemState>;
+
+/** "Meine Entschädigung": the own items of a year with their state and the totals per state. */
+export const MyCompensation = z.object({ year: z.number(), items: z.array(Item.extend({ state: MyItemState })), open: z.number(), settled: z.number(), paid: z.number() });
 export type MyCompensation = z.infer<typeof MyCompensation>;
 
 export const ManualItemInput = z.object({
@@ -213,7 +226,7 @@ export type RunInput = z.input<typeof RunInput>;
 
 export const ProblemCode = z.enum([
   'amount-missing', 'time-missing', 'working-hours-conflict', 'duplicate', 'overlap', 'no-iban', 'max-holders', 'negative-total', 'report-not-released',
-  'refreshment', 'multi-day', 'above-day-maximum',
+  'refreshment', 'multi-day', 'above-day-maximum', 'other-payment',
 ]);
 export type ProblemCode = z.infer<typeof ProblemCode>;
 
@@ -238,6 +251,18 @@ export const PersonTotal = z.object({
 });
 export type PersonTotal = z.infer<typeof PersonTotal>;
 
+/** A payout of a run that is not in the transfer files (payee without valid IBAN, confirmed when closing). */
+export const ManualPayout = z.object({
+  /** Person ID, or `employer-…` for loss of earnings assigned to an employer. */
+  key: z.string(),
+  name: z.string(),
+  personIds: z.array(z.string()),
+  amount: z.number(),
+  paidAt: z.string().nullable(),
+  paidBy: z.string().nullable(),
+});
+export type ManualPayout = z.infer<typeof ManualPayout>;
+
 export const Run = z.object({
   id: z.uuid(),
   number: z.string(),
@@ -250,6 +275,8 @@ export const Run = z.object({
   closedBy: z.string().nullable(),
   /** Persons without valid IBAN confirmed when closing; they are left out of the transfer files. */
   withoutIban: z.array(z.string()),
+  /** Payouts of the payees confirmed without IBAN: paid another way, open until marked as paid. */
+  manualPayouts: z.array(ManualPayout),
   /** Factual approval ("sachlich richtig") of the closed run. */
   approvedAt: z.string().nullable(),
   approvedBy: z.string().nullable(),

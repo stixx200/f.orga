@@ -10,6 +10,7 @@ export const COST_RECOVERY_MANIFEST = {
     { id: 'cost-recovery.read', name: { de: 'Kostenbescheide lesen', en: 'Read cost notices' }, scope: 'brigade' },
     { id: 'cost-recovery.write', name: { de: 'Kostenbescheide bearbeiten', en: 'Edit cost notices' }, scope: 'brigade' },
     { id: 'cost-recovery.issue', name: { de: 'Kostenbescheide erlassen', en: 'Issue cost notices' }, scope: 'brigade' },
+    { id: 'cost-recovery.refund', name: { de: 'Erstattungen von Überzahlungen', en: 'Refunds of overpayments' }, scope: 'brigade' },
     { id: 'cost-recovery.settings.manage', name: { de: 'Satztabellen und Textbausteine', en: 'Rate tables and text blocks' }, scope: 'brigade' },
   ],
   navigation: [

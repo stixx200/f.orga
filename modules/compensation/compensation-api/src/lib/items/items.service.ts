@@ -1,8 +1,8 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { type AuthenticatedUser, berlinDate, DomainEvents, SettingsService } from '@forga/core-api';
-import { billableHours, CompensationSettings, incidentPayout, type CompensationStatute, type IncidentRate, type Item, ItemAmountInput, type ItemKind, type ItemSource, ManualItemInput, type MyCompensation, round2, type Rounding, trainingRateOn } from '@forga/compensation-contracts';
-import { type DutyChangedEvent, INCIDENTS_EVENTS, IncidentSettings, type ReportReleasedEvent } from '@forga/incidents-contracts';
+import { billableHours, CompensationSettings, incidentPayout, type CompensationStatute, type IncidentRate, type Item, ItemAmountInput, type ItemKind, type ItemSource, ManualItemInput, type MyCompensation, type MyItemState, round2, type Rounding, trainingRateOn } from '@forga/compensation-contracts';
+import { type DutyChangedEvent, INCIDENTS_EVENTS, IncidentSettings, type ReportReleasedEvent, type ReportUnlockedEvent } from '@forga/incidents-contracts';
 import { type CoursePassedEvent, type CourseRevokedEvent, MASTERDATA_EVENTS, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { type SessionClosedEvent, type SessionReopenedEvent, TRAINING_EVENTS } from '@forga/training-contracts';
 import { ItemEntity } from '../compensation.entities.js';
@@ -56,7 +56,6 @@ export const toItemDto = (i: ItemEntity): Item => ({
   version: i.version,
 });
 
-const sum = (list: ItemEntity[]) => round2(list.reduce((s, i) => s + Number(i.amount ?? 0), 0));
 
 /** An item is open until it is part of a closed run. */
 export const isLocked = (i: ItemEntity) => Boolean(i.run && i.run.status !== 'draft');
@@ -72,6 +71,9 @@ export class ItemsService implements OnModuleInit, CompensationStatute {
 
   onModuleInit(): void {
     this.events.subscribe<ReportReleasedEvent>(INCIDENTS_EVENTS.reportReleased, (e) => this.fromIncident(e));
+    // Unlocked for correction: its open items are withdrawn, amounts already paid out reversed, until it is released
+    // again. A report is only deleted as draft (after unlocking), so nothing is left to withdraw then.
+    this.events.subscribe<ReportUnlockedEvent>(INCIDENTS_EVENTS.reportUnlocked, (e) => this.apply('incident', e.reportId, []));
     this.events.subscribe<SessionClosedEvent>(TRAINING_EVENTS.sessionClosed, (e) => this.fromTraining(e));
     // Reopened: open items disappear, amounts already paid out are reversed until it is closed again.
     this.events.subscribe<SessionReopenedEvent>(TRAINING_EVENTS.sessionReopened, (e) => this.apply('training', e.sessionId, []));
@@ -98,11 +100,25 @@ export class ItemsService implements OnModuleInit, CompensationStatute {
     return { rates: config.incidentRates, rounding: config.incidentRounding, minimumHours: config.incidentMinimumHours };
   }
 
-  /** "Meine Entschädigung": the items of the person linked to the user in a year, open and paid out. */
+  /**
+   * "Meine Entschädigung": the items of the person linked to the user in a year. "abgerechnet" while the run is closed
+   * or handed over, "ausgezahlt" only when the run is paid and the amount was transferred (not a payee without IBAN
+   * whose other payout is still open).
+   */
   async mine(user: AuthenticatedUser, year: number): Promise<MyCompensation> {
     if (!user.personId) throw new NotFoundException({ code: 'compensation.noPerson' });
-    const items = await this.em.fork().find(ItemEntity, { personId: user.personId, date: { $gte: `${year}-01-01`, $lte: `${year}-12-31` } }, { populate: ['run'], orderBy: { date: 'desc', createdAt: 'desc' } });
-    return { year, items: items.map((i) => ({ ...toItemDto(i), paidOut: isLocked(i) })), open: sum(items.filter((i) => !isLocked(i))), paid: sum(items.filter((i) => isLocked(i))) };
+    const personId = user.personId;
+    const items = await this.em.fork().find(ItemEntity, { personId, date: { $gte: `${year}-01-01`, $lte: `${year}-12-31` } }, { populate: ['run'], orderBy: { date: 'desc', createdAt: 'desc' } });
+    const state = (i: ItemEntity): MyItemState => {
+      if (!isLocked(i)) return 'open';
+      // Paid another way (no IBAN): paid out once that payout is marked as paid.
+      const other = (i.run!.manualPayouts ?? []).filter((p) => p.personIds.includes(personId));
+      if (other.length) return other.every((p) => p.paidAt) ? 'paid-out' : 'settled';
+      return i.run!.status === 'paid' ? 'paid-out' : 'settled';
+    };
+    const rows = items.map((i) => ({ ...toItemDto(i), state: state(i) }));
+    const total = (s: MyItemState) => round2(rows.filter((r) => r.state === s).reduce((t, r) => t + (r.amount ?? 0), 0));
+    return { year, items: rows, open: total('open'), settled: total('settled'), paid: total('paid-out') };
   }
 
   /** Several amounts at once, e.g. the loss of earnings of a run in a list; all or none. */
@@ -135,43 +151,55 @@ export class ItemsService implements OnModuleInit, CompensationStatute {
 
   /**
    * Brings the items of a source (a report, a session, an allowance) to the desired state.
-   * Open items are replaced. For amounts already in a closed run, a correction item with the difference is added,
-   * so closed runs stay unchanged. Entered loss-of-earnings amounts survive a replacement.
+   * Open items are updated in place, so they keep their draft run, "deferred" mark and amounts entered by hand (loss
+   * of earnings, amounts of items without rate, with their reason); open items no longer wanted are removed. For
+   * amounts already in a closed run, a correction item with the difference is added, so closed runs stay unchanged.
    */
   async apply(source: ItemSource, sourceId: string, desired: DesiredItem[]): Promise<void> {
     const em = this.em.fork();
     const existing = await em.find(ItemEntity, { source, sourceId }, { populate: ['run'] });
     const locked = new Map<string, number>();
-    const entered = new Map<string, number>();
+    const open = new Map<string, ItemEntity[]>();
     for (const item of existing) {
-      if (isLocked(item)) {
-        locked.set(key(item), round2((locked.get(key(item)) ?? 0) + Number(item.amount ?? 0)));
-      } else {
-        if (item.kind === 'loss-of-earnings' && item.amount !== null && item.amount !== undefined) entered.set(key(item), Number(item.amount));
-        em.remove(item);
-      }
+      if (isLocked(item)) locked.set(key(item), round2((locked.get(key(item)) ?? 0) + Number(item.amount ?? 0)));
+      else open.set(key(item), [...(open.get(key(item)) ?? []), item]);
     }
+    // One open item per key with these values: the existing one (preferably the one in a run or deferred), else a new one.
+    const keep = (k: string, values: Omit<DesiredItem, 'amount'> & { amount: number | null; correction: boolean; reason: string }) => {
+      const list = (open.get(k) ?? []).toSorted((a, b) => Number(Boolean(b.run || b.deferredFrom)) - Number(Boolean(a.run || a.deferredFrom)));
+      open.delete(k);
+      for (const extra of list.slice(1)) em.remove(extra);
+      if (list[0]) Object.assign(list[0], values);
+      else em.create(ItemEntity, { ...values, source, sourceId, run: null, deferredFrom: null });
+    };
     const wanted = new Set<string>();
     for (const row of desired) {
       const k = key(row);
       wanted.add(k);
-      const amount = row.kind === 'loss-of-earnings' && row.amount === null ? (entered.get(k) ?? null) : row.amount;
+      // An amount entered by hand stays while the source still has none (loss of earnings, no rate).
+      const current = (open.get(k) ?? []).find((i) => !i.correction);
+      const entered = row.amount === null && current && current.amount !== null && current.amount !== undefined ? Number(current.amount) : null;
+      const amount = row.amount ?? entered;
       const paid = locked.get(k);
       if (paid === undefined) {
-        em.create(ItemEntity, { ...row, amount, source, sourceId, correction: false, reason: '', run: null });
+        keep(k, { ...row, amount, correction: false, reason: entered !== null ? current!.reason : '' });
       } else if (amount !== null && round2(amount - paid) !== 0) {
-        em.create(ItemEntity, { ...row, hours: null, rate: null, amount: round2(amount - paid), source, sourceId, correction: true, reason: '', run: null });
+        keep(k, { ...row, hours: null, rate: null, amount: round2(amount - paid), correction: true, reason: '' });
+      } else {
+        for (const item of open.get(k) ?? []) em.remove(item);
+        open.delete(k);
       }
     }
     // A person removed from the source after payout: reverse the amount.
     for (const [k, paid] of locked) {
       if (wanted.has(k) || paid === 0) continue;
       const sample = existing.find((i) => key(i) === k)!;
-      em.create(ItemEntity, {
-        personId: sample.personId, departmentId: sample.departmentId, kind: sample.kind, label: sample.label, date: sample.date, from: sample.from, to: sample.to,
-        hours: null, rate: null, amount: -paid, workingHours: false, source, sourceId, correction: true, reason: '', run: null,
+      keep(k, {
+        personId: sample.personId, departmentId: sample.departmentId ?? null, kind: sample.kind, label: sample.label, date: sample.date, from: sample.from ?? null, to: sample.to ?? null,
+        hours: null, rate: null, amount: -paid, workingHours: false, correction: true, reason: '',
       });
     }
+    for (const list of open.values()) for (const item of list) em.remove(item);
     await em.flush();
   }
 
@@ -188,7 +216,7 @@ export class ItemsService implements OnModuleInit, CompensationStatute {
       // Unpaid during working hours (unless the incidents settings compensate them).
       const unpaid = p.duringWorkingHours && p.amount === 0;
       const items: DesiredItem[] = [{ ...base, kind: 'compensation', hours: unpaid ? 0 : p.hours, rate: unpaid ? null : p.rate, amount: payout.amount }];
-      if (p.lossOfEarnings) items.push({ ...base, kind: 'loss-of-earnings', hours: null, rate: null, amount: null, workingHours: false });
+      if (p.lossOfEarnings) items.push({ ...base, kind: 'loss-of-earnings', label: `${label} · Verdienstausfall`, hours: null, rate: null, amount: null, workingHours: false });
       if (payout.refreshment !== null) items.push({ ...base, kind: 'flat-rate', label: `${label} · Erfrischungszuschuss`, hours: null, rate: null, amount: payout.refreshment, workingHours: false });
       return items;
     });
@@ -221,18 +249,28 @@ export class ItemsService implements OnModuleInit, CompensationStatute {
     ]);
   }
 
-  /** Closed training session: hours × training or fire-watch rate of the statute, at most `maxPerService`. */
+  /**
+   * Closed training session: hours × training or fire-watch rate of the statute, at most `maxPerService`, for persons
+   * with a status the statute pays (`paidStatuses`, e.g. not the youth fire brigade). The item belongs to the session's
+   * department of the person, for a guest from another department to the person's primary department.
+   */
   async fromTraining(e: SessionClosedEvent): Promise<void> {
     const config = await this.config();
+    const day = berlinDate(new Date(e.startsAt));
+    const persons = new Map((await this.directory.snapshots([...new Set(e.attendances.map((a) => a.personId))], day)).map((p) => [p.id, p]));
     const rows: DesiredItem[] =
       e.compensation === 'none'
         ? []
-        : e.attendances.map((a) => {
+        : e.attendances.flatMap((a): DesiredItem[] => {
+            const person = persons.get(a.personId);
+            if (person && !(config.paidStatuses as string[]).includes(person.status)) return [];
             const date = berlinDate(new Date(a.from));
             const hours = billableHours(a.from, a.to, config.trainingRounding);
             const rate = trainingRateOn(config.trainingRates, e.compensation === 'fire-watch' ? 'fire-watch' : 'training', date);
+            const own = person ? [person.primaryDepartmentId, ...person.departmentIds].find((d) => d && e.departmentIds.includes(d)) : undefined;
+            const departmentId = own ?? person?.primaryDepartmentId ?? e.departmentIds[0] ?? null;
             // Without a rate for the date the amount stays open: the run cannot be closed until it is entered.
-            return { personId: a.personId, departmentId: e.departmentIds[0] ?? null, kind: 'compensation', label: e.title, date, from: new Date(a.from), to: new Date(a.to), hours, rate, amount: rate === null ? null : capped(round2(hours * rate), config.maxPerService), workingHours: false };
+            return [{ personId: a.personId, departmentId, kind: 'compensation', label: e.title, date, from: new Date(a.from), to: new Date(a.to), hours, rate, amount: rate === null ? null : capped(round2(hours * rate), config.maxPerService), workingHours: false }];
           });
     await this.apply('training', e.sessionId, rows);
   }

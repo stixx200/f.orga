@@ -193,6 +193,8 @@ export type NoticeStatus = z.infer<typeof NoticeStatus>;
 
 /** Issued and not settled: payments, reminders, objection and amendment apply. */
 export const OPEN_STATUSES: NoticeStatus[] = ['issued', 'handed-over', 'objection'];
+/** Issued and in effect, also when paid: the claim the treasury has to know (handover), objection, amendment and cancellation apply. */
+export const IN_EFFECT_STATUSES: NoticeStatus[] = [...OPEN_STATUSES, 'paid'];
 /** No longer in effect; a new notice for the incident is possible. */
 export const ENDED_STATUSES: NoticeStatus[] = ['cancelled', 'amended', 'discarded'];
 
@@ -243,6 +245,9 @@ export const Notice = z.object({
   submittedAt: z.string().nullable(),
   submittedBy: z.string().nullable(),
   submittedById: z.string().nullable(),
+  /** Who last changed the content while the notice was in review (four-eyes principle: cannot issue it). */
+  lastEditedBy: z.string().nullable(),
+  lastEditedById: z.string().nullable(),
   issuedAt: z.string().nullable(),
   issuedBy: z.string().nullable(),
   dueOn: z.string().nullable(),
@@ -255,8 +260,10 @@ export const Notice = z.object({
   payments: z.array(Payment),
   /** Sum of the payments not reversed. */
   paid: z.number(),
-  /** Total minus paid; negative = overpaid. */
+  /** Claim minus paid (claim 0 for a cancelled notice, nothing for one replaced by an amendment); negative = overpaid. */
   balance: z.number(),
+  /** Overpaid amount to be refunded (also everything paid on a cancelled notice); 0 = none. */
+  refundDue: z.number(),
   /** Open, past due and not paid in full. */
   overdue: z.boolean(),
   reminders: z.array(Reminder),
@@ -278,6 +285,9 @@ export const DiscardInput = z.object({ reason: text });
 export type DiscardInput = z.input<typeof DiscardInput>;
 export const PaymentInput = z.object({ date, amount: money.positive(), note: text });
 export type PaymentInput = z.input<typeof PaymentInput>;
+/** A refund of an overpayment, recorded as a negative payment. */
+export const RefundInput = z.object({ date, amount: money.positive(), note: text });
+export type RefundInput = z.input<typeof RefundInput>;
 export const PaymentReversalInput = z.object({ reason: z.string().trim().min(3) });
 export type PaymentReversalInput = z.input<typeof PaymentReversalInput>;
 
@@ -288,6 +298,8 @@ export const NoticeFilter = z.object({
   /** Words of file number, debtor, dispatch number, cash reference or location. */
   q: z.string().optional(),
   overdue: z.enum(['true', 'false']).optional(),
+  /** Only notices with an overpayment to refund. */
+  refund: z.enum(['true', 'false']).optional(),
   /** Comma-separated IDs (export of selected notices). */
   ids: z.string().optional(),
 });

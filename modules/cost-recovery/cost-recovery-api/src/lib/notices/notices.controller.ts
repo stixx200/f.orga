@@ -17,6 +17,7 @@ import {
   ObjectionInput,
   PaymentInput,
   PaymentReversalInput,
+  RefundInput,
 } from '@forga/cost-recovery-contracts';
 import { AddressBookEntity } from '../cost-recovery.entities.js';
 import { type HandoverFile, TreasuryHandover } from './handover.js';
@@ -26,6 +27,7 @@ type Parsed<T extends z.ZodType> = z.infer<T>;
 const READ = 'cost-recovery.read';
 const WRITE = 'cost-recovery.write';
 const ISSUE = 'cost-recovery.issue';
+const REFUND = 'cost-recovery.refund';
 const Create = z.object({ incidentId: z.uuid() });
 const OffenseChoice = z.object({ offenseKey: z.string().min(1).nullable() });
 
@@ -55,7 +57,7 @@ export class NoticesController {
     return this.notices.candidates(from ?? `${Number(year) - 1}-01-01`, to ?? `${year}-12-31`);
   }
 
-  /** Notices of the filter: `status`, `year`, `q` (file number, debtor, dispatch number, cash reference), `overdue=true`. */
+  /** Notices of the filter: `status`, `year`, `q` (file number, debtor, dispatch number, cash reference), `overdue=true`, `refund=true`. */
   @Get('notices')
   @RequirePermissions(READ)
   list(@Query(new ZodPipe(NoticeFilter)) filter: Parsed<typeof NoticeFilter>): Promise<Notice[]> {
@@ -83,8 +85,8 @@ export class NoticesController {
 
   @Put('notices/:id')
   @RequirePermissions(WRITE)
-  update(@Param('id') id: string, @Body(new ZodPipe(NoticeInput)) input: Parsed<typeof NoticeInput>): Promise<Notice> {
-    return this.notices.update(id, input);
+  update(@Param('id') id: string, @Body(new ZodPipe(NoticeInput)) input: Parsed<typeof NoticeInput>, @CurrentUser() user: AuthenticatedUser): Promise<Notice> {
+    return this.notices.update(user, id, input);
   }
 
   @Post('notices/:id/recalculate')
@@ -135,6 +137,14 @@ export class NoticesController {
   @RequirePermissions(WRITE)
   pay(@Param('id') id: string, @Body(new ZodPipe(PaymentInput)) input: Parsed<typeof PaymentInput>, @CurrentUser() user: AuthenticatedUser): Promise<Notice> {
     return this.notices.addPayment(user, id, input);
+  }
+
+  /** Refund of an overpayment (`{ date, amount, note }`), recorded as negative payment. */
+  @Post('notices/:id/refunds')
+  @HttpCode(200)
+  @RequirePermissions(REFUND)
+  refund(@Param('id') id: string, @Body(new ZodPipe(RefundInput)) input: Parsed<typeof RefundInput>, @CurrentUser() user: AuthenticatedUser): Promise<Notice> {
+    return this.notices.refund(user, id, input);
   }
 
   @Post('notices/:id/payments/:paymentId/reverse')
@@ -196,7 +206,7 @@ export class NoticesController {
 
   /**
    * Handover file for the treasury (Sollstellung) in the format of the settings, for the filter of the list (or `ids`).
-   * Without status: the issued notices not handed over yet and the cancellations not yet reported. Marks nothing.
+   * Without status: the notices in effect not handed over yet and the cancellations not yet reported. Marks nothing.
    */
   @Get('export')
   @RequirePermissions(READ)

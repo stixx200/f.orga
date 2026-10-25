@@ -94,6 +94,14 @@ export class RunsController {
     return this.runs.advance(id, 'paid');
   }
 
+  /** A payout another way (payee confirmed without IBAN when closing) is done. */
+  @Post(':id/payouts/:key/paid')
+  @HttpCode(200)
+  @RequirePermissions(RUNS)
+  manualPayout(@Param('id') id: string, @Param('key') key: string, @CurrentUser() user: AuthenticatedUser): Promise<RunDetail> {
+    return this.runs.markManualPayout(user, id, key);
+  }
+
   @Delete(':id')
   @HttpCode(204)
   @RequirePermissions(RUNS)
@@ -121,7 +129,7 @@ export class RunsController {
     res.send(pdf);
   }
 
-  /** SEPA credit transfer file for online banking (`?executionDate=`, default today); only for closed runs. */
+  /** SEPA credit transfer file for online banking (`?executionDate=`, default today); only for closed runs, after the factual approval when required. */
   @Get(':id/transfer.xml')
   @RequirePermissions(RUNS)
   async transferXml(@Param('id') id: string, @Query('executionDate') executionDate: string | undefined, @Res() res: Response): Promise<void> {
@@ -132,7 +140,7 @@ export class RunsController {
     res.send(xml);
   }
 
-  /** Transfer file (CSV); only for closed runs, like the SEPA file. */
+  /** Transfer file (CSV); only for closed runs (after the factual approval when required), like the SEPA file. */
   @Get(':id/transfer.csv')
   @RequirePermissions(RUNS)
   async transfer(@Param('id') id: string, @Res() res: Response): Promise<void> {

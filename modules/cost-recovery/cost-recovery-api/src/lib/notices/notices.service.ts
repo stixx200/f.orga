@@ -1,11 +1,12 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import { assertVersion, type AuthenticatedUser, berlinDate, berlinDayStart, brigadeLogoDataUrl, DomainEvents, pdfHeaderCell, PDF_TABLE_LAYOUT, renderLetterPdf, SettingsService } from '@forga/core-api';
+import { assertVersion, Audit, type AuthenticatedUser, berlinDate, berlinDayStart, brigadeLogoDataUrl, DomainEvents, pdfHeaderCell, PDF_TABLE_LAYOUT, renderLetterPdf, SettingsService } from '@forga/core-api';
 import type { BrigadeSettings, SearchHit } from '@forga/core-contracts';
 import {
   billableHours,
   type Candidate,
+  claimOf,
   cleanLocation,
   COST_RECOVERY_EVENTS,
   type CostRecoverySettings,
@@ -14,6 +15,7 @@ import {
   type Debtor,
   ENDED_STATUSES,
   type IncidentNotice,
+  IN_EFFECT_STATUSES,
   missingConfiguration,
   missingReasons,
   type Notice,
@@ -28,6 +30,7 @@ import {
   PersonnelKind,
   personnelRateOn,
   type Position,
+  refundDueOf,
   round2,
   totalOf,
   vehicleRateOn,
@@ -51,6 +54,17 @@ const address = (d: Draft) => [d.name, d.street, `${d.postalCode} ${d.city}`.tri
 const normalized = (value: string) => value.toLocaleLowerCase('de').replace(/\s+/g, ' ').trim();
 const debtorKey = (d: Draft) => [d.name, d.street, d.postalCode, d.city].map(normalized).join('|');
 const words = (query: string) => query.toLocaleLowerCase('de').split(/[\s,;]+/).filter(Boolean);
+/** JSON with sorted keys, to compare contents independent of the key order. */
+const stable = (value: unknown): string =>
+  JSON.stringify(value, (_key, v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).toSorted(([a], [b]) => a.localeCompare(b))) : v));
+/** Content of a notice that the four-eyes principle protects (the cash reference of the treasury is not part of it). */
+const protectedContent = (n: Pick<NoticeEntity, 'offenseKey' | 'debtors' | 'positions' | 'reasoning' | 'remedy'>) => stable([n.offenseKey, n.debtors, n.positions, n.reasoning, n.remedy]);
+/** A recalculated position matches the previous one: the same vehicle, otherwise the same kind and label. */
+const positionKey = (p: Position) => (p.kind === 'vehicle' && p.vehicleId ? `vehicle:${p.vehicleId}` : `${p.kind}:${p.label}`);
+/** Text without line breaks at hyphens (file and cash numbers in the letter head). */
+const noWrap = (text: string) => ({ text, noWrap: true });
+/** Display name without a role in brackets, e.g. "Erika Muster (Verwaltung / Kasse)". */
+const withoutRole = (name: string) => name.replace(/\s*\([^)]*\)\s*$/, '');
 
 /** Rounding of the time as stated in the notice. */
 const ROUNDING_TEXT: Record<CostRounding, string> = {
@@ -69,10 +83,17 @@ const PERSONNEL_LABELS: Record<PersonnelKind, string> = {
   'career-higher': ' – Hauptamt höherer Dienst',
 };
 
-/** Open, past due and not paid in full; an objection suspends the reminder. */
-export function isOverdue(n: Pick<NoticeEntity, 'status' | 'dueOn' | 'positions' | 'payments'>, today = berlinDate()): boolean {
-  return (n.status === 'issued' || n.status === 'handed-over') && Boolean(n.dueOn) && n.dueOn! < today && round2(totalOf(n.positions) - paidOf(n.payments ?? [])) > 0;
+/** Payment term in force: the one of the last reminder, else the due date of the notice. */
+export const currentDueOn = (n: Pick<NoticeEntity, 'dueOn' | 'reminders'>): string | null => n.reminders?.at(-1)?.dueOn ?? n.dueOn ?? null;
+
+/** Open, past the payment term in force (after a reminder its new term) and not paid in full; an objection suspends the reminder. */
+export function isOverdue(n: Pick<NoticeEntity, 'status' | 'dueOn' | 'reminders' | 'positions' | 'payments'>, today = berlinDate()): boolean {
+  const due = currentDueOn(n);
+  return (n.status === 'issued' || n.status === 'handed-over') && Boolean(due) && due! < today && round2(totalOf(n.positions) - paidOf(n.payments ?? [])) > 0;
 }
+
+/** Overpaid amount of the notice to refund. */
+export const refundDue = (n: Pick<NoticeEntity, 'status' | 'positions' | 'payments'>) => refundDueOf({ status: n.status, positions: n.positions, payments: n.payments ?? [] });
 
 /** Status of an issued notice that is not settled: an objection pending, handed over to the treasury, or only issued. */
 const openStatus = (n: NoticeEntity): NoticeStatus => (n.objection?.result === 'pending' ? 'objection' : n.handedOverAt ? 'handed-over' : 'issued');
@@ -99,6 +120,8 @@ export const toNoticeDto = (n: NoticeEntity, today = berlinDate()): Notice => {
     submittedAt: iso(n.submittedAt),
     submittedBy: n.submittedBy ?? null,
     submittedById: n.submittedById ?? null,
+    lastEditedBy: n.lastEditedBy ?? null,
+    lastEditedById: n.lastEditedById ?? null,
     issuedAt: iso(n.issuedAt),
     issuedBy: n.issuedBy ?? null,
     dueOn: n.dueOn ?? null,
@@ -109,7 +132,9 @@ export const toNoticeDto = (n: NoticeEntity, today = berlinDate()): Notice => {
     paidOn: n.paidOn ?? null,
     payments: n.payments ?? [],
     paid,
-    balance: round2(total - paid),
+    // A replaced notice passed its payments on to the amendment.
+    balance: n.status === 'amended' ? 0 : round2(claimOf(n) - paid),
+    refundDue: refundDue(n),
     overdue: isOverdue(n, today),
     reminders: n.reminders ?? [],
     guestsNotCharged: n.guestsNotCharged ?? 0,
@@ -141,6 +166,7 @@ export class NoticesService {
     private readonly em: EntityManager,
     private readonly settings: SettingsService,
     private readonly events: DomainEvents,
+    private readonly audit: Audit,
     @Inject(INCIDENTS_LOOKUP) private readonly incidents: IncidentsLookup,
     @Inject(ORGANIZATION) private readonly organization: Organization,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
@@ -167,8 +193,13 @@ export class NoticesService {
     return new Map((await this.em.fork().find(IncidentOffenseEntity, { incidentId: { $in: incidentIds } })).map((o) => [o.incidentId, o.offenseKey]));
   }
 
+  /** Legal ground of a chargeable incident (unknown incident 404, not chargeable 409); clearing it is always possible. */
   async setOffense(user: AuthenticatedUser, incidentId: string, offenseKey: string | null): Promise<string | null> {
-    if (offenseKey && !(await this.config()).offenses.some((o) => o.key === offenseKey)) throw new BadRequestException({ code: 'cost-recovery.unknownOffense' });
+    if (offenseKey) {
+      if (!(await this.config()).offenses.some((o) => o.key === offenseKey)) throw new BadRequestException({ code: 'cost-recovery.unknownOffense' });
+      const { chargeable } = await this.incidentState(incidentId);
+      if (!chargeable) throw new ConflictException({ code: 'cost-recovery.notChargeable' });
+    }
     const em = this.em.fork();
     const existing = await em.findOne(IncidentOffenseEntity, incidentId);
     if (!offenseKey) {
@@ -198,6 +229,7 @@ export class NoticesService {
     const query = words(filter.q ?? '');
     return (await this.em.fork().find(NoticeEntity, where, { orderBy: { alarmedAt: 'desc', number: 'desc' } })).filter((n) => {
       if (filter.overdue === 'true' && !isOverdue(n, today)) return false;
+      if (filter.refund === 'true' && refundDue(n) <= 0) return false;
       if (!query.length) return true;
       const text = [n.number, n.dispatchNumber, n.alarmKeyword, n.cashReference, n.location, ...n.debtors.map((d) => d.name)].join(' ').toLocaleLowerCase('de');
       return query.every((w) => text.includes(w));
@@ -267,8 +299,8 @@ export class NoticesService {
       const guests = present.filter((p) => !p.personId);
       const charged = config.guests === 'volunteer' ? present : present.filter((p) => p.personId);
       const uncharged = config.guests === 'volunteer' ? 0 : guests.length;
+      // Guests not charged are counted for the notice (hint and line in the PDF), also when a report has only guests.
       guestsNotCharged += uncharged;
-      let noted = false;
       for (const kind of PersonnelKind.options) {
         const group = charged.filter((p) => kindOf(p.personId) === kind);
         if (!group.length) continue;
@@ -277,12 +309,9 @@ export class NoticesService {
         const hours = round2(each.reduce((sum, h) => sum + h, 0));
         const amount = round2(hours * (rate ?? 0));
         const count = `${group.length} ${group.length === 1 ? 'Person' : 'Personen'}`;
-        // The guests not charged are named once per report, at its first personnel position.
-        const guestNote: string = uncharged && !noted ? `; ${uncharged} ${uncharged === 1 ? 'Gast' : 'Gäste'} nicht berechnet` : '';
-        noted ||= Boolean(guestNote);
         positions.push({
           kind: 'personnel',
-          label: `Personal ${departments.get(report.departmentId) ?? ''}${PERSONNEL_LABELS[kind]} (${count}${guestNote})${rate === null ? ' – kein Satz' : ''}`.replace(/\s+/g, ' ').trim(),
+          label: `Personal ${departments.get(report.departmentId) ?? ''}${PERSONNEL_LABELS[kind]} (${count})${rate === null ? ' – kein Satz' : ''}`.replace(/\s+/g, ' ').trim(),
           quantity: hours, unit: 'h', rate: rate ?? 0, amount, computedAmount: amount, reason: '', category: kind, vehicleId: null,
           persons: group.length, hoursEach: each.every((h) => h === each[0]) ? each[0]! : null,
         });
@@ -409,7 +438,11 @@ export class NoticesService {
     return toNoticeDto(notice);
   }
 
-  async update(id: string, input: ParsedNotice): Promise<Notice> {
+  /**
+   * Saves a draft or a notice in review. A change of the content in review (not only the cash reference) is remembered:
+   * with the four-eyes principle, whoever changed it cannot issue it.
+   */
+  async update(user: AuthenticatedUser, id: string, input: ParsedNotice): Promise<Notice> {
     const em = this.em.fork();
     const notice = await this.load(em, id);
     assertVersion(notice, input.version);
@@ -418,12 +451,17 @@ export class NoticesService {
     if (!config.offenses.some((o) => o.key === input.offenseKey)) throw new BadRequestException({ code: 'cost-recovery.unknownOffense' });
     const missing = missingReasons(input.positions);
     if (missing.length) throw new BadRequestException({ code: 'cost-recovery.reasonMissing', positions: missing.map((p) => p.label) });
+    const changed = protectedContent(notice) !== protectedContent(input);
     Object.assign(notice, { offenseKey: input.offenseKey, debtors: input.debtors, positions: input.positions, reasoning: input.reasoning, remedy: input.remedy, cashReference: input.cashReference });
+    if (changed && notice.status === 'review') Object.assign(notice, { lastEditedBy: user.displayName, lastEditedById: user.id });
     await em.flush();
     return toNoticeDto(notice);
   }
 
-  /** Calculates the positions again from the incident (e.g. after a corrected report); manual positions stay. */
+  /**
+   * Calculates the positions again from the incident (e.g. after a corrected report). Positions added by hand stay; a
+   * position whose calculation is unchanged keeps its deviation (amount, rate category such as "als MTW", reason).
+   */
   async recalculate(id: string): Promise<Notice> {
     const em = this.em.fork();
     const notice = await this.load(em, id);
@@ -431,8 +469,13 @@ export class NoticesService {
     const incident = await this.incidents.forCostRecovery(notice.incidentId);
     if (!incident) throw new NotFoundException({ code: 'cost-recovery.unknownIncident' });
     const manual = notice.positions.filter((p) => p.computedAmount === null);
+    const deviations = new Map(notice.positions.filter((p) => p.computedAmount !== null && p.reason.trim() && round2(p.amount) !== round2(p.computedAmount)).map((p) => [positionKey(p), p]));
     const { positions, guestsNotCharged } = await this.calculate(incident, await this.config());
-    Object.assign(notice, { positions: [...positions, ...manual], guestsNotCharged });
+    const kept = positions.map((p) => {
+      const before = deviations.get(positionKey(p));
+      return before && round2(before.computedAmount!) === round2(p.computedAmount!) ? before : p;
+    });
+    Object.assign(notice, { positions: [...kept, ...manual], guestsNotCharged });
     await em.flush();
     return toNoticeDto(notice);
   }
@@ -451,29 +494,51 @@ export class NoticesService {
     return this.transition(id, ['draft'], (n) => {
       if (!n.debtors.length) throw new BadRequestException({ code: 'cost-recovery.debtorMissing' });
       if (n.debtors.some((d) => !d.name.trim())) throw new BadRequestException({ code: 'cost-recovery.debtorIncomplete' });
-      Object.assign(n, { status: 'review', submittedAt: new Date(), submittedBy: user.displayName, submittedById: user.id });
-    });
+      Object.assign(n, { status: 'review', submittedAt: new Date(), submittedBy: user.displayName, submittedById: user.id, lastEditedBy: null, lastEditedById: null });
+    }).then((n) => this.logged('cost-recovery.notice-submitted', n));
   }
 
   returnToDraft(id: string): Promise<Notice> {
     return this.transition(id, ['review'], (n) => {
-      Object.assign(n, { status: 'draft', submittedAt: null, submittedBy: null, submittedById: null });
+      Object.assign(n, { status: 'draft', submittedAt: null, submittedBy: null, submittedById: null, lastEditedBy: null, lastEditedById: null });
     });
+  }
+
+  /** Audit entry of a step of the notice. */
+  private async logged(action: string, n: Notice, details: Record<string, unknown> = {}): Promise<Notice> {
+    await this.audit.log(action, { noticeId: n.id, number: n.number, status: n.status, ...details });
+    return n;
+  }
+
+  /** Name below the signature: the person linked to the user, else the display name (without a role in brackets). */
+  private async signerName(user: AuthenticatedUser): Promise<string> {
+    const [person] = user.personId ? await this.directory.snapshots([user.personId]) : [];
+    return person ? `${person.firstName} ${person.lastName}` : withoutRole(user.displayName);
+  }
+
+  /** Paid on the notice an amendment replaces: carried over when the amendment is issued. */
+  private async paidBefore(n: NoticeEntity): Promise<number> {
+    if (!n.amendsId || n.issuedAt) return 0;
+    const original = await this.em.fork().findOne(NoticeEntity, n.amendsId);
+    return original ? paidOf(original.payments ?? []) : 0;
   }
 
   /**
    * Issues the notice: only for an incident still chargeable whose reports are all released for billing, by someone
-   * other than the submitter when the four-eyes principle is on, with the cash reference when it is required.
+   * other than the submitter and the last editor in review when the four-eyes principle is on, with the cash
+   * reference when it is required.
    * Due date, PDF stored unchangeably, event `cost-recovery.notice.issued`.
    */
   async issue(user: AuthenticatedUser, id: string): Promise<Notice> {
     const config = await this.config();
     const current = await this.load(this.em.fork(), id);
     const { chargeable, released } = await this.incidentState(current.incidentId);
+    const signer = await this.signerName(user);
+    const paidBefore = await this.paidBefore(current);
     const result = await this.transition(id, ['review'], async (n) => {
       if (!chargeable) throw new ConflictException({ code: 'cost-recovery.notChargeable' });
       if (!released) throw new ConflictException({ code: 'cost-recovery.notReleased' });
-      if (config.fourEyes && n.submittedById === user.id) throw new ForbiddenException({ code: 'cost-recovery.fourEyes' });
+      if (config.fourEyes && (n.submittedById === user.id || n.lastEditedById === user.id)) throw new ForbiddenException({ code: 'cost-recovery.fourEyes' });
       if (totalOf(n.positions) <= 0) throw new BadRequestException({ code: 'cost-recovery.totalZero' });
       if (n.positions.some((p) => p.rate === 0 && p.amount === 0)) throw new BadRequestException({ code: 'cost-recovery.rateMissing' });
       if (!n.remedy.trim()) throw new BadRequestException({ code: 'cost-recovery.remedyMissing' });
@@ -485,12 +550,12 @@ export class NoticesService {
       }
       const issuedAt = new Date();
       const due = new Date(issuedAt.getTime() + config.dueDays * 86_400_000);
-      Object.assign(n, { status: 'issued', issuedAt, issuedBy: user.displayName, dueOn: berlinDate(due) });
-      n.pdf = await this.renderPdf(n, config);
+      Object.assign(n, { status: 'issued', issuedAt, issuedBy: signer, dueOn: berlinDate(due) });
+      n.pdf = await this.renderPdf(n, config, paidBefore);
     });
     const issued = result.amends ? await this.replaceOriginal(result) : result;
     await this.events.publish<NoticeIssuedEvent>(COST_RECOVERY_EVENTS.noticeIssued, { noticeId: issued.id, incidentId: issued.incidentId, total: issued.total });
-    return issued;
+    return this.logged('cost-recovery.notice-issued', issued, { total: issued.total, amends: issued.amends?.number ?? null });
   }
 
   /**
@@ -512,23 +577,24 @@ export class NoticesService {
     return toNoticeDto(notice);
   }
 
+  /** Hands one notice in effect over to the treasury (also when already paid or in objection); only once. */
   handOver(id: string): Promise<Notice> {
-    return this.transition(id, ['issued'], (n) => {
-      Object.assign(n, { status: 'handed-over', handedOverAt: new Date() });
-    });
+    return this.transition(id, IN_EFFECT_STATUSES, (n) => {
+      if (n.handedOverAt) throw new ConflictException({ code: 'cost-recovery.invalidTransition', from: n.status });
+      n.handedOverAt = new Date();
+      if (n.status === 'issued') n.status = 'handed-over';
+    }).then((n) => this.logged('cost-recovery.notice-handed-over', n));
   }
 
   /** Paid in full: status `paid` with the day of the last payment; otherwise back to the open status. */
   private settle(n: NoticeEntity): void {
     const active = (n.payments ?? []).filter((p) => !p.reversal);
     const full = active.length > 0 && paidOf(active) >= totalOf(n.positions);
-    if (full && (OPEN_STATUSES.includes(n.status) || n.status === 'paid')) {
-      n.status = 'paid';
-      n.paidOn = active.map((p) => p.date).toSorted().at(-1)!;
-    } else if (!full && n.status === 'paid') {
-      n.status = openStatus(n);
-      n.paidOn = null;
-    }
+    // Cancelled notices keep their status (payments on them are refunded).
+    if (!IN_EFFECT_STATUSES.includes(n.status)) return;
+    n.paidOn = full ? active.filter((p) => p.amount > 0).map((p) => p.date).toSorted().at(-1)! : null;
+    // A pending objection stays visible as status, also when the notice is paid.
+    n.status = full && n.objection?.result !== 'pending' ? 'paid' : openStatus(n);
   }
 
   /** A payment (also partial) on or after the day of issue and not in the future; an overpayment shows as negative balance. */
@@ -539,23 +605,42 @@ export class NoticesService {
       const payment: Payment = { id: uuidv7(), date: input.date, amount: round2(input.amount), note: input.note, recordedBy: user.displayName, reversal: null };
       n.payments = [...(n.payments ?? []), payment];
       this.settle(n);
-    });
+    }).then((n) => this.logged('cost-recovery.payment-recorded', n, { date: input.date, amount: round2(input.amount) }));
+  }
+
+  /**
+   * Refund of an overpayment (or of payments on a cancelled notice), recorded as a negative payment; at most the
+   * amount due. The task "Erstattung" disappears when nothing is left to refund.
+   */
+  refund(user: AuthenticatedUser, id: string, input: { date: string; amount: number; note: string }): Promise<Notice> {
+    return this.transition(id, [...IN_EFFECT_STATUSES, 'cancelled'], (n) => {
+      const due = refundDue(n);
+      if (due <= 0) throw new ConflictException({ code: 'cost-recovery.noRefundDue' });
+      if (round2(input.amount) > due) throw new BadRequestException({ code: 'cost-recovery.refundTooHigh', due: due.toFixed(2) });
+      if (input.date < berlinDate(n.issuedAt!)) throw new BadRequestException({ code: 'cost-recovery.paymentBeforeIssue' });
+      if (input.date > berlinDate()) throw new BadRequestException({ code: 'cost-recovery.paymentInFuture' });
+      n.payments = [...(n.payments ?? []), { id: uuidv7(), date: input.date, amount: -round2(input.amount), note: input.note || 'Erstattung', recordedBy: user.displayName, reversal: null }];
+      this.settle(n);
+    }).then((n) => this.logged('cost-recovery.refund-recorded', n, { date: input.date, amount: round2(input.amount) }));
   }
 
   /** Reverses a payment (e.g. booked to the wrong notice), with reason; a paid notice becomes open again. */
   reversePayment(user: AuthenticatedUser, id: string, paymentId: string, reason: string): Promise<Notice> {
-    return this.transition(id, [...OPEN_STATUSES, 'paid'], (n) => {
+    return this.transition(id, [...IN_EFFECT_STATUSES, 'cancelled'], (n) => {
       const payment = (n.payments ?? []).find((p) => p.id === paymentId);
       if (!payment) throw new NotFoundException({ code: 'cost-recovery.unknownPayment' });
       if (payment.reversal) throw new ConflictException({ code: 'cost-recovery.paymentReversed' });
       n.payments = n.payments.map((p) => (p.id === paymentId ? { ...p, reversal: { date: berlinDate(), reason, by: user.displayName } } : p));
       this.settle(n);
-    });
+    }).then((n) => this.logged('cost-recovery.payment-reversed', n, { paymentId, reason }));
   }
 
-  /** Objection: upheld lifts the notice; rejected restores the status before the objection (issued or handed over, or paid). */
+  /**
+   * Objection, also against a paid notice: upheld lifts the notice (payments are then refunded); rejected restores the
+   * status before the objection (issued or handed over, or paid).
+   */
   objection(id: string, input: { date: string; result: 'pending' | 'upheld' | 'rejected'; note: string }): Promise<Notice> {
-    return this.transition(id, [...OPEN_STATUSES], (n) => {
+    return this.transition(id, IN_EFFECT_STATUSES, (n) => {
       n.objection = input;
       if (input.result === 'upheld') {
         n.status = 'cancelled';
@@ -564,17 +649,17 @@ export class NoticesService {
       }
       n.status = openStatus(n);
       this.settle(n);
-    });
+    }).then((n) => this.logged('cost-recovery.objection-recorded', n, { result: input.result }));
   }
 
   /**
-   * Amendment notice (Änderungsbescheid) for an issued notice: a draft copy with the number of the original plus `-Ä1`, `-Ä2` …
-   * Issuing it replaces the original (status `amended`). One open amendment per notice.
+   * Amendment notice (Änderungsbescheid) for an issued notice, also a paid one: a draft copy with the number of the
+   * original plus `-Ä1`, `-Ä2` … Issuing it replaces the original (status `amended`). One open amendment per notice.
    */
   async amend(id: string): Promise<Notice> {
     const em = this.em.fork();
     const original = await this.load(em, id);
-    if (!OPEN_STATUSES.includes(original.status)) throw new ConflictException({ code: 'cost-recovery.notAmendable', status: original.status });
+    if (!IN_EFFECT_STATUSES.includes(original.status)) throw new ConflictException({ code: 'cost-recovery.notAmendable', status: original.status });
     if (await em.count(NoticeEntity, { amendsId: original.id, status: { $in: ['draft', 'review'] } })) throw new ConflictException({ code: 'cost-recovery.amendmentOpen' });
     const count = await em.count(NoticeEntity, { amendsId: original.id });
     const base = original.number.replace(/-Ä\d+$/, '');
@@ -598,7 +683,7 @@ export class NoticesService {
       amendsNumber: original.number,
     });
     await em.flush();
-    return toNoticeDto(amendment);
+    return this.logged('cost-recovery.amendment-created', toNoticeDto(amendment), { amends: original.number });
   }
 
   /** Discards a draft or a notice in review (never issued); the reason is optional. */
@@ -606,25 +691,26 @@ export class NoticesService {
     return this.transition(id, ['draft', 'review'], (n) => {
       n.status = 'discarded';
       n.cancellation = { date: berlinDate(), reason };
-    });
+    }).then((n) => this.logged('cost-recovery.notice-discarded', n, { reason }));
   }
 
-  /** Lifts an issued notice (Aufhebung), e.g. waiver for undue hardship. */
+  /** Lifts an issued notice (Aufhebung), e.g. waiver for undue hardship, also a paid one (payments are then refunded). */
   cancel(id: string, reason: string): Promise<Notice> {
-    return this.transition(id, [...OPEN_STATUSES], (n) => {
+    return this.transition(id, IN_EFFECT_STATUSES, (n) => {
       n.status = 'cancelled';
       n.cancellation = { date: berlinDate(), reason };
-    });
+    }).then((n) => this.logged('cost-recovery.notice-cancelled', n, { reason }));
   }
 
   /** Payment reminder for an overdue notice: recorded with a new payment term; the letter is a PDF. */
-  remind(user: AuthenticatedUser, id: string): Promise<Notice> {
-    return this.config().then((config) =>
-      this.transition(id, ['issued', 'handed-over'], (n) => {
-        if (!isOverdue(n)) throw new ConflictException({ code: 'cost-recovery.notOverdue' });
-        n.reminders = [...(n.reminders ?? []), { date: berlinDate(), dueOn: addDays(config.reminder.days), by: user.displayName }];
-      }),
-    );
+  async remind(user: AuthenticatedUser, id: string): Promise<Notice> {
+    const config = await this.config();
+    const signer = await this.signerName(user);
+    const notice = await this.transition(id, ['issued', 'handed-over'], (n) => {
+      if (!isOverdue(n)) throw new ConflictException({ code: 'cost-recovery.notOverdue' });
+      n.reminders = [...(n.reminders ?? []), { date: berlinDate(), dueOn: addDays(config.reminder.days), by: signer }];
+    });
+    return this.logged('cost-recovery.reminder-recorded', notice, { dueOn: notice.reminders.at(-1)?.dueOn });
   }
 
   async pdf(id: string): Promise<{ number: string; data: Buffer }> {
@@ -633,20 +719,25 @@ export class NoticesService {
     if (!notice) throw new NotFoundException();
     // Issued: exactly the stored version. Draft: a preview.
     if (notice.pdf) return { number: notice.number, data: Buffer.from(notice.pdf) };
-    return { number: notice.number, data: await this.renderPdf(notice, await this.config()) };
+    return { number: notice.number, data: await this.renderPdf(notice, await this.config(), await this.paidBefore(notice)) };
   }
 
   /** Letter head: authority, date, file number, cash reference; then the debtors. */
   private letterHead(n: NoticeEntity, config: CostRecoverySettings, brigade: BrigadeSettings | null, date: string): unknown[] {
     return [
-      { columns: [{ text: [config.authority || brigade?.name || '', '\n', config.authorityAddress].join(''), style: 'small', width: '*' }, { text: `Datum: ${germanDate(date)}\nAktenzeichen: ${n.number}${n.cashReference ? `\nKassenzeichen: ${n.cashReference}` : ''}`, width: 'auto', alignment: 'right' }] },
+      {
+        columns: [
+          { text: [config.authority || brigade?.name || '', '\n', config.authorityAddress].join(''), style: 'small', width: '*' },
+          { stack: [noWrap(`Datum: ${germanDate(date)}`), noWrap(`Aktenzeichen: ${n.number}`), ...(n.cashReference ? [noWrap(`Kassenzeichen: ${n.cashReference}`)] : [])], width: 'auto', alignment: 'right' },
+        ],
+      },
       { stack: n.debtors.map((d) => ({ text: address(d), margin: [0, 6, 0, 0] })), margin: [0, 24, 0, 0] },
     ];
   }
 
-  /** Name of the person who issues (or reminds), with the function of the settings below. */
+  /** Name of the person who issues (or reminds), without a role in brackets, with the function of the settings below. */
   private signature(name: string | null, config: CostRecoverySettings): unknown {
-    return { text: `\n\n${[name ?? '(Name der erlassenden Person)', config.signer].filter(Boolean).join('\n')}`, margin: [0, 20, 0, 0] };
+    return { text: `\n\n${[(name && withoutRole(name)) || '(Name der erlassenden Person)', config.signer].filter(Boolean).join('\n')}`, margin: [0, 20, 0, 0] };
   }
 
   private async render(n: NoticeEntity, title: string, content: unknown[]): Promise<Buffer> {
@@ -668,7 +759,8 @@ export class NoticesService {
     return `${germanNumber(p.quantity)} ${p.unit}`;
   }
 
-  private async renderPdf(n: NoticeEntity, config: CostRecoverySettings): Promise<Buffer> {
+  /** The notice as PDF; an amendment shows what was paid on the replaced notice and what is left to pay or to refund. */
+  private async renderPdf(n: NoticeEntity, config: CostRecoverySettings, paidBefore = 0): Promise<Buffer> {
     const brigade = await this.settings.get<BrigadeSettings>('brigade');
     const offense = config.offenses.find((o) => o.key === n.offenseKey);
     const total = totalOf(n.positions);
@@ -680,6 +772,16 @@ export class NoticesService {
     const alarmDay = berlinDate(n.alarmedAt);
     const at = (value: string) => `${berlinDate(new Date(value)) === alarmDay ? '' : `${germanDate(berlinDate(new Date(value)))} `}${time(value)} Uhr`;
     const times = [`Alarmierung ${time(n.alarmedAt.toISOString())} Uhr`, departed && `Ausrücken ${at(departed)}`, returned && `Rückkehr ${at(returned)}`].filter(Boolean).join(' · ');
+    const remaining = round2(total - paidBefore);
+    const account = `${config.bankAccount ? ` auf das Konto ${config.bankAccount}` : ''}${n.cashReference ? ` unter Angabe des Kassenzeichens ${n.cashReference}` : ''}`;
+    const due = n.dueOn ? germanDate(n.dueOn) : '…';
+    const paymentText = !paidBefore
+      ? `Der Betrag ist bis zum ${due} zu zahlen${account}.`
+      : remaining > 0
+        ? `Der noch offene Betrag von ${euro(remaining)} ist bis zum ${due} zu zahlen${account}.`
+        : remaining < 0
+          ? `Der zu viel gezahlte Betrag von ${euro(-remaining)} wird erstattet.`
+          : 'Der Betrag ist durch die bisherigen Zahlungen beglichen.';
     const vehicleRounding = config.vehicleRounding ?? config.rounding;
     const rounding = vehicleRounding === config.rounding
       ? `Die Zeiten werden ${ROUNDING_TEXT[config.rounding]} berechnet.`
@@ -706,12 +808,19 @@ export class NoticesService {
               { text: euro(p.amount), alignment: 'right' },
             ]),
             [{ text: 'Gesamtbetrag', bold: true, colSpan: 3 }, '', '', { text: euro(total), bold: true, alignment: 'right' }],
+            ...(paidBefore
+              ? [
+                  [{ text: `Bereits gezahlt (auf ${n.amendsNumber ?? 'den ersetzten Bescheid'})`, colSpan: 3 }, '', '', { text: euro(-paidBefore), alignment: 'right' }],
+                  [{ text: remaining < 0 ? 'Zu erstatten' : 'Noch zu zahlen', bold: true, colSpan: 3 }, '', '', { text: euro(Math.abs(remaining)), bold: true, alignment: 'right' }],
+                ]
+              : []),
           ],
         },
         layout: PDF_TABLE_LAYOUT,
       },
       { text: rounding, style: 'small', margin: [0, 4, 0, 0] },
-      { text: `Der Betrag ist bis zum ${n.dueOn ? germanDate(n.dueOn) : '…'} zu zahlen${config.bankAccount ? ` auf das Konto ${config.bankAccount}` : ''}${n.cashReference ? ` unter Angabe des Kassenzeichens ${n.cashReference}` : ''}.`, margin: [0, 10, 0, 0] },
+      ...(n.guestsNotCharged ? [{ text: `${n.guestsNotCharged} ${n.guestsNotCharged === 1 ? 'Gast ohne Personalakte wurde' : 'Gäste ohne Personalakte wurden'} nicht berechnet.`, style: 'small', margin: [0, 2, 0, 0] }] : []),
+      { text: paymentText, margin: [0, 10, 0, 0] },
       ...(n.debtors.length > 1 && config.jointLiability.trim() ? [{ text: config.jointLiability, margin: [0, 6, 0, 0] }] : []),
       { text: 'Begründung', style: 'heading' },
       { text: n.reasoning },
@@ -719,7 +828,7 @@ export class NoticesService {
       { text: n.remedy },
       this.signature(n.issuedBy ?? null, config),
     ];
-    return this.render(n, 'Kostenbescheid', content);
+    return this.render(n, n.amendsId ? 'Änderungsbescheid' : 'Kostenbescheid', content);
   }
 
   /** Letter of a recorded reminder (`index`, default the last one) with the text of the settings. */

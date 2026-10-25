@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import { berlinDate, type ImportContext, type ImportProfile, type ImportRow, parseDate } from '@forga/core-api';
+import { Audit, berlinDate, type ImportContext, type ImportProfile, type ImportRow, parseDate } from '@forga/core-api';
 import type { ImportResult, ImportRowResult } from '@forga/core-contracts';
-import { OPEN_STATUSES, paidOf, round2, totalOf } from '@forga/cost-recovery-contracts';
+import { OPEN_STATUSES, paidOf, parseAmount, round2, totalOf } from '@forga/cost-recovery-contracts';
 import { NoticeEntity } from '../cost-recovery.entities.js';
 
 const field = (key: string, de: string, en: string, aliases: string[], required = false) => ({ key, label: { de, en }, required, aliases });
@@ -15,22 +15,23 @@ const FIELDS = [
   field('amount', 'Betrag', 'Amount', ['Betrag', 'Zahlbetrag', 'Eingang']),
 ];
 
-/** Amount like `1.234,50` or `1234.50`. */
-function money(text: string): number | null {
-  const cleaned = text.replace(/[€\s]/g, '');
-  const normalized = /,\d{1,2}$/.test(cleaned) ? cleaned.replace(/\./g, '').replace(',', '.') : cleaned.replace(/,/g, '');
-  const value = Number(normalized);
-  return Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
-}
+const paymentKey = (noticeId: string, date: string, amount: number) => `${noticeId}|${date}|${amount.toFixed(2)}`;
 
 /**
  * Payments reported by the treasury, by file number or cash reference. A cash reference only matches notices in
  * effect and not settled (issued, handed over, objection), so an amended original or a cancelled notice is never hit.
  * Partial payments are recorded with the remaining balance; overpayments are reported.
+ *
+ * Duplicates are counted against the payments recorded before the import: a file imported again books nothing,
+ * while the same amount twice on one day in one file (two instalments) books both and says so. Preview and import
+ * count the same way, since the preview also adds the rows in memory (without saving).
  */
 @Injectable()
 export class PaymentsImport {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly audit: Audit,
+  ) {}
 
   profile(): ImportProfile {
     return {
@@ -50,6 +51,10 @@ export class PaymentsImport {
     const em = this.em.fork();
     const results: ImportRowResult[] = [];
     const today = berlinDate();
+    // Payments per notice, date and amount recorded before this import, and how often each occurred in the file so far.
+    const before = new Map<string, number>();
+    const known = new Set<string>();
+    const seen = new Map<string, number>();
     for (const { row, values } of rows) {
       const number = values['number']?.trim();
       const cashReference = values['cashReference']?.trim();
@@ -63,6 +68,10 @@ export class PaymentsImport {
       if (!candidates.length) { error('cost-recovery.import.unknownNotice', { reference: label }); continue; }
       if (candidates.length > 1) { error('cost-recovery.import.ambiguous', { reference: label, numbers: candidates.map((n) => n.number).join(', ') }); continue; }
       const notice = candidates[0]!;
+      if (!known.has(notice.id)) {
+        known.add(notice.id);
+        for (const p of (notice.payments ?? []).filter((x) => !x.reversal)) before.set(paymentKey(notice.id, p.date, p.amount), (before.get(paymentKey(notice.id, p.date, p.amount)) ?? 0) + 1);
+      }
       const paidOn = parseDate(values['paidOn'] ?? '');
       if (!paidOn) { error('imports.invalidDate'); continue; }
       if (notice.status !== 'paid' && !OPEN_STATUSES.includes(notice.status)) { error('cost-recovery.import.notOpen', { reference: label, status: notice.status }); continue; }
@@ -72,26 +81,37 @@ export class PaymentsImport {
       const open = round2(total - paidOf(notice.payments ?? []));
       let amount = open;
       if (values['amount']) {
-        const parsed = money(values['amount']);
+        const parsed = parseAmount(values['amount']);
         if (parsed === null || parsed <= 0) { error('cost-recovery.import.invalidAmount', { value: values['amount'] }); continue; }
         amount = parsed;
       }
-      // Imported again: the same payment is not booked twice; a paid notice without amount stays as it is.
-      if ((notice.payments ?? []).some((p) => !p.reversal && p.date === paidOn && p.amount === amount) || amount <= 0) {
+      // A paid notice without amount stays as it is.
+      if (amount <= 0) {
         results.push({ row, action: 'unchanged', label, messages: [] });
         continue;
       }
+      const key = paymentKey(notice.id, paidOn, amount);
+      const occurrence = (seen.get(key) ?? 0) + 1;
+      seen.set(key, occurrence);
+      const params = { reference: notice.number, amount: amount.toFixed(2), total: total.toFixed(2), open: round2(open - amount).toFixed(2), date: paidOn };
+      // Imported again: a payment recorded before the import is not booked twice.
+      if (occurrence <= (before.get(key) ?? 0)) {
+        results.push({ row, action: 'unchanged', label, messages: [{ code: 'cost-recovery.import.alreadyRecorded', params }] });
+        continue;
+      }
       const messages: ImportRowResult['messages'] = [];
-      const params = { reference: notice.number, amount: amount.toFixed(2), total: total.toFixed(2), open: round2(open - amount).toFixed(2) };
+      if (occurrence > 1) messages.push({ code: 'cost-recovery.import.repeated', params });
       if (amount < open) messages.push({ code: 'cost-recovery.import.partialPayment', params });
       if (amount > open) messages.push({ code: 'cost-recovery.import.overpayment', params: { ...params, open: round2(amount - open).toFixed(2) } });
-      if (!dryRun) {
-        notice.payments = [...(notice.payments ?? []), { id: uuidv7(), date: paidOn, amount, note: 'Import Kämmerei', recordedBy: user.displayName, reversal: null }];
-        if (paidOf(notice.payments) >= total) Object.assign(notice, { status: 'paid', paidOn: notice.payments.filter((p) => !p.reversal).map((p) => p.date).toSorted().at(-1) });
-      }
+      // Also in the preview (not saved), so later rows of the same notice see the open amount after this one.
+      notice.payments = [...(notice.payments ?? []), { id: uuidv7(), date: paidOn, amount, note: 'Import Kämmerei', recordedBy: user.displayName, reversal: null }];
+      if (paidOf(notice.payments) >= total && notice.objection?.result !== 'pending') Object.assign(notice, { status: 'paid', paidOn: notice.payments.filter((p) => !p.reversal && p.amount > 0).map((p) => p.date).toSorted().at(-1) });
       results.push({ row, action: 'update', label, messages });
     }
-    if (!dryRun) await em.flush();
+    if (!dryRun) {
+      await em.flush();
+      await this.audit.log('cost-recovery.payments-imported', { booked: results.filter((r) => r.action === 'update').length });
+    }
     const counts = { create: 0, update: 0, unchanged: 0, error: 0 };
     for (const r of results) counts[r.action]++;
     return { dryRun, counts, rows: results };

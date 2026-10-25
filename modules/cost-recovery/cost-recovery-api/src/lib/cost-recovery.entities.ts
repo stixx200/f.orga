@@ -26,6 +26,9 @@ export const NoticeSchema = defineEntity({
     submittedAt: p.datetime().nullable(),
     submittedBy: p.string().nullable(),
     submittedById: p.string().nullable(),
+    /** Last change of the content while in review (four-eyes principle: that user cannot issue it). */
+    lastEditedBy: p.string().nullable(),
+    lastEditedById: p.string().nullable(),
     issuedAt: p.datetime().nullable(),
     issuedBy: p.string().nullable(),
     dueOn: p.string().length(10).nullable(),
