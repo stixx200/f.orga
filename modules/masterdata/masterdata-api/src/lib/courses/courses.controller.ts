@@ -26,6 +26,8 @@ import {
 import {
   BulkNominationInput,
   type BulkNominationResult,
+  BulkNominationUpdate,
+  type BulkNominationUpdateResult,
   BW_COURSE_TEMPLATE,
   type Course as CourseDto,
   type CourseAttendance as CourseAttendanceDto,
@@ -43,22 +45,28 @@ import {
   type CourseRun as CourseRunDto,
   CourseRunInput,
   MASTERDATA_EVENTS,
+  type NominationStatus,
+  OPEN_NOMINATION_STATUSES,
   type QualificationChangedEvent,
 } from '@forga/masterdata-contracts';
 import { CatalogEntry, CatalogService } from '../catalog/catalog.js';
 import { Department, Person, PersonQualification } from '../masterdata.entities.js';
-import { activeMemberships, PersonsService, READ, WRITE, validQualifications } from '../persons/persons.service.js';
+import { activeMemberships, assertNotBeforeBirth, PersonsService, READ, WRITE, validQualifications } from '../persons/persons.service.js';
 import { today } from '../shared/access.js';
 import { addMonths, ageOn } from '../shared/dates.js';
 import { Course, CourseAttendance, CourseNomination, CourseRun } from './course.entities.js';
 
 export const PLAN = 'masterdata.courses.plan';
-export const OPEN_NOMINATION = ['nominated', 'registered', 'confirmed'] as const;
+export const OPEN_NOMINATION = OPEN_NOMINATION_STATUSES;
+const isOpen = (status: NominationStatus) => (OPEN_NOMINATION as readonly NominationStatus[]).includes(status);
+/** Set only by recording (or deleting) an attendance. */
+const CLOSED_BY_ATTENDANCE: readonly NominationStatus[] = ['completed', 'failed'];
 
 type ParsedCourse = ReturnType<typeof CourseInput.parse>;
 type ParsedAttendance = ReturnType<typeof CourseAttendanceInput.parse>;
 type ParsedNomination = ReturnType<typeof CourseNominationInput.parse>;
 type ParsedBulkNomination = ReturnType<typeof BulkNominationInput.parse>;
+type ParsedBulkUpdate = ReturnType<typeof BulkNominationUpdate.parse>;
 type ParsedRun = ReturnType<typeof CourseRunInput.parse>;
 type ParsedResults = ReturnType<typeof CourseResultsInput.parse>;
 
@@ -211,16 +219,16 @@ export class CoursesController {
     const em = this.em.fork();
     const person = await this.loadForAttendance(em, id, user);
     const course = await this.course(em, input.course);
-    const { course: _key, ...fields } = input;
-    const { attendance, publish } = await this.record(em, person, course, await this.grantedEntries(em, course), { ...fields, run: null });
+    const { course: _key, confirmHeld, ...fields } = input;
+    const { attendance, publish } = await this.record(em, person, course, await this.grantedEntries(em, course), { ...fields, run: null }, confirmHeld);
     await em.flush();
     await publish();
     return toAttendanceDto(attendance);
   }
 
   /**
-   * Results of a course for several persons at once (e.g. all confirmed nominations of a course run).
-   * Persons the user may not record for, or who passed the course already, are skipped with the reason.
+   * Results of a course for several persons at once (e.g. all nominations of a course run).
+   * Persons the user may not record for, who passed the course already or have a result for the run, are skipped with the reason.
    */
   @Post('course-results')
   @RequirePermissions(READ)
@@ -238,13 +246,17 @@ export class CoursesController {
     const entries = await this.grantedEntries(em, course);
     const pending: Pending[] = [];
     const skipped: CourseResultsOutcome['skipped'] = [];
-    const seen = new Set<string>();
+    // A run's result is recorded once per person; a second one would be a duplicate (or offer a failed person again).
+    const seen = new Set<string>(run ? (await em.find(CourseAttendance, { run }, { fields: ['person'] })).map((a) => a.person.id) : []);
     for (const { personId, result, notes } of input.results) {
-      if (seen.has(personId)) continue;
+      if (seen.has(personId)) {
+        if (!skipped.some((s) => s.personId === personId) && run) skipped.push({ personId, code: 'masterdata.resultRecordedAlready' });
+        continue;
+      }
       seen.add(personId);
       try {
         const person = await this.loadForAttendance(em, personId, user);
-        pending.push((await this.record(em, person, course, entries, { ...dates, result, notes, run })).publish);
+        pending.push((await this.record(em, person, course, entries, { ...dates, result, notes, run }, input.confirmHeld)).publish);
       } catch (error) {
         skipped.push({ personId, code: codeOf(error) });
       }
@@ -323,6 +335,10 @@ export class CoursesController {
     if (!run) throw new NotFoundException();
     if (run.course.key !== input.course) throw new BadRequestException({ code: 'masterdata.nominationTargetImmutable' });
     const { course: _key, ...fields } = input;
+    // The recorded attendances carry the dates of the run (and the qualifications the date of passing): they stay fixed.
+    const moved = fields.startsOn !== run.startsOn || (fields.endsOn ?? null) !== (run.endsOn ?? null);
+    const recorded = moved ? await em.count(CourseAttendance, { run }) : 0;
+    if (recorded) throw new ConflictException({ code: 'masterdata.courseRunHasResults', count: recorded });
     em.assign(run, fields);
     await em.flush();
     return (await this.runDtos(em, user, [run]))[0];
@@ -367,16 +383,22 @@ export class CoursesController {
     const em = this.em.fork();
     const person = await this.persons.load(em, input.personId, user, PLAN);
     const course = await this.course(em, input.course);
+    if (CLOSED_BY_ATTENDANCE.includes(input.status)) throw new BadRequestException({ code: 'masterdata.nominationStatusByAttendance' });
     if (await em.count(CourseNomination, { person, course, status: { $in: [...OPEN_NOMINATION] } })) {
       throw new ConflictException({ code: 'masterdata.alreadyNominated' });
     }
+    const problem = (await this.eligibility(em, course, [person]))(person);
+    if (problem) throw new BadRequestException({ code: problem });
     const { personId: _p, course: _c, runId, ...fields } = input;
     const nomination = em.create(CourseNomination, { ...fields, person, course, run: await this.run(em, course, runId) });
     await em.flush();
     return toNominationDto(nomination);
   }
 
-  /** Nominates several persons in one request; already nominated or invisible persons are skipped with the reason. */
+  /**
+   * Nominates several persons in one request, optionally for a run and with a status. Persons who cannot be nominated
+   * are skipped with the reason: already nominated, course held, status or conditions not met, not visible.
+   */
   @Post('course-nominations/bulk')
   @RequirePermissions(PLAN)
   async nominateMany(
@@ -390,19 +412,28 @@ export class CoursesController {
       (await em.find(CourseNomination, { course, person: { $in: input.personIds }, status: { $in: [...OPEN_NOMINATION] } })).map((n) => n.person.id),
     );
     const skipped: BulkNominationResult['skipped'] = [];
-    let created = 0;
+    const persons: Person[] = [];
     for (const personId of new Set(input.personIds)) {
       if (open.has(personId)) {
         skipped.push({ personId, code: 'masterdata.alreadyNominated' });
         continue;
       }
       try {
-        const person = await this.persons.load(em, personId, user, PLAN);
-        em.create(CourseNomination, { person, course, run, priority: input.priority, desiredPeriod: input.desiredPeriod, status: 'nominated', notes: '' });
-        created++;
+        persons.push(await this.persons.load(em, personId, user, PLAN));
       } catch (error) {
         skipped.push({ personId, code: codeOf(error) });
       }
+    }
+    const problem = await this.eligibility(em, course, persons);
+    let created = 0;
+    for (const person of persons) {
+      const code = problem(person);
+      if (code) {
+        skipped.push({ personId: person.id, code });
+        continue;
+      }
+      em.create(CourseNomination, { person, course, run, priority: input.priority, desiredPeriod: input.desiredPeriod, status: input.status, notes: '' });
+      created++;
     }
     await em.flush();
     return { created, skipped };
@@ -422,6 +453,7 @@ export class CoursesController {
     if (nomination.person.id !== input.personId || nomination.course.key !== input.course) {
       throw new BadRequestException({ code: 'masterdata.nominationTargetImmutable' });
     }
+    await this.assertStatusChange(em, nomination, input.status);
     em.assign(nomination, {
       priority: input.priority,
       desiredPeriod: input.desiredPeriod,
@@ -431,6 +463,36 @@ export class CoursesController {
     });
     await em.flush();
     return toNominationDto(nomination);
+  }
+
+  /** Sets status and/or run of several nominations at once; nominations that cannot change are skipped with the reason. */
+  @Post('course-nominations/bulk-update')
+  @RequirePermissions(PLAN)
+  async updateNominations(
+    @Body(new ZodPipe(BulkNominationUpdate)) input: ParsedBulkUpdate,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<BulkNominationUpdateResult> {
+    const em = this.em.fork();
+    const skipped: BulkNominationUpdateResult['skipped'] = [];
+    let updated = 0;
+    for (const nominationId of new Set(input.nominationIds)) {
+      try {
+        const nomination = await em.findOne(CourseNomination, nominationId, { populate: ['course', 'person', 'run'] });
+        if (!nomination) throw new NotFoundException({ code: 'masterdata.unknownNomination' });
+        await this.persons.load(em, nomination.person.id, user, PLAN);
+        if (CLOSED_BY_ATTENDANCE.includes(nomination.status)) throw new BadRequestException({ code: 'masterdata.nominationStatusByAttendance' });
+        if (input.status !== undefined) await this.assertStatusChange(em, nomination, input.status);
+        const run = input.runId === undefined ? nomination.run : await this.run(em, nomination.course, input.runId);
+        em.assign(nomination, { status: input.status ?? nomination.status, run });
+        // Checked one by one, so a later nomination sees the reopened earlier ones.
+        await em.flush();
+        updated++;
+      } catch (error) {
+        em.clear();
+        skipped.push({ nominationId, code: codeOf(error) });
+      }
+    }
+    return { updated, skipped };
   }
 
   @Delete('course-nominations/:id')
@@ -466,6 +528,7 @@ export class CoursesController {
       { populate: ['course', 'run'], orderBy: { priority: 'asc', createdAt: 'asc' } },
     );
     const check = await this.conditions(em, course, persons);
+    const problem = await this.eligibility(em, course, persons);
     const byId = new Map(persons.map((p) => [p.id, p]));
     const nominated = new Set(nominations.map((n) => n.person.id));
     const runs = await em.find(CourseRun, { course }, { populate: ['course'], orderBy: { startsOn: 'desc' }, limit: 20 });
@@ -474,7 +537,7 @@ export class CoursesController {
       course: dto,
       nominations: nominations.map((n) => {
         const person = byId.get(n.person.id) as Person;
-        return { nomination: toNominationDto(n), person: this.persons.summary(person), prerequisitesMet: check.meets(person) };
+        return { nomination: toNominationDto(n), person: this.persons.summary(person), prerequisitesMet: problem(person) === null };
       }),
       candidates: persons
         .filter((p) => dto.allowedStatuses.includes(p.status) && !nominated.has(p.id) && !check.has(p) && check.meets(p))
@@ -484,8 +547,9 @@ export class CoursesController {
   }
 
   /**
-   * Course needs per active course and department the user may plan for: members (in probation or active)
-   * who have the course, the target of the course catalog and the open nominations.
+   * Course needs per active course and department the user may plan for: members with a status the course allows
+   * (e.g. youth members for Truppmann Teil 1) who have the course, the target of the course catalog and the open
+   * nominations. Departments without such members and without a target are left out (no platoon leaders in the youth brigade).
    */
   @Get('course-needs')
   @RequirePermissions(PLAN)
@@ -493,15 +557,16 @@ export class CoursesController {
     const em = this.em.fork();
     const grant = user.grant(PLAN);
     const departments = await em.find(Department, grant === 'brigade' ? {} : { id: { $in: grant ?? [] } }, { orderBy: { name: 'asc' } });
-    const persons = await this.persons.findVisible(user, PLAN, { status: { $in: ['probation', 'active'] } });
+    const persons = await this.persons.findVisible(user, PLAN, { status: { $ne: 'left' } });
     const courses = await em.find(Course, { active: true }, { orderBy: { sortOrder: 'asc', key: 'asc' } });
     const nominations = await em.find(CourseNomination, { status: { $in: [...OPEN_NOMINATION] }, person: { $in: persons.map((p) => p.id) } }, { populate: ['course'] });
     const passed = await this.passedBy(em, persons);
     const rows: CourseNeed[] = [];
     for (const course of courses) {
       const has = (p: Person) => hasCourse(course, p, passed);
+      const statuses: string[] = toCourseDto(course).allowedStatuses;
       for (const department of departments) {
-        const members = persons.filter((p) => activeMemberships(p).some((m) => m.department.id === department.id));
+        const members = persons.filter((p) => statuses.includes(p.status) && activeMemberships(p).some((m) => m.department.id === department.id));
         const target = course.targets?.[department.id] ?? null;
         if (!members.length && target === null) continue;
         rows.push({
@@ -519,21 +584,38 @@ export class CoursesController {
   // ----- Helpers -----
 
   /**
-   * Creates an attendance. A passed one must have ended, may exist only once per person and course,
-   * grants the qualifications of the course and completes the open nominations.
+   * Creates an attendance. It does not start in the future or before the birth. A passed one must have ended, may exist
+   * only once per person and course, grants the qualifications of the course and completes the open nominations.
+   * Whoever holds all its qualifications already needs `confirmHeld`; then nothing is granted twice and
+   * `masterdata.course.passed` is not published (no second course allowance). A failed one closes the open nominations
+   * of the run (or of earlier or no runs), so the person is not offered again for it.
    */
-  private async record(em: EntityManager, person: Person, course: Course, entries: CatalogEntry[], fields: AttendanceFields): Promise<{ attendance: CourseAttendance; publish: Pending }> {
+  private async record(em: EntityManager, person: Person, course: Course, entries: CatalogEntry[], fields: AttendanceFields, confirmHeld = false): Promise<{ attendance: CourseAttendance; publish: Pending }> {
     const passed = fields.result === 'passed';
     const passedOn = fields.endsOn ?? fields.startsOn;
     if (passed && passedOn > today()) throw new BadRequestException({ code: 'masterdata.courseNotFinished' });
+    if (fields.startsOn > today()) throw new BadRequestException({ code: 'masterdata.attendanceInFuture' });
+    assertNotBeforeBirth(person.birthDate, [fields.startsOn]);
     if (passed && (await em.count(CourseAttendance, { person, course, result: 'passed' }))) {
       throw new ConflictException({ code: 'masterdata.coursePassedAlready' });
     }
+    const valid = new Set(validQualifications(person, passedOn));
+    const held = entries.length > 0 && entries.every((entry) => valid.has(entry.key));
+    if (passed && held && !confirmHeld) throw new ConflictException({ code: 'masterdata.qualificationsHeld' });
     // The ID is needed before the flush to link the granted qualifications.
     const attendance = em.create(CourseAttendance, { id: uuidv7(), ...fields, person, course });
-    if (!passed) return { attendance, publish: async () => undefined };
+    const open = await em.find(CourseNomination, { person, course, status: { $in: [...OPEN_NOMINATION] } }, { populate: ['run'] });
+    if (!passed) {
+      const sameOrEarlier = (n: CourseNomination) => !n.run || n.run.id === fields.run?.id || n.run.startsOn <= fields.startsOn;
+      for (const nomination of open.filter(sameOrEarlier)) Object.assign(nomination, { status: 'failed', attendanceId: attendance.id });
+      return { attendance, publish: async () => undefined };
+    }
+    for (const nomination of open) Object.assign(nomination, { status: 'completed', attendanceId: attendance.id });
+    // Held before: a documented attendance only, without new qualifications and without the event for the allowance.
+    if (held) return { attendance, publish: async () => undefined };
 
-    for (const entry of entries) {
+    const granted = entries.filter((entry) => !valid.has(entry.key));
+    for (const entry of granted) {
       const months = entry.attributes['validityMonths'] as number | null | undefined;
       person.qualifications.add(
         em.create(PersonQualification, {
@@ -545,10 +627,6 @@ export class CoursesController {
         }),
       );
     }
-    for (const nomination of await em.find(CourseNomination, { person, course, status: { $in: [...OPEN_NOMINATION] } })) {
-      nomination.status = 'completed';
-      nomination.attendanceId = attendance.id;
-    }
     const publish = async () => {
       await this.events.publish<CoursePassedEvent>(MASTERDATA_EVENTS.coursePassed, {
         personId: person.id,
@@ -557,8 +635,8 @@ export class CoursesController {
         passedOn,
         attendanceId: attendance.id,
       });
-      for (const qualification of course.grantsQualifications) {
-        await this.events.publish<QualificationChangedEvent>(MASTERDATA_EVENTS.qualificationChanged, { personId: person.id, qualification });
+      for (const entry of granted) {
+        await this.events.publish<QualificationChangedEvent>(MASTERDATA_EVENTS.qualificationChanged, { personId: person.id, qualification: entry.key });
       }
     };
     return { attendance, publish };
@@ -604,11 +682,41 @@ export class CoursesController {
     return { meets, has: (person: Person) => hasCourse(course, person, passed) };
   }
 
+  /**
+   * Why a person cannot be nominated for the course (`null` = can be): status not allowed, course held already
+   * (passed or all its qualifications), conditions not met.
+   */
+  private async eligibility(em: EntityManager, course: Course, persons: Person[]): Promise<(person: Person) => string | null> {
+    const check = await this.conditions(em, course, persons);
+    const statuses: string[] = toCourseDto(course).allowedStatuses;
+    return (person) => {
+      if (!statuses.includes(person.status)) return 'masterdata.statusNotAllowedForCourse';
+      if (check.has(person)) return 'masterdata.courseHeldAlready';
+      if (!check.meets(person)) return 'masterdata.courseConditionsNotMet';
+      return null;
+    };
+  }
+
+  /**
+   * `completed` and `failed` follow the attendances only. Reopening a nomination (e.g. after `rejected`) must not
+   * give the person a second open nomination for the course.
+   */
+  private async assertStatusChange(em: EntityManager, nomination: CourseNomination, status: NominationStatus): Promise<void> {
+    if (status === nomination.status) return;
+    if (CLOSED_BY_ATTENDANCE.includes(status) || CLOSED_BY_ATTENDANCE.includes(nomination.status)) {
+      throw new BadRequestException({ code: 'masterdata.nominationStatusByAttendance' });
+    }
+    if (isOpen(status) && !isOpen(nomination.status)) {
+      const other = await em.count(CourseNomination, { id: { $ne: nomination.id }, person: nomination.person, course: nomination.course, status: { $in: [...OPEN_NOMINATION] } });
+      if (other) throw new ConflictException({ code: 'masterdata.alreadyNominated' });
+    }
+  }
+
   private async runDtos(em: EntityManager, user: AuthenticatedUser, runs: CourseRun[]): Promise<CourseRunDto[]> {
     if (!runs.length) return [];
     const visible = this.persons.visibleWhere(user, PLAN) ?? { id: null };
     const ids = runs.map((r) => r.id);
-    const nominations = await em.find(CourseNomination, { run: { $in: ids }, status: { $ne: 'rejected' }, person: visible });
+    const nominations = await em.find(CourseNomination, { run: { $in: ids }, status: { $in: [...OPEN_NOMINATION] }, person: visible });
     const attendances = await em.find(CourseAttendance, { run: { $in: ids }, person: visible });
     return runs.map((r) => ({
       id: r.id,

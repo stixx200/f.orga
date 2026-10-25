@@ -88,6 +88,10 @@ describe('promotions', () => {
     // The department commander of Musterstadt sees and proposes for Musterstadt only.
     const own = (await get(`/promotions/lists/${ids.list}`, commander).expect(200)).body;
     expect(own.entries.map((e: { firstName: string }) => e.firstName)).toEqual(['Jonas', 'Tim']);
+    // The overview counts only the entries the user may see.
+    const summary = (lists: { id: string; total: number; promote: number }[]) => lists.find((l) => l.id === ids.list);
+    expect(summary((await get('/promotions/lists', commander).expect(200)).body)).toMatchObject({ total: 2, promote: 2 });
+    expect(summary((await get('/promotions/lists').expect(200)).body)).toMatchObject({ total: 3, promote: 2 });
     await put(`/promotions/lists/${ids.list}/entries/${ids.lea}`, { decision: 'promote', version: own.version }, commander).expect(403);
     const rejected = await put(`/promotions/lists/${ids.list}/entries/${ids.tim}`, { decision: 'reject', version: own.version }, commander).expect(400);
     expect(rejected.body.code).toBe('promotions.reasonRequired');
@@ -117,6 +121,9 @@ describe('promotions', () => {
 
     const executed = (await post(`/promotions/lists/${ids.list}/execute`, { version: Number(ids.version) }).expect(200)).body;
     expect(executed.status).toBe('executed');
+    // Decision and execution are recorded in the audit log.
+    const audit = (await get('/core/audit?action=promotions.').expect(200)).body as { action: string; details: { listId: string } }[];
+    expect(audit.filter((e) => e.details.listId === ids.list).map((e) => e.action).toSorted()).toEqual(['promotions.list-decided', 'promotions.list-executed']);
     const jonas = (await get(`/masterdata/persons/${ids.jonas}`).expect(200)).body;
     expect(jonas.ranks.at(-1)).toMatchObject({ rank: 'ofm', since: '2026-12-20', notes: 'Hauptversammlung 2026' });
     // Tim was deferred: rank unchanged.

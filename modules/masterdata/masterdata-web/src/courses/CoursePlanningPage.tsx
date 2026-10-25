@@ -4,7 +4,7 @@ import { IconPencil, IconTrash } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
-import type { BulkNominationResult, CourseNeed, CourseNomination, CoursePlanning, CourseResultsOutcome, CourseRun } from '@forga/masterdata-contracts';
+import type { BulkNominationResult, BulkNominationUpdateResult, CourseNeed, CourseNomination, CoursePlanning, CourseResultsOutcome, CourseRun } from '@forga/masterdata-contracts';
 import { api, formatDate, send, translateCode, useLocalized, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { today, useCatalogNames, useDepartments } from '../api';
@@ -13,6 +13,10 @@ import { useCourses } from '../persons/CoursesTab';
 const NOMINATIONS = ['masterdata', 'course-nominations'] as const;
 const NEEDS = ['masterdata', 'course-needs'] as const;
 const OPEN = ['nominated', 'registered', 'confirmed'];
+const PLANNED = ['nominated', 'registered', 'confirmed', 'rejected'] as const;
+/** Select value for "leave as it is" in the bulk change. */
+const KEEP = '__keep';
+const NO_RUN = '__none';
 
 type Nomination = CoursePlanning['nominations'][number];
 type Result = 'passed' | 'failed' | 'absent';
@@ -56,7 +60,10 @@ function RunDialog({ course, run, onClose, invalidate }: { course: string; run?:
   );
 }
 
-/** Records the results of all confirmed nominations (of a run) at once; persons who did not attend are left out. */
+/**
+ * Records the results of all open nominations of a run (or of those without a run) at once; persons who did not attend
+ * are left out. Recorded persons are no longer open, so they are not offered again.
+ */
 function ResultsDialog({ course, run, nominations, onClose, invalidate }: {
   course: string;
   run: CourseRun | null;
@@ -67,8 +74,10 @@ function ResultsDialog({ course, run, nominations, onClose, invalidate }: {
   const { t, i18n } = useTranslation('masterdata');
   const { t: common } = useTranslation('common');
   const { data: departments = [] } = useDepartments();
-  const participants = nominations.filter((n) => n.nomination.status === 'confirmed' && (!run || n.nomination.runId === run.id));
-  const [results, setResults] = useState<Record<string, Result>>(() => Object.fromEntries(participants.map((n) => [n.person.id, 'passed'])));
+  const participants = nominations.filter((n) => OPEN.includes(n.nomination.status) && n.nomination.runId === (run?.id ?? null));
+  // A confirmed place is preselected as passed, the others as not attended.
+  const [results, setResults] = useState<Record<string, Result>>(() => Object.fromEntries(participants.map((n) => [n.person.id, n.nomination.status === 'confirmed' ? 'passed' : 'absent'])));
+  const [confirmHeld, setConfirmHeld] = useState(false);
   const [dates, setDates] = useState({ startsOn: today() as string | null, endsOn: null as string | null, location: '' });
   const [outcome, setOutcome] = useState<CourseResultsOutcome | null>(null);
   const end = run ? (run.endsOn ?? run.startsOn) : (dates.endsOn ?? dates.startsOn ?? '');
@@ -76,7 +85,7 @@ function ResultsDialog({ course, run, nominations, onClose, invalidate }: {
   const endError = !run && dates.endsOn && dates.startsOn && dates.endsOn < dates.startsOn ? t('courses.endBeforeStart') : undefined;
   const chosen = Object.entries(results).filter(([, r]) => r !== 'absent').map(([personId, result]) => ({ personId, result }));
   const save = useAction(
-    () => send<CourseResultsOutcome>('POST', 'masterdata/course-results', { course, runId: run?.id ?? null, ...(run ? {} : dates), results: chosen }),
+    () => send<CourseResultsOutcome>('POST', 'masterdata/course-results', { course, runId: run?.id ?? null, ...(run ? {} : dates), results: chosen, confirmHeld }),
     { success: t('planning.resultsSaved'), invalidate, onSuccess: (result) => (result.skipped.length ? setOutcome(result) : onClose()) },
   );
   const name = (id: string) => {
@@ -109,7 +118,7 @@ function ResultsDialog({ course, run, nominations, onClose, invalidate }: {
             ) : (
               <>
                 <SimpleGrid cols={2}>
-                  <DateInput label={t('courses.startsOn')} value={dates.startsOn} onChange={(v) => setDates({ ...dates, startsOn: v })} valueFormat="DD.MM.YYYY" required />
+                  <DateInput label={t('courses.startsOn')} value={dates.startsOn} onChange={(v) => setDates({ ...dates, startsOn: v })} valueFormat="DD.MM.YYYY" minDate="1900-01-01" maxDate={today()} required />
                   <DateInput label={t('courses.endsOn')} value={dates.endsOn} onChange={(v) => setDates({ ...dates, endsOn: v })} valueFormat="DD.MM.YYYY" clearable error={endError} />
                 </SimpleGrid>
                 <TextInput label={t('courses.location')} value={dates.location} onChange={(e) => setDates({ ...dates, location: e.currentTarget.value })} />
@@ -131,7 +140,7 @@ function ResultsDialog({ course, run, nominations, onClose, invalidate }: {
                     <Select
                       aria-label={t('courses.result')}
                       data={(['passed', 'failed', 'absent'] as const).map((r) => ({ value: r, label: t(`planning.result.${r}`) }))}
-                      value={results[n.person.id] ?? 'passed'}
+                      value={results[n.person.id] ?? 'absent'}
                       onChange={(v) => v && setResults({ ...results, [n.person.id]: v as Result })}
                       allowDeselect={false}
                       size="xs"
@@ -141,6 +150,7 @@ function ResultsDialog({ course, run, nominations, onClose, invalidate }: {
                 },
               ]}
             />
+            <Checkbox label={t('planning.confirmHeld')} checked={confirmHeld} onChange={(e) => setConfirmHeld(e.currentTarget.checked)} />
             <Text size="xs" c="dimmed">{t('courses.passedHint')}</Text>
           </>
         )}
@@ -167,15 +177,37 @@ function Planning({ course }: { course: string }) {
   const [runDialog, setRunDialog] = useState<{ run?: CourseRun } | null>(null);
   const [results, setResults] = useState<{ run: CourseRun | null } | null>(null);
   const [skipped, setSkipped] = useState<BulkNominationResult['skipped']>([]);
+  const [bulkRun, setBulkRun] = useState<string | null>(null);
+  const [bulkStatus, setBulkStatus] = useState<string>('nominated');
+  const [marked, setMarked] = useState<string[]>([]);
+  const [change, setChange] = useState({ status: KEEP, run: KEEP });
+  const [notChanged, setNotChanged] = useState<BulkNominationUpdateResult['skipped']>([]);
   const invalidate = [planningKey, NOMINATIONS, NEEDS];
   const nominate = useAction(
-    () => send<BulkNominationResult>('POST', 'masterdata/course-nominations/bulk', { course, personIds: chosen, priority: Number(priority), desiredPeriod: desired }),
+    () => send<BulkNominationResult>('POST', 'masterdata/course-nominations/bulk', { course, personIds: chosen, priority: Number(priority), desiredPeriod: desired, runId: bulkRun, status: bulkStatus }),
     {
       success: t('planning.nominated'),
       invalidate,
       onSuccess: (result) => {
         setChosen([]);
         setSkipped(result.skipped);
+      },
+    },
+  );
+  // Status and/or run for all marked nominations at once.
+  const updateMarked = useAction(
+    () =>
+      send<BulkNominationUpdateResult>('POST', 'masterdata/course-nominations/bulk-update', {
+        nominationIds: marked,
+        ...(change.status === KEEP ? {} : { status: change.status }),
+        ...(change.run === KEEP ? {} : { runId: change.run === NO_RUN ? null : change.run }),
+      }),
+    {
+      success: t('planning.bulkUpdated'),
+      invalidate,
+      onSuccess: (result) => {
+        setMarked([]);
+        setNotChanged(result.skipped);
       },
     },
   );
@@ -210,6 +242,12 @@ function Planning({ course }: { course: string }) {
   const runOptions = planning.runs.map((r) => ({ value: r.id, label: [period(r, i18n.language), r.location].filter(Boolean).join(' · ') }));
   const allChosen = candidates.length > 0 && candidates.every((p) => chosen.includes(p.id));
   const toggle = (id: string, on: boolean) => setChosen((list) => (on ? [...new Set([...list, id])] : list.filter((x) => x !== id)));
+  const markAll = planning.nominations.length > 0 && planning.nominations.every((n) => marked.includes(n.nomination.id));
+  const mark = (id: string, on: boolean) => setMarked((list) => (on ? [...new Set([...list, id])] : list.filter((x) => x !== id)));
+  const nominationName = (id: string) => {
+    const n = planning.nominations.find((x) => x.nomination.id === id);
+    return n ? `${n.person.lastName}, ${n.person.firstName}` : id;
+  };
   const personName = (id: string) => {
     const p = planning.candidates.find((x) => x.id === id) ?? planning.nominations.find((n) => n.person.id === id)?.person;
     return p ? `${p.lastName}, ${p.firstName}` : id;
@@ -257,6 +295,11 @@ function Planning({ course }: { course: string }) {
           empty={t('planning.noNominations')}
           highlight={(n) => !n.prerequisitesMet}
           columns={[
+            {
+              key: 'select',
+              header: ' ',
+              render: (n) => <Checkbox aria-label={`${n.person.lastName}, ${n.person.firstName}`} checked={marked.includes(n.nomination.id)} onChange={(e) => mark(n.nomination.id, e.currentTarget.checked)} />,
+            },
             { key: 'person', header: t('persons.name'), render: (n) => <Text component={Link} to={`/masterdata/persons/${n.person.id}?tab=courses`} size="sm" fw={700} c="brand">{n.person.lastName}, {n.person.firstName}</Text> },
             { key: 'department', header: t('persons.department'), render: (n) => departmentName(n.person.primaryDepartmentId) },
             {
@@ -298,7 +341,7 @@ function Planning({ course }: { course: string }) {
               render: (n) => (
                 <Select
                   aria-label={t('courses.status')}
-                  data={(['nominated', 'registered', 'confirmed', 'rejected'] as const).map((s) => ({ value: s, label: t(`nominationStatus.${s}`) }))}
+                  data={PLANNED.map((s) => ({ value: s, label: t(`nominationStatus.${s}`) }))}
                   value={n.nomination.status}
                   onChange={(v) => v && update.mutate({ ...n.nomination, status: v as CourseNomination['status'] })}
                   allowDeselect={false}
@@ -323,6 +366,37 @@ function Planning({ course }: { course: string }) {
             { key: 'remove', header: '', align: 'right', render: (n) => <ActionIcon aria-label={t('planning.remove')} onClick={() => setRemoving(n)}><IconTrash size={16} /></ActionIcon> },
           ]}
         />
+        {planning.nominations.length > 0 && (
+          <Checkbox mt="sm" label={t('planning.selectAll', { count: planning.nominations.length })} checked={markAll} onChange={(e) => setMarked(e.currentTarget.checked ? planning.nominations.map((n) => n.nomination.id) : [])} />
+        )}
+        {marked.length > 0 && (
+          <Group align="end" mt="sm">
+            <Text size="sm" fw={700}>{t('planning.selected', { count: marked.length })}</Text>
+            <Select
+              label={t('courses.status')}
+              data={[{ value: KEEP, label: t('planning.keep') }, ...PLANNED.map((s) => ({ value: s, label: t(`nominationStatus.${s}`) }))]}
+              value={change.status}
+              onChange={(v) => v && setChange({ ...change, status: v })}
+              allowDeselect={false}
+              w={170}
+            />
+            <Select
+              label={t('planning.run')}
+              data={[{ value: KEEP, label: t('planning.keep') }, { value: NO_RUN, label: t('planning.noRun') }, ...runOptions]}
+              value={change.run}
+              onChange={(v) => v && setChange({ ...change, run: v })}
+              allowDeselect={false}
+              w={220}
+            />
+            <Button variant="outline" disabled={change.status === KEEP && change.run === KEEP} loading={updateMarked.isPending} onClick={() => updateMarked.mutate(undefined)}>{t('planning.applyToSelection')}</Button>
+          </Group>
+        )}
+        {notChanged.length > 0 && (
+          <Notice kind="info">
+            {t('planning.bulkSkipped')}
+            <ul>{notChanged.map((s) => <li key={s.nominationId}>{nominationName(s.nominationId)}: {translateCode(s.code)}</li>)}</ul>
+          </Notice>
+        )}
       </Panel>
 
       <Panel title={t('planning.candidatesTitle', { count: planning.candidates.length })}>
@@ -359,6 +433,8 @@ function Planning({ course }: { course: string }) {
           <Group align="end">
             <Select label={t('courses.priority')} data={['1', '2', '3'].map((p) => ({ value: p, label: t(`priority.${p}`) }))} value={priority} onChange={(v) => v && setPriority(v)} allowDeselect={false} w={140} />
             <TextInput label={t('courses.desiredPeriod')} value={desired} onChange={(e) => setDesired(e.currentTarget.value)} w={140} />
+            <Select label={t('planning.run')} placeholder={t('planning.noRun')} data={runOptions} value={bulkRun} onChange={setBulkRun} clearable w={220} />
+            <Select label={t('courses.status')} data={OPEN.map((s) => ({ value: s, label: t(`nominationStatus.${s}`) }))} value={bulkStatus} onChange={(v) => v && setBulkStatus(v)} allowDeselect={false} w={170} />
             <Button disabled={!chosen.length} loading={nominate.isPending} onClick={() => nominate.mutate(undefined)}>{t('planning.nominate', { count: chosen.length })}</Button>
           </Group>
           {skipped.length > 0 && (

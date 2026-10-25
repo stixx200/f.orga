@@ -3,7 +3,7 @@ import { DateInput } from '@mantine/dates';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import type { CreatePersonInput, Person, PersonSummary } from '@forga/masterdata-contracts';
+import { type CreatePersonInput, type Person, type PersonSummary, STATUSES_BY_DEPARTMENT_TYPE } from '@forga/masterdata-contracts';
 import { api, can, send, useSession, useTranslation, withQuery } from '@forga/web-sdk';
 import { ActionBar, Notice, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { ageOn, keys, probationEnd, SENSITIVE, today, useDepartments, useMembershipRules, WRITE } from '../api';
@@ -29,18 +29,23 @@ export function PersonCreatePage() {
     city: '',
     departmentId: null as string | null,
     from: today(),
-    status: 'probation' as 'probation' | 'active' | 'youth',
+    status: 'probation' as 'probation' | 'active' | 'youth' | 'veterans',
     probationEndsOn: null as string | null,
     probationReason: '',
   }));
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
   const departmentId = form.departmentId ?? (writable.length === 1 ? writable[0].id : null);
   const standardEnd = probationEnd(form.from, rules?.probationMonths ?? 12);
-  const probationChanged = form.status === 'probation' && form.probationEndsOn !== null && form.probationEndsOn !== standardEnd;
   // Minors cannot join an operational department (minimum age of the statute); the server refuses it as well.
   const ageAtStart = form.birthDate ? ageOn(form.birthDate, form.from) : null;
-  const operational = departments.find((d) => d.id === departmentId)?.type === 'operational';
+  const departmentType = departments.find((d) => d.id === departmentId)?.type;
+  const operational = departmentType === 'operational';
   const tooYoung = operational && ageAtStart !== null && ageAtStart < (rules?.minimumAgeOperational ?? 17);
+  const tooYoungYouth = departmentType === 'youth' && ageAtStart !== null && ageAtStart < (rules?.minimumAgeYouth ?? 10);
+  // The status follows the type of the primary department (youth department: youth members only), as on the server.
+  const statuses = (['probation', 'active', 'youth', 'veterans'] as const).filter((s) => !departmentType || STATUSES_BY_DEPARTMENT_TYPE[departmentType].includes(s));
+  const status = statuses.includes(form.status) ? form.status : (statuses[0] ?? form.status);
+  const probationChanged = status === 'probation' && form.probationEndsOn !== null && form.probationEndsOn !== standardEnd;
   const futureBirth = Boolean(form.birthDate && form.birthDate > today());
 
   // Same name (also former members): offer to open the existing person instead of creating a duplicate.
@@ -64,7 +69,7 @@ export function PersonCreatePage() {
         postalCode: form.postalCode,
         city: form.city,
         joinedOn: form.from,
-        status: form.status,
+        status,
         memberships: [{ departmentId: departmentId!, from: form.from, primary: true }],
         ...(can(session, SENSITIVE, departmentId ?? undefined) ? { birthDate: form.birthDate } : {}),
       };
@@ -76,7 +81,7 @@ export function PersonCreatePage() {
     },
     { success: t('persons.created'), invalidate: [keys.persons], onSuccess: (person) => navigate(`/masterdata/persons/${person.id}`) },
   );
-  const valid = Boolean(form.firstName.trim() && form.lastName.trim() && departmentId && (!probationChanged || form.probationReason.trim())) && !tooYoung && !futureBirth;
+  const valid = Boolean(form.firstName.trim() && form.lastName.trim() && departmentId && (!probationChanged || form.probationReason.trim())) && !tooYoung && !tooYoungYouth && !futureBirth;
 
   return (
     <Stack gap="lg" pb={80}>
@@ -121,14 +126,15 @@ export function PersonCreatePage() {
                 <Select label={t('persons.primaryDepartment')} data={writable.map((d) => ({ value: d.id, label: d.name }))} value={departmentId} onChange={(v) => set('departmentId', v)} required />
                 <DateInput label={t('persons.admittedFrom')} value={form.from} onChange={(v) => v && set('from', v)} valueFormat="DD.MM.YYYY" required />
               </SimpleGrid>
-              <Radio.Group label={t('persons.status')} value={form.status} onChange={(v) => set('status', v as typeof form.status)}>
+              <Radio.Group label={t('persons.status')} value={status} onChange={(v) => set('status', v as typeof form.status)}>
                 <Stack gap={6} mt={4}>
-                  <Radio value="probation" label={t('status.probation')} description={t('persons.statusProbationHint')} />
-                  <Radio value="active" label={t('status.active')} description={t('persons.statusActiveHint')} />
-                  <Radio value="youth" label={t('status.youth')} />
+                  {statuses.includes('probation') && <Radio value="probation" label={t('status.probation')} description={t('persons.statusProbationHint')} />}
+                  {statuses.includes('active') && <Radio value="active" label={t('status.active')} description={t('persons.statusActiveHint')} />}
+                  {statuses.includes('youth') && <Radio value="youth" label={t('status.youth')} />}
+                  {statuses.includes('veterans') && <Radio value="veterans" label={t('status.veterans')} />}
                 </Stack>
               </Radio.Group>
-              {form.status === 'probation' && (
+              {status === 'probation' && (
                 <SimpleGrid cols={{ base: 1, sm: 2 }}>
                   <DateInput
                     label={t('persons.probationEnds')}
@@ -147,6 +153,7 @@ export function PersonCreatePage() {
                 </SimpleGrid>
               )}
               {tooYoung && <Notice kind="warning">{t('persons.tooYoung', { age: rules?.minimumAgeOperational ?? 17 })}</Notice>}
+              {tooYoungYouth && <Notice kind="warning">{t('persons.tooYoungYouth', { age: rules?.minimumAgeYouth ?? 10 })}</Notice>}
               <Text size="xs" c="dimmed">{t('persons.reminderHint')}</Text>
             </Stack>
           </Panel>

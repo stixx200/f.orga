@@ -50,8 +50,8 @@ export class PromotionsController {
 
   @Get('lists')
   @RequirePermissions(READ)
-  lists(): Promise<PromotionListSummary[]> {
-    return this.promotions.lists();
+  lists(@CurrentUser() user: AuthenticatedUser): Promise<PromotionListSummary[]> {
+    return this.promotions.lists(user);
   }
 
   @Post('lists')

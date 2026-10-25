@@ -3,9 +3,9 @@ import { DateInput } from '@mantine/dates';
 import { IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 import type { OfficeAssignment, Person } from '@forga/masterdata-contracts';
-import { formatDate, send, useLocalized, useTranslation } from '@forga/web-sdk';
+import { can, formatDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
-import { today, useCatalog, useCatalogNames, useDepartments } from '../api';
+import { today, useCatalog, useCatalogNames, useDepartments, WRITE } from '../api';
 
 type Draft = { office: string | null; departmentId: string | null; from: string | null; to: string | null; notes: string };
 
@@ -21,6 +21,11 @@ export function OfficesTab({ person, disabled, onChanged }: { person: Person; di
   const [draft, setDraft] = useState<Draft>({ office: null, departmentId: null, from: today(), to: null, notes: '' });
   const [removing, setRemoving] = useState<string | null>(null);
   const [now] = useState(() => today());
+  // Offices of a department need the permission for it, offices of the whole brigade the brigade-wide one (as on the server).
+  const session = useSession().data;
+  const brigadeWide = session?.permissions[WRITE] === 'brigade';
+  const mayEdit = (departmentId: string | null) => !disabled && (departmentId ? can(session, WRITE, departmentId) : brigadeWide);
+  const choosable = departments.filter((d) => can(session, WRITE, d.id));
   const open = (entry: OfficeAssignment | 'new') => {
     setDraft(entry === 'new' ? { office: null, departmentId: null, from: today(), to: null, notes: '' } : { office: entry.office, departmentId: entry.departmentId, from: entry.from, to: entry.to, notes: entry.notes });
     setEditing(entry);
@@ -46,7 +51,7 @@ export function OfficesTab({ person, disabled, onChanged }: { person: Person; di
       <DataTable<OfficeAssignment>
         rows={person.offices.toSorted((a, b) => b.from.localeCompare(a.from))}
         rowKey={(o) => o.id}
-        onRowClick={disabled ? undefined : open}
+        onRowClick={(o) => mayEdit(o.departmentId) && open(o)}
         empty={t('offices.empty')}
         columns={[
           { key: 'office', header: t('offices.office'), render: (o) => <Text fw={700} size="sm">{name(o.office, i18n.language)}</Text> },
@@ -59,7 +64,7 @@ export function OfficesTab({ person, disabled, onChanged }: { person: Person; di
             header: '',
             align: 'right',
             render: (o) =>
-              !disabled && (
+              mayEdit(o.departmentId) && (
                 <ActionIcon
                   aria-label={common('actions.delete')}
                   onClick={(event) => {
@@ -81,13 +86,21 @@ export function OfficesTab({ person, disabled, onChanged }: { person: Person; di
           actions={
             <Group justify="flex-end">
               <Button variant="default" onClick={() => setEditing(null)}>{common('actions.cancel')}</Button>
-              <Button loading={save.isPending} disabled={!draft.office || !draft.from || Boolean(draft.to && draft.from && draft.to < draft.from)} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
+              <Button loading={save.isPending} disabled={!draft.office || !draft.from || !mayEdit(draft.departmentId) || Boolean(draft.to && draft.from && draft.to < draft.from)} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
             </Group>
           }
         >
           <Stack gap="sm">
             <Select label={t('offices.office')} data={catalog.filter((c) => c.active).map((c) => ({ value: c.key, label: localized(c.name) }))} value={draft.office} onChange={(v) => setDraft({ ...draft, office: v })} searchable required />
-            <Select label={t('offices.department')} placeholder={t('offices.brigade')} data={departments.map((d) => ({ value: d.id, label: d.name }))} value={draft.departmentId} onChange={(v) => setDraft({ ...draft, departmentId: v })} clearable />
+            <Select
+              label={t('offices.department')}
+              placeholder={brigadeWide ? t('offices.brigade') : undefined}
+              data={choosable.map((d) => ({ value: d.id, label: d.name }))}
+              value={draft.departmentId}
+              onChange={(v) => setDraft({ ...draft, departmentId: v })}
+              clearable={brigadeWide}
+              required={!brigadeWide}
+            />
             <Group grow>
               <DateInput label={t('offices.from')} value={draft.from} onChange={(v) => setDraft({ ...draft, from: v })} valueFormat="DD.MM.YYYY" required />
               <DateInput label={t('offices.to')} description={t('offices.toHint')} value={draft.to} onChange={(v) => setDraft({ ...draft, to: v })} valueFormat="DD.MM.YYYY" clearable />

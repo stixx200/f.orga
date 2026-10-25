@@ -2,13 +2,15 @@ import type { CourseInput } from '../course.js';
 
 /**
  * Course catalog template for Baden-Württemberg (VwV Feuerwehrausbildung, Anlage 1).
- * Keys of granted qualifications match the BW catalog template.
+ * Keys of granted qualifications match the BW catalog template. Conditions such as minimum ages are template values
+ * the brigade checks against the current regulations.
  */
 const COURSES: CourseInput[] = [
   { key: 'truppmann-1', name: { de: 'Truppmann Teil 1', en: 'Basic training part 1' }, level: 'district', grantsQualifications: ['truppmann-1'], allowedStatuses: ['probation', 'active', 'youth'] },
   { key: 'truppmann-2', name: { de: 'Truppmann Teil 2', en: 'Basic training part 2' }, level: 'municipal', grantsQualifications: ['truppmann-2'], prerequisites: ['truppmann-1'] },
   { key: 'radio-operator', name: { de: 'Sprechfunker', en: 'Radio operator' }, level: 'district', grantsQualifications: ['radio-operator'], prerequisites: ['truppmann-1'] },
-  { key: 'breathing-apparatus', name: { de: 'Atemschutzgeräteträger', en: 'Breathing apparatus wearer' }, level: 'district', grantsQualifications: ['breathing-apparatus'], prerequisites: ['truppmann-1'] },
+  // Minimum age 18: template value after FwDV 7 (Atemschutz); compare with the current regulation before relying on it.
+  { key: 'breathing-apparatus', name: { de: 'Atemschutzgeräteträger', en: 'Breathing apparatus wearer' }, level: 'district', grantsQualifications: ['breathing-apparatus'], prerequisites: ['truppmann-1'], minimumAge: 18 },
   { key: 'machinist', name: { de: 'Maschinisten', en: 'Pump operator' }, level: 'district', grantsQualifications: ['machinist'], prerequisites: ['truppmann-1'] },
   { key: 'squad-leader', name: { de: 'Truppführer', en: 'Squad leader' }, level: 'district', grantsQualifications: ['squad-leader'], prerequisites: ['truppmann-2'] },
   { key: 'group-leader', name: { de: 'Gruppenführer', en: 'Group leader' }, level: 'state-school', grantsQualifications: ['group-leader'], prerequisites: ['squad-leader'] },
