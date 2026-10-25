@@ -76,9 +76,13 @@ export type Login = z.infer<typeof Login>;
 
 /** First start: creates the brigade settings and the first administrator. */
 export const Setup = z.object({
+  /** From `FORGA_SETUP_TOKEN` or the server log; proves access to the server. */
+  setupToken: z.string().trim().min(1),
   brigadeName: z.string().trim().min(1),
   username: z.string().trim().min(3),
   displayName: z.string().trim().min(1),
+  /** E-mail address of the administrator, e.g. for resetting the password. */
+  email: z.email().nullable().default(null),
   password: Password,
   language: Language.default('de'),
 });
@@ -91,6 +95,8 @@ export const UpdateProfile = z.object({
   language: Language,
   /** Weekly e-mail with the user's deadlines. */
   receiveDigest: z.boolean().default(true),
+  /** Own e-mail address; left out = unchanged, `null` = remove. */
+  email: z.email().nullable().optional(),
 });
 export type UpdateProfile = z.input<typeof UpdateProfile>;
 
@@ -152,10 +158,40 @@ export const User = z.object({
   lastLogin: z.string().nullable(),
   /** Linked to an account of the OIDC provider. */
   oidcLinked: z.boolean(),
+  /** `false` for invited users who have not set their password yet. */
+  passwordSet: z.boolean(),
   roles: z.array(z.object({ roleId: z.string(), departmentId: z.string().nullable() })),
   version: z.number(),
 });
 export type User = z.infer<typeof User>;
+
+/**
+ * Creates a user for a person of the master data: name and e-mail address come from the person,
+ * the person sets the password with the link of the invitation e-mail.
+ */
+export const UserInvitation = z.object({
+  personId: z.string().min(1),
+  /** Default: the local part of the person's e-mail address. */
+  username: z.string().trim().min(3).optional(),
+  language: Language.default('de'),
+  roles: z.array(RoleAssignmentInput).default([]),
+});
+export type UserInvitation = z.infer<typeof UserInvitation>;
+
+/** Invites several persons with the same roles ("create users from persons"). */
+export const BulkUserInvitation = z.object({
+  personIds: z.array(z.string().min(1)).min(1).max(500),
+  language: Language.default('de'),
+  roles: z.array(RoleAssignmentInput).default([]),
+});
+export type BulkUserInvitation = z.infer<typeof BulkUserInvitation>;
+
+export const BulkUserInvitationResult = z.object({
+  /** IDs of the created users. */
+  invited: z.array(z.string()),
+  skipped: z.array(z.object({ personId: z.string(), reason: z.enum(['unknownPerson', 'hasUser', 'noEmail', 'usernameTaken']) })),
+});
+export type BulkUserInvitationResult = z.infer<typeof BulkUserInvitationResult>;
 
 export const RoleInput = z.object({
   name: z.string().trim().min(1),

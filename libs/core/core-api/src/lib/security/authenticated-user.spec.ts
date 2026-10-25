@@ -42,6 +42,12 @@ describe('computeGrants', () => {
     ]);
     expect(grants.get('masterdata.persons.read')).toBe('brigade');
   });
+
+  it('extends a department assignment to the departments below it', () => {
+    const below: Record<string, string[]> = { musterstadt: ['musterstadt', 'jugend', 'alters'] };
+    const grants = computeGrants(KNOWN, [{ patterns: ['masterdata.persons.read'], departmentId: 'musterstadt' }], (id) => below[id] ?? [id]);
+    expect(grants.get('masterdata.persons.read')).toEqual(['musterstadt', 'jugend', 'alters']);
+  });
 });
 
 describe('AuthenticatedUser.can', () => {

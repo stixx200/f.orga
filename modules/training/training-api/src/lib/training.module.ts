@@ -67,4 +67,6 @@ export const trainingModule = defineModule({
   historized: [SessionTypeEntity, SessionEntity, { entity: AttendanceEntity, parent: 'session' }],
   migrations: TRAINING_MIGRATIONS,
   settings: TRAINING_SETTINGS,
+  // Whoever knows the feed token reads all sessions without logging in: only for the managers of the settings.
+  settingsAccess: { 'training.general': { managerFields: ['feedToken'] } },
 });

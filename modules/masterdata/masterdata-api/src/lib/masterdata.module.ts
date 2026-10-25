@@ -1,6 +1,6 @@
 import { Global, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, RetentionRegistry, RoleAssignment, SearchRegistry } from '@forga/core-api';
+import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, OrganizationDirectory, RetentionRegistry, RoleAssignment, SearchRegistry } from '@forga/core-api';
 import {
   MASTERDATA_MANIFEST,
   MASTERDATA_SETTINGS,
@@ -66,6 +66,7 @@ export class MasterdataModule implements OnModuleInit {
     private readonly exports: ExportRegistry,
     private readonly retention: RetentionRegistry,
     private readonly data: MasterdataData,
+    private readonly organization: OrganizationDirectory,
   ) {}
 
   /**
@@ -81,6 +82,14 @@ export class MasterdataModule implements OnModuleInit {
     this.references.register('core', (kind, id) =>
       kind === 'department' ? this.em.fork().count(RoleAssignment, { departmentId: id }) : Promise.resolve(0),
     );
+    // The core checks role assignments and user links against departments and persons, and extends a department
+    // assignment to the departments below it (youth and veterans department of an operational department).
+    this.organization.register({
+      departments: async () => (await this.em.fork().find(Department, {}, { fields: ['id', 'parent'] })).map((d) => ({ id: d.id, parentId: d.parent?.id ?? null })),
+      persons: async (ids) =>
+        (await this.em.fork().find(Person, { id: { $in: [...ids] } }, { fields: ['id', 'firstName', 'lastName', 'email'] })).map((p) => ({ id: p.id, firstName: p.firstName, lastName: p.lastName, email: p.email })),
+      catalogEntries: () => this.em.fork().count(CatalogEntry, {}),
+    });
     this.search.register('masterdata', (user, query) => this.data.search(user, query));
     this.exports.register('masterdata', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
     this.retention.register('masterdata.persons', { run: (settings, dryRun) => this.data.anonymize(settings, dryRun) });

@@ -46,11 +46,11 @@ export class ListRegistry {
   available(user: AuthenticatedUser): ListInfo[] {
     return [...this.lists.values()]
       .filter(({ definition }) => user.can(definition.permission))
-      .map(({ module, definition }) => toInfo(module, definition));
+      .map(({ module, definition }) => toInfo(module, definition, user.grant(definition.permission) ?? []));
   }
 }
 
-export function toInfo(module: string, definition: ListDefinition<never> | ListDefinition<unknown>): ListInfo {
+export function toInfo(module: string, definition: ListDefinition<never> | ListDefinition<unknown>, departments: ListInfo['departments']): ListInfo {
   return {
     id: definition.id,
     module,
@@ -59,5 +59,6 @@ export function toInfo(module: string, definition: ListDefinition<never> | ListD
     parameters: (definition.parameters ?? []).map((p) => ({ required: false, ...p })),
     signatureColumn: definition.signatureColumn ?? false,
     orientation: definition.orientation ?? 'portrait',
+    departments,
   };
 }

@@ -9,7 +9,7 @@ let admin: string;
 let provider: Server;
 let issuer = '';
 /** What the fake provider puts into the next ID token. */
-const next = { nonce: '', sub: 'abc-123', email: 'jonas@example.org' };
+const next = { nonce: '', sub: 'abc-123', email: 'jonas@example.org', emailVerified: true as boolean | undefined };
 
 const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const base64url = (value: string | Buffer) => Buffer.from(value).toString('base64url');
@@ -46,7 +46,7 @@ function startProvider(): Promise<void> {
         access_token: 'access',
         token_type: 'Bearer',
         expires_in: 300,
-        id_token: idToken({ iss: issuer, sub: next.sub, aud: 'forga', iat: now, exp: now + 300, nonce: next.nonce, email: next.email, email_verified: true }),
+        id_token: idToken({ iss: issuer, sub: next.sub, aud: 'forga', iat: now, exp: now + 300, nonce: next.nonce, email: next.email, email_verified: next.emailVerified }),
       });
     }
     res.statusCode = 404;
@@ -61,9 +61,11 @@ function startProvider(): Promise<void> {
 }
 
 /** Starts a sign-in and answers it like the provider would; returns the redirect of f.orga. */
-async function signIn(options: { state?: string } = {}) {
-  const start = await test.http.get('/api/core/oidc/start').expect(302);
-  const location = new URL(start.headers['location']);
+async function signIn(options: { state?: string; link?: string } = {}) {
+  const start = options.link
+    ? await test.http.post('/api/core/oidc/link').set('Cookie', options.link).set(UI).expect(200)
+    : await test.http.get('/api/core/oidc/start').expect(302);
+  const location = new URL(options.link ? start.body.url : start.headers['location']);
   expect(location.origin + location.pathname).toBe(`${issuer}/authorize`);
   expect(location.searchParams.get('code_challenge_method')).toBe('S256');
   expect(location.searchParams.get('redirect_uri')).toBe('http://localhost:4200/api/core/oidc/callback');
@@ -121,6 +123,50 @@ describe('OIDC sign-in', () => {
     expect((await signIn({ state: 'forged' })).headers['location']).toBe('/?oidcError=auth.oidcFailed');
     // Without the pending cookie (e.g. a replayed link) nothing happens.
     expect((await test.http.get('/api/core/oidc/callback?code=xyz&state=abc').expect(302)).headers['location']).toBe('/?oidcError=auth.oidcExpired');
+  });
+
+  it('links by e-mail only when the provider verified the address', async () => {
+    await test.http.post('/api/core/users').set('Cookie', admin).set(UI).send({ username: 'mia', displayName: 'Mia', email: 'mia@example.org', password: 'auch-sehr-geheim', roles: [] }).expect(201);
+    next.sub = 'mia-at-provider';
+    next.email = 'mia@example.org';
+    next.emailVerified = undefined;
+    expect((await signIn()).headers['location']).toBe('/?oidcError=auth.oidcUnknownUser');
+    next.emailVerified = false;
+    expect((await signIn()).headers['location']).toBe('/?oidcError=auth.oidcUnknownUser');
+    next.emailVerified = true;
+    expect((await signIn()).headers['location']).toBe('/');
+  });
+
+  it('never links administrative accounts automatically, only from their own profile', async () => {
+    await test.http.put('/api/core/profile').set('Cookie', admin).set(UI).send({ language: 'de', receiveDigest: true, email: 'admin@example.org' }).expect(200);
+    next.sub = 'admin-at-provider';
+    next.email = 'admin@example.org';
+    expect((await signIn()).headers['location']).toBe('/?oidcError=auth.oidcLinkManually');
+    const users = (await test.http.get('/api/core/users').set('Cookie', admin).expect(200)).body as { username: string; oidcLinked: boolean }[];
+    expect(users.find((u) => u.username === 'admin')?.oidcLinked).toBe(false);
+
+    // Logged in with the password, the administrator links his account himself.
+    expect((await signIn({ link: admin })).headers['location']).toBe('/profile?oidcLinked=1');
+    expect((await signIn()).headers['location']).toBe('/');
+    // The provider account cannot be linked to a second user.
+    const jonas = await test.login({ username: 'jonas', password: 'auch-sehr-geheim' });
+    expect((await signIn({ link: jonas })).headers['location']).toBe('/?oidcError=auth.oidcLinkedElsewhere');
+  });
+
+  it('tests the settings against the provider and names a failed discovery', async () => {
+    const tested = (await test.http.post('/api/core/settings/oidc/test').set('Cookie', admin).set(UI).expect(200)).body;
+    expect(tested).toEqual({ issuer, redirectUri: 'http://localhost:4200/api/core/oidc/callback' });
+    await test.http.put('/api/core/settings/oidc').set('Cookie', admin).set(UI).send({ enabled: true, issuer: 'http://127.0.0.1:1/gibt-es-nicht', clientId: 'forga', matchBy: 'email' }).expect(200);
+    expect((await test.http.post('/api/core/settings/oidc/test').set('Cookie', admin).set(UI).expect(502)).body.code).toBe('auth.oidcDiscoveryFailed');
+    expect((await test.http.get('/api/core/oidc/start').expect(302)).headers['location']).toBe('/?oidcError=auth.oidcDiscoveryFailed');
+    await test.http.put('/api/core/settings/oidc').set('Cookie', admin).set(UI).send({ enabled: true, issuer, clientId: 'forga', matchBy: 'email' }).expect(200);
+  });
+
+  it('hides the sign-in button without the public address', async () => {
+    await test.http.put('/api/core/settings/brigade').set('Cookie', admin).set(UI).send({ name: 'FF Test', publicUrl: '' }).expect(200);
+    expect((await test.http.get('/api/core/setup').expect(200)).body.oidc).toBeNull();
+    expect((await test.http.put('/api/core/settings/brigade').set('Cookie', admin).set(UI).send({ name: 'FF Test', publicUrl: 'http://forga.example.org' }).expect(400)).body.issues[0].path).toBe('publicUrl');
+    await test.http.put('/api/core/settings/brigade').set('Cookie', admin).set(UI).send({ name: 'FF Test', publicUrl: 'http://localhost:4200' }).expect(200);
   });
 
   it('lets administrators remove the link', async () => {

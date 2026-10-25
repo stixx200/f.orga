@@ -7,6 +7,9 @@ import { Course, CourseAttendance, CourseNomination } from '../courses/course.en
 import { Department, HonorAward, Membership, Person, PersonQualification, RankAssignment, Station, Vehicle } from '../masterdata.entities.js';
 import { PersonsService } from '../persons/persons.service.js';
 
+/** First and last name of anonymised persons: "N." (nomen nescio) reads the same in every language. */
+const ANONYMIZED_NAME = 'N.';
+
 const plain = async <T extends object>(em: EntityManager, entity: EntityClass<T>, where: object = {}) =>
   (await em.find(entity, where as never)).map((e) => wrap(e).toObject());
 
@@ -68,7 +71,7 @@ export class MasterdataData {
   }
 
   /**
-   * Anonymises persons who left more than the configured years ago: name becomes "Person (ausgeschieden)",
+   * Anonymises persons who left more than the configured years ago: name becomes the language-neutral "N., N." (nomen nescio; the UI marks anonymised persons in the user's language),
    * contact, sensitive data, qualifications, honours and courses are removed, and so is their history.
    * Memberships and ranks stay for past statistics; incident reports keep the reference.
    */
@@ -81,7 +84,7 @@ export class MasterdataData {
     if (dryRun || !persons.length) return persons.length;
     for (const person of persons) {
       em.assign(person, {
-        personnelNumber: null, salutation: '', title: '', firstName: 'Person', lastName: '(ausgeschieden)', nickname: '',
+        personnelNumber: null, salutation: '', title: '', firstName: ANONYMIZED_NAME, lastName: ANONYMIZED_NAME, nickname: '',
         street: '', postalCode: '', city: '', phonePrivate: '', phoneMobile: '', phoneWork: '', email: '',
         birthDate: null, birthPlace: '', employer: null, bank: null, notes: '',
         driverLicense: { classes: [], expiresOn: null, lastCheckedOn: null }, anonymizedAt: new Date(),

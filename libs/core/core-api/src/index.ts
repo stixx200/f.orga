@@ -14,6 +14,8 @@ export * from './lib/security/auth.service.js';
 export * from './lib/security/auth.guard.js';
 export * from './lib/security/password.js';
 export * from './lib/security/permission-registry.js';
+export * from './lib/security/organization-directory.js';
+export * from './lib/security/password-reset.js';
 export * from './lib/security/security.entities.js';
 export * from './lib/events/domain-events.js';
 export * from './lib/history/history-access.js';

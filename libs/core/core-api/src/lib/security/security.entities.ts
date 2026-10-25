@@ -12,8 +12,8 @@ export const UserSchema = defineEntity({
     displayName: p.string(),
     email: p.string().nullable(),
     passwordHash: p.string().nullable().hidden().lazy(),
-    /** Person in the masterdata module; no foreign key across modules. */
-    personId: p.string().nullable(),
+    /** Person in the masterdata module; no foreign key across modules. At most one user per person. */
+    personId: p.string().nullable().unique(),
     language: p.string().$type<Language>().default('de'),
     receiveDigest: p.boolean().default(true),
     active: p.boolean().default(true),

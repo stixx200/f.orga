@@ -14,8 +14,7 @@ import {
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import type { Response } from 'express';
-import { z } from 'zod';
-import type { PrivacySettings, RetentionResult, SearchHit } from '@forga/core-contracts';
+import { type PrivacySettings, type RetentionResult, RetentionRun, type SearchHit } from '@forga/core-contracts';
 import { Audit, AuditEntry } from '../audit/audit.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { CurrentUser, RequirePermissions } from '../security/decorators.js';
@@ -123,7 +122,8 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
 
   /**
    * Runs a minute after the start and then once a day, so it also runs when the server is restarted daily;
-   * switched off with `FORGA_RETENTION_SCHEDULER=off` (tests).
+   * switched off with `FORGA_RETENTION_SCHEDULER=off` (tests, or to apply the rules only by hand).
+   * Persons are only anonymised once an administrator has chosen a period (default: never).
    */
   onApplicationBootstrap(): void {
     if (process.env.FORGA_RETENTION_SCHEDULER === 'off') return;
@@ -138,8 +138,10 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
     clearInterval(this.timer);
   }
 
-  async run(dryRun: boolean): Promise<RetentionResult> {
-    const settings = (await this.settings.get<PrivacySettings>('privacy')) as PrivacySettings;
+  /** `overrides` only for dry runs: what would other values affect, before they are saved. */
+  async run(dryRun: boolean, overrides: Partial<PrivacySettings> = {}): Promise<RetentionResult> {
+    const stored = (await this.settings.get<PrivacySettings>('privacy')) as PrivacySettings;
+    const settings: PrivacySettings = dryRun ? { ...stored, ...Object.fromEntries(Object.entries(overrides).filter(([, v]) => v !== undefined)) } : stored;
     const counts: Record<string, number> = {};
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - settings.auditRetentionMonths);
@@ -223,7 +225,7 @@ export class DataController {
   @Post('retention/run')
   @HttpCode(200)
   @RequirePermissions('core.settings.manage')
-  run(@Body(new ZodPipe(z.object({ dryRun: z.boolean().default(true) }))) input: { dryRun: boolean }): Promise<RetentionResult> {
-    return this.retention.run(input.dryRun);
+  run(@Body(new ZodPipe(RetentionRun)) input: ReturnType<typeof RetentionRun.parse>): Promise<RetentionResult> {
+    return this.retention.run(input.dryRun, input.settings);
   }
 }

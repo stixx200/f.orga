@@ -1,7 +1,7 @@
 import type { Type } from '@nestjs/common';
 import type { EntityClass, EntitySchema, MigrationObject } from '@mikro-orm/core';
 import type { z } from 'zod';
-import { ModuleManifest } from '@forga/core-contracts';
+import { ModuleManifest, type SettingsAccess } from '@forga/core-contracts';
 
 export type EntityDefinition = EntityClass<object> | EntitySchema;
 
@@ -22,6 +22,8 @@ export interface ForgaModule {
   migrations: MigrationObject[];
   /** Settings sections of the module, keyed `<module-id>.<section>`. */
   settings: Record<string, z.ZodType>;
+  /** Read restrictions of the settings sections; without an entry every logged-in user may read a section. */
+  settingsAccess: Record<string, SettingsAccess>;
 }
 
 export function defineModule(module: {
@@ -31,9 +33,10 @@ export function defineModule(module: {
   historized?: HistorizedEntity[];
   migrations?: MigrationObject[];
   settings?: Record<string, z.ZodType>;
+  settingsAccess?: Record<string, SettingsAccess>;
 }): ForgaModule {
   const manifest = ModuleManifest.parse(module.manifest);
-  for (const key of Object.keys(module.settings ?? {})) {
+  for (const key of [...Object.keys(module.settings ?? {}), ...Object.keys(module.settingsAccess ?? {})]) {
     if (!key.startsWith(`${manifest.id}.`)) {
       throw new Error(`Settings section "${key}" of module "${manifest.id}" must start with "${manifest.id}.".`);
     }
@@ -45,6 +48,7 @@ export function defineModule(module: {
     historized: module.historized ?? [],
     migrations: module.migrations ?? [],
     settings: module.settings ?? {},
+    settingsAccess: module.settingsAccess ?? {},
   };
 }
 

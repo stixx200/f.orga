@@ -18,6 +18,7 @@ import {
 import { EntityManager } from '@mikro-orm/core';
 import type { Request, Response } from 'express';
 import {
+  type BrigadeSettings,
   ChangePassword,
   Impersonate,
   Login,
@@ -52,20 +53,29 @@ export class AuthController {
   @Public()
   @Get('setup')
   async setupState() {
-    const brigade = await this.settings.get<{ name: string }>('brigade');
+    const brigade = await this.settings.get<BrigadeSettings>('brigade');
     const oidc = await this.settings.get<OidcSettings>('oidc');
+    // Without the public address the provider could not send the user back: no button then.
+    const publicUrl = brigade?.publicUrl || process.env.FORGA_PUBLIC_URL;
     return {
       required: await this.auth.setupRequired(),
       brigadeName: brigade?.name ?? null,
-      oidc: oidc?.enabled && oidc.issuer && oidc.clientId ? { label: oidc.buttonLabel } : null,
+      oidc: oidc?.enabled && oidc.issuer && oidc.clientId && publicUrl ? { label: oidc.buttonLabel } : null,
     };
   }
 
-  /** First start only: creates the brigade settings, the standard roles and the first user (administrator). */
+  /**
+   * First start only: creates the brigade settings, the standard roles and the first user (administrator).
+   * Needs the setup token from the server log or `FORGA_SETUP_TOKEN`.
+   */
   @Public()
   @Post('setup')
-  async setup(@Body(new ZodPipe(Setup)) input: Setup, @Res({ passthrough: true }) res: Response) {
+  async setup(@Body(new ZodPipe(Setup)) input: ReturnType<typeof Setup.parse>, @Res({ passthrough: true }) res: Response) {
     if (!(await this.auth.setupRequired())) throw new ConflictException({ code: 'setup.done' });
+    if (!this.auth.isSetupToken(input.setupToken)) {
+      await this.audit.log('setup.invalid-token', {}, null);
+      throw new ForbiddenException({ code: 'setup.invalidToken' });
+    }
 
     const em = this.em.fork();
     const passwordHash = await hashPassword(input.password);
@@ -73,9 +83,9 @@ export class AuthController {
     const user = await em.transactional(async (tx) => {
       await tx.getConnection().execute('select pg_advisory_xact_lock(4711)', [], 'all', tx.getTransactionContext());
       if (await tx.count(User, { technical: false })) throw new ConflictException({ code: 'setup.done' });
-      await this.roleTemplates.createMissing(tx, input.language ?? 'de');
+      await this.roleTemplates.createMissing(tx, input.language);
       const role = await tx.findOneOrFail(Role, { templateKey: 'administrator' });
-      const created = tx.create(User, { username: input.username, displayName: input.displayName, passwordHash, language: input.language ?? 'de' });
+      const created = tx.create(User, { username: input.username, displayName: input.displayName, email: input.email, passwordHash, language: input.language });
       tx.create(RoleAssignment, { user: created, role, departmentId: null });
       await tx.flush();
       return created;
@@ -165,6 +175,12 @@ export class AuthController {
     const user = await em.findOneOrFail(User, current.id);
     user.language = input.language;
     user.receiveDigest = input.receiveDigest;
+    if (input.email !== undefined && input.email !== user.email) {
+      // During an impersonation the address (and with it password resets) stays the user's own business.
+      if (current.impersonator) throw new ForbiddenException({ code: 'auth.impersonationNotAllowed' });
+      user.email = input.email;
+      await this.audit.log('auth.email-changed', {});
+    }
     await em.flush();
     return { ok: true };
   }
