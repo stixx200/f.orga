@@ -126,16 +126,24 @@ export class IncidentsLookupService implements IncidentsLookup {
     return {
       ...(await this.summary(incident)),
       alarmMessage: incident.alarmMessage,
+      notes: incident.notes,
       compensationKind: keyword?.compensationKind ?? 'incident',
-      reports: incident.reports.getItems().map((r) => ({
+      reports: incident.reports.getItems().toSorted((a, b) => Number(b.primary) - Number(a.primary)).map((r) => ({
         reportId: r.id,
         departmentId: r.departmentId,
         status: r.status,
+        number: r.number,
+        situation: r.situation,
+        actions: r.actions,
+        cause: r.cause,
+        incidentCommander: r.incidentCommander,
         alarmedAt: r.alarmedAt.toISOString(),
+        departedAt: r.departedAt?.toISOString() ?? null,
         returnedAt: r.returnedAt.toISOString(),
         personnel: r.personnel.getItems().map((p) => ({
           personId: p.personId ?? null,
           name: p.personId ? (persons.get(p.personId) ?? '') : p.guestName,
+          vehicleId: p.vehicleId ?? null,
           ...assignmentTimes(p, r),
           standby: Boolean(p.standbyStationId),
         })),

@@ -11,6 +11,7 @@
     "plugin": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/plugin.mts",
     "migration:create": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/migration.mts create",
     "migration:run": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/migration.mts run",
+    "migration:reset": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/migration-reset.mts",
     "dev": "nx run-many -t serve --parallel=20",
     "seed": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/seed.mts",
     "e2e": "playwright test -c e2e/playwright.config.ts",

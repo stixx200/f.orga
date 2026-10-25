@@ -24,7 +24,7 @@ import {
 } from '@forga/masterdata-contracts';
 import { localDate } from '../domain/compensation.js';
 import { AlarmKeywordEntity, IncidentEntity, ReportPersonnelEntity } from '../incidents.entities.js';
-import { RELEASE, ReportsService } from '../reports/reports.service.js';
+import { addCrewVehicles, RELEASE, ReportsService } from '../reports/reports.service.js';
 import { statisticsFromMpFeuer } from './mp-feuer-statistics.js';
 import { readIncidents } from './mp-feuer.transfer.js';
 
@@ -208,7 +208,7 @@ export class MpFeuerIncidentsImport {
         continue;
       }
       report ??= await this.reports.createReport(em, current, department.id, null);
-      await em.populate(report, ['personnel']);
+      await em.populate(report, ['personnel', 'vehicles']);
 
       // MP-Feuer may hold several reports of a department for one dispatch number; f.orga keeps one and merges their personnel.
       const earlier = handled.get(report.id);
@@ -288,6 +288,7 @@ export class MpFeuerIncidentsImport {
         );
         results.push({ row, action: created ? 'create' : 'update', label, messages });
       }
+      addCrewVehicles(em, report);
     }
 
     if (!dryRun) await em.flush();

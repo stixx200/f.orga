@@ -17,7 +17,7 @@
 - **Modulgrenzen:** Module importieren voneinander nur `*-contracts`-Pakete. Verträge (Zod) liegen in `*-contracts` und werden von Backend und Frontend genutzt. Geprüft wird das mit `tools/module-boundaries.mjs` über die Nx-Tags `scope:*` und `type:*`.
 - **ESM:** Backend-Bibliotheken sind ESM (`nodenext`). Relative Importe enden auf `.js`.
 - **Historie:** Neue Entitäten werden im Modul unter `historized` gemeldet, damit die Historie entsteht.
-- **Migrationen:** nur mit `npm run migration:create -- <modul|core> <name>` erzeugen, nie von Hand.
+- **Migrationen:** Bis zum ersten Release nur eine `initial` je Modul: nach Änderungen an Entitäten `npm run migration:reset` und die Entwicklungsdatenbank neu anlegen (danach `npm run seed`). Migrationen nie von Hand schreiben.
 - **Vor jedem Commit:** `npm run check` (Lint, Modulgrenzen, Typprüfung, Unit- und Integrationstests, Build).
 
 <!-- nx configuration start-->

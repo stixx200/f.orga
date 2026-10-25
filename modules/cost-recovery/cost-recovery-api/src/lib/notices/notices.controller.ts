@@ -4,7 +4,7 @@ import type { Response } from 'express';
 import ExcelJS from 'exceljs';
 import { z } from 'zod';
 import { addStyledSheet, type AuthenticatedUser, berlinDate, CurrentUser, RequirePermissions, ZodPipe } from '@forga/core-api';
-import { type AddressBookEntry, AddressBookInput, type Candidate, CancellationInput, type CostRecoverySettings, type HandoverColumn, type Notice, NoticeInput, ObjectionInput, PaymentInput, totalOf } from '@forga/cost-recovery-contracts';
+import { type AddressBookEntry, AddressBookInput, type Candidate, CancellationInput, type CostRecoverySettings, type HandoverColumn, type Notice, type NoticeIncident, NoticeInput, ObjectionInput, PaymentInput, totalOf } from '@forga/cost-recovery-contracts';
 import { AddressBookEntity, NoticeEntity } from '../cost-recovery.entities.js';
 import { NoticesService, toNoticeDto } from './notices.service.js';
 
@@ -64,6 +64,13 @@ export class NoticesController {
   @RequirePermissions(READ)
   async get(@Param('id') id: string): Promise<Notice> {
     return toNoticeDto(await this.notices.load(this.em.fork(), id));
+  }
+
+  /** The incident of the notice, for reading it while the notice is written. */
+  @Get('notices/:id/incident')
+  @RequirePermissions(READ)
+  incident(@Param('id') id: string): Promise<NoticeIncident> {
+    return this.notices.incidentOf(id);
   }
 
   @Put('notices/:id')

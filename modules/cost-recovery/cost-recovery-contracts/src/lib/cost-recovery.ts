@@ -186,6 +186,37 @@ export type AddressBookInput = z.input<typeof AddressBookInput>;
 export const AddressBookEntry = AddressBookInput.extend({ id: z.uuid(), version: z.number() });
 export type AddressBookEntry = z.infer<typeof AddressBookEntry>;
 
+/** The incident of a notice for reading while editing it (`GET /cost-recovery/notices/:id/incident`), names resolved. */
+export const NoticeIncident = z.object({
+  incidentId: z.uuid(),
+  dispatchNumber: z.string(),
+  alarmKeyword: z.string(),
+  alarmMessage: z.string(),
+  alarmedAt: z.string(),
+  location: z.string(),
+  chargeableReason: z.string(),
+  notes: z.string(),
+  reports: z.array(
+    z.object({
+      reportId: z.uuid(),
+      department: z.string(),
+      number: z.string(),
+      status: z.string(),
+      alarmedAt: z.string(),
+      departedAt: z.string().nullable(),
+      returnedAt: z.string(),
+      incidentCommander: z.string(),
+      situation: z.string(),
+      actions: z.string(),
+      cause: z.string(),
+      vehicles: z.array(z.object({ vehicleId: z.string(), name: z.string(), departedAt: z.string().nullable(), returnedAt: z.string().nullable(), crew: z.number() })),
+      personnel: z.array(z.object({ name: z.string(), vehicle: z.string(), from: z.string(), to: z.string(), standby: z.boolean() })),
+      parties: z.array(z.object({ role: z.string(), name: z.string(), street: z.string(), postalCode: z.string(), city: z.string() })),
+    }),
+  ),
+});
+export type NoticeIncident = z.infer<typeof NoticeIncident>;
+
 /** A chargeable incident with its notice, if any. */
 export const Candidate = z.object({
   incidentId: z.uuid(),

@@ -27,14 +27,23 @@ export interface ChargeableIncident {
 
 export interface IncidentForCostRecovery extends ChargeableIncident {
   alarmMessage: string;
+  /** Notes on the costs of the whole incident. */
+  notes: string;
   compensationKind: 'incident' | 'standby' | 'fire-watch';
   reports: {
     reportId: string;
     departmentId: string;
     status: string;
     alarmedAt: string;
+    /** Departure of the first vehicle; `null` if not recorded. */
+    departedAt: string | null;
+    number: string;
+    situation: string;
+    actions: string;
+    cause: string;
+    incidentCommander: string;
     returnedAt: string;
-    personnel: { personId: string | null; name: string; from: string; to: string; standby: boolean }[];
+    personnel: { personId: string | null; name: string; vehicleId: string | null; from: string; to: string; standby: boolean }[];
     vehicles: { vehicleId: string; departedAt: string | null; returnedAt: string | null }[];
     parties: { role: PartyRole; name: string; street: string; postalCode: string; city: string }[];
   }[];
