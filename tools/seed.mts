@@ -538,7 +538,7 @@ async function respiratoryProtection(persons: PersonRef[]): Promise<void> {
     // 75 % fit, 15 % with evidence expiring within 60 days, 10 % with an expired examination.
     const old = roll > 0.75 && roll <= 0.9 ? 330 : 0;
     const examination = roll > 0.9 ? 1200 : between(30, 700);
-    evidence.push({ personId: person.id, kind: 'examination', date: daysAgo(examination), examiner: 'Betriebsarzt' });
+    evidence.push({ personId: person.id, kind: 'examination', date: daysAgo(examination), examiner: 'Betriebsarzt', result: 'no-concerns' });
     evidence.push({ personId: person.id, kind: 'briefing', date: daysAgo(old || between(20, 250)) });
     evidence.push({ personId: person.id, kind: 'stress-exercise', date: daysAgo(old ? old - 5 : between(20, 280)), facility: 'Atemschutzübungsstrecke Kreis', kilojoules: between(82, 110), passed: true });
     evidence.push({ personId: person.id, kind: 'exercise', date: daysAgo(between(10, 300)), minutes: between(15, 35) });
@@ -621,9 +621,12 @@ async function equipment(persons: PersonRef[]): Promise<void> {
         if (chance(0.03)) await call('POST', `equipment/items/${item.id}/defects`, { description: pick(['Riss im Gehäuse', 'Dichtung porös', 'Display ohne Anzeige', 'Kupplung schwergängig']) });
       }
     }
-    for (const [typeKey, name, quantity] of [['pressure-hose-b', 'B-Schlauch 20 m', between(6, 12)], ['pressure-hose-c', 'C-Schlauch 15 m', between(8, 16)]] as const) {
-      await call('POST', 'equipment/items', { inventoryNumber: `${prefix}-${typeKey}`, name, typeKey, categoryKey: 'hoses', departmentId: vehicle.departmentId, vehicleId: vehicle.id, loadingPlace: 'Heck', quantity, barcode: barcode('2000'), rfid: rfidChip() });
-      count++;
+    // Hoses as single items (default of the template), each with its own record of pressure tests after washing.
+    for (const [typeKey, name, quantity] of [['pressure-hose-b', 'B-Schlauch 20 m', big ? between(6, 10) : 2], ['pressure-hose-c', 'C-Schlauch 15 m', big ? between(6, 10) : 2]] as const) {
+      for (let n = 1; n <= quantity; n++) {
+        await call('POST', 'equipment/items', { inventoryNumber: `${prefix}-${typeKey}-${n}`, name: `${name} ${n}`, typeKey, categoryKey: 'hoses', departmentId: vehicle.departmentId, vehicleId: vehicle.id, loadingPlace: 'Heck', barcode: barcode('2000'), rfid: rfidChip() });
+        count++;
+      }
     }
   }
   console.log(`  ${count} Geräte für ${vehicles.length} Fahrzeuge`);

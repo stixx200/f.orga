@@ -1,7 +1,10 @@
 import { defineEntity, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
+import { berlinDate } from '@forga/core-api';
 import type { LocalizedText } from '@forga/core-contracts';
 import type { DefectStatus, InspectionResult, InspectionType, ItemStatus, Tracking } from '@forga/equipment-contracts';
+
+const berlinToday = () => berlinDate();
 
 export const CategorySchema = defineEntity({
   name: 'CategoryEntity',
@@ -14,6 +17,7 @@ export const CategorySchema = defineEntity({
     parentKey: p.string().nullable(),
     tracking: p.string().$type<Tracking>().default('item'),
     breathingApparatus: p.boolean().default(false),
+    lockWhenOverdue: p.boolean().default(false),
     version: p.integer().version(),
   },
 });
@@ -66,12 +70,17 @@ export const ItemSchema = defineEntity({
     expiresOn: p.string().length(10).nullable(),
     /** `null` = inspections of the type. */
     inspections: p.json<InspectionType[]>().nullable(),
+    /** Inspection key → own interval in months. */
+    intervalOverrides: p.json<Record<string, number>>().defaultRaw("'{}'::jsonb"),
     status: p.string().$type<ItemStatus>().default('ready'),
     /** Inspection key → date it became due (after use, incident, washing). */
     triggered: p.json<Record<string, string>>().defaultRaw("'{}'::jsonb"),
     retirement: p.json<{ date: string; reason: string; disposition: string }>().nullable(),
     forVehicleId: p.string().nullable().unique(),
+    labelPrintedAt: p.datetime().nullable(),
     notes: p.text().default(''),
+    /** Day the item was recorded (Europe/Berlin); items never inspected are due from then, unless purchased earlier. */
+    createdOn: p.string().length(10).onCreate(() => berlinToday()),
     version: p.integer().version(),
   },
 });
@@ -96,6 +105,10 @@ export const InspectionSchema = defineEntity({
     notes: p.text().default(''),
     recordedBy: p.string(),
     qualificationWarning: p.boolean().default(false),
+    /** Cancelled inspections do not count for the due dates. */
+    cancelled: p.boolean().default(false),
+    /** Reason of the last correction or of the cancellation (the history keeps earlier ones). */
+    changeReason: p.text().default(''),
   },
 });
 export class InspectionEntity extends InspectionSchema.class {}

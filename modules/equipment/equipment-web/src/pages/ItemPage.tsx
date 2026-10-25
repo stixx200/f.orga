@@ -2,16 +2,18 @@ import { Button, Group, Menu, SimpleGrid, Stack, Tabs, Text, Textarea, TextInput
 import { DateInput } from '@mantine/dates';
 import { QRCodeSVG } from 'qrcode.react';
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import type { Defect, Inspection, Item, ItemIncident } from '@forga/equipment-contracts';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
+import type { Defect, Inspection, Item, ItemIncident, ItemSummary } from '@forga/equipment-contracts';
 import { apiUrl, can, formatDate, formatMoney, localDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
-import { INSPECT, keys, READ, useCategoryName, useDefects, useDepartments, useInspections, useItem, useItemIncidents, usePersons, usePlace, WRITE } from '../api';
+import { keys, READ, useCategoryName, useDefects, useDepartments, useInspections, useItem, useItemAccess, useItemIncidents, useLabelBase, usePersons, usePlace, WRITE } from '../api';
 import { AttachmentsDialog, DefectPhotoInput, DueDate, ItemStatusBadge, uploadDefectPhoto } from '../parts';
 import { InspectionDialog } from './InspectionDialog';
 import { ItemDialog } from './ItemDialog';
 
-export function DefectDialog({ item, onClose }: { item: Item; onClose: () => void }) {
+const TABS = ['data', 'inspections', 'defects', 'incidents', 'history'] as const;
+
+export function DefectDialog({ item, onClose }: { item: Pick<Item, 'id' | 'inventoryNumber' | 'name'>; onClose: () => void }) {
   const { t } = useTranslation('equipment');
   const { t: common } = useTranslation('common');
   const [description, setDescription] = useState('');
@@ -60,9 +62,34 @@ function RetireDialog({ item, onClose }: { item: Item; onClose: () => void }) {
       }
     >
       <Text size="sm" c="dimmed">{t('item.retireHint')}</Text>
-      <DateInput label={t('item.retireDate')} value={form.date} onChange={(v) => v && setForm({ ...form, date: v })} valueFormat="DD.MM.YYYY" />
+      <DateInput label={t('item.retireDate')} value={form.date} onChange={(v) => v && setForm({ ...form, date: v })} valueFormat="DD.MM.YYYY" maxDate={localDate()} />
       <TextInput label={t('item.retireReason')} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.currentTarget.value })} required />
       <TextInput label={t('item.disposition')} value={form.disposition} onChange={(e) => setForm({ ...form, disposition: e.currentTarget.value })} />
+    </ResponsiveDialog>
+  );
+}
+
+/** Cancels an inspection recorded by mistake; it stays in the history with the reason. */
+function CancelInspectionDialog({ inspection, title, onClose }: { inspection: Inspection; title: string; onClose: () => void }) {
+  const { t } = useTranslation('equipment');
+  const { t: common } = useTranslation('common');
+  const [reason, setReason] = useState('');
+  const save = useAction(() => send('POST', `equipment/inspections/${inspection.id}/cancel`, { reason }), { success: t('inspection.cancelled'), invalidate: [keys.all], onSuccess: onClose });
+  return (
+    <ResponsiveDialog
+      opened
+      onClose={onClose}
+      title={t('inspection.cancel')}
+      actions={
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button>
+          <Button color="red" loading={save.isPending} disabled={reason.trim().length < 3} onClick={() => save.mutate(undefined)}>{t('inspection.cancel')}</Button>
+        </Group>
+      }
+    >
+      <Text size="sm">{title}</Text>
+      <Text size="sm" c="dimmed">{t('inspection.cancelHint')}</Text>
+      <TextInput label={t('inspection.reason')} value={reason} onChange={(e) => setReason(e.currentTarget.value)} required data-autofocus />
     </ResponsiveDialog>
   );
 }
@@ -73,6 +100,8 @@ function InspectionsTab({ item, canInspect }: { item: Item; canInspect: boolean 
   const { data = [] } = useInspections(item.id);
   const { data: persons = [] } = usePersons();
   const [recording, setRecording] = useState<string | null>(null);
+  const [correcting, setCorrecting] = useState<Inspection | null>(null);
+  const [cancelling, setCancelling] = useState<Inspection | null>(null);
   const [files, setFiles] = useState<Inspection | null>(null);
   const trigger = useAction((inspectionKey: string) => send('POST', `equipment/items/${item.id}/trigger`, { inspectionKey }), { invalidate: [keys.all] });
   const name = (key: string) => {
@@ -90,6 +119,14 @@ function InspectionsTab({ item, canInspect }: { item: Item; canInspect: boolean 
           columns={[
             { key: 'name', header: t('inspection.type'), render: (d) => <Text size="sm" fw={700}>{localized(d.name)}</Text> },
             { key: 'trigger', header: t('inspection.trigger'), render: (d) => t(`trigger.${item.inspections.find((x) => x.key === d.key)?.trigger ?? 'periodic'}`) },
+            {
+              key: 'interval',
+              header: t('inspection.interval'),
+              render: (d) => {
+                const months = item.inspections.find((x) => x.key === d.key)?.intervalMonths;
+                return months ? `${t('inspection.months', { count: months })}${item.intervalOverrides[d.key] ? ` (${t('inspection.overridden')})` : ''}` : '–';
+              },
+            },
             { key: 'last', header: t('inspection.last'), render: (d) => formatDate(d.lastDate, i18n.language) },
             { key: 'due', header: t('inspection.due'), render: (d) => <DueDate dueOn={d.dueOn} /> },
             {
@@ -115,11 +152,25 @@ function InspectionsTab({ item, canInspect }: { item: Item; canInspect: boolean 
           rowKey={(i) => i.id}
           empty={t('inspection.noHistory')}
           columns={[
-            { key: 'date', header: t('inspection.date'), render: (i) => formatDate(i.date, i18n.language) },
+            { key: 'date', header: t('inspection.date'), render: (i) => <Text size="sm" td={i.cancelled ? 'line-through' : undefined}>{formatDate(i.date, i18n.language)}</Text> },
             { key: 'type', header: t('inspection.type'), render: (i) => name(i.inspectionKey) },
-            { key: 'result', header: t('inspection.result'), render: (i) => <StatusBadge tone={i.result === 'passed' ? 'done' : i.result === 'failed' ? 'error' : 'warning'}>{t(`result.${i.result}`)}</StatusBadge> },
+            {
+              key: 'result',
+              header: t('inspection.result'),
+              render: (i) =>
+                i.cancelled ? <StatusBadge tone="neutral">{t('inspection.cancelledBadge')}</StatusBadge> : <StatusBadge tone={i.result === 'passed' ? 'done' : i.result === 'failed' ? 'error' : 'warning'}>{t(`result.${i.result}`)}</StatusBadge>,
+            },
             { key: 'by', header: t('inspection.inspector'), render: (i) => <>{inspector(i)}{i.qualificationWarning && <Text size="xs" c="orange.8">{t('inspection.qualificationWarning')}</Text>}</> },
-            { key: 'notes', header: t('inspection.notes'), render: (i) => [i.measurements, i.notes].filter(Boolean).join(' · ') },
+            {
+              key: 'notes',
+              header: t('inspection.notes'),
+              render: (i) => (
+                <>
+                  {[i.measurements, i.notes].filter(Boolean).join(' · ')}
+                  {i.changeReason && <Text size="xs" c="dimmed">{t(i.cancelled ? 'inspection.cancelReason' : 'inspection.correctionReason', { reason: i.changeReason })}</Text>}
+                </>
+              ),
+            },
             { key: 'next', header: t('inspection.nextDue'), render: (i) => formatDate(i.nextDueOn, i18n.language) },
             {
               key: 'report',
@@ -129,6 +180,15 @@ function InspectionsTab({ item, canInspect }: { item: Item; canInspect: boolean 
                 <Group gap={4} justify="flex-end" wrap="nowrap">
                   <Button size="compact-xs" variant="subtle" onClick={() => setFiles(i)}>{t('attachmentsButton')}</Button>
                   <Button size="compact-xs" variant="subtle" component="a" href={apiUrl('core/lists/equipment.inspection-report/export/pdf', { inspectionId: i.id, lang: i18n.language })} target="_blank">{t('protocol.single')}</Button>
+                  {canInspect && !i.cancelled && (
+                    <Menu position="bottom-end">
+                      <Menu.Target><Button size="compact-xs" variant="subtle">{t('item.more')}</Button></Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item onClick={() => setCorrecting(i)}>{t('inspection.correct')}</Menu.Item>
+                        <Menu.Item color="red" onClick={() => setCancelling(i)}>{t('inspection.cancel')}</Menu.Item>
+                      </Menu.Dropdown>
+                    </Menu>
+                  )}
                 </Group>
               ),
             },
@@ -136,6 +196,8 @@ function InspectionsTab({ item, canInspect }: { item: Item; canInspect: boolean 
         />
       </Panel>
       {recording && <InspectionDialog item={item} inspectionKey={recording} onClose={() => setRecording(null)} />}
+      {correcting && <InspectionDialog item={item} inspection={correcting} onClose={() => setCorrecting(null)} />}
+      {cancelling && <CancelInspectionDialog inspection={cancelling} title={`${name(cancelling.inspectionKey)} · ${formatDate(cancelling.date, i18n.language)}`} onClose={() => setCancelling(null)} />}
       {files && <AttachmentsDialog title={`${name(files.inspectionKey)} · ${formatDate(files.date, i18n.language)}`} type="equipment.inspection" id={files.id} editable={canInspect} onClose={() => setFiles(null)} />}
     </Stack>
   );
@@ -147,19 +209,19 @@ function DefectsTab({ item, canWrite }: { item: Item; canWrite: boolean }) {
   const [files, setFiles] = useState<Defect | null>(null);
   return (
     <>
-    <DataTable<Defect>
-      rows={data}
-      rowKey={(d) => d.id}
-      empty={t('defect.none')}
-      columns={[
-        { key: 'date', header: t('defect.reportedAt'), render: (d) => formatDate(d.reportedAt, i18n.language) },
-        { key: 'description', header: t('defect.description'), render: (d) => <><Text size="sm">{d.description}</Text>{d.resolution && <Text size="xs" c="dimmed">{d.resolution}</Text>}</> },
-        { key: 'by', header: t('defect.by'), render: (d) => d.reportedBy },
-        { key: 'status', header: t('fields.status'), render: (d) => <StatusBadge tone={d.status === 'fixed' ? 'done' : d.status === 'retired' ? 'neutral' : 'error'}>{t(`defectStatus.${d.status}`)}</StatusBadge> },
-        { key: 'files', header: '', align: 'right', render: (d) => <Button size="compact-xs" variant="subtle" onClick={() => setFiles(d)}>{t('attachmentsButton')}</Button> },
-      ]}
-    />
-    {files && <AttachmentsDialog title={files.description} type="equipment.defect" id={files.id} editable={canWrite} onClose={() => setFiles(null)} />}
+      <DataTable<Defect>
+        rows={data}
+        rowKey={(d) => d.id}
+        empty={t('defect.none')}
+        columns={[
+          { key: 'date', header: t('defect.reportedAt'), render: (d) => formatDate(d.reportedAt, i18n.language) },
+          { key: 'description', header: t('defect.description'), render: (d) => <><Text size="sm">{d.description}</Text>{d.resolution && <Text size="xs" c="dimmed">{d.resolution}</Text>}</> },
+          { key: 'by', header: t('defect.by'), render: (d) => d.reportedBy },
+          { key: 'status', header: t('fields.status'), render: (d) => <StatusBadge tone={d.status === 'fixed' ? 'done' : d.status === 'retired' ? 'neutral' : 'error'}>{t(`defectStatus.${d.status}`)}</StatusBadge> },
+          { key: 'files', header: '', align: 'right', render: (d) => <Button size="compact-xs" variant="subtle" onClick={() => setFiles(d)}>{t('attachmentsButton')}</Button> },
+        ]}
+      />
+      {files && <AttachmentsDialog title={files.description} type="equipment.defect" id={files.id} editable={canWrite} onClose={() => setFiles(null)} />}
     </>
   );
 }
@@ -186,23 +248,48 @@ function IncidentsTab({ item }: { item: Item }) {
   );
 }
 
-/** Equipment file: master data, inspections, defects, history; QR code for mobile use. */
+/** Members who may only report defects: name, number and "report a defect" (from a scanned label). */
+function ReportOnlyPage({ item, reporting, setReporting }: { item: ItemSummary; reporting: boolean; setReporting: (on: boolean) => void }) {
+  const { t } = useTranslation('equipment');
+  return (
+    <Stack gap="lg">
+      <PageHeader
+        breadcrumbs={[{ label: t('module') }, { label: item.inventoryNumber }]}
+        title={item.name}
+        badges={<StatusBadge>{item.inventoryNumber}</StatusBadge>}
+        actions={item.status !== 'retired' && <Button onClick={() => setReporting(true)}>{t('defect.report')}</Button>}
+      />
+      <Notice kind="info">{t('item.reportOnly')}</Notice>
+      {reporting && <DefectDialog item={item} onClose={() => setReporting(false)} />}
+    </Stack>
+  );
+}
+
+/** Equipment file: master data, inspections, defects, history; QR code for mobile use. `?tab=` opens a tab, `?report=defect` the defect dialog. */
 export function ItemPage() {
   const { id = '' } = useParams();
+  const [params, setParams] = useSearchParams();
   const { t, i18n } = useTranslation('equipment');
   const { t: common } = useTranslation('common');
+  const navigate = useNavigate();
   const session = useSession().data;
   const category = useCategoryName();
   const place = usePlace();
+  const access = useItemAccess();
+  const { base } = useLabelBase();
   const { data: departments = [] } = useDepartments();
   const { data: item, isLoading } = useItem(id);
-  const [dialog, setDialog] = useState<'edit' | 'inspect' | 'defect' | 'retire' | null>(null);
+  const [dialog, setDialog] = useState<'edit' | 'inspect' | 'defect' | 'retire' | null>(() => (params.get('report') === 'defect' ? 'defect' : null));
   const status = useAction((next: string) => send('PUT', `equipment/items/${id}/status`, { status: next }), { invalidate: [keys.all] });
+  const tab = TABS.find((x) => x === params.get('tab')) ?? 'data';
   if (!item) return isLoading ? null : <EmptyState title={t('item.notFound')} />;
+  if ('reportOnly' in item) return <ReportOnlyPage item={item} reporting={dialog === 'defect'} setReporting={(on) => setDialog(on ? 'defect' : null)} />;
 
   const may = (permission: string) => can(session, permission, item.departmentId);
+  const canWrite = access.canWrite(item);
+  const canInspect = access.canInspect(item);
   const retired = item.status === 'retired';
-  const link = `${window.location.origin}/equipment/items/${item.id}`;
+  const link = `${base}/equipment/items/${item.id}`;
   const fields: [string, string][] = [
     [t('fields.category'), category(item.categoryKey)],
     [t('fields.department'), departments.find((d) => d.id === item.departmentId)?.name ?? ''],
@@ -225,22 +312,22 @@ export function ItemPage() {
       <PageHeader
         breadcrumbs={[{ label: t('module') }, { label: t('items.title'), to: '/equipment/items' }, { label: item.inventoryNumber }]}
         title={item.name}
-        badges={<Group gap={4}><ItemStatusBadge status={item.status} /><StatusBadge>{item.inventoryNumber}</StatusBadge></Group>}
+        badges={<Group gap={4}><ItemStatusBadge status={item.status} blocked={item.blocked} /><StatusBadge>{item.inventoryNumber}</StatusBadge></Group>}
         subtitle={place(item)}
         actions={
           !retired && (
             <Group gap="sm">
               <Button variant="default" onClick={() => setDialog('defect')}>{t('defect.report')}</Button>
-              {may(INSPECT) && item.inspections.length > 0 && <Button onClick={() => setDialog('inspect')}>{t('inspection.inspect')}</Button>}
-              {may(WRITE) && (
+              {canInspect && item.inspections.length > 0 && <Button onClick={() => setDialog('inspect')}>{t('inspection.inspect')}</Button>}
+              {canWrite && (
                 <Menu position="bottom-end">
                   <Menu.Target><Button variant="default">{t('item.more')}</Button></Menu.Target>
                   <Menu.Dropdown>
-                    <Menu.Item onClick={() => setDialog('edit')}>{t('item.edit')}</Menu.Item>
+                    {may(WRITE) && <Menu.Item onClick={() => setDialog('edit')}>{t('item.edit')}</Menu.Item>}
                     {(['ready', 'in-inspection', 'defective', 'in-repair'] as const).filter((s) => s !== item.status).map((s) => (
                       <Menu.Item key={s} onClick={() => status.mutate(s)}>{t('item.setStatus', { status: t(`status.${s}`) })}</Menu.Item>
                     ))}
-                    <Menu.Item color="red" onClick={() => setDialog('retire')}>{t('item.retire')}</Menu.Item>
+                    {may(WRITE) && <Menu.Item color="red" onClick={() => setDialog('retire')}>{t('item.retire')}</Menu.Item>}
                   </Menu.Dropdown>
                 </Menu>
               )}
@@ -249,15 +336,13 @@ export function ItemPage() {
         }
       />
       {retired && item.retirement && <Notice kind="info">{t('item.retiredOn', { date: formatDate(item.retirement.date, i18n.language), reason: item.retirement.reason })}</Notice>}
+      {item.blocked && !retired && <Notice kind="error">{t('item.blocked')}</Notice>}
+      {item.status === 'in-inspection' && <Notice kind="warning">{t('item.awaitingInspection')}</Notice>}
       {item.openDefects > 0 && <Notice kind="error">{t('item.openDefects', { count: item.openDefects })}</Notice>}
       {may(READ) ? (
-        <Tabs defaultValue="data" keepMounted={false}>
+        <Tabs value={tab} onChange={(v) => setParams((p) => { p.set('tab', v ?? 'data'); p.delete('report'); return p; }, { replace: true })} keepMounted={false}>
           <Tabs.List mb="md">
-            <Tabs.Tab value="data">{t('item.tabs.data')}</Tabs.Tab>
-            <Tabs.Tab value="inspections">{t('item.tabs.inspections')}</Tabs.Tab>
-            <Tabs.Tab value="defects">{t('item.tabs.defects')}</Tabs.Tab>
-            <Tabs.Tab value="incidents">{t('item.tabs.incidents')}</Tabs.Tab>
-            <Tabs.Tab value="history">{t('item.tabs.history')}</Tabs.Tab>
+            {TABS.map((x) => <Tabs.Tab key={x} value={x}>{t(`item.tabs.${x}`)}</Tabs.Tab>)}
           </Tabs.List>
           <Tabs.Panel value="data">
             <SimpleGrid cols={{ base: 1, md: 3 }} spacing="lg">
@@ -273,12 +358,14 @@ export function ItemPage() {
                   <QRCodeSVG value={link} size={140} />
                   <Text size="xs" fw={700}>{item.inventoryNumber}</Text>
                   <Text size="xs" c="dimmed" ta="center">{t('item.qrHint')}</Text>
+                  {item.labelPrintedAt && <Text size="xs" c="dimmed">{t('labels.printedOn', { date: formatDate(item.labelPrintedAt, i18n.language) })}</Text>}
+                  <Button size="xs" variant="default" onClick={() => navigate(`/equipment/labels?ids=${item.id}`)}>{t('labels.single')}</Button>
                 </Stack>
               </Panel>
             </SimpleGrid>
           </Tabs.Panel>
-          <Tabs.Panel value="inspections"><InspectionsTab item={item} canInspect={may(INSPECT) && !retired} /></Tabs.Panel>
-          <Tabs.Panel value="defects"><DefectsTab item={item} canWrite={may(WRITE)} /></Tabs.Panel>
+          <Tabs.Panel value="inspections"><InspectionsTab item={item} canInspect={canInspect && !retired} /></Tabs.Panel>
+          <Tabs.Panel value="defects"><DefectsTab item={item} canWrite={canWrite} /></Tabs.Panel>
           <Tabs.Panel value="incidents"><IncidentsTab item={item} /></Tabs.Panel>
           <Tabs.Panel value="history"><HistoryTimeline entity="equipment.item" id={item.id} /></Tabs.Panel>
         </Tabs>

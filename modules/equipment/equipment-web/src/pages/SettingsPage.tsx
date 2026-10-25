@@ -1,10 +1,10 @@
-import { ActionIcon, Button, Checkbox, Group, NumberInput, Select, SimpleGrid, Stack, Table, Tabs, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Checkbox, Group, NumberInput, Radio, Select, SimpleGrid, Stack, Table, Tabs, Text, TextInput } from '@mantine/core';
 import { IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
-import type { Category, CategoryInput, EquipmentType, EquipmentTypeInput, InspectionType } from '@forga/equipment-contracts';
+import { type Category, type CategoryInput, EquipmentSettings, type EquipmentType, type EquipmentTypeInput, type InspectionType, type Tracking } from '@forga/equipment-contracts';
 import { send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { DataTable, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
-import { keys, useCategories, useTypes } from '../api';
+import { keys, useCategories, useEquipmentSettings, useTypes } from '../api';
 
 /** Categories depth-first with their depth; categories of a cycle or with an unknown parent count as top level. */
 function treeOrder(categories: Category[]): { category: Category; depth: number }[] {
@@ -35,7 +35,7 @@ function CategoryDialog({ category, parentKey = null, onClose }: { category?: Ca
   const { t: common } = useTranslation('common');
   const localized = useLocalized();
   const { data: categories = [] } = useCategories();
-  const [form, setForm] = useState<Required<CategoryInput>>(() => ({ key: category?.key ?? '', name: category?.name ?? { de: '', en: '' }, parentKey: category?.parentKey ?? parentKey, tracking: category?.tracking ?? 'item', breathingApparatus: category?.breathingApparatus ?? false }));
+  const [form, setForm] = useState<Required<CategoryInput>>(() => ({ key: category?.key ?? '', name: category?.name ?? { de: '', en: '' }, parentKey: category?.parentKey ?? parentKey, tracking: category?.tracking ?? 'item', breathingApparatus: category?.breathingApparatus ?? false, lockWhenOverdue: category?.lockWhenOverdue ?? false }));
   const save = useAction(() => {
     const body = { ...form, name: { de: form.name.de, en: form.name.en || form.name.de } };
     return category ? send('PUT', `equipment/categories/${category.id}`, body) : send('POST', 'equipment/categories', body);
@@ -49,6 +49,7 @@ function CategoryDialog({ category, parentKey = null, onClose }: { category?: Ca
         <TextInput label={t('settings.nameEn')} value={form.name.en} onChange={(e) => setForm({ ...form, name: { ...form.name, en: e.currentTarget.value } })} />
         <Select label={t('settings.tracking')} data={(['item', 'stock'] as const).map((x) => ({ value: x, label: t(`tracking.${x}`) }))} value={form.tracking} onChange={(v) => v && setForm({ ...form, tracking: v as Category['tracking'] })} allowDeselect={false} />
         <Checkbox mt="xl" label={t('settings.breathing')} checked={form.breathingApparatus} onChange={(e) => setForm({ ...form, breathingApparatus: e.currentTarget.checked })} />
+        <Checkbox label={t('settings.lockWhenOverdue')} description={t('settings.lockWhenOverdueHint')} checked={form.lockWhenOverdue} onChange={(e) => setForm({ ...form, lockWhenOverdue: e.currentTarget.checked })} />
       </SimpleGrid>
     </ResponsiveDialog>
   );
@@ -102,7 +103,54 @@ function TypeDialog({ type, onClose }: { type?: EquipmentType; onClose: () => vo
   );
 }
 
-/** Administration: categories, equipment types with inspection types, DGUV template, vehicles. */
+/** Adds the DGUV template; hoses as single items (own inspection record per hose) or as stock. */
+function TemplateDialog({ onDone, onClose }: { onDone: (r: { categories: number; types: number }) => void; onClose: () => void }) {
+  const { t } = useTranslation('equipment');
+  const { t: common } = useTranslation('common');
+  const [hoseTracking, setHoseTracking] = useState<Tracking>('item');
+  const template = useAction(() => send<{ categories: number; types: number }>('POST', 'equipment/templates/dguv', { hoseTracking }), {
+    invalidate: [keys.all],
+    onSuccess: (r) => {
+      onDone(r);
+      onClose();
+    },
+  });
+  return (
+    <ResponsiveDialog opened onClose={onClose} title={t('settings.template')} actions={<Group justify="flex-end"><Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button><Button loading={template.isPending} onClick={() => template.mutate(undefined)}>{t('settings.templateAdd')}</Button></Group>}>
+      <Stack gap="sm">
+        <Text size="sm" c="dimmed">{t('settings.templateHint')}</Text>
+        <Radio.Group label={t('settings.hoses')} value={hoseTracking} onChange={(v) => setHoseTracking(v as Tracking)}>
+          <Stack gap={6} mt={6}>
+            <Radio value="item" label={t('settings.hosesItem')} />
+            <Radio value="stock" label={t('settings.hosesStock')} />
+          </Stack>
+        </Radio.Group>
+      </Stack>
+    </ResponsiveDialog>
+  );
+}
+
+/** Lead times of the deadlines and "due soon" (setting `equipment.settings`). */
+function LeadTimes() {
+  const { t } = useTranslation('equipment');
+  const { t: common } = useTranslation('common');
+  const { data } = useEquipmentSettings();
+  const [form, setForm] = useState<EquipmentSettings | null>(null);
+  const value = form ?? data ?? EquipmentSettings.parse({});
+  const save = useAction(() => send('PUT', 'core/settings/equipment.settings', value), { success: t('settings.saved'), invalidate: [['core', 'settings', 'equipment.settings']], onSuccess: () => setForm(null) });
+  const set = (key: keyof EquipmentSettings, v: string | number) => setForm({ ...value, [key]: Number(v) || 0 });
+  return (
+    <Panel title={t('settings.leadTimes')} aside={<Button size="xs" disabled={!form} loading={save.isPending} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>}>
+      <SimpleGrid cols={{ base: 1, sm: 3 }}>
+        <NumberInput label={t('settings.inspectionLeadDays')} description={t('settings.inspectionLeadDaysHint')} value={value.inspectionLeadDays} onChange={(v) => set('inspectionLeadDays', v)} min={0} max={365} />
+        <NumberInput label={t('settings.expiryLeadDays')} description={t('settings.expiryLeadDaysHint')} value={value.expiryLeadDays} onChange={(v) => set('expiryLeadDays', v)} min={0} max={365} />
+        <NumberInput label={t('settings.dueSoonDays')} description={t('settings.dueSoonDaysHint')} value={value.dueSoonDays} onChange={(v) => set('dueSoonDays', v)} min={0} max={365} />
+      </SimpleGrid>
+    </Panel>
+  );
+}
+
+/** Administration: categories, equipment types with inspection types, DGUV template, vehicles, lead times. */
 export function SettingsPage() {
   const { t } = useTranslation('equipment');
   const localized = useLocalized();
@@ -112,7 +160,7 @@ export function SettingsPage() {
   const [newParent, setNewParent] = useState<string | null>(null);
   const [editType, setEditType] = useState<EquipmentType | 'new' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const template = useAction(() => send<{ categories: number; types: number }>('POST', 'equipment/templates/dguv'), { invalidate: [keys.all], onSuccess: (r) => setNotice(t('settings.templateDone', r)) });
+  const [template, setTemplate] = useState(false);
   const vehicles = useAction(() => send<{ created: number }>('POST', 'equipment/vehicles/sync'), { invalidate: [keys.all], onSuccess: (r) => setNotice(t('settings.vehiclesDone', r)) });
   const category = (key: string) => {
     const c = categories.find((x) => x.key === key);
@@ -125,7 +173,7 @@ export function SettingsPage() {
         title={t('settings.title')}
         actions={
           <Group gap="sm">
-            <Button variant="default" loading={template.isPending} onClick={() => template.mutate(undefined)}>{t('settings.template')}</Button>
+            <Button variant="default" onClick={() => setTemplate(true)}>{t('settings.template')}</Button>
             <Button variant="default" loading={vehicles.isPending} onClick={() => vehicles.mutate(undefined)}>{t('settings.vehicles')}</Button>
           </Group>
         }
@@ -135,7 +183,9 @@ export function SettingsPage() {
         <Tabs.List mb="md">
           <Tabs.Tab value="types">{t('settings.types')}</Tabs.Tab>
           <Tabs.Tab value="categories">{t('settings.categories')}</Tabs.Tab>
+          <Tabs.Tab value="lead-times">{t('settings.leadTimes')}</Tabs.Tab>
         </Tabs.List>
+        <Tabs.Panel value="lead-times"><LeadTimes /></Tabs.Panel>
         <Tabs.Panel value="types">
           <Panel aside={<Button size="xs" onClick={() => setEditType('new')}>{t('settings.newType')}</Button>}>
             <DataTable<EquipmentType>
@@ -170,7 +220,7 @@ export function SettingsPage() {
                   ),
                 },
                 { key: 'tracking', header: t('settings.tracking'), render: ({ category: x }) => t(`tracking.${x.tracking}`) },
-                { key: 'breathing', header: '', render: ({ category: x }) => x.breathingApparatus && <StatusBadge>{t('settings.breathingShort')}</StatusBadge> },
+                { key: 'breathing', header: '', render: ({ category: x }) => <Group gap={4}>{x.breathingApparatus && <StatusBadge>{t('settings.breathingShort')}</StatusBadge>}{x.lockWhenOverdue && <StatusBadge tone="warning">{t('settings.lockShort')}</StatusBadge>}</Group> },
                 {
                   key: 'child',
                   header: '',
@@ -204,6 +254,7 @@ export function SettingsPage() {
           }}
         />
       )}
+      {template && <TemplateDialog onDone={(r) => setNotice(t('settings.templateDone', r))} onClose={() => setTemplate(false)} />}
       {editType && <TypeDialog type={editType === 'new' ? undefined : editType} onClose={() => setEditType(null)} />}
     </Stack>
   );

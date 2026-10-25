@@ -45,7 +45,7 @@ export function OverviewPage() {
       <DataTable<FitnessStatus>
         rows={rows}
         rowKey={(s) => s.personId}
-        onRowClick={(s) => navigate(`/masterdata/persons/${s.personId}`)}
+        onRowClick={(s) => navigate(`/masterdata/persons/${s.personId}?tab=respiratory-protection`)}
         empty={isLoading ? t('loading') : t('overview.empty')}
         columns={[
           { key: 'name', header: t('overview.name'), render: (s) => <Text fw={700} size="sm" c="brand">{s.lastName}, {s.firstName}</Text> },

@@ -60,7 +60,7 @@ beforeAll(async () => {
   await post(`/masterdata/persons/${ids.jonas}/qualifications`, { qualification: 'breathing-apparatus', acquiredOn: '2020-01-01' }).expect(201);
   // Jonas is a fit breathing apparatus wearer (respiratory protection module), so only Max gets a warning.
   for (const kind of ['examination', 'briefing', 'stress-exercise', 'exercise']) {
-    await post('/respiratory-protection/evidence', { personId: ids.jonas, kind, date: '2026-01-15', kilojoules: kind === 'stress-exercise' ? 90 : null, passed: kind === 'stress-exercise' ? true : null }).expect(201);
+    await post('/respiratory-protection/evidence', { personId: ids.jonas, kind, date: '2026-01-15', kilojoules: kind === 'stress-exercise' ? 90 : null, passed: kind === 'stress-exercise' ? true : null, result: kind === 'examination' ? 'no-concerns' : null }).expect(201);
   }
 
   // A group leader of Musterstadt who may write reports of his department only.

@@ -1,4 +1,4 @@
-import type { Condition, EvidenceKind, ExaminationGroup, FitnessColor, FitnessRule } from './evidence.js';
+import type { Condition, EvidenceKind, ExaminationGroup, ExaminationResult, FitnessColor, FitnessRule } from './evidence.js';
 
 export const QUALIFICATION_BREATHING_APPARATUS = 'breathing-apparatus';
 export const QUALIFICATION_CHEMICAL_SUIT = 'chemical-suit';
@@ -16,6 +16,7 @@ export interface FitnessEvidence {
   passed: boolean | null;
   withdrawn?: boolean;
   examinationGroup?: ExaminationGroup | null;
+  result?: ExaminationResult | null;
 }
 
 /** `date` plus months (ISO dates), clamped to the end of shorter months. */
@@ -38,6 +39,24 @@ export function ageOn(birthDate: string | null, date: string): number | null {
   const [by, bm, bd] = birthDate.split('-').map(Number);
   const [y, m, d] = date.split('-').map(Number);
   return y - by - (m < bm || (m === bm && d < bd) ? 1 : 0);
+}
+
+/** Older group: from the age `olderFromAge` on (inclusive), at the date of the evidence. */
+export function isOlder(rule: Pick<FitnessRule, 'olderFromAge'>, birthDate: string | null, date: string): boolean {
+  const age = ageOn(birthDate, date);
+  return age !== null && age >= rule.olderFromAge;
+}
+
+/** Interval in months of an examination without "valid until": by age at the examination and device group, or fixed. */
+export function examinationMonths(rule: FitnessRule, birthDate: string | null, date: string, group: ExaminationGroup | null | undefined): number {
+  if (rule.examinationInterval !== 'by-age') return rule.examinationInterval * 12;
+  if (!isOlder(rule, birthDate, date)) return rule.examinationMonths;
+  return group === 'up-to-5kg' ? rule.examinationMonthsOlderLight : rule.examinationMonthsOlder;
+}
+
+/** Minimum work in kJ of a stress exercise at the age on `date`. */
+export function minimumKilojoules(rule: FitnessRule, birthDate: string | null, date: string): number {
+  return isOlder(rule, birthDate, date) ? rule.minKilojoulesFrom50 : rule.minKilojoules;
 }
 
 /**
@@ -67,22 +86,15 @@ export function evaluateFitness(person: FitnessPerson, evidence: FitnessEvidence
     conditions.push({ key: 'minimum-age', met: false, lastDate: null, dueOn: addMonths(person.birthDate!, rule.minimumAge * 12) });
   }
   if (rule.examination) {
-    // By age (DGUV G 26, values in the rule): 36 months, over 50 years 12 months, for devices up to 5 kg (G 26.2) 24 months.
-    const months = (e: FitnessEvidence) => {
-      const age = ageAt(e.date);
-      if (rule.examinationInterval !== 'by-age') return rule.examinationInterval * 12;
-      if (age === null || age <= rule.olderFromAge) return rule.examinationMonths;
-      return e.examinationGroup === 'up-to-5kg' ? rule.examinationMonthsOlderLight : rule.examinationMonthsOlder;
-    };
-    conditions.push(condition('examination', latest(['examination']), (e) => e.validUntil ?? addMonths(e.date, months(e))));
+    // By age (DGUV G 26, values in the rule): 36 months, from 50 years on 12 months, for devices up to 5 kg (G 26.2) 24 months.
+    // The latest examination counts; with "concerns" the wearer is not fit from its date on.
+    const found = latest(['examination']);
+    if (found?.result === 'concerns') conditions.push({ key: 'examination', met: false, lastDate: found.date, dueOn: found.date, concerns: true });
+    else conditions.push(condition('examination', found, (e) => e.validUntil ?? addMonths(e.date, examinationMonths(rule, person.birthDate, e.date, e.examinationGroup))));
   }
   if (rule.briefing) conditions.push(condition('briefing', latest(['briefing']), (e) => yearly(e.date)));
   if (rule.stressExercise) {
-    const minimum = (date: string) => {
-      const age = ageAt(date);
-      return age !== null && age >= rule.olderFromAge ? rule.minKilojoulesFrom50 : rule.minKilojoules;
-    };
-    const passed = (e: FitnessEvidence) => e.passed !== false && (e.kilojoules === null ? e.passed === true : e.kilojoules >= minimum(e.date));
+    const passed = (e: FitnessEvidence) => e.passed !== false && (e.kilojoules === null ? e.passed === true : e.kilojoules >= minimumKilojoules(rule, person.birthDate, e.date));
     conditions.push(condition('stress-exercise', latest(['stress-exercise', 'training-track'], passed), (e) => yearly(e.date)));
   }
   if (rule.exercise) conditions.push(condition('exercise', latest(rule.incidentReplacesExercise ? ['exercise', 'incident'] : ['exercise']), (e) => yearly(e.date)));

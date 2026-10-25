@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '@forga/web-sdk';
 import { Notice } from './Notice';
 
-/** Barcode detection of the browser (Chrome, Edge, Android); not in every browser, hence the typed fallback. */
+/**
+ * Barcode detection of the browser (Chrome, Edge, Android). Browsers without it (Safari on iOS, Firefox) use the
+ * JavaScript decoder of ZXing, loaded only when the camera is opened.
+ */
 interface Detector {
   detect(source: HTMLVideoElement): Promise<{ rawValue: string }[]>;
 }
@@ -14,8 +17,45 @@ const barcodeDetector = () => (window as unknown as { BarcodeDetector?: Detector
 /** Labels of f.orga (QR) and the usual barcodes on equipment and clothing. */
 export const CODE_FORMATS = ['qr_code', 'code_128', 'code_39', 'code_93', 'ean_13', 'ean_8', 'upc_a', 'data_matrix', 'itf'];
 
+/** The camera can scan wherever the browser grants access to it (secure context); the decoder is built in or loaded. */
 export function cameraScanSupported(): boolean {
-  return Boolean(barcodeDetector() && navigator.mediaDevices?.getUserMedia);
+  return typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia);
+}
+
+/** Decodes the video with the ZXing fallback; returns a function that stops it. */
+async function zxingDecode(video: HTMLVideoElement, onValue: (value: string) => void): Promise<() => void> {
+  const { BarcodeFormat, BrowserMultiFormatReader } = await import('@zxing/browser');
+  const { DecodeHintType } = await import('@zxing/library');
+  const formats = [BarcodeFormat.QR_CODE, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93, BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.DATA_MATRIX, BarcodeFormat.ITF];
+  const reader = new BrowserMultiFormatReader(new Map([[DecodeHintType.POSSIBLE_FORMATS, formats]]), { delayBetweenScanAttempts: 300 });
+  const controls = await reader.decodeFromVideoElement(video, (result) => {
+    if (result) onValue(result.getText());
+  });
+  return () => controls.stop();
+}
+
+/** Feedback when a code was read: a short vibration (where supported) and a beep. */
+export function signalScan(ok = true): void {
+  try {
+    navigator.vibrate?.(ok ? 80 : [60, 60, 60]);
+  } catch {
+    // Vibration is optional.
+  }
+  try {
+    const Context = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Context) return;
+    const audio = new Context();
+    const tone = audio.createOscillator();
+    const volume = audio.createGain();
+    tone.frequency.value = ok ? 1200 : 400;
+    volume.gain.value = 0.08;
+    tone.connect(volume).connect(audio.destination);
+    tone.start();
+    tone.stop(audio.currentTime + (ok ? 0.08 : 0.2));
+    tone.addEventListener('ended', () => void audio.close(), { once: true });
+  } catch {
+    // Sound is optional.
+  }
 }
 
 /** Web NFC (Chrome on Android) reads the ID of RFID/NFC chips at 13.56 MHz. */
@@ -52,16 +92,22 @@ export function CodeCamera({ onCode, height = 320 }: { onCode: (code: string) =>
   });
 
   useEffect(() => {
+    if (!cameraScanSupported()) return;
     const Barcode = barcodeDetector();
-    if (!Barcode || !cameraScanSupported()) return;
     let stream: MediaStream | null = null;
     let timer: number | undefined;
+    let stopFallback: (() => void) | null = null;
     let stopped = false;
     let previous = '';
-    const detector = new Barcode({ formats: CODE_FORMATS });
+    const seen = (value: string | undefined) => {
+      if (value && value !== previous) {
+        previous = value;
+        report.current(value);
+      }
+    };
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: 'environment' } })
-      .then((s) => {
+      .then(async (s) => {
         if (stopped) {
           for (const track of s.getTracks()) track.stop();
           return;
@@ -72,17 +118,20 @@ export function CodeCamera({ onCode, height = 320 }: { onCode: (code: string) =>
           void video.current.play();
         }
         setState('on');
+        if (!Barcode) {
+          // Without the detector of the browser: ZXing reads the same video.
+          if (!video.current) return;
+          const stop = await zxingDecode(video.current, seen);
+          if (stopped) stop();
+          else stopFallback = stop;
+          return;
+        }
+        const detector = new Barcode({ formats: CODE_FORMATS });
         timer = window.setInterval(() => {
           if (!video.current || video.current.readyState < 2) return;
           detector
             .detect(video.current)
-            .then((codes) => {
-              const value = codes[0]?.rawValue;
-              if (value && value !== previous) {
-                previous = value;
-                report.current(value);
-              }
-            })
+            .then((codes) => seen(codes[0]?.rawValue))
             .catch(() => undefined);
         }, 400);
       })
@@ -90,6 +139,7 @@ export function CodeCamera({ onCode, height = 320 }: { onCode: (code: string) =>
     return () => {
       stopped = true;
       window.clearInterval(timer);
+      stopFallback?.();
       for (const track of stream?.getTracks() ?? []) track.stop();
     };
   }, []);
@@ -117,7 +167,10 @@ export function CodeInput({ value, onChange, source, ...props }: Omit<TextInputP
     const controller = new AbortController();
     setReading(controller);
     readNfc(controller.signal)
-      .then((id) => onChange(id))
+      .then((id) => {
+        signalScan();
+        onChange(id);
+      })
       .catch(() => undefined)
       .finally(() => {
         controller.abort();
@@ -147,6 +200,7 @@ export function CodeInput({ value, onChange, source, ...props }: Omit<TextInputP
         <Modal opened onClose={() => setCamera(false)} title={t('codes.camera')} size="lg">
           <CodeCamera
             onCode={(code) => {
+              signalScan();
               onChange(code);
               setCamera(false);
             }}

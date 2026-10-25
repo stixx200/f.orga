@@ -33,8 +33,13 @@ export const CategoryInput = z.object({
   name: LocalizedText,
   parentKey: key.nullable().default(null),
   tracking: Tracking.default('item'),
-  /** Breathing apparatus: inspections also by the breathing apparatus officer. */
+  /**
+   * Breathing apparatus: the breathing apparatus officer inspects and maintains these items
+   * (`equipment.breathing.*`), receives their deadlines and defect e-mails.
+   */
   breathingApparatus: z.boolean().default(false),
+  /** Items count as blocked (not ready) while an inspection is overdue, e.g. breathing apparatus and pressure vessels. */
+  lockWhenOverdue: z.boolean().default(false),
 });
 export type CategoryInput = z.input<typeof CategoryInput>;
 export const Category = CategoryInput.extend({ id: z.uuid(), version: z.number() });
@@ -56,6 +61,10 @@ export type EquipmentType = z.infer<typeof EquipmentType>;
 
 export const ItemStatus = z.enum(['ready', 'in-inspection', 'defective', 'in-repair', 'retired']);
 export type ItemStatus = z.infer<typeof ItemStatus>;
+
+/** Inspection done before the item was recorded in f.orga (when creating the item). */
+export const InitialInspection = z.object({ inspectionKey: z.string().min(1), date, nextDueOn: date.nullable().default(null) });
+export type InitialInspection = z.input<typeof InitialInspection>;
 
 export const ItemInput = z
   .object({
@@ -84,6 +93,10 @@ export const ItemInput = z
     expiresOn: date.nullable().default(null),
     /** `null` = inspections of the type. */
     inspections: z.array(InspectionType).nullable().default(null),
+    /** Own interval in months per inspection type, e.g. a vehicle below 3.5 t with a longer roadworthiness test interval. */
+    intervalOverrides: z.record(z.string(), z.number().int().min(1).max(240)).default({}),
+    /** Only when creating: last inspection per inspection type. */
+    initialInspections: z.array(InitialInspection).default([]),
     notes: text,
   })
   .refine((i) => !(i.vehicleId && i.stationId), { message: 'Vehicle or station', path: ['stationId'] });
@@ -120,10 +133,15 @@ export const Item = z.object({
   loadingPlace: z.string(),
   quantity: z.number(),
   expiresOn: z.string().nullable(),
-  /** Effective inspection types (own or of the type). */
+  /** Effective inspection types (own or of the type, with the interval overrides of the item). */
   inspections: z.array(InspectionType),
   ownInspections: z.boolean(),
+  intervalOverrides: z.record(z.string(), z.number()),
   status: ItemStatus,
+  /** An inspection is overdue and the category locks such items: not ready, whatever the status. */
+  blocked: z.boolean(),
+  /** When a label was last printed; `null` = no label yet. */
+  labelPrintedAt: z.string().nullable(),
   retirement: z.object({ date: z.string(), reason: z.string(), disposition: z.string() }).nullable(),
   /** Master data vehicle this item stands for (vehicle inspections). */
   forVehicleId: z.uuid().nullable(),
@@ -134,6 +152,17 @@ export const Item = z.object({
   version: z.number(),
 });
 export type Item = z.infer<typeof Item>;
+
+/** What members who may only report defects see of an item (no price, serial number or inspections). */
+export const ItemSummary = z.object({
+  id: z.uuid(),
+  inventoryNumber: z.string(),
+  name: z.string(),
+  departmentId: z.uuid(),
+  status: ItemStatus,
+  reportOnly: z.literal(true),
+});
+export type ItemSummary = z.infer<typeof ItemSummary>;
 
 export const InspectionResult = z.enum(['passed', 'passed-with-defects', 'failed']);
 export type InspectionResult = z.infer<typeof InspectionResult>;
@@ -171,8 +200,19 @@ export const Inspection = z.object({
   recordedBy: z.string(),
   /** Inspector lacks the qualification for the inspection type. */
   qualificationWarning: z.boolean(),
+  /** Cancelled inspections stay in the history but do not count. */
+  cancelled: z.boolean(),
+  /** Reason of the last correction or of the cancellation. */
+  changeReason: z.string(),
 });
 export type Inspection = z.infer<typeof Inspection>;
+
+/** Correction of a recorded inspection; the reason is kept with the inspection and in its history. */
+export const InspectionCorrection = InspectionInput.omit({ inspectionKey: true }).extend({ reason: z.string().trim().min(3) });
+export type InspectionCorrection = z.input<typeof InspectionCorrection>;
+
+export const InspectionCancellation = z.object({ reason: z.string().trim().min(3) });
+export type InspectionCancellation = z.input<typeof InspectionCancellation>;
 
 export const DefectStatus = z.enum(['reported', 'in-progress', 'fixed', 'retired']);
 export type DefectStatus = z.infer<typeof DefectStatus>;
@@ -188,6 +228,7 @@ export const Defect = z.object({
   itemId: z.uuid(),
   itemName: z.string(),
   inventoryNumber: z.string(),
+  categoryKey: z.string(),
   departmentId: z.uuid(),
   description: z.string(),
   status: DefectStatus,
@@ -197,6 +238,27 @@ export const Defect = z.object({
   resolvedAt: z.string().nullable(),
 });
 export type Defect = z.infer<typeof Defect>;
+
+/** Labels printed for these items (filter "without label"). */
+export const LabelsPrintedInput = z.object({ itemIds: z.array(z.uuid()).min(1) });
+export type LabelsPrintedInput = z.input<typeof LabelsPrintedInput>;
+
+/** Options of the DGUV template: hoses as single items (own inspection record per hose) or as stock. */
+export const TemplateOptions = z.object({ hoseTracking: Tracking.default('item') });
+export type TemplateOptions = z.input<typeof TemplateOptions>;
+
+/** Lead times of the module (setting `equipment.settings`). */
+export const EquipmentSettings = z.object({
+  /** Days before the due date an inspection appears among the deadlines. */
+  inspectionLeadDays: z.number().int().min(0).max(365).default(30),
+  /** Days before the expiry date an item appears among the deadlines. */
+  expiryLeadDays: z.number().int().min(0).max(365).default(60),
+  /** Days within which a due date counts as "due soon" (yellow). */
+  dueSoonDays: z.number().int().min(0).max(365).default(30),
+});
+export type EquipmentSettings = z.infer<typeof EquipmentSettings>;
+
+export const EQUIPMENT_SETTINGS = { 'equipment.settings': EquipmentSettings } as const;
 
 export const RetireInput = z.object({ date, reason: z.string().trim().min(1), disposition: text });
 export type RetireInput = z.input<typeof RetireInput>;

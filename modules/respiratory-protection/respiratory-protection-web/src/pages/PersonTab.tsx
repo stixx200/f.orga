@@ -1,6 +1,7 @@
-import { ActionIcon, Button, Group, Stack, Text } from '@mantine/core';
+import { ActionIcon, Anchor, Button, Group, Stack, Text } from '@mantine/core';
 import { IconPencil, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
+import { Link } from 'react-router';
 import type { Evidence } from '@forga/respiratory-protection-contracts';
 import { apiUrl, can, formatDate, send, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, Panel, useAction } from '@forga/web-ui';
@@ -54,6 +55,7 @@ export function PersonTab({ personId }: { personId?: unknown }) {
               header: t('evidence.details'),
               render: (e) =>
                 [
+                  e.result && t(`result.${e.result}`),
                   e.validUntil && t('evidence.validUntilShort', { date: formatDate(e.validUntil, i18n.language) }),
                   e.restrictions,
                   e.examinationGroup && t(`examinationGroup.${e.examinationGroup}`),
@@ -68,7 +70,15 @@ export function PersonTab({ personId }: { personId?: unknown }) {
                   .filter(Boolean)
                   .join(' · '),
             },
-            { key: 'source', header: t('evidence.source'), render: (e) => t(`source.${e.source}`) },
+            {
+              key: 'source',
+              header: t('evidence.source'),
+              render: (e) => {
+                // Reports and sessions the evidence comes from are linked.
+                const to = e.sourceId && e.source === 'incidents' ? `/incidents/reports/${e.sourceId}` : e.sourceId && e.source === 'training' ? `/training/sessions/${e.sourceId}` : null;
+                return to ? <Anchor component={Link} to={to} size="sm">{t(`source.${e.source}`)}</Anchor> : t(`source.${e.source}`);
+              },
+            },
             {
               key: 'actions',
               header: '',
@@ -84,7 +94,7 @@ export function PersonTab({ personId }: { personId?: unknown }) {
           ]}
         />
       </Panel>
-      {editing && <EvidenceDialog personId={id} evidence={editing === 'new' ? undefined : editing} kinds={kinds} onClose={() => setEditing(null)} />}
+      {editing && <EvidenceDialog personId={id} evidence={editing === 'new' ? undefined : editing} kinds={kinds} minimumKilojoules={status.minimumKilojoules} onClose={() => setEditing(null)} />}
       {removing && (
         <ConfirmDialog
           opened

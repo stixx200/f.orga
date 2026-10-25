@@ -59,7 +59,7 @@ test('inspection, defect report and handling', async ({ browser }) => {
   // Bulk inspection: choose an inspection type and select an item by its label (typed here, the camera scans in the field).
   await chooseFirst(officer, 'Prüfart');
   const first = (await officer.getByRole('row').nth(1).getByText(/ · /).first().textContent())!;
-  await officer.getByRole('button', { name: 'Per QR-Code auswählen' }).click();
+  await officer.getByRole('button', { name: 'Per Scan auswählen' }).click();
   await officer.getByRole('dialog').getByLabel('Code oder Inventarnummer').fill(first.split(' · ')[0]);
   await officer.getByRole('dialog').getByRole('button', { name: 'Übernehmen' }).click();
   await expect(officer.getByRole('dialog').getByText(/ausgewählt \(1 insgesamt\)/)).toBeVisible();

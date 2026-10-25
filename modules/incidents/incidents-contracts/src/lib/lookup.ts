@@ -57,6 +57,8 @@ export interface ReportReference {
   reportNumber: string;
   departmentId: string;
   status: string;
+  /** Edited by a releaser: only releasers may change it (also while it is a draft). */
+  locked: boolean;
   incidentId: string;
   dispatchNumber: string;
   alarmKeyword: string;

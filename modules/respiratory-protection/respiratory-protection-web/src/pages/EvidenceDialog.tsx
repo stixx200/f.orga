@@ -1,15 +1,27 @@
-import { Button, Checkbox, Group, NumberInput, Select, SimpleGrid, TextInput } from '@mantine/core';
+import { Button, Checkbox, Group, NumberInput, Select, SimpleGrid, Text, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useState } from 'react';
-import type { BreathingDevice, Evidence, EvidenceInput, EvidenceKind, ExaminationGroup } from '@forga/respiratory-protection-contracts';
+import type { BreathingDevice, Evidence, EvidenceInput, EvidenceKind, ExaminationGroup, ExaminationResult } from '@forga/respiratory-protection-contracts';
 import { localDate, send, useTranslation } from '@forga/web-sdk';
-import { ResponsiveDialog, useAction } from '@forga/web-ui';
+import { Notice, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { keys } from '../api';
 
 export const KINDS: EvidenceKind[] = ['examination', 'stress-exercise', 'training-track', 'briefing', 'exercise', 'incident', 'chemical-suit'];
 
-/** Records or corrects one piece of evidence of a person. */
-export function EvidenceDialog({ personId, evidence, kinds, onClose }: { personId: string; evidence?: Evidence; kinds: EvidenceKind[]; onClose: () => void }) {
+const RESULTS: ExaminationResult[] = ['no-concerns', 'no-concerns-limited', 'no-concerns-conditional', 'concerns'];
+
+/** The day after an ISO date. */
+const dayAfter = (date: string) => {
+  const d = new Date(`${date}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * Records or corrects one piece of evidence of a person. Examinations need a result; a stress exercise below the
+ * minimum work (`minimumKilojoules`, by age) cannot be marked as passed.
+ */
+export function EvidenceDialog({ personId, evidence, kinds, minimumKilojoules, onClose }: { personId: string; evidence?: Evidence; kinds: EvidenceKind[]; minimumKilojoules: number; onClose: () => void }) {
   const { t } = useTranslation('respiratory-protection');
   const { t: common } = useTranslation('common');
   const [form, setForm] = useState<Required<EvidenceInput>>(() => ({
@@ -17,6 +29,7 @@ export function EvidenceDialog({ personId, evidence, kinds, onClose }: { personI
     kind: evidence?.kind ?? kinds[0],
     date: evidence?.date ?? localDate(),
     validUntil: evidence?.validUntil ?? null,
+    result: evidence?.result ?? null,
     examiner: evidence?.examiner ?? '',
     restrictions: evidence?.restrictions ?? '',
     examinationGroup: evidence?.examinationGroup ?? null,
@@ -28,7 +41,9 @@ export function EvidenceDialog({ personId, evidence, kinds, onClose }: { personI
     note: evidence?.note ?? '',
   }));
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
-  const save = useAction(() => (evidence ? send('PUT', `respiratory-protection/evidence/${evidence.id}`, form) : send('POST', 'respiratory-protection/evidence', form)), {
+  const below = form.kind === 'stress-exercise' && form.kilojoules !== null && form.kilojoules < minimumKilojoules;
+  const body = { ...form, passed: below ? false : form.passed };
+  const save = useAction(() => (evidence ? send('PUT', `respiratory-protection/evidence/${evidence.id}`, body) : send('POST', 'respiratory-protection/evidence', body)), {
     success: t('evidence.saved'),
     invalidate: [keys.all],
     onSuccess: onClose,
@@ -46,16 +61,17 @@ export function EvidenceDialog({ personId, evidence, kinds, onClose }: { personI
       actions={
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button>
-          <Button loading={save.isPending} disabled={!form.date} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
+          <Button loading={save.isPending} disabled={!form.date || (examination && (!form.result || (form.result === 'no-concerns-limited' && !form.validUntil)))} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
         </Group>
       }
     >
       <SimpleGrid cols={{ base: 1, sm: 2 }}>
         <Select label={t('evidence.kind')} data={kinds.map((k) => ({ value: k, label: t(`kind.${k}`) }))} value={form.kind} onChange={(v) => v && set('kind', v as EvidenceKind)} allowDeselect={false} disabled={Boolean(evidence)} />
-        <DateInput label={t('evidence.date')} value={form.date} onChange={(v) => v && set('date', v)} valueFormat="DD.MM.YYYY" required />
+        <DateInput label={t('evidence.date')} value={form.date} onChange={(v) => v && set('date', v)} valueFormat="DD.MM.YYYY" maxDate={localDate()} required />
         {examination && (
           <>
-            <DateInput label={t('evidence.validUntil')} description={t('evidence.validUntilHint')} value={form.validUntil} onChange={(v) => set('validUntil', v)} valueFormat="DD.MM.YYYY" clearable />
+            <Select label={t('evidence.result')} data={RESULTS.map((r) => ({ value: r, label: t(`result.${r}`) }))} value={form.result} onChange={(v) => set('result', v as ExaminationResult | null)} required allowDeselect={false} />
+            <DateInput label={t('evidence.validUntil')} description={t('evidence.validUntilHint')} value={form.validUntil} onChange={(v) => set('validUntil', v)} valueFormat="DD.MM.YYYY" minDate={dayAfter(form.date)} required={form.result === 'no-concerns-limited'} clearable />
             <TextInput label={t('evidence.examiner')} value={form.examiner} onChange={(e) => set('examiner', e.currentTarget.value)} />
             <TextInput label={t('evidence.restrictions')} description={t('evidence.restrictionsHint')} value={form.restrictions} onChange={(e) => set('restrictions', e.currentTarget.value)} />
             <Select
@@ -74,8 +90,8 @@ export function EvidenceDialog({ personId, evidence, kinds, onClose }: { personI
         {stress && (
           <>
             <TextInput label={t('evidence.facility')} value={form.facility} onChange={(e) => set('facility', e.currentTarget.value)} />
-            <NumberInput label={t('evidence.kilojoules')} value={form.kilojoules ?? ''} onChange={(v) => set('kilojoules', v === '' ? null : Number(v))} min={0} />
-            <Checkbox label={t('evidence.passed')} checked={form.passed ?? false} onChange={(e) => set('passed', e.currentTarget.checked)} mt="xl" />
+            <NumberInput label={t('evidence.kilojoules')} description={t('evidence.minimum', { kilojoules: minimumKilojoules })} value={form.kilojoules ?? ''} onChange={(v) => set('kilojoules', v === '' ? null : Number(v))} min={0} error={below ? t('evidence.belowMinimum', { kilojoules: minimumKilojoules }) : undefined} />
+            <Checkbox label={t('evidence.passed')} checked={below ? false : (form.passed ?? false)} disabled={below} onChange={(e) => set('passed', e.currentTarget.checked)} mt="xl" />
           </>
         )}
         {track && (
@@ -87,6 +103,7 @@ export function EvidenceDialog({ personId, evidence, kinds, onClose }: { personI
         {!examination && !track && <NumberInput label={t('evidence.minutes')} value={form.minutes ?? ''} onChange={(v) => set('minutes', v === '' ? null : Number(v))} min={0} />}
         <TextInput label={t('evidence.note')} value={form.note} onChange={(e) => set('note', e.currentTarget.value)} />
       </SimpleGrid>
+      {examination && form.result === 'concerns' && <Notice kind="warning"><Text size="sm" span>{t('evidence.resultConcerns')}</Text></Notice>}
     </ResponsiveDialog>
   );
 }

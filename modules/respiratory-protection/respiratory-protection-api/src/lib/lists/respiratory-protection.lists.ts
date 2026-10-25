@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { ListColumn, LocalizedText } from '@forga/core-contracts';
 import { type AuthenticatedUser, berlinDate, type ListDefinition } from '@forga/core-api';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
-import type { BreathingDevice, ConditionKey, EvidenceKind, ExaminationGroup, FitnessColor, FitnessStatus } from '@forga/respiratory-protection-contracts';
+import type { BreathingDevice, ConditionKey, EvidenceKind, ExaminationGroup, ExaminationResult, FitnessColor, FitnessStatus } from '@forga/respiratory-protection-contracts';
 import { EvidenceEntity } from '../respiratory-protection.entities.js';
 import { EvidenceService, EXAMINATIONS, READ } from '../evidence/evidence.service.js';
 
@@ -21,6 +21,12 @@ const DEVICES: Record<BreathingDevice, LocalizedText> = {
   'compressed-air': { de: 'Pressluftatmer', en: 'Compressed air' },
   rebreather: { de: 'Regenerationsgerät', en: 'Rebreather' },
   filter: { de: 'Filtergerät', en: 'Filter device' },
+};
+const RESULTS: Record<ExaminationResult, LocalizedText> = {
+  'no-concerns': { de: 'keine Bedenken', en: 'no concerns' },
+  'no-concerns-limited': { de: 'befristet keine Bedenken', en: 'no concerns for a limited time' },
+  'no-concerns-conditional': { de: 'keine Bedenken unter bestimmten Voraussetzungen', en: 'no concerns under certain conditions' },
+  concerns: { de: 'Bedenken', en: 'concerns' },
 };
 const GROUPS: Record<ExaminationGroup, LocalizedText> = {
   'up-to-5kg': { de: 'Geräte bis 5 kg (G 26.2)', en: 'Devices up to 5 kg (G 26.2)' },
@@ -57,7 +63,7 @@ export class RespiratoryProtectionLists {
   }
 
   private async statuses(user: AuthenticatedUser, departmentId?: string): Promise<FitnessStatus[]> {
-    const statuses = await this.evidence.statuses(await this.evidence.wearers(user, departmentId));
+    const statuses = await this.evidence.visibleStatuses(user, await this.evidence.wearers(user, departmentId));
     return statuses.toSorted((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`));
   }
 
@@ -155,7 +161,7 @@ export class RespiratoryProtectionLists {
             .map((e) => ({
               date: e.date,
               kind: KINDS[e.kind][language],
-              details: [e.device ? DEVICES[e.device][language] : '', e.examinationGroup ? GROUPS[e.examinationGroup][language] : '', e.facility, e.kilojoules !== null ? `${e.kilojoules} kJ` : '', e.restrictions, e.note].filter(Boolean).join(' · '),
+              details: [e.result ? RESULTS[e.result][language] : '', e.device ? DEVICES[e.device][language] : '', e.examinationGroup ? GROUPS[e.examinationGroup][language] : '', e.facility, e.kilojoules !== null ? `${e.kilojoules} kJ` : '', e.restrictions, e.note].filter(Boolean).join(' · '),
               minutes: e.minutes,
             })),
         };

@@ -1,20 +1,22 @@
 import { Button, FileInput, Group, Text } from '@mantine/core';
-import { useState } from 'react';
 import type { ItemStatus } from '@forga/equipment-contracts';
-import { formatDate, localDate, upload, useTranslation } from '@forga/web-sdk';
+import { formatDate, upload, useTranslation } from '@forga/web-sdk';
 import { Attachments, ResponsiveDialog, StatusBadge, type Tone } from '@forga/web-ui';
+import { useDueSoon } from './api';
 
 const TONES: Record<ItemStatus, Tone> = { ready: 'done', 'in-inspection': 'primary', defective: 'error', 'in-repair': 'warning', retired: 'neutral' };
 
-export function ItemStatusBadge({ status }: { status: ItemStatus }) {
+/** Status of the item; "blocked" (overdue inspection in a locking category) wins over "ready". */
+export function ItemStatusBadge({ status, blocked = false }: { status: ItemStatus; blocked?: boolean }) {
   const { t } = useTranslation('equipment');
+  if (blocked && status !== 'retired') return <StatusBadge tone="error">{t('status.blocked')}</StatusBadge>;
   return <StatusBadge tone={TONES[status]}>{t(`status.${status}`)}</StatusBadge>;
 }
 
-/** Next due date with traffic light: red when due, yellow within 30 days. */
+/** Next due date with traffic light: red when due, yellow within the configured days. */
 export function DueDate({ dueOn }: { dueOn: string | null }) {
   const { t, i18n } = useTranslation('equipment');
-  const [{ today, soon }] = useState(() => ({ today: localDate(), soon: localDate(new Date(Date.now() + 30 * 86_400_000)) }));
+  const { today, soon } = useDueSoon();
   if (!dueOn) return <Text size="sm" c="dimmed">–</Text>;
   const color = dueOn <= today ? 'red.8' : dueOn <= soon ? 'orange.8' : undefined;
   return <Text size="sm" c={color} fw={color ? 700 : undefined}>{dueOn <= today ? t('due.overdue', { date: formatDate(dueOn, i18n.language) }) : formatDate(dueOn, i18n.language)}</Text>;
