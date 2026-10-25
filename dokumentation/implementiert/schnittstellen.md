@@ -108,7 +108,10 @@ Schemas aus `@forga/masterdata-contracts`. „Abteilungsbezogen“ heißt: Das R
 | --- | --- | --- | --- |
 | `GET` | `/masterdata/departments` | angemeldet | Abteilungen |
 | `POST` | `/masterdata/departments` | `masterdata.organization.manage` für die Gesamtwehr | Abteilung anlegen (`DepartmentInput`) |
-| `PUT` | `/masterdata/departments/:id` | `masterdata.organization.manage`, abteilungsbezogen | Abteilung ändern. Fehler: `masterdata.unknownDepartment`, `masterdata.departmentOwnParent`, `masterdata.unknownPerson` |
+| `PUT` | `/masterdata/departments/:id` | `masterdata.organization.manage`, abteilungsbezogen | Abteilung ändern. Typ, übergeordnete Abteilung, Sonderaufgaben, Statistik und Einwohner nur mit dem Recht für die Gesamtwehr (`masterdata.departmentFieldsBrigadeOnly`, `403`). Fehler: `masterdata.unknownDepartment`, `masterdata.departmentOwnParent`, `masterdata.unknownPerson`, `masterdata.shortNameTaken` (`409`, auch beim Anlegen) |
+| `GET` | `/masterdata/groups?departmentId=` | angemeldet | Gruppen (`DepartmentGroup`) der Abteilungen mit `masterdata.persons.read`, dazu die selbst geführten |
+| `GET` | `/masterdata/groups/mine` | angemeldet | Gruppen, deren Gruppenführer die verknüpfte Person ist („Meine Gruppe“) |
+| `POST`, `PUT`, `DELETE` | `/masterdata/groups`, `/masterdata/groups/:id` | `masterdata.organization.manage`, abteilungsbezogen | Gruppe anlegen/ändern (`DepartmentGroupInput`: `departmentId`, `name`, `leaderId`, `memberIds`) bzw. löschen. Fehler: `masterdata.groupMemberNotInDepartment`, `masterdata.groupNameTaken` (`409`), `masterdata.groupDepartmentImmutable` |
 | `DELETE` | `/masterdata/departments/:id` | `masterdata.organization.manage` (Gesamtwehr) | Unbenutzte Abteilung löschen (`204`). Fehler (`409`): `masterdata.departmentHasChildren`, `masterdata.departmentHasMembers` (auch frühere), `masterdata.departmentHasStations`, `masterdata.departmentHasVehicles`, `masterdata.inUse` (Berichte, Rollenzuweisungen) |
 | `GET` | `/masterdata/stations?departmentId=` | angemeldet | Wachen |
 | `POST`, `PUT` | `/masterdata/stations`, `/masterdata/stations/:id` | `masterdata.organization.manage`, abteilungsbezogen (alte und neue Abteilung) | Wache anlegen/ändern (`StationInput`) |
@@ -122,18 +125,20 @@ Schemas aus `@forga/masterdata-contracts`. „Abteilungsbezogen“ heißt: Das R
 | Methode | Pfad | Zweck |
 | --- | --- | --- |
 | `GET` | `/masterdata/persons?q=&departmentId=&status=&qualification=&includeLeft=` | Sichtbare Personen als `PersonSummary`, Ausgeschiedene nur mit `includeLeft=true` oder `status=left`. Personen, die nur über `masterdata.persons.directory` sichtbar sind, kommen mit Name, Status und Abteilungen und `restricted: true` |
-| `GET` | `/masterdata/persons/:id` | Person mit Mitgliedschaften, Qualifikationen, Dienstgraden, Ehrungen. Sensible Felder nur mit `masterdata.persons.sensitive`, sonst `sensitiveHidden: true` |
-| `POST` | `/masterdata/persons` | Anlegen (`CreatePersonInput`, mindestens eine Mitgliedschaft). Status Standard `probation`, Probezeitende aus `masterdata.membership`. Fehler: `masterdata.personnelNumberTaken` (`409`), `masterdata.primaryMembershipRequired`, `masterdata.unknownDepartment` |
-| `PUT` | `/masterdata/persons/:id` | Stammdaten ändern (`PersonInput`). Sensible Felder ohne Recht werden ignoriert. |
-| `PUT` | `/masterdata/persons/:id/memberships` | Alle Mitgliedschaften ersetzen (Liste von `MembershipInput`). Recht für alte und neue Abteilungen nötig. Fehler: `masterdata.membershipPeriodInvalid`, `masterdata.primaryMembershipRequired` |
+| `GET` | `/masterdata/persons/:id` | Person mit Mitgliedschaften, Qualifikationen, Dienstgraden, Ehrungen. Sensible Felder nur mit `masterdata.persons.sensitive`, sonst `sensitiveHidden: true`, `notes` leer, `restPeriods` leer und `exitReason` `null` |
+| `POST` | `/masterdata/persons` | Anlegen (`CreatePersonInput`, mindestens eine Mitgliedschaft). Status Standard `probation`, Probezeitende aus `masterdata.membership`. Fehler: `masterdata.personnelNumberTaken` (`409`), `masterdata.primaryMembershipRequired`, `masterdata.unknownDepartment`, `masterdata.birthDateInFuture`, `masterdata.belowMinimumAge` (laufende Mitgliedschaft in einer Einsatzabteilung unter `minimumAgeOperational`), `validation.failed` mit `bank.iban` bzw. `employer.iban` (Prüfziffer) |
+| `PUT` | `/masterdata/persons/:id` | Stammdaten ändern (`PersonInput`). Sensible Felder (auch `notes`) ohne Recht werden ignoriert. Fehler: `masterdata.birthDateInFuture` |
+| `PUT` | `/masterdata/persons/:id/memberships` | Alle Mitgliedschaften ersetzen (Liste von `MembershipInput`). Recht für alte und neue Abteilungen nötig. Fehler: `masterdata.membershipPeriodInvalid`, `masterdata.primaryMembershipRequired`, `masterdata.belowMinimumAge` (neue laufende Mitgliedschaft in einer Einsatzabteilung) |
+| `POST`, `PUT`, `DELETE` | `/masterdata/persons/:id/rest-periods`, `…/rest-periods/:entryId` | Ruhezeiten; zusätzlich `masterdata.persons.sensitive` |
 | `POST`, `DELETE` | `/masterdata/persons/:id/qualifications`, `…/qualifications/:entryId` | Qualifikation eintragen (`PersonQualificationInput`) bzw. entfernen. Löst `masterdata.person.qualification-changed` aus. |
 | `POST`, `DELETE` | `/masterdata/persons/:id/ranks`, `…/ranks/:entryId` | Dienstgrad eintragen (`RankAssignmentInput`) bzw. entfernen |
 | `POST`, `DELETE` | `/masterdata/persons/:id/honors`, `…/honors/:entryId` | Ehrung eintragen (`HonorAwardInput`) bzw. entfernen |
 | `PUT` | `/masterdata/persons/:id/probation` | Probezeitende ändern (`ProbationChange`). Fehler: `masterdata.notInProbation` |
-| `POST` | `/masterdata/persons/:id/admission` | Endgültige Aufnahme (`Admission`). Fehler: `masterdata.notInProbation` |
+| `POST` | `/masterdata/persons/:id/admission` | Endgültige Aufnahme (`Admission`: `decidedOn`, `reason`). Vor dem Ende der Probezeit oder ohne die Qualifikationen der Probezeit nur mit Begründung (kommt in die Bemerkung). Fehler: `masterdata.notInProbation`, `masterdata.admissionReasonRequired` (mit `probationEndsOn`, `missing`), `masterdata.admissionBeforeJoining` |
+| `GET` | `/masterdata/persons/honors/certificates?from&to&honor&ids` | Anzahl der Urkunden (`{ count }`) für dieselben Parameter wie das PDF |
 | `POST` | `/masterdata/persons/:id/status` | Statuswechsel (`StatusChange`), nicht aus `probation` oder `left` (`masterdata.statusChangeNotAllowed`); aus `youth` heraus und nach `veterans` nur über die Übernahmen (`masterdata.useTransfer`) |
 | `POST` | `/masterdata/persons/:id/transfer-to-operational` | Übernahme aus der Jugendfeuerwehr (`TransferToOperational`: `departmentId`, `on`, `probationEndsOn` oder `null` = Verzicht, `reason`, `decidedOn`). Fehler: `masterdata.transferNotAllowed`, `masterdata.wrongDepartmentType`, `masterdata.belowMinimumAge`, `masterdata.probationReasonRequired`, `masterdata.transferBeforeMembership` |
-| `POST` | `/masterdata/persons/:id/transfer-to-veterans` | Übernahme in die Altersabteilung (`TransferToVeterans`: `departmentId`, `on`, `decidedOn`), nur aus `active` oder `passive`. Fehler: `masterdata.personHoldsItems` (409, noch Schutzausrüstung zugeordnet), `masterdata.transferNotAllowed`, `masterdata.wrongDepartmentType`, `masterdata.transferBeforeMembership` |
+| `POST` | `/masterdata/persons/:id/transfer-to-veterans` | Übernahme in die Altersabteilung (`TransferToVeterans`: `departmentId`, `on`, `decidedOn`), nur aus `active` oder `passive`. Fehler: `masterdata.personHoldsItems` (409, mit `modules` (Modul-IDs) und `count`), `masterdata.transferNotAllowed`, `masterdata.wrongDepartmentType`, `masterdata.transferBeforeMembership` |
 | `POST` | `/masterdata/persons/:id/leave` | Austritt (`Leave`), beendet offene Mitgliedschaften, löst `masterdata.person.left` aus. Fehler: `masterdata.alreadyLeft`, `masterdata.personHoldsItems` (409) |
 
 Unbekannte Katalogschlüssel ergeben `400` mit `catalog.unknownKey`.
@@ -143,16 +148,21 @@ Unbekannte Katalogschlüssel ergeben `400` mit `catalog.unknownKey`.
 | Methode | Pfad | Recht | Zweck |
 | --- | --- | --- | --- |
 | `GET` | `/masterdata/courses` | angemeldet | Lehrgangskatalog |
-| `POST`, `PUT` | `/masterdata/courses`, `/masterdata/courses/:id` | `masterdata.catalogs.manage` | Lehrgang anlegen/ändern (`CourseInput`). Fehler: `catalog.keyTaken`, `catalog.keyImmutable`, `catalog.unknownKey`, `masterdata.courseOwnPrerequisite` |
+| `POST`, `PUT` | `/masterdata/courses`, `/masterdata/courses/:id` | `masterdata.catalogs.manage` | Lehrgang anlegen/ändern (`CourseInput`, auch `requiredQualifications`, `minimumAge`, `allowedStatuses`, `targets`). Fehler: `catalog.keyTaken`, `catalog.keyImmutable`, `catalog.unknownKey`, `masterdata.courseOwnPrerequisite`, `masterdata.unknownDepartment` |
 | `POST` | `/masterdata/courses/templates/bw` | `masterdata.catalogs.manage` | BW-Lehrgänge anlegen (Qualifikationen der BW-Katalogvorlage müssen existieren), Antwort `{ added }` |
 | `GET` | `/masterdata/persons/:id/course-attendances` | `masterdata.persons.read`, abteilungsbezogen | Teilnahmen der Person |
-| `POST` | `/masterdata/persons/:id/course-attendances` | `masterdata.persons.write` oder `masterdata.courses.plan`, abteilungsbezogen | Teilnahme eintragen (`CourseAttendanceInput`). Bei `passed`: Qualifikationen anlegen, offene Vormerkungen `completed`, Ereignisse `masterdata.course.passed` und `masterdata.person.qualification-changed` |
-| `DELETE` | `/masterdata/persons/:id/course-attendances/:attendanceId` | `masterdata.persons.write` oder `masterdata.courses.plan`, abteilungsbezogen | Teilnahme und die daraus entstandenen Qualifikationen entfernen (`204`) |
+| `POST` | `/masterdata/persons/:id/course-attendances` | `masterdata.persons.write` oder `masterdata.courses.plan`, abteilungsbezogen | Teilnahme eintragen (`CourseAttendanceInput`, Ende nicht vor Beginn). Bei `passed`: Qualifikationen anlegen, offene Vormerkungen `completed`, Ereignisse `masterdata.course.passed` und `masterdata.person.qualification-changed`. Fehler: `masterdata.courseNotFinished` (bestanden mit Ende nach heute), `masterdata.coursePassedAlready` (`409`) |
+| `DELETE` | `/masterdata/persons/:id/course-attendances/:attendanceId` | `masterdata.persons.write` oder `masterdata.courses.plan`, abteilungsbezogen | Teilnahme und die daraus entstandenen Qualifikationen entfernen (`204`); die damit erledigte Vormerkung wird wieder `confirmed`. Bei bestandener Teilnahme `masterdata.course.revoked` und `masterdata.person.qualification-changed` |
+| `POST` | `/masterdata/course-results` | `masterdata.persons.write` oder `masterdata.courses.plan` je Person | Ergebnisse mehrerer Personen auf einmal (`CourseResultsInput`: `course`, `runId` oder Datum und Ort, `results`); Antwort `{ recorded, skipped: [{ personId, code }] }` |
+| `GET` | `/masterdata/course-runs?course=&year=` | `masterdata.courses.plan` | Lehrgangstermine (`CourseRun`) mit Zahl der zugeordneten Vormerkungen und erfassten Teilnahmen |
+| `POST`, `PUT`, `DELETE` | `/masterdata/course-runs`, `/masterdata/course-runs/:id` | `masterdata.courses.plan` | Termin anlegen/ändern (`CourseRunInput`) bzw. löschen; mit erfassten Ergebnissen `masterdata.courseRunHasResults` (`409`) |
+| `GET` | `/masterdata/course-needs` | `masterdata.courses.plan` | Lehrgangsbedarf (`CourseNeed[]`): je aktivem Lehrgang und Abteilung `have`, `target`, `nominated` |
 | `GET` | `/masterdata/course-nominations?course=` | `masterdata.courses.plan` | Vormerkungen der Personen, für die der Benutzer planen darf |
-| `POST` | `/masterdata/course-nominations` | `masterdata.courses.plan`, abteilungsbezogen | Vormerken (`CourseNominationInput`). Fehler: `masterdata.alreadyNominated` (`409`) |
-| `PUT` | `/masterdata/course-nominations/:id` | `masterdata.courses.plan`, abteilungsbezogen | Priorität, Zeitraum, Status, Bemerkung ändern. Person und Lehrgang sind fest (`masterdata.nominationTargetImmutable`). |
+| `POST` | `/masterdata/course-nominations` | `masterdata.courses.plan`, abteilungsbezogen | Vormerken (`CourseNominationInput`, optional `runId`). Fehler: `masterdata.alreadyNominated` (`409`), `masterdata.unknownCourseRun` |
+| `POST` | `/masterdata/course-nominations/bulk` | `masterdata.courses.plan`, abteilungsbezogen je Person | Mehrere Personen vormerken (`BulkNominationInput`); bereits vorgemerkte oder nicht sichtbare werden übersprungen. Antwort `{ created, skipped: [{ personId, code }] }` |
+| `PUT` | `/masterdata/course-nominations/:id` | `masterdata.courses.plan`, abteilungsbezogen | Priorität, Zeitraum, Status, Bemerkung und Termin ändern. Person und Lehrgang sind fest (`masterdata.nominationTargetImmutable`). |
 | `DELETE` | `/masterdata/course-nominations/:id` | `masterdata.courses.plan`, abteilungsbezogen | Vormerkung löschen (`204`) |
-| `GET` | `/masterdata/course-planning/:course` | `masterdata.courses.plan` | `CoursePlanning`: offene Vormerkungen mit `prerequisitesMet` und Kandidaten |
+| `GET` | `/masterdata/course-planning/:course` | `masterdata.courses.plan` | `CoursePlanning`: offene Vormerkungen mit `prerequisitesMet` (alle Bedingungen), Kandidaten und Termine |
 
 **Ungültige Eingaben** ergeben `400`:
 

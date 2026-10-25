@@ -3,7 +3,7 @@ import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { type AuthenticatedUser, berlinDate, DomainEvents, SettingsService } from '@forga/core-api';
 import { billableHours, CompensationSettings, incidentPayout, type CompensationStatute, type IncidentRate, type Item, ItemAmountInput, type ItemKind, type ItemSource, ManualItemInput, round2, type Rounding, trainingRateOn } from '@forga/compensation-contracts';
 import { type DutyChangedEvent, INCIDENTS_EVENTS, type ReportReleasedEvent } from '@forga/incidents-contracts';
-import { type CoursePassedEvent, MASTERDATA_EVENTS, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
+import { type CoursePassedEvent, type CourseRevokedEvent, MASTERDATA_EVENTS, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { type SessionClosedEvent, type SessionReopenedEvent, TRAINING_EVENTS } from '@forga/training-contracts';
 import { ItemEntity } from '../compensation.entities.js';
 
@@ -74,6 +74,8 @@ export class ItemsService implements OnModuleInit, CompensationStatute {
     this.events.subscribe<SessionReopenedEvent>(TRAINING_EVENTS.sessionReopened, (e) => this.apply('training', e.sessionId, []));
     this.events.subscribe<DutyChangedEvent>(INCIDENTS_EVENTS.dutyChanged, (e) => this.fromDuty(e));
     this.events.subscribe<CoursePassedEvent>(MASTERDATA_EVENTS.coursePassed, (e) => this.fromCourse(e));
+    // A deleted course attendance: an open allowance disappears, one already paid out is reversed by a correction item.
+    this.events.subscribe<CourseRevokedEvent>(MASTERDATA_EVENTS.courseRevoked, (e) => this.apply('course', e.attendanceId, []));
   }
 
   async config(): Promise<CompensationSettings> {

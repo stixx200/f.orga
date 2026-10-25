@@ -1,9 +1,9 @@
 import { Button, Group, MultiSelect, NumberInput, Select, SimpleGrid, Stack, Switch, Tabs, Text, TextInput } from '@mantine/core';
 import { useState } from 'react';
-import { type CatalogEntry, CatalogKind, type Course, type CourseInput, VEHICLE_STATISTICS_CATEGORIES } from '@forga/masterdata-contracts';
+import { type CatalogEntry, CatalogKind, type Course, type CourseInput, type PersonStatus, VEHICLE_STATISTICS_CATEGORIES } from '@forga/masterdata-contracts';
 import { send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { DataTable, PageHeader, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
-import { useCatalog } from '../api';
+import { useCatalog, useDepartments } from '../api';
 import { useCourses } from '../persons/CoursesTab';
 
 type Editing = { kind: CatalogKind; entry?: CatalogEntry } | { kind: 'course'; course?: Course } | null;
@@ -88,12 +88,17 @@ function CourseDialog({ course, onClose }: { course?: Course; onClose: () => voi
   const localized = useLocalized();
   const { data: qualifications = [] } = useCatalog('qualification');
   const { data: courses = [] } = useCourses();
+  const { data: departments = [] } = useDepartments();
   const [form, setForm] = useState<Required<CourseInput>>(() => ({
     key: course?.key ?? '',
     name: course?.name ?? { de: '', en: '' },
     level: course?.level ?? 'district',
     grantsQualifications: course?.grantsQualifications ?? [],
     prerequisites: course?.prerequisites ?? [],
+    requiredQualifications: course?.requiredQualifications ?? [],
+    minimumAge: course?.minimumAge ?? null,
+    allowedStatuses: (course?.allowedStatuses.filter((s) => s !== 'left') as Exclude<PersonStatus, 'left'>[] | undefined) ?? ['probation', 'active'],
+    targets: course?.targets ?? {},
     active: course?.active ?? true,
     sortOrder: course?.sortOrder ?? 0,
   }));
@@ -126,6 +131,34 @@ function CourseDialog({ course, onClose }: { course?: Course; onClose: () => voi
         </SimpleGrid>
         <MultiSelect label={t('catalogs.grants')} data={qualifications.map((q) => ({ value: q.key, label: localized(q.name) }))} value={form.grantsQualifications} onChange={(v) => setForm({ ...form, grantsQualifications: v })} searchable />
         <MultiSelect label={t('catalogs.prerequisites')} data={courses.filter((c) => c.key !== form.key).map((c) => ({ value: c.key, label: localized(c.name) }))} value={form.prerequisites} onChange={(v) => setForm({ ...form, prerequisites: v })} searchable />
+        <MultiSelect label={t('catalogs.requiredQualifications')} description={t('catalogs.requiredQualificationsHint')} data={qualifications.map((q) => ({ value: q.key, label: localized(q.name) }))} value={form.requiredQualifications} onChange={(v) => setForm({ ...form, requiredQualifications: v })} searchable />
+        <SimpleGrid cols={2}>
+          <MultiSelect
+            label={t('catalogs.allowedStatuses')}
+            description={t('catalogs.allowedStatusesHint')}
+            data={(['probation', 'active', 'youth', 'passive', 'veterans'] as const).map((v) => ({ value: v, label: t(`status.${v}`) }))}
+            value={form.allowedStatuses}
+            onChange={(v) => v.length && setForm({ ...form, allowedStatuses: v as Exclude<PersonStatus, 'left'>[] })}
+          />
+          <NumberInput label={t('catalogs.minimumAge')} description={t('catalogs.minimumAgeHint')} value={form.minimumAge ?? ''} onChange={(v) => setForm({ ...form, minimumAge: v === '' ? null : Number(v) })} min={0} max={99} />
+        </SimpleGrid>
+        <Text size="sm" fw={700}>{t('catalogs.targets')}</Text>
+        <Text size="xs" c="dimmed">{t('catalogs.targetsHint')}</Text>
+        <SimpleGrid cols={{ base: 2, sm: 3 }}>
+          {departments.map((d) => (
+            <NumberInput
+              key={d.id}
+              label={d.name}
+              value={form.targets[d.id] ?? ''}
+              onChange={(v) => {
+                const { [d.id]: _old, ...rest } = form.targets;
+                setForm({ ...form, targets: v === '' ? rest : { ...rest, [d.id]: Number(v) } });
+              }}
+              min={0}
+              max={999}
+            />
+          ))}
+        </SimpleGrid>
         <Group grow>
           <NumberInput label={t('catalogs.sortOrder')} value={form.sortOrder} onChange={(v) => setForm({ ...form, sortOrder: Number(v) || 0 })} />
           <Switch label={t('catalogs.active')} checked={form.active} onChange={(e) => setForm({ ...form, active: e.currentTarget.checked })} mt="lg" />

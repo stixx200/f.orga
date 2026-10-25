@@ -5,6 +5,8 @@ import type { Language, ListCell, ListColumn, LocalizedText } from '@forga/core-
 import { type AuthenticatedUser, type ListDefinition, SettingsService } from '@forga/core-api';
 import { type MembershipSettings, PersonStatus } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
+import { CourseAttendance, CourseNomination } from '../courses/course.entities.js';
+import { OPEN_NOMINATION, PLAN } from '../courses/courses.controller.js';
 import { Department, Person, Vehicle } from '../masterdata.entities.js';
 import {
   activeMemberships,
@@ -95,6 +97,8 @@ export class MasterdataLists {
       this.ageLimits(),
       this.strength(),
       this.vehicles(),
+      this.courseNominations(),
+      this.courseYear(),
     ] as ListDefinition<never>[];
     return lists;
   }
@@ -510,6 +514,100 @@ export class MasterdataLists {
             seats: v.seats,
             statisticsCategory: v.statisticsCategory,
           })),
+        };
+      },
+    };
+  }
+
+  /** Open nominations ("Lehrgangsvormerkungen") of the persons the user may plan courses for. */
+  private courseNominations(): ListDefinition<{ departmentId?: string }> {
+    return {
+      id: 'masterdata.course-nominations',
+      name: { de: 'Lehrgangsvormerkungen', en: 'Course nominations' },
+      permission: PLAN,
+      parameters: [departmentParameter],
+      schema: z.object({ departmentId: z.uuid().optional() }),
+      columns: [
+        col('course', 'Lehrgang', 'Course', 1.6),
+        NAME,
+        DEPARTMENT,
+        col('priority', 'Priorität', 'Priority', 0.7),
+        col('desiredPeriod', 'Gewünscht', 'Desired', 0.8),
+        col('run', 'Termin', 'Date', 1),
+        col('status', 'Status', 'Status', 1),
+      ],
+      orientation: 'landscape',
+      rows: async (user, params, language) => {
+        const { departments } = await this.labels(language);
+        const visible = this.persons.visibleWhere(user, PLAN) ?? { id: null };
+        const nominations = await this.em.fork().find(
+          CourseNomination,
+          { person: visible, status: { $in: [...OPEN_NOMINATION] } },
+          { populate: ['course', 'run', 'person.memberships.department'], orderBy: { course: { sortOrder: 'asc' }, priority: 'asc', createdAt: 'asc' } },
+        );
+        const priorities: Record<number, LocalizedText> = { 1: { de: 'hoch', en: 'high' }, 2: { de: 'mittel', en: 'medium' }, 3: { de: 'niedrig', en: 'low' } };
+        const statuses: Record<string, LocalizedText> = {
+          nominated: { de: 'vorgemerkt', en: 'nominated' },
+          registered: { de: 'angemeldet', en: 'registered' },
+          confirmed: { de: 'Platz zugesagt', en: 'place confirmed' },
+        };
+        return {
+          rows: nominations
+            .filter((n) => !params.departmentId || activeMemberships(n.person).some((m) => m.department.id === params.departmentId))
+            .map((n) => ({
+              course: n.course.name[language],
+              name: name(n.person),
+              department: departments.get(primaryDepartment(n.person) ?? '') ?? '',
+              priority: priorities[n.priority]?.[language] ?? String(n.priority),
+              desiredPeriod: n.desiredPeriod,
+              run: n.run ? [n.run.startsOn, n.run.endsOn].filter(Boolean).join(' – ') : '',
+              status: statuses[n.status]?.[language] ?? n.status,
+            })),
+        };
+      },
+    };
+  }
+
+  /** Course attendances of a year ("Lehrgänge im Jahr"), e.g. for the annual report. */
+  private courseYear(): ListDefinition<{ year?: number; departmentId?: string }> {
+    return {
+      id: 'masterdata.course-year',
+      name: { de: 'Lehrgänge im Jahr', en: 'Courses of the year' },
+      permission: PLAN,
+      parameters: [{ key: 'year', label: { de: 'Jahr', en: 'Year' }, type: 'year' }, departmentParameter],
+      schema: z.object({ year: z.coerce.number().int().min(1900).max(2200).optional(), departmentId: z.uuid().optional() }),
+      columns: [
+        col('course', 'Lehrgang', 'Course', 1.6),
+        col('startsOn', 'Beginn', 'Start'),
+        col('endsOn', 'Ende', 'End'),
+        col('location', 'Ort', 'Location', 1.2),
+        NAME,
+        DEPARTMENT,
+        col('result', 'Ergebnis', 'Result', 0.9),
+      ],
+      orientation: 'landscape',
+      rows: async (user, params, language) => {
+        const year = params.year ?? Number(today().slice(0, 4));
+        const { departments } = await this.labels(language);
+        const visible = this.persons.visibleWhere(user, PLAN) ?? { id: null };
+        const attendances = await this.em.fork().find(
+          CourseAttendance,
+          { person: visible, startsOn: { $lte: `${year}-12-31` }, $or: [{ endsOn: { $gte: `${year}-01-01` } }, { endsOn: null, startsOn: { $gte: `${year}-01-01` } }] },
+          { populate: ['course', 'person.memberships.department'], orderBy: { startsOn: 'asc' } },
+        );
+        return {
+          subtitle: String(year),
+          rows: attendances
+            .filter((a) => !params.departmentId || a.person.memberships.getItems().some((m) => m.department.id === params.departmentId))
+            .map((a) => ({
+              course: a.course.name[language],
+              startsOn: a.startsOn,
+              endsOn: a.endsOn ?? null,
+              location: a.location,
+              name: name(a.person),
+              department: departments.get(primaryDepartment(a.person, a.startsOn) ?? primaryDepartment(a.person) ?? '') ?? '',
+              result: a.result === 'passed' ? (language === 'de' ? 'bestanden' : 'passed') : language === 'de' ? 'nicht bestanden' : 'failed',
+            })),
         };
       },
     };

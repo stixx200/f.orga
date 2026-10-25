@@ -1,13 +1,13 @@
 import { Avatar, Button, Group, Stack, Tabs, Text } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useParams } from 'react-router';
-import type { Person, PersonInput } from '@forga/masterdata-contracts';
+import { useParams, useSearchParams } from 'react-router';
+import { isValidIban, type Person, type PersonInput } from '@forga/masterdata-contracts';
 import { apiUrl, can, extensionsOf, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ActionBar, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, today as todayDate, useCatalogNames, useDepartments, usePerson, WRITE } from '../api';
 import { BrigadeTab } from './BrigadeTab';
-import { CoursesTab } from './CoursesTab';
+import { CoursesTab, PLAN } from './CoursesTab';
 import { EntriesTab } from './EntriesTab';
 import { OfficesTab } from './OfficesTab';
 import { RestPeriodsPanel } from './RestPeriodsPanel';
@@ -41,6 +41,9 @@ export function toForm(person: Person): PersonForm {
   };
 }
 
+/** Tabs of the person file; extension tabs of other modules are addressed by their module ID (`?tab=clothing`). */
+const TABS = ['master', 'brigade', 'courses', 'qualifications', 'honors', 'offices', 'history'] as const;
+
 const initials = (p: Pick<Person, 'firstName' | 'lastName'>) => `${p.firstName[0] ?? ''}${p.lastName[0] ?? ''}`.toUpperCase();
 
 function PersonFile({ person }: { person: Person }) {
@@ -53,9 +56,12 @@ function PersonFile({ person }: { person: Person }) {
   const rankName = useCatalogNames('rank');
   const qualificationName = useCatalogNames('qualification');
   const [form, setForm] = useState<PersonForm>(() => toForm(person));
-  const [tab, setTab] = useState<string | null>('master');
+  const [search, setSearch] = useSearchParams();
   const editable = person.memberships.some((m) => can(session, WRITE, m.departmentId)) || session?.permissions[WRITE] === 'brigade';
+  // Course coordinators record course attendances without editing the person (`masterdata.courses.plan`).
+  const planner = person.memberships.some((m) => can(session, PLAN, m.departmentId)) || session?.permissions[PLAN] === 'brigade';
   const dirty = JSON.stringify(form) !== JSON.stringify(toForm(person));
+  const ibanInvalid = [form.bank?.iban, form.employer?.iban].some((iban) => iban?.trim() && !isValidIban(iban));
   const updated = (saved: Person) => {
     queryClient.setQueryData([...keys.persons, person.id], saved);
     void queryClient.invalidateQueries({ queryKey: [...keys.persons, 'summaries'] });
@@ -77,6 +83,15 @@ function PersonFile({ person }: { person: Person }) {
     person.personnelNumber ? t('persons.number', { number: person.personnelNumber }) : '',
   ].filter(Boolean).join(' · ');
   const extensions = extensionsOf('masterdata.person.tab').filter((e) => !e.permission || can(session, e.permission));
+  // Deep link `?tab=<tab>`: own tabs by name, extension tabs by module ID.
+  const requested = search.get('tab');
+  const tab = requested && (TABS as readonly string[]).includes(requested) ? requested : requested && extensions.some((e) => e.module === requested) ? `ext:${requested}` : 'master';
+  const setTab = (value: string | null) => {
+    const next = new URLSearchParams(search);
+    if (!value || value === 'master') next.delete('tab');
+    else next.set('tab', value.replace(/^ext:/, ''));
+    setSearch(next, { replace: true });
+  };
 
   return (
     <Stack gap="lg" pb={80}>
@@ -118,10 +133,10 @@ function PersonFile({ person }: { person: Person }) {
         <Tabs.Panel value="brigade">
           <Stack gap="md">
             <BrigadeTab person={person} form={form} setForm={setForm} disabled={!editable} onChanged={updated} />
-            <RestPeriodsPanel person={person} disabled={!editable} onChanged={updated} />
+            {!person.sensitiveHidden && <RestPeriodsPanel person={person} disabled={!editable} onChanged={updated} />}
           </Stack>
         </Tabs.Panel>
-        <Tabs.Panel value="courses"><CoursesTab person={person} disabled={!editable} onChanged={updated} /></Tabs.Panel>
+        <Tabs.Panel value="courses"><CoursesTab person={person} disabled={!editable && !planner} onChanged={updated} /></Tabs.Panel>
         <Tabs.Panel value="qualifications"><EntriesTab kind="qualification" person={person} disabled={!editable} onChanged={updated} /></Tabs.Panel>
         <Tabs.Panel value="honors"><EntriesTab kind="honor" person={person} disabled={!editable} onChanged={updated} /></Tabs.Panel>
         <Tabs.Panel value="offices"><OfficesTab person={person} disabled={!editable} onChanged={updated} /></Tabs.Panel>
@@ -137,7 +152,7 @@ function PersonFile({ person }: { person: Person }) {
       {editable && (
         <ActionBar info={t(dirty ? 'person.unsaved' : 'person.allSaved')}>
           <Button variant="default" disabled={!dirty} onClick={() => setForm(toForm(person))}>{common('actions.cancel')}</Button>
-          <Button disabled={!dirty} loading={save.isPending} onClick={() => save.mutate(form)}>{common('actions.save')}</Button>
+          <Button disabled={!dirty || ibanInvalid} loading={save.isPending} onClick={() => save.mutate(form)}>{common('actions.save')}</Button>
         </ActionBar>
       )}
     </Stack>

@@ -122,6 +122,9 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Lehrgang | `Course` |
 | Lehrgangsteilnahme | `CourseAttendance` |
 | Lehrgangsvormerkung | `CourseNomination` |
+| Lehrgangstermin | `CourseRun` |
+| Lehrgangsbedarf (Haben, Soll, Vorgemerkt je Lehrgang und Abteilung) | `CourseNeed`, Soll `targets` am Lehrgang |
+| Gruppe (als Einheit einer Abteilung), Gruppenführer | `DepartmentGroup`, `leader` |
 | Qualifikation | `Qualification` |
 | Dienstgrad | `Rank` |
 | Beförderung | `Promotion` |

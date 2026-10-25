@@ -1,10 +1,14 @@
 import { Select, SimpleGrid, Text, Textarea, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import type { Dispatch, SetStateAction } from 'react';
-import type { Person } from '@forga/masterdata-contracts';
+import { isValidIban, type Person } from '@forga/masterdata-contracts';
 import { useTranslation } from '@forga/web-sdk';
 import { Notice, Panel, StatusBadge } from '@forga/web-ui';
+import { today } from '../api';
 import type { PersonForm } from './PersonPage';
+
+/** Field error for an IBAN with wrong check digits; empty is allowed. */
+export const ibanError = (iban: string | undefined, message: string) => (iban?.trim() && !isValidIban(iban) ? message : undefined);
 
 const age = (birthDate: string) => {
   const birth = new Date(`${birthDate}T12:00:00Z`);
@@ -70,6 +74,7 @@ export function MasterDataTab({ person, form, setForm, disabled }: { person: Per
               value={form.birthDate ?? null}
               onChange={(v) => set('birthDate', v)}
               valueFormat="DD.MM.YYYY"
+              maxDate={today()}
               clearable
               disabled={disabled}
             />
@@ -85,7 +90,7 @@ export function MasterDataTab({ person, form, setForm, disabled }: { person: Per
             <TextInput label={t('person.street')} value={employer.street} onChange={(e) => set('employer', { ...employer, street: e.currentTarget.value })} disabled={disabled} />
             <TextInput label={t('person.city')} value={employer.city} onChange={(e) => set('employer', { ...employer, city: e.currentTarget.value })} disabled={disabled} />
             <TextInput label={t('person.employerContact')} value={employer.contact} onChange={(e) => set('employer', { ...employer, contact: e.currentTarget.value })} disabled={disabled} />
-            <TextInput label={t('person.employerIban')} value={employer.iban} onChange={(e) => set('employer', { ...employer, iban: e.currentTarget.value })} disabled={disabled} />
+            <TextInput label={t('person.employerIban')} value={employer.iban} onChange={(e) => set('employer', { ...employer, iban: e.currentTarget.value })} disabled={disabled} error={ibanError(employer.iban, t('person.invalidIban'))} />
             <DateInput
               label={t('person.lossOfEarningsAssignedFrom')}
               description={t('person.lossOfEarningsAssignedHint')}
@@ -101,14 +106,18 @@ export function MasterDataTab({ person, form, setForm, disabled }: { person: Per
       <Panel title={t('person.sections.bank')} aside={sensitiveBadge}>
         {person.sensitiveHidden ? hidden : (
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <TextInput label={t('person.iban')} value={bank.iban} onChange={(e) => set('bank', { ...bank, iban: e.currentTarget.value })} disabled={disabled} />
+            <TextInput label={t('person.iban')} value={bank.iban} onChange={(e) => set('bank', { ...bank, iban: e.currentTarget.value })} disabled={disabled} error={ibanError(bank.iban, t('person.invalidIban'))} />
             <TextInput label={t('person.accountHolder')} value={bank.accountHolder} onChange={(e) => set('bank', { ...bank, accountHolder: e.currentTarget.value })} disabled={disabled} />
           </SimpleGrid>
         )}
       </Panel>
-      <Panel title={t('person.sections.notes')}>
-        <Textarea label={t('person.notes')} value={form.notes} onChange={(e) => set('notes', e.currentTarget.value)} autosize minRows={3} disabled={disabled} />
-        <Text size="xs" c="dimmed" mt="xs">{t('person.notesHint')}</Text>
+      <Panel title={t('person.sections.notes')} aside={sensitiveBadge}>
+        {person.sensitiveHidden ? hidden : (
+          <>
+            <Textarea label={t('person.notes')} value={form.notes} onChange={(e) => set('notes', e.currentTarget.value)} autosize minRows={3} disabled={disabled} />
+            <Text size="xs" c="dimmed" mt="xs">{t('person.notesHint')}</Text>
+          </>
+        )}
       </Panel>
     </SimpleGrid>
   );

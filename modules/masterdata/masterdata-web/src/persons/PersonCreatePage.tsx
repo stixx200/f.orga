@@ -6,7 +6,7 @@ import { Link, useNavigate } from 'react-router';
 import type { CreatePersonInput, Person, PersonSummary } from '@forga/masterdata-contracts';
 import { api, can, send, useSession, useTranslation, withQuery } from '@forga/web-sdk';
 import { ActionBar, Notice, PageHeader, Panel, useAction } from '@forga/web-ui';
-import { keys, probationEnd, SENSITIVE, today, useDepartments, useMembershipRules, WRITE } from '../api';
+import { ageOn, keys, probationEnd, SENSITIVE, today, useDepartments, useMembershipRules, WRITE } from '../api';
 
 /** New person with primary department and admission; further data follows in the person file. */
 export function PersonCreatePage() {
@@ -37,6 +37,11 @@ export function PersonCreatePage() {
   const departmentId = form.departmentId ?? (writable.length === 1 ? writable[0].id : null);
   const standardEnd = probationEnd(form.from, rules?.probationMonths ?? 12);
   const probationChanged = form.status === 'probation' && form.probationEndsOn !== null && form.probationEndsOn !== standardEnd;
+  // Minors cannot join an operational department (minimum age of the statute); the server refuses it as well.
+  const ageAtStart = form.birthDate ? ageOn(form.birthDate, form.from) : null;
+  const operational = departments.find((d) => d.id === departmentId)?.type === 'operational';
+  const tooYoung = operational && ageAtStart !== null && ageAtStart < (rules?.minimumAgeOperational ?? 17);
+  const futureBirth = Boolean(form.birthDate && form.birthDate > today());
 
   // Same name (also former members): offer to open the existing person instead of creating a duplicate.
   const lastName = form.lastName.trim().toLowerCase();
@@ -71,7 +76,7 @@ export function PersonCreatePage() {
     },
     { success: t('persons.created'), invalidate: [keys.persons], onSuccess: (person) => navigate(`/masterdata/persons/${person.id}`) },
   );
-  const valid = Boolean(form.firstName.trim() && form.lastName.trim() && departmentId && (!probationChanged || form.probationReason.trim()));
+  const valid = Boolean(form.firstName.trim() && form.lastName.trim() && departmentId && (!probationChanged || form.probationReason.trim())) && !tooYoung && !futureBirth;
 
   return (
     <Stack gap="lg" pb={80}>
@@ -100,7 +105,7 @@ export function PersonCreatePage() {
                 onChange={(v) => v && set('gender', v as Person['gender'])}
                 allowDeselect={false}
               />
-              {can(session, SENSITIVE) && <DateInput label={t('person.birthDate')} value={form.birthDate} onChange={(v) => set('birthDate', v)} valueFormat="DD.MM.YYYY" clearable />}
+              {can(session, SENSITIVE) && <DateInput label={t('person.birthDate')} value={form.birthDate} onChange={(v) => set('birthDate', v)} valueFormat="DD.MM.YYYY" maxDate={today()} clearable error={futureBirth ? t('persons.birthDateInFuture') : undefined} />}
               <TextInput label={t('person.phoneMobile')} type="tel" value={form.phoneMobile} onChange={(e) => set('phoneMobile', e.currentTarget.value)} />
               <TextInput label={t('person.email')} type="email" value={form.email} onChange={(e) => set('email', e.currentTarget.value)} />
               <TextInput label={t('person.street')} value={form.street} onChange={(e) => set('street', e.currentTarget.value)} />
@@ -141,6 +146,7 @@ export function PersonCreatePage() {
                   />
                 </SimpleGrid>
               )}
+              {tooYoung && <Notice kind="warning">{t('persons.tooYoung', { age: rules?.minimumAgeOperational ?? 17 })}</Notice>}
               <Text size="xs" c="dimmed">{t('persons.reminderHint')}</Text>
             </Stack>
           </Panel>

@@ -5,7 +5,7 @@ import type { CourseInput } from '../course.js';
  * Keys of granted qualifications match the BW catalog template.
  */
 const COURSES: CourseInput[] = [
-  { key: 'truppmann-1', name: { de: 'Truppmann Teil 1', en: 'Basic training part 1' }, level: 'district', grantsQualifications: ['truppmann-1'] },
+  { key: 'truppmann-1', name: { de: 'Truppmann Teil 1', en: 'Basic training part 1' }, level: 'district', grantsQualifications: ['truppmann-1'], allowedStatuses: ['probation', 'active', 'youth'] },
   { key: 'truppmann-2', name: { de: 'Truppmann Teil 2', en: 'Basic training part 2' }, level: 'municipal', grantsQualifications: ['truppmann-2'], prerequisites: ['truppmann-1'] },
   { key: 'radio-operator', name: { de: 'Sprechfunker', en: 'Radio operator' }, level: 'district', grantsQualifications: ['radio-operator'], prerequisites: ['truppmann-1'] },
   { key: 'breathing-apparatus', name: { de: 'Atemschutzgeräteträger', en: 'Breathing apparatus wearer' }, level: 'district', grantsQualifications: ['breathing-apparatus'], prerequisites: ['truppmann-1'] },

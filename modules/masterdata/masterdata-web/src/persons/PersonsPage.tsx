@@ -1,10 +1,10 @@
 import { Button, Chip, Group, MultiSelect, Stack, Text, TextInput } from '@mantine/core';
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import type { PersonSummary } from '@forga/masterdata-contracts';
 import { can, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, matchesSearch, PageHeader, StatusBadge, type Tone } from '@forga/web-ui';
-import { READ, useCatalog, useCatalogNames, useDepartments, usePersons, WRITE } from '../api';
+import { READ, useCatalog, useCatalogNames, useDepartments, useGroups, useMyGroups, usePersons, WRITE } from '../api';
 import { HonorCertificatesDialog } from './HonorCertificatesDialog';
 
 const STATUSES = ['active', 'probation', 'youth', 'veterans', 'passive', 'left'] as const;
@@ -27,9 +27,15 @@ export function PersonsPage() {
   const { t, i18n } = useTranslation('masterdata');
   const navigate = useNavigate();
   const session = useSession().data;
-  const [statuses, setStatuses] = useState<Status[]>(['active']);
-  const [query, setQuery] = useState('');
-  const [chosenDepartments, setDepartmentIds] = useState<string[] | null>(null);
+  // `?q=` (e.g. from the global search) searches all departments and statuses except those who left.
+  const [search] = useSearchParams();
+  const initialQuery = search.get('q') ?? '';
+  const [statuses, setStatuses] = useState<Status[]>(() => (initialQuery ? STATUSES.filter((s) => s !== 'left') : ['active']));
+  const [query, setQuery] = useState(initialQuery);
+  const [chosenDepartments, setDepartmentIds] = useState<string[] | null>(() => (initialQuery ? [] : null));
+  const [groupIds, setGroupIds] = useState<string[]>([]);
+  const { data: groups = [] } = useGroups();
+  const { data: myGroups = [] } = useMyGroups();
   const [qualifications, setQualifications] = useState<string[]>([]);
   const [ranks, setRanks] = useState<string[]>([]);
   const [certificates, setCertificates] = useState(false);
@@ -57,8 +63,16 @@ export function PersonsPage() {
       .filter((p) => !departmentIds.length || p.departmentIds.some((d) => departmentIds.includes(d)))
       .filter((p) => matchesSearch([p.firstName, p.lastName, p.personnelNumber, p.email, p.phoneMobile], q))
       .filter((p) => !qualifications.length || p.qualifications.some((x) => qualifications.includes(x)))
-      .filter((p) => !ranks.length || (p.rank !== null && ranks.includes(p.rank)));
-  }, [persons, statuses, departmentIds, query, qualifications, ranks]);
+      .filter((p) => !ranks.length || (p.rank !== null && ranks.includes(p.rank)))
+      .filter((p) => !groupIds.length || groups.some((g) => groupIds.includes(g.id) && (g.memberIds.includes(p.id) || g.leaderId === p.id)));
+  }, [persons, statuses, departmentIds, query, qualifications, ranks, groupIds, groups]);
+  // "Meine Gruppe": the groups the user leads, in all departments and statuses except those who left.
+  const mine = myGroups.length > 0 && groupIds.length === myGroups.length && myGroups.every((g) => groupIds.includes(g.id));
+  const showMine = () => {
+    setGroupIds(myGroups.map((g) => g.id));
+    setDepartmentIds([]);
+    setStatuses(STATUSES.filter((s) => s !== 'left'));
+  };
 
   return (
     <Stack gap="lg">
@@ -81,6 +95,11 @@ export function PersonsPage() {
           <Button variant="subtle" size="compact-sm" onClick={() => setStatuses(statuses.length === STATUSES.length ? ['active'] : [...STATUSES])}>
             {statuses.length === STATUSES.length ? t('persons.views.reset') : t('persons.views.all')}
           </Button>
+          {myGroups.length > 0 && (
+            <Button variant={mine ? 'filled' : 'outline'} size="compact-sm" onClick={() => (mine ? setGroupIds([]) : showMine())}>
+              {t('persons.myGroup')}
+            </Button>
+          )}
         </Group>
       </Chip.Group>
       <Group grow align="end">
@@ -88,6 +107,17 @@ export function PersonsPage() {
         <MultiSelect label={t('persons.department')} placeholder={departmentIds.length ? undefined : t('persons.allDepartments')} data={departments.map((d) => ({ value: d.id, label: d.name }))} value={departmentIds} onChange={setDepartmentIds} clearable searchable />
         <MultiSelect label={t('persons.qualification')} placeholder={qualifications.length ? undefined : t('persons.all')} data={qualificationEntries.map((q) => ({ value: q.key, label: name(q) }))} value={qualifications} onChange={setQualifications} clearable searchable />
         <MultiSelect label={t('persons.rank')} placeholder={ranks.length ? undefined : t('persons.all')} data={rankEntries.map((r) => ({ value: r.key, label: name(r) }))} value={ranks} onChange={setRanks} clearable searchable />
+        {groups.length > 0 && (
+          <MultiSelect
+            label={t('persons.group')}
+            placeholder={groupIds.length ? undefined : t('persons.all')}
+            data={groups.map((g) => ({ value: g.id, label: `${g.name} (${departments.find((d) => d.id === g.departmentId)?.shortName ?? ''})` }))}
+            value={groupIds}
+            onChange={setGroupIds}
+            clearable
+            searchable
+          />
+        )}
       </Group>
       <DataTable<PersonSummary>
         rows={rows}
