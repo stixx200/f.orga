@@ -122,6 +122,18 @@ Ein fester Zufallsstartwert je Schritt erzeugt bei jedem Lauf dieselben Daten. E
 
 ## Migrationen
 
+**Bis zum ersten Release gibt es keine fortlaufenden Migrationen:** Core und jedes Modul haben genau eine Migration `initial`. Nach einer Änderung an Entitäten werden alle Migrationen neu erzeugt und die Entwicklungsdatenbank neu angelegt:
+
+```bash
+npm run migration:reset   # löscht alle Migrationen, erzeugt je Modul eine neue `initial`
+```
+
+1. `migration:reset` arbeitet in einer eigenen, vorübergehenden Datenbank (`forga_migration_reset`). Ein laufender Entwicklungsserver bleibt ungestört.
+2. Danach die Entwicklungsdatenbank neu anlegen. Der Server spielt die neuen Migrationen beim nächsten Start ein, `npm run seed` füllt die Demodaten.
+3. Datenmigrationen (`--blank`) braucht es bis dahin nicht.
+
+Die einzelnen Befehle (ab dem ersten Release wieder der normale Weg):
+
 ```bash
 npm run migration:create -- <modul|core> <name>   # z. B. masterdata persons
 npm run migration:run
