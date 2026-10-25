@@ -116,8 +116,8 @@ Schemas aus `@forga/masterdata-contracts`. „Abteilungsbezogen“ heißt: Das R
 | `POST` | `/masterdata/persons/:id/admission` | Endgültige Aufnahme (`Admission`). Fehler: `masterdata.notInProbation` |
 | `POST` | `/masterdata/persons/:id/status` | Statuswechsel (`StatusChange`), nicht aus `probation` oder `left` (`masterdata.statusChangeNotAllowed`); aus `youth` heraus und nach `veterans` nur über die Übernahmen (`masterdata.useTransfer`) |
 | `POST` | `/masterdata/persons/:id/transfer-to-operational` | Übernahme aus der Jugendfeuerwehr (`TransferToOperational`: `departmentId`, `on`, `probationEndsOn` oder `null` = Verzicht, `reason`, `decidedOn`). Fehler: `masterdata.transferNotAllowed`, `masterdata.wrongDepartmentType`, `masterdata.belowMinimumAge`, `masterdata.probationReasonRequired`, `masterdata.transferBeforeMembership` |
-| `POST` | `/masterdata/persons/:id/transfer-to-veterans` | Übernahme in die Altersabteilung (`TransferToVeterans`: `departmentId`, `on`, `decidedOn`), nur aus `active` oder `passive`. Fehler: `masterdata.transferNotAllowed`, `masterdata.wrongDepartmentType`, `masterdata.transferBeforeMembership` |
-| `POST` | `/masterdata/persons/:id/leave` | Austritt (`Leave`), beendet offene Mitgliedschaften, löst `masterdata.person.left` aus. Fehler: `masterdata.alreadyLeft` |
+| `POST` | `/masterdata/persons/:id/transfer-to-veterans` | Übernahme in die Altersabteilung (`TransferToVeterans`: `departmentId`, `on`, `decidedOn`), nur aus `active` oder `passive`. Fehler: `masterdata.personHoldsItems` (409, noch Schutzausrüstung zugeordnet), `masterdata.transferNotAllowed`, `masterdata.wrongDepartmentType`, `masterdata.transferBeforeMembership` |
+| `POST` | `/masterdata/persons/:id/leave` | Austritt (`Leave`), beendet offene Mitgliedschaften, löst `masterdata.person.left` aus. Fehler: `masterdata.alreadyLeft`, `masterdata.personHoldsItems` (409) |
 
 Unbekannte Katalogschlüssel ergeben `400` mit `catalog.unknownKey`.
 
@@ -184,6 +184,25 @@ Abteilungsbezogene Rechte gelten für die Abteilung des Berichts. Wer `incidents
 **Importprofil `incidents.duty-roster`** (Recht `incidents.duty.manage`, Datei `.ics`), Meldungscodes je Zeile: `imports.invalidDate`, `incidents.duty.unknownPerson`, `incidents.duty.ambiguousPerson`, `incidents.duty.noKind`.
 
 **Einstellungsabschnitt** `incidents.general`: `homeMunicipalities`, `rates`, `rounding`, `compensationRelease`, `standbyHours`, `allowances`, `dutyKinds`, `rules`.
+
+## Clothing
+
+| Methode | Pfad | Recht | Zweck |
+| --- | --- | --- | --- |
+| `GET` | `/clothing/articles` | angemeldet | Artikel (`Article[]`) |
+| `POST`, `PUT` | `/clothing/articles`, `/clothing/articles/:id` | `clothing.manage` für die Gesamtwehr | Artikel anlegen/ändern (`ArticleInput`). Fehler: `clothing.articleKeyTaken`, `clothing.articleKeyFixed`, `clothing.articleKindFixed` |
+| `POST` | `/clothing/articles/template` | `clothing.manage` für die Gesamtwehr | Fehlende Artikel der Vorlage anlegen, Antwort `{ added }` |
+| `GET` | `/clothing/items?status&articleKey&holderId&q` | `clothing.read`, abteilungsbezogen | Stücke mit letzter Wäsche, Imprägnierung, Prüfung und Fälligkeiten (`Item[]`); ohne `status` alle nicht ausgesonderten |
+| `POST`, `PUT` | `/clothing/items`, `/clothing/items/:id` | `clothing.manage`, abteilungsbezogen | Stück anlegen/ändern (`ItemInput`). Fehler: `clothing.notInventoried`, `clothing.inventoryNumberTaken` (409), `clothing.articleFixed` |
+| `GET` | `/clothing/items/:id` | `clothing.read` | Stück mit Wäsche, Prüfungen und Verlauf (`ItemDetail`) |
+| `POST` | `/clothing/items/:id/issue` | `clothing.issue` für Stück und Person | Ausgeben (`ItemIssueInput`: `personId`, `date`, `notes`). Fehler: `clothing.notInStock`, `clothing.personLeft` |
+| `POST` | `/clothing/items/:id/return` | `clothing.issue` | Zurücknehmen (`ItemReturnInput`, `retire` sondert aus). Fehler: `clothing.notIssued`, `clothing.returnBeforeIssue` |
+| `POST` | `/clothing/items/:id/retire` | `clothing.manage` | Stück im Lager aussondern |
+| `POST` | `/clothing/items/:id/inspections` | `clothing.issue` | Prüfung erfassen (`InspectionInput`) |
+| `POST` | `/clothing/care` | `clothing.issue` | Waschen oder Imprägnieren mehrerer Stücke (`CareInput`: `itemIds`, `kind`, `date`, `place`). Fehler: `clothing.notTextile`, `clothing.retired` |
+| `POST` | `/clothing/consumables` | `clothing.issue` für eine Abteilung der Person | Verbrauchsartikel abgeben (`ConsumableIssueInput`); nur Eintrag im Verlauf. Fehler: `clothing.inventoried`, `clothing.personLeft` |
+| `GET` | `/clothing/persons/:personId` | `clothing.read` für eine Abteilung der Person, sonst `404` | Zugeordnete Stücke und Verlauf (`PersonClothing`) |
+| `GET` | `/clothing/me` | `clothing.self` | Eigene Schutzausrüstung |
 
 ## Inaktive Module
 

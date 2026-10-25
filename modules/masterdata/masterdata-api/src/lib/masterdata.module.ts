@@ -6,6 +6,7 @@ import {
   MASTERDATA_SETTINGS,
   ORGANIZATION,
   ORGANIZATION_REFERENCES,
+  PERSON_HOLDINGS,
   PERSON_DIRECTORY,
   SENSITIVE_PERSON_FIELDS,
 } from '@forga/masterdata-contracts';
@@ -22,11 +23,12 @@ import { OrganizationController } from './organization/organization.controller.j
 import { Department, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod, Station, Vehicle } from './masterdata.entities.js';
 import { MasterdataData } from './data/masterdata.data.js';
 import { OrganizationReferenceRegistry } from './organization/references.js';
+import { PersonHoldingsRegistry } from './persons/holdings.js';
 import { PersonsController } from './persons/persons.controller.js';
 import { SelfController } from './self/self.controller.js';
 import { PersonsService, READ, SENSITIVE } from './persons/persons.service.js';
 
-/** Global, so other modules can inject `PERSON_DIRECTORY`, `ORGANIZATION` and `ORGANIZATION_REFERENCES` without importing this package. */
+/** Global, so other modules can inject `PERSON_DIRECTORY`, `ORGANIZATION`, `ORGANIZATION_REFERENCES` and `PERSON_HOLDINGS` without importing this package. */
 @Global()
 @Module({
   controllers: [CatalogController, OrganizationController, PersonsController, CoursesController, SelfController],
@@ -42,8 +44,10 @@ import { PersonsService, READ, SENSITIVE } from './persons/persons.service.js';
     { provide: ORGANIZATION, useClass: OrganizationService },
     OrganizationReferenceRegistry,
     { provide: ORGANIZATION_REFERENCES, useExisting: OrganizationReferenceRegistry },
+    PersonHoldingsRegistry,
+    { provide: PERSON_HOLDINGS, useExisting: PersonHoldingsRegistry },
   ],
-  exports: [PERSON_DIRECTORY, ORGANIZATION, ORGANIZATION_REFERENCES],
+  exports: [PERSON_DIRECTORY, ORGANIZATION, ORGANIZATION_REFERENCES, PERSON_HOLDINGS],
 })
 export class MasterdataModule implements OnModuleInit {
   constructor(

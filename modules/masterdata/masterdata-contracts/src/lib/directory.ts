@@ -127,6 +127,16 @@ export interface OrganizationReferences {
   register(module: string, count: (kind: OrganizationObject, id: string) => Promise<number>): void;
 }
 
+/**
+ * Other modules report what a person still holds (e.g. personal protective equipment of the clothing store).
+ * Leaving the brigade and the transfer to the veterans are refused while anything is held.
+ */
+export const PERSON_HOLDINGS = 'masterdata.PersonHoldings';
+
+export interface PersonHoldings {
+  register(module: string, count: (personId: string) => Promise<number>): void;
+}
+
 /** Domain events published by the masterdata module after the change is committed. */
 export const MASTERDATA_EVENTS = {
   personLeft: 'masterdata.person.left',

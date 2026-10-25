@@ -20,10 +20,12 @@ import {
   IconLayoutGrid,
   IconList,
   IconSchool,
+  IconShirt,
   IconSitemap,
   IconTruck,
   IconUser,
   IconUsers,
+  IconWash,
   type Icon,
 } from '@tabler/icons-react';
 
@@ -54,4 +56,6 @@ export const NAV_ICONS: Record<string, Icon> = {
   receipt: IconReceipt,
   award: IconAward,
   edit: IconPencil,
+  shirt: IconShirt,
+  wash: IconWash,
 };

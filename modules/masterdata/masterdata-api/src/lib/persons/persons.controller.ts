@@ -45,6 +45,7 @@ import { CatalogEntry, CatalogService } from '../catalog/catalog.js';
 import { Department, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod } from '../masterdata.entities.js';
 import { requireDepartment, today } from '../shared/access.js';
 import { addDays, addMonths, ageOn } from '../shared/dates.js';
+import { PersonHoldingsRegistry } from './holdings.js';
 import { activeMemberships, PersonsService, READ, SENSITIVE, WRITE } from './persons.service.js';
 
 type ParsedPerson = ReturnType<typeof PersonInput.parse>;
@@ -64,6 +65,7 @@ export class PersonsController {
     private readonly catalogs: CatalogService,
     private readonly settings: SettingsService,
     private readonly events: DomainEvents,
+    private readonly holdings: PersonHoldingsRegistry,
   ) {}
 
   /** With `masterdata.persons.read` the summaries, with only `masterdata.persons.directory` restricted entries. */
@@ -467,6 +469,7 @@ export class PersonsController {
     const em = this.em.fork();
     const person = await this.persons.load(em, id, user, WRITE);
     if (person.status !== 'active' && person.status !== 'passive') throw new BadRequestException({ code: 'masterdata.transferNotAllowed', from: person.status });
+    await this.holdings.assertNothingHeld(person.id);
     await this.transferMembership(em, user, person, input.departmentId, input.on, 'veterans', ['operational', 'command']);
     person.status = 'veterans';
     if (input.decidedOn) person.notes = appendNote(person.notes, `Übernahme in Altersabteilung ${input.on}, beschlossen / decided ${input.decidedOn}`);
@@ -520,6 +523,7 @@ export class PersonsController {
     const em = this.em.fork();
     const person = await this.persons.load(em, id, user, WRITE);
     if (person.status === 'left') throw new BadRequestException({ code: 'masterdata.alreadyLeft' });
+    await this.holdings.assertNothingHeld(person.id);
     await this.catalogs.requireKey('exit-reason', input.exitReason, em);
     person.status = 'left';
     person.leftOn = input.leftOn;

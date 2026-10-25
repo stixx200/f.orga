@@ -104,7 +104,8 @@
     "@forga/compensation-api": "*",
     "@forga/equipment-api": "*",
     "@forga/cost-recovery-api": "*",
-    "@forga/promotions-api": "*"
+    "@forga/promotions-api": "*",
+    "@forga/clothing-api": "*"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.0",
