@@ -148,7 +148,10 @@ export type InspectionsInput = z.input<typeof InspectionsInput>;
 export const Inspection = z.object({ id: z.uuid(), itemId: z.uuid(), date: z.string(), passed: z.boolean(), inspector: z.string(), notes: z.string(), ...recorded });
 export type Inspection = z.infer<typeof Inspection>;
 
-/** Handing out consumables (not assigned; only recorded in the person's history). */
+/**
+ * Handing out consumables (not assigned; only recorded in the person's history). An article with sizes needs one.
+ * When the store keeps a counter for the article and it would drop below zero, the issue needs `acceptLowStock`.
+ */
 export const ConsumableIssueInput = z.object({
   personId: z.uuid(),
   articleKey: z.string().min(1),
@@ -156,6 +159,7 @@ export const ConsumableIssueInput = z.object({
   quantity: z.number().int().min(1).max(100).default(1),
   date,
   notes: text,
+  acceptLowStock: z.boolean().default(false),
 });
 export type ConsumableIssueInput = z.input<typeof ConsumableIssueInput>;
 
@@ -218,15 +222,34 @@ export type SizeProfileInput = z.input<typeof SizeProfileInput>;
 export const PersonClothing = z.object({ items: z.array(Item), history: z.array(IssueRecord), sizes: SizeProfile });
 export type PersonClothing = z.infer<typeof PersonClothing>;
 
-/** Consumables received into the store (or a correction after counting, with a negative quantity). */
+/** Consumables received into the store. */
 export const ConsumableReceiptInput = z.object({
   articleKey: z.string().min(1),
   size: text,
-  quantity: z.number().int().min(-10_000).max(10_000).refine((q) => q !== 0),
+  quantity: z.number().int().min(1).max(10_000),
   date,
   notes: text,
 });
 export type ConsumableReceiptInput = z.input<typeof ConsumableReceiptInput>;
+
+/** Result of counting a consumable in the store: the counter is set to `counted` (recorded as the difference). */
+export const ConsumableCountInput = z.object({
+  articleKey: z.string().min(1),
+  size: text,
+  counted: z.number().int().min(0).max(100_000),
+  date,
+  notes: text,
+});
+export type ConsumableCountInput = z.input<typeof ConsumableCountInput>;
+
+/**
+ * Settings of the clothing store (section `clothing.settings`): a piece taken back "to the laundry" becomes a task
+ * after this many days without a recorded washing; 0 = never.
+ */
+export const ClothingSettings = z.object({ laundryReminderDays: z.number().int().min(0).max(365).default(14) });
+export type ClothingSettings = z.infer<typeof ClothingSettings>;
+
+export const CLOTHING_SETTINGS = { 'clothing.settings': ClothingSettings } as const;
 
 /**
  * Stock of one article in one size. Inventory articles: pieces of the visible departments in stock (`available` may

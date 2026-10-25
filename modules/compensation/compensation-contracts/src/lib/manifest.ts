@@ -28,6 +28,7 @@ export const COMPENSATION_MANIFEST = {
     { key: 'group-leader', permissions: [SELF] },
     { key: 'course-coordinator', permissions: [SELF] },
     { key: 'equipment-officer', permissions: [SELF] },
+    { key: 'clothing-officer', permissions: [SELF] },
     { key: 'commander', permissions: ['compensation.read', 'compensation.runs.read', 'compensation.approve', SELF] },
     { key: 'department-commander', permissions: ['compensation.read', SELF] },
     { key: 'administration', permissions: ['compensation.*'], permissionsAllDepartments: ['compensation.read'] },

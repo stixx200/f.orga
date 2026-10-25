@@ -46,6 +46,7 @@ export const MASTERDATA_MANIFEST = {
     { key: 'course-coordinator', permissions: ['masterdata.self'] },
     { key: 'breathing-apparatus-officer', permissions: ['masterdata.self'] },
     { key: 'equipment-officer', permissions: ['masterdata.self'] },
+    { key: 'clothing-officer', permissions: ['masterdata.self'] },
     { key: 'administration', permissions: ['masterdata.self'] },
     { key: 'commander', permissions: ['masterdata.*'] },
     {

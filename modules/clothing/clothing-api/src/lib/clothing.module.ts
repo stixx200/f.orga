@@ -1,7 +1,7 @@
 import { Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
-import { CLOTHING_MANIFEST } from '@forga/clothing-contracts';
+import { CLOTHING_MANIFEST, CLOTHING_SETTINGS } from '@forga/clothing-contracts';
 import { ORGANIZATION_REFERENCES, type OrganizationReferences, PERSON_HOLDINGS, type PersonHoldings } from '@forga/masterdata-contracts';
 import { CLOTHING_MIGRATIONS } from '../migrations/index.js';
 import { ClothingController } from './clothing.controller.js';
@@ -50,4 +50,5 @@ export const clothingModule = defineModule({
   entities: [ArticleEntity, ClothingItemEntity, IssueEntity, CareEntity, ClothingInspectionEntity, SizeProfileEntity, ConsumableReceiptEntity],
   historized: [ArticleEntity, ClothingItemEntity, { entity: CareEntity, parent: 'item' }, { entity: ClothingInspectionEntity, parent: 'item' }, SizeProfileEntity, ConsumableReceiptEntity],
   migrations: CLOTHING_MIGRATIONS,
+  settings: CLOTHING_SETTINGS,
 });

@@ -17,26 +17,30 @@ export interface MergedRoleTemplate {
 export class RoleTemplates {
   readonly all: MergedRoleTemplate[];
 
+  /**
+   * A module may add permissions to a role another module defines (with its name), in any order. Additions to a role
+   * nobody names belong to a module that is not installed and are dropped.
+   */
   constructor(@Inject(FORGA_CORE_OPTIONS) options: ForgaCoreOptions) {
-    const merged = new Map<string, MergedRoleTemplate>();
+    const merged = new Map<string, Omit<MergedRoleTemplate, 'name'> & { name: LocalizedText | null }>();
     for (const template of [...CORE_ROLE_TEMPLATES, ...options.modules.flatMap((m) => m.manifest.roles ?? [])]) {
       const existing = merged.get(template.key);
       if (existing) {
         existing.permissions = [...new Set([...existing.permissions, ...(template.permissions ?? [])])];
         existing.permissionsAllDepartments = [...new Set([...existing.permissionsAllDepartments, ...(template.permissionsAllDepartments ?? [])])];
+        existing.name ??= template.name ?? null;
         existing.description ??= template.description ?? null;
         continue;
       }
-      if (!template.name) throw new Error(`Role template "${template.key}" has no name.`);
       merged.set(template.key, {
         key: template.key,
-        name: template.name,
+        name: template.name ?? null,
         description: template.description ?? null,
         permissions: [...(template.permissions ?? [])],
         permissionsAllDepartments: [...(template.permissionsAllDepartments ?? [])],
       });
     }
-    this.all = [...merged.values()];
+    this.all = [...merged.values()].flatMap((t) => (t.name ? [{ ...t, name: t.name }] : []));
   }
 
   /**

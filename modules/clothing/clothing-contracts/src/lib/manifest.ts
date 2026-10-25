@@ -13,6 +13,7 @@ export const CLOTHING_MANIFEST = {
     { id: 'clothing.issue', name: { de: 'Ausgeben, zurücknehmen, Wäsche und Prüfungen erfassen', en: 'Issue, take back, record washing and inspections' }, scope: 'department' },
     { id: 'clothing.manage', name: { de: 'Bestand und Artikel verwalten', en: 'Manage stock and articles' }, scope: 'department' },
     { id: 'clothing.self', name: { de: 'Eigene Schutzausrüstung sehen', en: 'See own protective equipment' }, scope: 'department' },
+    { id: 'clothing.settings.manage', name: { de: 'Einstellungen der Kleiderkammer', en: 'Clothing store settings' }, scope: 'brigade' },
   ],
   navigation: [
     { label: { de: 'Kleiderkammer', en: 'Clothing store' }, path: 'items', permission: 'clothing.read', icon: 'shirt' },
@@ -31,7 +32,8 @@ export const CLOTHING_MANIFEST = {
       permissions: ['clothing.*', 'masterdata.persons.read'],
     },
     { key: 'commander', permissions: ['clothing.read'], permissionsAllDepartments: ['clothing.read'] },
-    { key: 'department-commander', permissions: ['clothing.read', 'clothing.issue'] },
+    // Only viewing: the washing and inspection deadlines of every piece go to those issuing (the clothing officers).
+    { key: 'department-commander', permissions: ['clothing.read'] },
   ],
   frontend: { remote: 'clothing_web', exposed: './Module' },
 } satisfies ModuleManifest;

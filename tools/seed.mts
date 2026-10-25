@@ -698,7 +698,7 @@ async function clothing(persons: PersonRef[]): Promise<void> {
   const members = persons.filter((p) => ['active', 'probation'].includes(p.status) && operationalIds.has(p.primaryDepartmentId ?? ''));
   const counters = new Map<string, number>();
   const prefixes: Record<string, string> = { jacket: 'J', trousers: 'H', 'breathing-apparatus-trousers': 'AH', boots: 'S', helmet: 'HM' };
-  type Piece = { id: string; articleKey: string; departmentId: string };
+  type Piece = { id: string; articleKey: string; departmentId: string; purchasedOn: string };
   const create = async (articleKey: string, departmentId: string, size: string, purchasedOn: string): Promise<Piece> => {
     const n = (counters.get(articleKey) ?? 0) + 1;
     counters.set(articleKey, n);
@@ -708,12 +708,26 @@ async function clothing(persons: PersonRef[]): Promise<void> {
       // Washable RFID tags in jackets and trousers, barcodes on most labels.
       barcode: chance(0.9) ? barcode('2100') : null, rfid: ['jacket', 'trousers', 'breathing-apparatus-trousers'].includes(articleKey) ? rfidChip() : null,
     });
-    return { id: created.id, articleKey, departmentId };
+    return { id: created.id, articleKey, departmentId, purchasedOn };
   };
 
-  // Consumables received into the store (counter: received minus handed out).
+  // Consumables handed out to each member: gloves now and then, a cap and T-shirts, hoods for breathing apparatus wearers.
+  const handOuts = new Map<string, [string, string, number][]>();
+  for (const person of members) {
+    const handOut: [string, string, number][] = [['cap', '', 1], ['t-shirt', pick(sizes['t-shirt']), between(1, 3)]];
+    const gloves = pick(sizes.gloves);
+    for (let k = between(1, 3); k > 0; k--) handOut.push(['gloves', gloves, 1]);
+    if (person.qualifications.includes('breathing-apparatus')) handOut.push(['hood', '', 1]);
+    handOuts.set(person.id, handOut);
+  }
+  // Received into the store before: what is handed out plus a remainder, so the counter never drops below zero.
+  const demand = new Map<string, number>();
+  for (const [articleKey, size, quantity] of [...handOuts.values()].flat()) demand.set(`${articleKey}|${size}`, (demand.get(`${articleKey}|${size}`) ?? 0) + quantity);
   for (const [articleKey, articleSizes] of [['gloves', sizes.gloves], ['cap', ['']], ['t-shirt', sizes['t-shirt']], ['hood', ['']]] as const) {
-    for (const size of articleSizes) await call('POST', 'clothing/consumables/receipts', { articleKey, size, quantity: between(15, 40), date: daysAgo(1600), notes: 'Erstausstattung' });
+    for (const size of articleSizes) {
+      const quantity = (demand.get(`${articleKey}|${size}`) ?? 0) + between(3, 15);
+      await call('POST', 'clothing/consumables/receipts', { articleKey, size, quantity, date: daysAgo(1600), notes: 'Erstausstattung' });
+    }
   }
 
   const issued: Piece[] = [];
@@ -729,7 +743,7 @@ async function clothing(persons: PersonRef[]): Promise<void> {
     for (const [articleKey, size] of kit) {
       // Some members had a worn piece replaced: the old one was taken back and retired.
       if (articleKey !== 'helmet' && chance(0.12)) {
-        const old = await create(articleKey, departmentId, size, isoDate(new Date(between(2012, 2016), between(0, 11), between(1, 28))));
+        const old = await create(articleKey, departmentId, size, isoDate(new Date(between(2012, 2015), between(0, 11), between(1, 28))));
         const issuedOn = later('2016-01-01');
         await call('POST', `clothing/items/${old.id}/issue`, { personId: person.id, date: issuedOn, acceptOverdueInspection: true });
         await call('POST', `clothing/items/${old.id}/return`, { date: later(issuedOn), retire: true, notes: pick(['verschlissen', 'Riss im Obermaterial', 'Reflexstreifen beschädigt', 'zu klein']) });
@@ -740,14 +754,9 @@ async function clothing(persons: PersonRef[]): Promise<void> {
       await call('POST', `clothing/items/${piece.id}/issue`, { personId: person.id, date: later(purchasedOn), acceptOverdueInspection: true });
       issued.push(piece);
     }
-    // Consumables: gloves now and then, a cap and T-shirts, hoods for breathing apparatus wearers.
-    const handOut: [string, string, number][] = [['gloves', pick(sizes.gloves), 1], ['cap', '', 1], ['t-shirt', pick(sizes['t-shirt']), between(1, 3)]];
-    if (person.qualifications.includes('breathing-apparatus')) handOut.push(['hood', '', 1]);
-    for (const [articleKey, size, quantity] of handOut) {
-      for (let k = 0; k < (articleKey === 'gloves' ? between(1, 3) : 1); k++) {
-        await call('POST', 'clothing/consumables', { personId: person.id, articleKey, size, quantity, date: daysAgo(between(10, 1500)) });
-        consumables++;
-      }
+    for (const [articleKey, size, quantity] of handOuts.get(person.id) ?? []) {
+      await call('POST', 'clothing/consumables', { personId: person.id, articleKey, size, quantity, date: daysAgo(between(10, 1500)) });
+      consumables++;
     }
   }
 
@@ -773,10 +782,13 @@ async function clothing(persons: PersonRef[]): Promise<void> {
   // Collection days every few weeks, so the pieces of one laundry trip share a date.
   const days = Array.from({ length: 30 }, (_, i) => daysAgo(i * 17 + 3));
   for (const piece of issued.filter((p) => textile.has(p.articleKey))) {
+    // Washing is recorded after the purchase only.
+    const owned = days.filter((d) => d >= piece.purchasedOn);
     const overdue = chance(0.1);
-    const impregnated = overdue ? days.filter((d) => d < daysAgo(380))[between(0, 5)] : days.filter((d) => d >= daysAgo(360))[between(0, 20)];
+    const impregnated = overdue ? owned.filter((d) => d < daysAgo(380))[between(0, 5)] : owned.filter((d) => d >= daysAgo(360))[between(0, 20)];
     if (impregnated) add('impregnation', impregnated, pick(laundries.slice(0, 2)), piece.id);
-    for (let k = 0; k < between(0, 3); k++) add('wash', pick(days.slice(0, 20)), pick(laundries), piece.id);
+    const washed = owned.filter((d) => d >= days[19]);
+    for (let k = 0; k < between(0, 3); k++) if (washed.length) add('wash', pick(washed), pick(laundries), piece.id);
   }
   for (const [key, itemIds] of batches) {
     const [kind, date, place] = key.split('|');
@@ -784,12 +796,14 @@ async function clothing(persons: PersonRef[]): Promise<void> {
   }
 
   // Yearly inspections by the clothing officers; some are overdue.
-  const all = await call<{ id: string; articleKey: string; status: string }[]>('GET', 'clothing/items');
+  const all = await call<{ id: string; articleKey: string; status: string; purchasedOn: string | null }[]>('GET', 'clothing/items');
   const inspected = new Set(['jacket', 'trousers', 'breathing-apparatus-trousers', 'boots', 'helmet']);
   let inspections = 0;
   for (const piece of all.filter((p) => inspected.has(p.articleKey) && p.status !== 'retired')) {
     if (chance(0.15)) continue;
-    const date = chance(0.9) ? daysAgo(between(5, 350)) : daysAgo(between(380, 500));
+    const drawn = chance(0.9) ? daysAgo(between(5, 350)) : daysAgo(between(380, 500));
+    // Not before the purchase.
+    const date = piece.purchasedOn && drawn < piece.purchasedOn ? piece.purchasedOn : drawn;
     await call('POST', `clothing/items/${piece.id}/inspections`, { date, passed: chance(0.97), inspector: pick(['Kleiderwart', 'Gerätewart', 'Fachfirma']), notes: chance(0.1) ? pick(['Klettverschluss erneuert', 'Reflexstreifen nachgenäht', 'Innenfutter geprüft']) : '' });
     inspections++;
   }

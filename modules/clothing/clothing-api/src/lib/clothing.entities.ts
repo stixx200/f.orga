@@ -153,7 +153,10 @@ export const ConsumableReceiptSchema = defineEntity({
     id: p.uuid().primary().onCreate(() => uuidv7()),
     articleKey: p.string().index(),
     size: p.string().default(''),
+    /** Received, or the difference to the counter after counting (`counted`). */
     quantity: p.integer(),
+    /** Count in the store when the entry corrects the counter after counting; `null` for a receipt. */
+    counted: p.integer().nullable(),
     date: p.string().length(10),
     notes: p.text().default(''),
     recordedBy: p.string(),

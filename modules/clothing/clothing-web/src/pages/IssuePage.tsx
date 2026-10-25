@@ -1,14 +1,24 @@
 import { Button, Checkbox, Grid, Group, NumberInput, Select, SimpleGrid, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
+import { notifications } from '@mantine/notifications';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import type { Item } from '@forga/clothing-contracts';
-import { localDate, send, useLocalized, useTranslation } from '@forga/web-sdk';
-import { DataTable, matchesSearch, Notice, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
-import { keys, useArticleName, useArticles, useItems, usePersonClothing, usePersons, useStock } from '../api';
+import { api, ApiError, localDate, send, useLocalized, useTranslation, withQuery } from '@forga/web-sdk';
+import { ConfirmDialog, DataTable, matchesSearch, Notice, notifySuccess, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
+import { keys, useArticleName, useArticles, useItems, usePersonClothing, usePersonName, usePersons, useStock } from '../api';
 import { BlockBadges, findByCode, inspectionOverdue, ScanField, useUnknownCode } from '../parts';
 import { PersonClothingView } from './PersonClothingView';
 import { ReturnDialog } from './ReturnDialog';
+
+/** A piece not among the issuable pieces: looked up on the server to name the reason. */
+async function lookup(code: string): Promise<Item | undefined> {
+  const label = /\/clothing\/items\/([0-9a-f-]{36})/i.exec(code)?.[1];
+  const found = label
+    ? await api<Item>(`clothing/items/${label.toLowerCase()}`).then((i) => [i]).catch((): Item[] => [])
+    : await api<Item[]>(withQuery('clothing/items', { q: code })).catch((): Item[] => []);
+  return findByCode(found, code);
+}
 
 /**
  * Issue desk: choose a person (or open it with `?person=<id>` from the person file), issue several pieces in one step
@@ -24,6 +34,7 @@ export function IssuePage() {
   const { data: articles = [] } = useArticles();
   const articleName = useArticleName();
   const unknown = useUnknownCode();
+  const holderName = usePersonName();
   const [date, setDate] = useState<string | null>(() => localDate());
   const [notes, setNotes] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -32,6 +43,7 @@ export function IssuePage() {
   const [acceptOverdue, setAcceptOverdue] = useState(false);
   const [returning, setReturning] = useState<'some' | 'all' | null>(null);
   const [consumable, setConsumable] = useState<{ articleKey: string | null; size: string; quantity: number }>({ articleKey: null, size: '', quantity: 1 });
+  const [lowStock, setLowStock] = useState<number | null>(null);
   const { data: clothing } = usePersonClothing(personId);
   const { data: stock = [] } = useItems({ status: 'stock' }, Boolean(personId));
   const { data: counts = [] } = useStock();
@@ -52,9 +64,26 @@ export function IssuePage() {
   const article = articles.find((a) => a.key === consumable.articleKey);
   const counter = counts.find((c) => c.articleKey === consumable.articleKey && c.size === consumable.size);
   const toggle = (id: string, on: boolean) => setSelected((s) => { const next = new Set(s); if (on) next.add(id); else next.delete(id); return next; });
-  const scan = (code: string) => {
+  /** Why a scanned piece cannot be issued: blocked, inactive article, issued (to whom) or retired. */
+  const explain = (item: Item) => {
+    const number = item.inventoryNumber;
+    const message =
+      item.status === 'issued'
+        ? item.holderId === personId
+          ? t('scan.issuedToThis', { number })
+          : t('scan.issuedTo', { number, name: holderName(item.holderId) || '–' })
+        : item.status === 'retired'
+          ? t('scan.retired', { number })
+          : item.blockedBy.length
+            ? t(`scan.blocked.${item.blockedBy[0]}`, { number })
+            : t('scan.inactive', { number });
+    notifications.show({ color: 'orange', message });
+  };
+  const scan = async (code: string) => {
     const item = findByCode(stock.filter((i) => active.has(i.articleKey) && !i.blockedBy.length), code);
-    if (item) toggle(item.id, true);
+    if (item) return toggle(item.id, true);
+    const known = findByCode(stock, code) ?? findByCode(clothing?.items ?? [], code) ?? (await lookup(code));
+    if (known) explain(known);
     else unknown(code);
   };
   const done = { invalidate: [keys.all] };
@@ -66,11 +95,30 @@ export function IssuePage() {
       setAcceptOverdue(false);
     },
   });
-  const handOut = useAction(() => send('POST', 'clothing/consumables', { personId, articleKey: consumable.articleKey, size: consumable.size, quantity: consumable.quantity, date, notes }), {
-    ...done,
-    success: t('issue.handedOut'),
-    onSuccess: () => setConsumable({ articleKey: null, size: '', quantity: 1 }),
-  });
+  // Not enough in stock according to the counter: asks first, then hands out anyway.
+  const handOut = useAction(
+    async (acceptLowStock: boolean) => {
+      try {
+        return await send('POST', 'clothing/consumables', { personId, articleKey: consumable.articleKey, size: consumable.size, quantity: consumable.quantity, date, notes, acceptLowStock });
+      } catch (error) {
+        if (!acceptLowStock && error instanceof ApiError && error.code === 'clothing.stockInsufficient') {
+          setLowStock(Number(error.body?.['available'] ?? 0));
+          return null;
+        }
+        throw error;
+      }
+    },
+    {
+      ...done,
+      onSuccess: (result) => {
+        if (!result) return;
+        notifySuccess(t('issue.handedOut'));
+        setLowStock(null);
+        setConsumable({ articleKey: null, size: '', quantity: 1 });
+      },
+    },
+  );
+  const sizeMissing = Boolean(article?.sizes.length && !consumable.size);
 
   return (
     <Stack gap="lg">
@@ -103,7 +151,7 @@ export function IssuePage() {
               <Stack gap="sm">
                 <Text size="xs" c="dimmed">{t('issue.selectHint')}</Text>
                 <Group align="end" grow>
-                  <ScanField onCode={scan} />
+                  <ScanField onCode={(code) => void scan(code)} />
                   <TextInput type="search" label={t('items.search')} placeholder={t('care.searchPlaceholder')} value={query} onChange={(e) => setQuery(e.currentTarget.value)} />
                 </Group>
                 {Object.keys(sizes).length > 0 && <Switch label={t('issue.onlySizes')} checked={onlySizes} onChange={(e) => setOnlySizes(e.currentTarget.checked)} />}
@@ -172,8 +220,9 @@ export function IssuePage() {
                     <NumberInput label={t('history.quantity')} value={consumable.quantity} min={1} max={100} onChange={(v) => setConsumable((c) => ({ ...c, quantity: Number(v) || 1 }))} />
                   </Group>
                   {counter && <Text size="xs" c={counter.available < consumable.quantity ? 'red.8' : 'dimmed'}>{t('issue.stockLeft', { count: counter.available })}</Text>}
+                  {consumable.articleKey && sizeMissing && <Text size="xs" c="dimmed">{t('issue.sizeRequired')}</Text>}
                   <Group justify="flex-end">
-                    <Button disabled={refused || !consumable.articleKey || !date} loading={handOut.isPending} onClick={() => handOut.mutate(undefined)}>{t('issue.handOut')}</Button>
+                    <Button disabled={refused || !consumable.articleKey || sizeMissing || !date} loading={handOut.isPending} onClick={() => handOut.mutate(false)}>{t('issue.handOut')}</Button>
                   </Group>
                 </Stack>
               </Panel>
@@ -188,6 +237,17 @@ export function IssuePage() {
           </Grid>
           <PersonClothingView data={clothing} />
           {returning && <ReturnDialog items={clothing.items} all={returning === 'all'} onClose={() => setReturning(null)} />}
+          {lowStock !== null && (
+            <ConfirmDialog
+              opened
+              onClose={() => setLowStock(null)}
+              title={t('issue.lowStockTitle')}
+              description={t('issue.lowStockText', { count: lowStock })}
+              confirmLabel={t('issue.lowStockConfirm')}
+              loading={handOut.isPending}
+              onConfirm={() => handOut.mutate(true)}
+            />
+          )}
         </>
       )}
     </Stack>

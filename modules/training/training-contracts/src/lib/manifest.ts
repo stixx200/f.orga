@@ -26,6 +26,7 @@ export const TRAINING_MANIFEST = {
     { key: 'course-coordinator', permissions: ['training.self'] },
     { key: 'breathing-apparatus-officer', permissions: ['training.self'] },
     { key: 'equipment-officer', permissions: ['training.self'] },
+    { key: 'clothing-officer', permissions: ['training.self'] },
     { key: 'administration', permissions: ['training.self'] },
     { key: 'commander', permissions: ['training.*'] },
     { key: 'department-commander', permissions: ['training.read', 'training.plan', 'training.attendance', 'training.close'] },

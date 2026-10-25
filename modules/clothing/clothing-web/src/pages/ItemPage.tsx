@@ -72,7 +72,8 @@ export function ItemPage() {
   const recipient = persons.find((p) => p.id === value('person'));
   // Only the newest issue or return can be cancelled.
   const lastRecord = item.history.find((h) => !h.cancelledAt)?.id;
-  const date = (label: string) => <DateInput label={label} value={value('date', localDate())} onChange={(v) => setValue('date', v)} maxDate={localDate()} valueFormat="DD.MM.YYYY" required />;
+  // Nothing is recorded before the purchase or in the future.
+  const date = (label: string) => <DateInput label={label} value={value('date', localDate())} onChange={(v) => setValue('date', v)} minDate={item.purchasedOn ?? undefined} maxDate={localDate()} valueFormat="DD.MM.YYYY" required />;
   const notes = <Textarea label={t('items.notes')} value={value('notes')} onChange={(e) => setValue('notes', e.currentTarget.value)} autosize minRows={1} />;
   const actions = (submit: () => void, loading: boolean, ok = true) => (
     <Group justify="flex-end">
@@ -209,7 +210,7 @@ export function ItemPage() {
             <SegmentedControl
               value={value('to', 'stock')}
               onChange={(v) => setValue('to', v)}
-              data={(['stock', 'laundry', 'retire'] as const).filter((d) => d !== 'laundry' || article?.textile).map((d) => ({ value: d, label: t(`returns.dispositions.${d}`) }))}
+              data={(['stock', 'laundry', 'retire'] as const).filter((d) => (d !== 'laundry' || article?.textile) && (d !== 'retire' || mayManage)).map((d) => ({ value: d, label: t(`returns.dispositions.${d}`) }))}
             />
             <Text size="xs" c="dimmed">{t('returns.hint')}</Text>
             {notes}

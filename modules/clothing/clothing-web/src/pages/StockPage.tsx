@@ -1,4 +1,4 @@
-import { Button, Group, NumberInput, Select, SimpleGrid, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core';
+import { Button, Group, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useState } from 'react';
 import type { StockRow } from '@forga/clothing-contracts';
@@ -6,15 +6,23 @@ import { can, localDate, send, useLocalized, useSession, useTranslation } from '
 import { DataTable, PageHeader, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, MANAGE, READ, useArticleName, useArticles, useDepartments, useStock } from '../api';
 
-/** Consumables received (or corrected after counting with a negative quantity). */
-function ReceiptDialog({ onClose }: { onClose: () => void }) {
+/** Consumables received, or the result of counting them (sets the counter to the count). */
+function ReceiptDialog({ rows, onClose }: { rows: StockRow[]; onClose: () => void }) {
   const { t } = useTranslation('clothing');
   const { t: common } = useTranslation('common');
   const localized = useLocalized();
   const { data: articles = [] } = useArticles();
+  const [mode, setMode] = useState<'receipt' | 'count'>('receipt');
   const [form, setForm] = useState<{ articleKey: string | null; size: string; quantity: number; date: string | null; notes: string }>({ articleKey: null, size: '', quantity: 1, date: localDate(), notes: '' });
   const article = articles.find((a) => a.key === form.articleKey);
-  const save = useAction(() => send('POST', 'clothing/consumables/receipts', form), { success: t('stock.received'), invalidate: [keys.all], onSuccess: onClose });
+  const current = rows.find((r) => r.articleKey === form.articleKey && r.size === form.size)?.available ?? 0;
+  const { quantity, ...rest } = form;
+  const save = useAction(() => (mode === 'count' ? send('POST', 'clothing/consumables/counts', { ...rest, counted: quantity }) : send('POST', 'clothing/consumables/receipts', form)), {
+    success: t(mode === 'count' ? 'stock.countedDone' : 'stock.received'),
+    invalidate: [keys.all],
+    onSuccess: onClose,
+  });
+  const valid = Boolean(form.articleKey && form.date && (mode === 'count' ? quantity >= 0 : quantity > 0) && (!article?.sizes.length || form.size));
   return (
     <ResponsiveDialog
       opened
@@ -23,12 +31,13 @@ function ReceiptDialog({ onClose }: { onClose: () => void }) {
       actions={
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button>
-          <Button disabled={!form.articleKey || !form.quantity || !form.date} loading={save.isPending} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
+          <Button disabled={!valid} loading={save.isPending} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
         </Group>
       }
     >
       <Stack gap="sm">
         <Text size="xs" c="dimmed">{t('stock.receiveHint')}</Text>
+        <SegmentedControl value={mode} onChange={(v) => setMode(v as 'receipt' | 'count')} data={(['receipt', 'count'] as const).map((m) => ({ value: m, label: t(`stock.modes.${m}`) }))} />
         <Select
           label={t('items.article')}
           data={articles.filter((a) => a.kind === 'consumable').map((a) => ({ value: a.key, label: localized(a.name) }))}
@@ -38,12 +47,20 @@ function ReceiptDialog({ onClose }: { onClose: () => void }) {
         />
         <SimpleGrid cols={2}>
           {article?.sizes.length ? (
-            <Select label={t('items.size')} data={article.sizes} value={form.size || null} onChange={(v) => setForm((f) => ({ ...f, size: v ?? '' }))} />
+            <Select label={t('items.size')} data={article.sizes} value={form.size || null} onChange={(v) => setForm((f) => ({ ...f, size: v ?? '' }))} required />
           ) : (
             <TextInput label={t('items.size')} value={form.size} onChange={(e) => { const size = e.currentTarget.value; setForm((f) => ({ ...f, size })); }} />
           )}
-          <NumberInput label={t('stock.quantity')} value={form.quantity} min={-10_000} max={10_000} onChange={(v) => setForm((f) => ({ ...f, quantity: Number(v) || 0 }))} required />
+          <NumberInput
+            label={t(mode === 'count' ? 'stock.counted' : 'stock.quantity')}
+            value={form.quantity}
+            min={mode === 'count' ? 0 : 1}
+            max={mode === 'count' ? 100_000 : 10_000}
+            onChange={(v) => setForm((f) => ({ ...f, quantity: Number(v) || 0 }))}
+            required
+          />
         </SimpleGrid>
+        {mode === 'count' && form.articleKey && <Text size="xs" c="dimmed">{t('stock.countHint', { count: current })}</Text>}
         <DateInput label={t('care.date')} value={form.date} onChange={(date) => setForm((f) => ({ ...f, date }))} maxDate={localDate()} valueFormat="DD.MM.YYYY" required />
         <Textarea label={t('items.notes')} value={form.notes} onChange={(e) => { const notes = e.currentTarget.value; setForm((f) => ({ ...f, notes })); }} autosize minRows={1} />
       </Stack>
@@ -97,7 +114,7 @@ export function StockPage() {
         ]}
       />
       <Text size="xs" c="dimmed">{t('stock.consumableHint')}</Text>
-      {receiving && <ReceiptDialog onClose={() => setReceiving(false)} />}
+      {receiving && <ReceiptDialog rows={rows} onClose={() => setReceiving(false)} />}
     </Stack>
   );
 }

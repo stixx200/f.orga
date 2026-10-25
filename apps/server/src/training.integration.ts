@@ -219,3 +219,81 @@ describe('training sessions', () => {
     expect((await run()).body.counts).toMatchObject({ create: 0, unchanged: 0, error: 3 });
   });
 });
+
+const row = (session: { attendance: { personId: string }[] }, personId: string) => session.attendance.find((a) => a.personId === personId);
+
+describe('training sessions: corrections, persons, participation and audit', () => {
+
+  it('discards a wrong QR check-in; an excuse sent before stays', async () => {
+    ids.wrong = (await post('/training/sessions', { type: 'exercise', title: 'Falscher Check-in', startsAt: at(-10), endsAt: at(110), departmentIds: [ids.musterstadt] }).expect(201)).body.id;
+    await put(`/training/me/sessions/${ids.wrong}/excuse`, { note: 'Urlaub' }, leader).expect(200);
+    const code = (await get(`/training/sessions/${ids.wrong}/check-in`, leader).expect(200)).body.code as string;
+    await post('/training/check-in', { code }, leader).expect(200);
+    expect(row((await get(`/training/sessions/${ids.wrong}`)).body, ids.max)).toMatchObject({ status: 'present', confirmed: false });
+    expect((await post(`/training/sessions/${ids.wrong}/close`, {}).expect(409)).body).toMatchObject({ code: 'training.unconfirmedCheckIns' });
+
+    const discarded = (await post(`/training/sessions/${ids.wrong}/check-ins/${ids.max}/discard`, {}, leader).expect(200)).body;
+    expect(row(discarded, ids.max)).toMatchObject({ status: 'excused', confirmed: true, checkedInAt: null, note: 'Urlaub' });
+    expect(discarded.status).toBe('planned');
+    await post(`/training/sessions/${ids.wrong}/check-ins/${ids.max}/discard`, {}, leader).expect(409);
+
+    // Without an excuse the row goes.
+    await test.http.delete(`/api/training/me/sessions/${ids.wrong}/excuse`).set('Cookie', leader).set(UI).expect(200);
+    await post('/training/check-in', { code }, leader).expect(200);
+    expect(row((await post(`/training/sessions/${ids.wrong}/check-ins/${ids.max}/discard`, {}, leader).expect(200)).body, ids.max)).toBeUndefined();
+    await put(`/training/sessions/${ids.wrong}/attendance`, [{ personId: ids.jonas, status: 'present' }], leader).expect(200);
+    await post(`/training/sessions/${ids.wrong}/close`, {}).expect(200);
+  });
+
+  it('records attendance only for persons of the person directory, guests included', async () => {
+    const session = (await post('/training/sessions', { type: 'exercise', title: 'Gäste', startsAt: at(-30), endsAt: at(90), departmentIds: [ids.musterstadt] }).expect(201)).body.id;
+    const unknown = '00000000-0000-4000-8000-000000000000';
+    expect((await put(`/training/sessions/${session}/attendance`, [{ personId: ids.jonas, status: 'present' }, { personId: unknown, status: 'present' }], leader).expect(400)).body).toMatchObject({ code: 'training.unknownPerson', personId: unknown });
+    // Lena of another department as a guest.
+    const saved = (await put(`/training/sessions/${session}/attendance`, [{ personId: ids.jonas, status: 'present' }, { personId: ids.lena, status: 'present' }], leader).expect(200)).body;
+    expect(row(saved, ids.lena)).toMatchObject({ status: 'present' });
+  });
+
+  it('keeps a scanned code valid as a ticket while the member logs in', async () => {
+    const code = (await get(`/training/sessions/${ids.session}/check-in`, leader).expect(200)).body.code as string;
+    // The QR code leads to the server first (no login), which opens the check-in page with a ticket.
+    const start = await test.http.get(`/api/training/check-in/start?code=${encodeURIComponent(code)}`).expect(302);
+    const ticket = decodeURIComponent(/code=([^&]+)/.exec(start.headers['location'] as string)![1]);
+    expect(ticket.split('.')).toHaveLength(3);
+    expect((await post('/training/check-in', { code: ticket }, leader).expect(200)).body).toMatchObject({ sessionId: ids.session });
+    // A ticket is not extended by another one; unknown codes are passed on as they are.
+    expect((await test.http.get(`/api/training/check-in/start?code=${encodeURIComponent(ticket)}`).expect(302)).headers['location']).toBe(`/training/check-in?code=${encodeURIComponent(ticket)}`);
+    expect((await test.http.get('/api/training/check-in/start?code=falsch').expect(302)).headers['location']).toBe('/training/check-in?code=falsch');
+
+    // An expired or forged ticket does not work.
+    const secret = (await test.app.get(EntityManager).fork().findOneOrFail(SessionEntity, ids.session)).checkInSecret!;
+    const expires = Math.floor(Date.now() / 1000) - 60;
+    const expired = `${ids.session}.${expires}.${createHmac('sha256', secret).update(`${ids.session}:ticket:${expires}`).digest('base64url').slice(0, 22)}`;
+    expect((await post('/training/check-in', { code: expired }, leader).expect(400)).body).toMatchObject({ code: 'training.codeExpired' });
+    await post('/training/check-in', { code: `${ids.session}.${expires + 3600}.AAAAAAAAAAAAAAAAAAAAAA` }, leader).expect(404);
+  });
+
+  it('computes the participation rate from the sessions of the own departments', async () => {
+    const before = (await get('/training/participation?from=2020-01-01&to=2030-12-31').expect(200)).body as { personId: string; sessions: number }[];
+    ids.nora = (await post('/masterdata/persons', { firstName: 'Nora', lastName: 'Test', status: 'active', memberships: [{ departmentId: ids.ahornfeld, from: '2020-01-01', primary: true }] }).expect(201)).body.id;
+    const session = (await post('/training/sessions', { type: 'exercise', title: 'Ahornfeld', startsAt: at(-120), endsAt: at(-30), departmentIds: [ids.ahornfeld] }).expect(201)).body.id;
+    await put(`/training/sessions/${session}/attendance`, [{ personId: ids.lena, status: 'present' }]).expect(200);
+
+    const after = (await get('/training/participation?from=2020-01-01&to=2030-12-31').expect(200)).body as { personId: string; sessions: number; present: number; rate: number; departmentId: string | null }[];
+    const of = (personId: string) => after.find((p) => p.personId === personId);
+    // The session of Ahornfeld does not lower the rate of Musterstadt's members.
+    expect(of(ids.jonas)!.sessions).toBe(before.find((p) => p.personId === ids.jonas)!.sessions);
+    expect(of(ids.jonas)).toMatchObject({ departmentId: ids.musterstadt });
+    // Nora, a member of Ahornfeld, missed it without being listed.
+    expect(of(ids.nora)).toMatchObject({ sessions: 1, present: 0, rate: 0, departmentId: ids.ahornfeld });
+
+    const list = (await get(`/core/lists/training.participation?from=2020-01-01&to=2030-12-31&departmentId=${ids.ahornfeld}`).expect(200)).body;
+    expect(list.rows.find((r: { name: string }) => r.name === 'Test, Nora')).toMatchObject({ department: 'Ahornfeld', sessions: 1, present: 0, rate: 0 });
+  });
+
+  it('records closing and reopening in the audit log', async () => {
+    const entries = (await get('/core/audit?action=training.').expect(200)).body as { action: string; details: { sessionId: string } }[];
+    expect(entries.filter((e) => e.details.sessionId === ids.session).map((e) => e.action)).toEqual(expect.arrayContaining(['training.session-closed', 'training.session-reopened']));
+    expect(entries.some((e) => e.action === 'training.session-closed' && e.details.sessionId === ids.wrong)).toBe(true);
+  });
+});

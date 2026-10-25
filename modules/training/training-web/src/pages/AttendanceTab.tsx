@@ -22,7 +22,8 @@ function CheckInPanel({ session }: { session: Session }) {
   const { data } = useQuery({ queryKey: [...keys.session(session.id), 'check-in'], queryFn: () => api<CheckIn>(`training/sessions/${session.id}/check-in`), refetchInterval: 20_000 });
   useSession(session.id, REFRESH);
   if (!data) return null;
-  const link = `${window.location.origin}/training/check-in?code=${encodeURIComponent(data.code)}`;
+  // The server exchanges the code for a ticket valid some minutes before the login page opens.
+  const link = `${window.location.origin}/api/training/check-in/start?code=${encodeURIComponent(data.code)}`;
   const checkedIn = session.attendance.filter((a) => a.checkedInAt).length;
   return (
     <Panel title={t('attendance.qr')}>
@@ -68,6 +69,7 @@ export function AttendanceTab({ session, editable }: { session: Session; editabl
   const [rows, setRows] = useState<Row[]>(() => build(session));
   const [dirty, setDirty] = useState(false);
   const [query, setQuery] = useState('');
+  const [discarding, setDiscarding] = useState<string | null>(null);
   const known = useRef(new Map(session.attendance.map((a) => [a.personId, a.checkedInAt])));
 
   // A refreshed session: take it over when nothing was changed, else only merge new check-ins.
@@ -109,6 +111,18 @@ export function AttendanceTab({ session, editable }: { session: Session; editabl
     () => send<Session>('PUT', `training/sessions/${session.id}/attendance`, rows.filter((r) => r.status).map(({ status, ...r }) => ({ ...r, status }))),
     { success: t('attendance.saved'), invalidate: [keys.sessions], onSuccess: () => setDirty(false) },
   );
+  // The row changes in the edited list too: a member of the departments comes back without status.
+  const discard = useAction((personId: string) => send<Session>('POST', `training/sessions/${session.id}/check-ins/${personId}/discard`), {
+    success: t('attendance.discarded'),
+    invalidate: [keys.sessions],
+    onSuccess: (result, personId) => {
+      // An excuse sent before the check-in stays.
+      const kept = result.attendance.find((a) => a.personId === personId);
+      known.current.set(personId, null);
+      setRows((rs) => rs.map((r) => (r.personId === personId ? (kept ? toRow(kept) : { ...r, status: null, checkedInAt: null }) : r)));
+      setDiscarding(null);
+    },
+  });
   const present = rows.filter((r) => r.status === 'present').length;
   const unconfirmed = new Set(session.attendance.filter((a) => !a.confirmed).map((a) => a.personId));
   if (!rows.length) return <EmptyState title={t('attendance.noPersons')} />;
@@ -131,7 +145,12 @@ export function AttendanceTab({ session, editable }: { session: Session; editabl
               return (
                 <>
                   <Text fw={700} size="sm">{name(r.personId)}</Text>
-                  {unconfirmed.has(r.personId) && <StatusBadge tone="warning">{t('attendance.viaQr')}</StatusBadge>}
+                  {unconfirmed.has(r.personId) && (
+                    <Group gap={4}>
+                      <StatusBadge tone="warning">{t('attendance.viaQr')}</StatusBadge>
+                      {editable && <Button size="compact-xs" variant="subtle" color="red" onClick={() => setDiscarding(r.personId)}>{t('attendance.discard')}</Button>}
+                    </Group>
+                  )}
                   {note && <Text size="xs" c="dimmed">{t('attendance.excuseNote', { note })}</Text>}
                 </>
               );
@@ -170,6 +189,17 @@ export function AttendanceTab({ session, editable }: { session: Session; editabl
           <Button variant="default" onClick={() => change((rs) => rs.map((r) => (r.status ? r : { ...r, status: 'absent' })))}>{t('attendance.restAbsent')}</Button>
           <Button loading={save.isPending} onClick={() => save.mutate(undefined)}>{t('attendance.save')}</Button>
         </ActionBar>
+      )}
+      {discarding && (
+        <ConfirmDialog
+          opened
+          onClose={() => setDiscarding(null)}
+          title={t('attendance.discardTitle')}
+          description={t('attendance.discardText', { name: name(discarding) })}
+          confirmLabel={t('attendance.discard')}
+          loading={discard.isPending}
+          onConfirm={() => discard.mutate(discarding)}
+        />
       )}
       {blocker.state === 'blocked' && (
         <ConfirmDialog

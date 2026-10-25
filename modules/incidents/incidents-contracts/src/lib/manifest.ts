@@ -81,6 +81,7 @@ export const INCIDENTS_MANIFEST = {
     { key: 'course-coordinator', permissions: ['incidents.self'] },
     { key: 'breathing-apparatus-officer', permissions: ['incidents.reports.read', 'incidents.self'] },
     { key: 'equipment-officer', permissions: ['incidents.self'] },
+    { key: 'clothing-officer', permissions: ['incidents.self'] },
     {
       key: 'administration',
       permissions: ['incidents.reports.read', 'incidents.compensation.export', 'incidents.statistics', 'incidents.duty.manage', 'incidents.self'],
