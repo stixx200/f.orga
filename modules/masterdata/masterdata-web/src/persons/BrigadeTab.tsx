@@ -5,9 +5,9 @@ import { type Dispatch, type ReactNode, type SetStateAction, useState } from 're
 import type { MembershipInput, Person } from '@forga/masterdata-contracts';
 import { useQuery } from '@tanstack/react-query';
 import type { ActiveModule } from '@forga/core-contracts';
-import { api, ApiError, formatDate, send, useLocalized, useTranslation } from '@forga/web-sdk';
+import { api, ApiError, formatDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, Notice, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
-import { probationEnd, today, useCatalog, useCatalogNames, useDepartments, useMembershipRules } from '../api';
+import { probationEnd, today, useCatalog, useCatalogNames, useDepartments, useMembershipRules, WRITE } from '../api';
 import type { PersonForm } from './PersonPage';
 
 type Dialog = 'probation' | 'admission' | 'status' | 'leave' | 'membership' | 'rank' | 'toOperational' | 'toVeterans' | null;
@@ -41,6 +41,9 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
   const { data: ranks = [] } = useCatalog('rank');
   const { data: exitReasons = [] } = useCatalog('exit-reason');
   const { data: rules } = useMembershipRules();
+  // Ranks are entered directly only brigade-wide (old records, corrections); promotions go through the promotion lists.
+  const session = useSession().data;
+  const ranksEditable = !disabled && session?.permissions[WRITE] === 'brigade';
   // The body that decides on admission and transfers comes from the settings (fire brigade statute).
   const decidedLabel = rules?.admissionDecidedBy ? t('brigade.decidedOnBy', { body: rules.admissionDecidedBy }) : t('brigade.decidedOn');
   const rankName = useCatalogNames('rank');
@@ -96,8 +99,8 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
   const primaryDepartment = person.memberships.find((m) => m.primary && !m.to)?.departmentId ?? null;
   const operationalDepartments = departments.filter((d) => d.type === 'operational');
   const veteransDepartments = departments.filter((d) => d.type === 'veterans');
-  // Joining the veterans and leaving the youth brigade only work through the transfers.
-  const statusTargets = person.status === 'veterans' ? (['veterans', 'active', 'passive'] as const) : (['active', 'passive'] as const);
+  // Only active and passive members switch between active and passive; joining the veterans and leaving the youth brigade work through the transfers.
+  const statusTargets = ['active', 'passive'] as const;
   // The veterans department of the own operational department, if there is one.
   const defaultVeterans = (primaryDepartment && veteransDepartments.find((d) => d.parentId === primaryDepartment)?.id) || '';
   const regularProbation = probationEnd(value('date', today()), rules?.probationMonths ?? 12);
@@ -128,9 +131,11 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
       <Button onClick={submit} loading={loading} disabled={!ok}>{common('actions.save')}</Button>
     </Group>
   );
-  const date = (label: string, key = 'date', fallback = today()) => (
-    <DateInput label={label} value={value(key, fallback) || null} onChange={(v) => setValue(key, v)} valueFormat="DD.MM.YYYY" required />
+  const date = (label: string, key = 'date', fallback = today(), maxDate?: string) => (
+    <DateInput label={label} value={value(key, fallback) || null} onChange={(v) => setValue(key, v)} valueFormat="DD.MM.YYYY" maxDate={maxDate} required />
   );
+  // Transfers take effect at once, so they are recorded on or after their date.
+  const transferInFuture = value('date', today()) > today();
 
   return (
     <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
@@ -148,7 +153,7 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
                 <>
                   {person.status === 'youth' && <Button size="xs" variant="outline" onClick={() => open('toOperational')}>{t('brigade.toOperational')}</Button>}
                   {(person.status === 'active' || person.status === 'passive') && <Button size="xs" variant="outline" onClick={() => open('toVeterans')}>{t('brigade.toVeterans')}</Button>}
-                  {person.status !== 'youth' && <Button size="xs" variant="default" onClick={() => open('status')}>{t('brigade.changeStatus')}</Button>}
+                  {(person.status === 'active' || person.status === 'passive') && <Button size="xs" variant="default" onClick={() => open('status')}>{t('brigade.changeStatus')}</Button>}
                 </>
               )}
               <Button size="xs" variant="default" onClick={() => open('leave')}>{t('brigade.leave')}</Button>
@@ -203,7 +208,8 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
         />
       </Panel>
 
-      <Panel title={t('brigade.ranks')} aside={!disabled && <Button size="xs" variant="outline" onClick={() => open('rank')}>{t('brigade.addRank')}</Button>}>
+      <Panel title={t('brigade.ranks')} aside={ranksEditable && <Button size="xs" variant="outline" onClick={() => open('rank')}>{t('brigade.addRank')}</Button>}>
+        {!disabled && !ranksEditable && <Text size="xs" c="dimmed" mb="xs">{t('brigade.ranksBrigadeOnly')}</Text>}
         <DataTable
           rows={person.ranks.toSorted((a, b) => b.since.localeCompare(a.since))}
           rowKey={(r) => r.id}
@@ -211,7 +217,7 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
           columns={[
             { key: 'rank', header: t('brigade.rank'), render: (r) => rankName(r.rank, i18n.language) },
             { key: 'since', header: t('brigade.since'), render: (r) => formatDate(r.since, i18n.language) },
-            { key: 'remove', header: '', align: 'right', render: (r) => !disabled && <ActionIcon aria-label={common('actions.delete')} onClick={() => setRemoveRank(r.id)}><IconTrash size={16} /></ActionIcon> },
+            { key: 'remove', header: '', align: 'right', render: (r) => ranksEditable && <ActionIcon aria-label={common('actions.delete')} onClick={() => setRemoveRank(r.id)}><IconTrash size={16} /></ActionIcon> },
           ]}
         />
       </Panel>
@@ -259,7 +265,7 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
             <Radio.Group label={t('brigade.newStatus')} value={value('status', person.status === 'left' || person.status === 'probation' ? 'active' : person.status)} onChange={(v) => setValue('status', v)}>
               <Group mt={4}>{statusTargets.map((s) => <Radio key={s} value={s} label={t(`status.${s}`)} />)}</Group>
             </Radio.Group>
-            {person.status !== 'veterans' && <Text size="xs" c="dimmed">{t('brigade.statusTransferHint')}</Text>}
+            <Text size="xs" c="dimmed">{t('brigade.statusTransferHint')}</Text>
             {date(t('brigade.effectiveOn'))}
           </Stack>
         </ResponsiveDialog>
@@ -303,13 +309,14 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
           actions={dialogActions(
             () => toOperational.mutate(undefined),
             toOperational.isPending,
-            Boolean(value('department')) && (probationMode === 'regular' || Boolean(value('reason').trim())) && (probationMode !== 'shortened' || Boolean(probationEndsOn)),
+            Boolean(value('department')) && !transferInFuture && (probationMode === 'regular' || Boolean(value('reason').trim())) && (probationMode !== 'shortened' || Boolean(probationEndsOn)),
           )}
         >
           <Stack gap="sm">
             <Text size="sm">{t('brigade.toOperationalText', { name: `${person.firstName} ${person.lastName}` })}</Text>
             <Select label={t('brigade.targetDepartment')} data={operationalDepartments.map((d) => ({ value: d.id, label: d.name }))} value={value('department') || null} onChange={(v) => setValue('department', v)} required />
-            {date(t('brigade.transferOn'))}
+            {date(t('brigade.transferOn'), 'date', today(), today())}
+            <Text size="xs" c="dimmed">{t('brigade.transferTodayHint')}</Text>
             <Radio.Group label={t('brigade.probation')} value={probationMode} onChange={(v) => setValue('probation', v)}>
               <Stack gap={6} mt={4}>
                 <Radio value="regular" label={t('brigade.probationRegular', { date: formatDate(regularProbation, i18n.language) })} />
@@ -332,12 +339,13 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
           opened
           onClose={close}
           title={t('brigade.toVeterans')}
-          actions={dialogActions(() => toVeterans.mutate(undefined), toVeterans.isPending, Boolean(value('department', defaultVeterans)))}
+          actions={dialogActions(() => toVeterans.mutate(undefined), toVeterans.isPending, Boolean(value('department', defaultVeterans)) && !transferInFuture)}
         >
           <Stack gap="sm">
             <Text size="sm">{t('brigade.toVeteransText', { name: `${person.firstName} ${person.lastName}`, age: rules?.veteransApplicationAge ?? 55, limit: rules?.ageLimitOperational ?? 65 })}</Text>
             <Select label={t('brigade.targetDepartment')} data={veteransDepartments.map((d) => ({ value: d.id, label: d.name }))} value={value('department', defaultVeterans) || null} onChange={(v) => setValue('department', v)} required />
-            {date(t('brigade.transferOn'))}
+            {date(t('brigade.transferOn'), 'date', today(), today())}
+            <Text size="xs" c="dimmed">{t('brigade.transferTodayHint')}</Text>
             <DateInput label={decidedLabel} value={value('decidedOn') || null} onChange={(v) => setValue('decidedOn', v)} valueFormat="DD.MM.YYYY" clearable />
           </Stack>
         </ResponsiveDialog>

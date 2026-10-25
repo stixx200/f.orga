@@ -1,6 +1,7 @@
 /**
  * Fills a running f.orga instance with demo data through the public API:
- * organization, one user per standard role, persons and incidents, protective equipment of the clothing store (imported from generated files in the
+ * organization, one user per standard role (department roles linked to fitting persons of Musterstadt), groups, course
+ * planning (runs, nominations, targets), bank accounts with made-up IBANs, persons and incidents, protective equipment of the clothing store (imported from generated files in the
  * format of the MP-Feuer exports `Personal.xlsx` and `MP-EXCEL.xlsx`) and a duty roster calendar.
  *
  * All persons and incidents are made up; a fixed random seed keeps them identical between runs, so running
@@ -16,6 +17,7 @@ import ExcelJS from 'exceljs';
 import { VWV_2022_RULES } from '@forga/promotions-contracts';
 import { BW_TEMPLATE } from '@forga/cost-recovery-contracts';
 import { SAMPLE_STATUTE } from '@forga/compensation-contracts';
+import { BW_MEMBERSHIP_TEMPLATE } from '@forga/masterdata-contracts';
 
 const BASE = (process.env['FORGA_URL'] ?? 'http://localhost:3000').replace(/\/$/, '');
 const ADMIN = { username: process.env['FORGA_ADMIN_USER'] ?? 'admin', password: process.env['FORGA_ADMIN_PASSWORD'] ?? 'sehr-geheim-123' };
@@ -390,6 +392,9 @@ async function settings(): Promise<void> {
   await call('PUT', 'core/settings/incidents.general', { ...general, homeMunicipalities: ['Musterstadt'] });
   await call('POST', 'masterdata/catalog/templates/bw', {});
   await call('POST', 'masterdata/courses/templates/bw', {}).catch(() => undefined);
+  // Statute values of the BW template (template values; a real brigade compares them with its own statute).
+  const membership = (await call<Record<string, unknown> | null>('GET', 'core/settings/masterdata.membership')) ?? {};
+  if (!membership['admissionDecidedBy']) await call('PUT', 'core/settings/masterdata.membership', { ...membership, ...BW_MEMBERSHIP_TEMPLATE });
   await call('POST', 'incidents/keywords/templates/bw', {});
   await call('POST', 'core/roles/templates', {});
 }
@@ -457,24 +462,54 @@ async function careers(planned: PlannedPerson[], persons: PersonRef[]): Promise<
   console.log(`  Laufbahn für ${updated} Personen ergänzt`);
 }
 
-/** One user per standard role; the department roles apply to Abteilung Musterstadt. */
-async function users(persons: PersonRef[], departments: Map<string, string>): Promise<void> {
+/** Adds a qualification unless the person holds it already. */
+async function ensureQualification(person: PersonRef, qualification: string, acquiredOn: string): Promise<void> {
+  if (person.qualifications.includes(qualification)) return;
+  await call('POST', `masterdata/persons/${person.id}/qualifications`, { qualification, acquiredOn });
+  person.qualifications.push(qualification);
+}
+
+/**
+ * One user per standard role. The department roles apply to Abteilung Musterstadt and belong to persons there whose
+ * file fits the role: the department commander holds the office, the group leader the qualification; the equipment
+ * and breathing apparatus officers hold theirs as well.
+ */
+async function users(persons: PersonRef[], departments: Map<string, string>): Promise<Map<string, PersonRef>> {
   const roles = await call<{ id: string; name: { de: string; en: string }; templateKey: string | null }[]>('GET', 'core/roles');
-  const existing = new Set((await call<{ username: string }[]>('GET', 'core/users')).map((u) => u.username));
+  const accounts = await call<{ username: string; personId: string | null }[]>('GET', 'core/users');
+  const existing = new Set(accounts.map((u) => u.username));
   const departmentRoles = new Set(['department-commander', 'group-leader', 'member']);
   const musterstadt = departments.get('Abteilung Musterstadt')!;
   const available = persons.filter((p) => p.status === 'active');
-  // The member of "My area" is a breathing apparatus wearer of Musterstadt, so all sections have content.
-  const member = available.find((p) => p.primaryDepartmentId === musterstadt && p.qualifications.includes('breathing-apparatus'));
+  const local = available.filter((p) => p.primaryDepartmentId === musterstadt);
+  const taken = new Set<string>(accounts.flatMap((u) => (u.personId ? [u.personId] : [])));
+  // Persons per role: from Musterstadt with a fitting qualification (in the order of preference).
+  const prefer = (...qualifications: string[]) => qualifications.map((q) => local.find((p) => p.qualifications.includes(q) && !taken.has(p.id))).find(Boolean) ?? local.find((p) => !taken.has(p.id));
+  const chosen = new Map<string, PersonRef>();
+  // Persons of users created earlier keep their role.
+  for (const account of accounts) {
+    const person = persons.find((p) => p.id === account.personId);
+    if (person) chosen.set(account.username, person);
+  }
+  for (const [username, qualifications] of [
+    ['member', ['breathing-apparatus']],
+    ['department-commander', ['platoon-leader', 'group-leader']],
+    ['group-leader', ['group-leader', 'squad-leader']],
+  ] as const) {
+    if (chosen.has(username)) continue;
+    const person = prefer(...qualifications);
+    if (!person) continue;
+    chosen.set(username, person);
+    taken.add(person.id);
+  }
   let created = 0;
-  // Each person belongs to at most one user; the member's person is reserved for the user "member".
-  const taken = new Set(member ? [member.id] : []);
   for (const [index, role] of roles.filter((r) => r.templateKey).entries()) {
     const username = role.templateKey!;
     if (existing.has(username) || username === ADMIN.username) continue;
     let candidate = (index * 7) % available.length;
     while (taken.has(available[candidate].id)) candidate = (candidate + 1) % available.length;
-    const person = (username === 'member' && member) || available[candidate];
+    const person = chosen.get(username) ?? available[candidate];
+    chosen.set(username, person);
     taken.add(person.id);
     await call('POST', 'core/users', {
       username,
@@ -486,8 +521,115 @@ async function users(persons: PersonRef[], departments: Map<string, string>): Pr
     });
     created++;
   }
+  // The files fit the roles: qualifications of the group leader and the officers, office of the department commander.
+  const since = isoDate(new Date(new Date().getFullYear() - 3, 2, 1));
+  const groupLeader = chosen.get('group-leader');
+  if (groupLeader) await ensureQualification(groupLeader, 'group-leader', since);
+  const equipmentOfficer = chosen.get('equipment-officer');
+  if (equipmentOfficer) await ensureQualification(equipmentOfficer, 'equipment-officer', since);
+  const apparatusOfficer = chosen.get('breathing-apparatus-officer');
+  if (apparatusOfficer) {
+    await ensureQualification(apparatusOfficer, 'breathing-apparatus', since);
+    await ensureQualification(apparatusOfficer, 'breathing-apparatus-officer', since);
+  }
+  const commander = chosen.get('department-commander');
+  if (commander) {
+    const file = await call<{ offices: { office: string }[] }>('GET', `masterdata/persons/${commander.id}`);
+    if (!file.offices.some((o) => o.office === 'department-commander')) {
+      await call('POST', `masterdata/persons/${commander.id}/offices`, { office: 'department-commander', departmentId: musterstadt, from: since });
+    }
+    const department = (await call<{ id: string; commanderId: string | null }[]>('GET', 'masterdata/departments')).find((d) => d.id === musterstadt)!;
+    if (!department.commanderId) await call('PUT', `masterdata/departments/${musterstadt}`, { ...department, commanderId: commander.id });
+  }
   console.log(`  ${created} Benutzer angelegt (Passwort: ${USER_PASSWORD})`);
   for (const role of roles.filter((r) => r.templateKey)) console.log(`    ${role.templateKey!.padEnd(30)} ${role.name.de}`);
+  return chosen;
+}
+
+/** Three groups in Musterstadt; the user "group-leader" leads the first. */
+async function groups(persons: PersonRef[], departments: Map<string, string>, accounts: Map<string, PersonRef>): Promise<void> {
+  const musterstadt = departments.get('Abteilung Musterstadt')!;
+  if ((await call<unknown[]>('GET', `masterdata/groups?departmentId=${musterstadt}`)).length) return;
+  const local = persons.filter((p) => p.primaryDepartmentId === musterstadt && (p.status === 'active' || p.status === 'probation'));
+  const first = accounts.get('group-leader');
+  const leaders = [first, ...local.filter((p) => p !== first && p.qualifications.includes('group-leader'))].filter((p): p is PersonRef => Boolean(p)).slice(0, 3);
+  const others = local.filter((p) => !leaders.includes(p));
+  for (const [index, leader] of leaders.entries()) {
+    const memberIds = others.filter((_, i) => i % leaders.length === index).slice(0, 9).map((p) => p.id);
+    await call('POST', 'masterdata/groups', { departmentId: musterstadt, name: `${index + 1}. Gruppe`, leaderId: leader.id, memberIds });
+  }
+  console.log(`  ${leaders.length} Gruppen in Musterstadt`);
+}
+
+/**
+ * Course planning: targets for Musterstadt and the youth brigade, a past run with results, coming runs with
+ * nominations, and further nominations without a run, so planning and needs show something.
+ */
+async function coursePlanning(departments: Map<string, string>): Promise<void> {
+  const musterstadt = departments.get('Abteilung Musterstadt')!;
+  const youth = departments.get('Jugendfeuerwehr Musterstadt')!;
+  type Course = { id: string; key: string; targets: Record<string, number> } & Record<string, unknown>;
+  const courses = await call<Course[]>('GET', 'masterdata/courses');
+  const targets: Record<string, Record<string, number>> = {
+    'truppmann-1': { [youth]: 10 },
+    // Some targets above the current numbers, so the needs show gaps.
+    'breathing-apparatus': { [musterstadt]: 44 },
+    machinist: { [musterstadt]: 24 },
+    'squad-leader': { [musterstadt]: 24 },
+    'group-leader': { [musterstadt]: 15 },
+  };
+  for (const course of courses) {
+    const wanted = targets[course.key];
+    if (!wanted || Object.keys(course.targets).length) continue;
+    const { id, version: _version, ...fields } = course;
+    await call('PUT', `masterdata/courses/${id}`, { ...fields, targets: wanted });
+  }
+  if ((await call<unknown[]>('GET', 'masterdata/course-runs')).length) return;
+
+  type Planning = { candidates: { id: string; primaryDepartmentId: string | null }[] };
+  const year = new Date().getFullYear();
+  const run = (course: string, startsOn: string, endsOn: string, location: string) => call<{ id: string }>('POST', 'masterdata/course-runs', { course, startsOn, endsOn, location });
+  const candidates = async (course: string, departmentId: string, count: number) =>
+    (await call<Planning>('GET', `masterdata/course-planning/${course}`)).candidates.filter((p) => p.primaryDepartmentId === departmentId).slice(0, count).map((p) => p.id);
+  const nominate = async (course: string, personIds: string[], body: object = {}) => {
+    if (personIds.length) await call('POST', 'masterdata/course-nominations/bulk', { course, personIds, desiredPeriod: String(year + 1), ...body });
+  };
+
+  // Past: Truppmann Teil 2 in the municipality, two passed and one failed.
+  const past = await run('truppmann-2', daysAgo(70), daysAgo(60), 'Feuerwehrhaus Musterstadt');
+  const attended = await candidates('truppmann-2', musterstadt, 3);
+  await nominate('truppmann-2', attended, { runId: past.id, status: 'confirmed', desiredPeriod: String(year) });
+  if (attended.length) {
+    await call('POST', 'masterdata/course-results', { course: 'truppmann-2', runId: past.id, results: attended.map((personId, i) => ({ personId, result: i === 2 ? 'failed' : 'passed' })) });
+  }
+  // Coming runs with registered persons, further nominations without a run.
+  const spring = await run('breathing-apparatus', `${year + 1}-03-07`, `${year + 1}-03-21`, 'Feuerwehrhaus Ahornfeld');
+  await nominate('breathing-apparatus', await candidates('breathing-apparatus', musterstadt, 6), { runId: spring.id, status: 'registered', priority: 1 });
+  const basic = await run('truppmann-1', `${year + 1}-02-14`, `${year + 1}-04-25`, 'Kreisfeuerwehrzentrale');
+  await nominate('truppmann-1', await candidates('truppmann-1', youth, 4), { runId: basic.id, status: 'confirmed' });
+  await nominate('machinist', await candidates('machinist', musterstadt, 4));
+  await nominate('squad-leader', await candidates('squad-leader', musterstadt, 3), { priority: 1 });
+  console.log('  Lehrgangstermine, Vormerkungen und Soll angelegt');
+}
+
+/** A valid German IBAN for a made-up account at the bank code 00000000, which no bank uses. */
+function demoIban(account: number): string {
+  const bban = `00000000${String(account).padStart(10, '0')}`;
+  // Check digits per ISO 13616: BBAN + "DE00" with letters as numbers (D = 13, E = 14), 98 − remainder mod 97.
+  const check = 98n - (BigInt(`${bban}131400`) % 97n);
+  return `DE${String(check).padStart(2, '0')}${bban}`;
+}
+
+/** Bank accounts for some active members (made up, valid check digits), e.g. for the compensation payments. */
+async function bankAccounts(persons: PersonRef[]): Promise<void> {
+  let updated = 0;
+  for (const [index, person] of persons.filter((p) => p.status === 'active').slice(0, 20).entries()) {
+    const file = await call<{ bank?: { iban: string }; sensitiveHidden: boolean } & Record<string, unknown>>('GET', `masterdata/persons/${person.id}`);
+    if (file.sensitiveHidden || file.bank?.iban) continue;
+    await call('PUT', `masterdata/persons/${person.id}`, { ...file, bank: { iban: demoIban(4_711_000 + index * 37), accountHolder: `${person.firstName} ${person.lastName}` } });
+    updated++;
+  }
+  console.log(`  ${updated} Bankverbindungen ergänzt`);
 }
 
 /** Training sessions every second week per department this year; past ones with attendance, older ones closed. */
@@ -919,7 +1061,12 @@ async function main(): Promise<void> {
   persons = await call<PersonRef[]>('GET', 'masterdata/persons');
 
   console.log('Benutzer je Rolle …');
-  await users(persons, departments);
+  const accounts = await users(persons, departments);
+  console.log('Gruppen, Lehrgänge und Bankverbindungen …');
+  await groups(persons, departments, accounts);
+  await coursePlanning(departments);
+  await bankAccounts(persons);
+  persons = await call<PersonRef[]>('GET', 'masterdata/persons');
 
   console.log('Einsätze (MP-EXCEL.xlsx) …');
   const byNumber = new Map(persons.map((p) => [p.personnelNumber, p]));

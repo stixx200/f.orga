@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DomainEvents } from '@forga/core-api';
 import {
+  BW_MEMBERSHIP_TEMPLATE,
   MASTERDATA_EVENTS,
   PERSON_DIRECTORY,
   type PersonDirectory,
@@ -34,6 +35,14 @@ describe('catalogs', () => {
 
     const courses = await post('courses/templates/bw', {}).expect(201);
     expect(courses.body.added).toBe(14);
+    // Template value: minimum age for breathing apparatus wearers.
+    expect((await get('courses').expect(200)).body.find((c: { key: string }) => c.key === 'breathing-apparatus')).toMatchObject({ minimumAge: 18 });
+
+    // Neutral defaults until the brigade applies its statute (here the BW template values).
+    const settings = () => test.http.get('/api/core/settings/masterdata.membership').set('Cookie', admin);
+    expect((await settings().expect(200)).body).toMatchObject({ admissionDecidedBy: '', probationQualifications: [], minimumAgeYouth: 10 });
+    await test.http.put('/api/core/settings/masterdata.membership').set('Cookie', admin).set(UI).send(BW_MEMBERSHIP_TEMPLATE).expect(200);
+    expect((await settings().expect(200)).body).toMatchObject({ admissionDecidedBy: 'Feuerwehrausschuss', probationQualifications: ['truppmann-1'] });
 
     const ranks = await get('catalog?kind=rank').expect(200);
     expect(ranks.body[1]).toMatchObject({ key: 'fm', name: { de: 'Feuerwehrmann/-frau' } });
@@ -377,16 +386,13 @@ describe('transfers between youth, operational and veterans departments', () => 
     const waived = await post(`persons/${ben}/transfer-to-operational`, { departmentId: operational, on: '2026-09-01', probationEndsOn: null, reason: 'Jugendfeuerwehr seit 2020', decidedOn: '2026-08-20' }).expect(201);
     expect(waived.body).toMatchObject({ status: 'active', admittedOn: '2026-08-20', probationEndsOn: null });
 
-    // A transfer dated ahead keeps the youth membership primary until then, so the memberships stay editable.
+    // Transfers take effect at once, so they are not recorded ahead (the person would be in probation while still youth).
     const lea = (await member({ firstName: 'Lea', birthDate: '2008-02-01' })).body.id;
-    await post(`persons/${lea}/transfer-to-operational`, { departmentId: operational, on: '2099-01-01', probationEndsOn: '2099-12-31' }).expect(201);
-    await put(`persons/${lea}/memberships`, [
-      { departmentId: youth, from: '2020-09-01', to: '2098-12-31', primary: true },
-      { departmentId: operational, from: '2099-01-01', to: null, primary: true },
-    ]).expect(200);
+    expect((await post(`persons/${lea}/transfer-to-operational`, { departmentId: operational, on: '2099-01-01', probationEndsOn: '2099-12-31' }).expect(400)).body.code).toBe('masterdata.transferInFuture');
+    expect((await get(`persons/${lea}`)).body.status).toBe('youth');
 
     // Below the minimum age of 17.
-    const kim = (await member({ firstName: 'Kim', birthDate: '2011-01-01' })).body.id;
+    const kim = (await member({ firstName: 'Kim', birthDate: '2011-01-01', memberships: [{ departmentId: youth, from: '2021-09-01', primary: true }] })).body.id;
     expect((await post(`persons/${kim}/transfer-to-operational`, { departmentId: operational, on: '2026-09-01', probationEndsOn: '2027-08-31' }).expect(400)).body).toMatchObject({ code: 'masterdata.belowMinimumAge' });
     // Only active and passive members move to the veterans.
     expect((await post(`persons/${kim}/transfer-to-veterans`, { departmentId: veterans, on: '2026-09-01' }).expect(400)).body).toMatchObject({ code: 'masterdata.transferNotAllowed' });
@@ -395,6 +401,7 @@ describe('transfers between youth, operational and veterans departments', () => 
     expect((await post(`persons/${old}/status`, { status: 'veterans', effectiveOn: '2026-10-01' }).expect(400)).body).toMatchObject({ code: 'masterdata.useTransfer' });
     await post(`persons/${old}/status`, { status: 'passive', effectiveOn: '2026-10-01' }).expect(201);
     await post(`persons/${old}/ranks`, { rank: 'hlm', since: '2010-01-01' }).expect(201);
+    expect((await post(`persons/${old}/transfer-to-veterans`, { departmentId: veterans, on: '2099-10-01' }).expect(400)).body.code).toBe('masterdata.transferInFuture');
     const moved = await post(`persons/${old}/transfer-to-veterans`, { departmentId: veterans, on: '2026-10-01', decidedOn: '2026-09-15' }).expect(201);
     expect(moved.body).toMatchObject({ status: 'veterans', rank: 'hlm' });
     expect(moved.body.memberships).toEqual(
@@ -403,6 +410,11 @@ describe('transfers between youth, operational and veterans departments', () => 
         expect.objectContaining({ departmentId: veterans, from: '2026-10-01', to: null, primary: true }),
       ]),
     );
+    // Back to active or into the youth status only with other memberships, not by a status change.
+    for (const status of ['active', 'youth']) {
+      expect((await post(`persons/${old}/status`, { status, effectiveOn: '2026-10-20' }).expect(400)).body.code).toBe('masterdata.statusChangeNotAllowed');
+    }
+    expect((await post(`persons/${mia}/status`, { status: 'youth', effectiveOn: '2026-10-20' }).expect(400)).body.code).toBe('masterdata.statusChangeNotAllowed');
   });
 });
 
@@ -585,5 +597,129 @@ describe('review fixes', () => {
 
     const settings = test.http.put('/api/core/settings/masterdata.membership').set('Cookie', admin).set(UI);
     expect((await settings.send({ minimumAgeOperational: -1 }).expect(400)).body.code).toBe('validation.failed');
+  });
+
+  it('limits offices and direct rank entries to the scope of the user', async () => {
+    const kdt = await login('kdt.pruefung');
+    // Offices of the own department only; brigade offices and those of other departments need the matching permission.
+    expect((await post(`persons/${r.anna}/offices`, { office: 'youth-warden', from: '2024-01-01' }, kdt).expect(403)).body.code).toBe('auth.forbidden');
+    await post(`persons/${r.anna}/offices`, { office: 'youth-warden', departmentId: ids.musterstadt, from: '2024-01-01' }, kdt).expect(403);
+    const own = (await post(`persons/${r.anna}/offices`, { office: 'youth-warden', departmentId: r.review, from: '2024-01-01' }, kdt).expect(201)).body.offices[0];
+    await put(`persons/${r.anna}/offices/${own.id}`, { office: 'youth-warden', departmentId: null, from: '2024-01-01' }, kdt).expect(403);
+    const brigade = (await post(`persons/${r.anna}/offices`, { office: 'youth-warden', from: '2025-01-01' }).expect(201)).body.offices.find((o: { departmentId: string | null }) => o.departmentId === null);
+    await del(`persons/${r.anna}/offices/${brigade.id}`, kdt).expect(403);
+    await del(`persons/${r.anna}/offices/${own.id}`, kdt).expect(200);
+    // Not before the birth.
+    expect((await post(`persons/${r.anna}/offices`, { office: 'youth-warden', from: '1980-01-01' }).expect(400)).body.code).toBe('masterdata.dateBeforeBirth');
+
+    // Ranks: department commanders promote through the promotion lists, direct entries are brigade-wide only.
+    await post(`persons/${r.anna}/ranks`, { rank: 'fm', since: '2024-01-01' }, kdt).expect(403);
+    const rank = (await post(`persons/${r.anna}/ranks`, { rank: 'fm', since: '2024-01-01' }).expect(201)).body.ranks[0];
+    await del(`persons/${r.anna}/ranks/${rank.id}`, kdt).expect(403);
+  });
+
+  it('moves departments only with the right to manage roles, logged and without cycles', async () => {
+    const organizer = (await core('roles', { name: 'Organisation Prüfung', permissions: ['masterdata.organization.manage'] }).expect(201)).body.id;
+    await core('users', { username: 'org.pruefung', displayName: 'Organisation', password: 'auch-sehr-geheim', roles: [{ roleId: organizer, departmentId: null }] }).expect(201);
+    const cookie = await login('org.pruefung');
+    const youth = (await get('departments')).body.find((d: { id: string }) => d.id === r.youth);
+    const { id: _id, version: _v, ...fields } = youth;
+    // Moving widens the department roles of the new parent: the role right is needed as well.
+    expect((await put(`departments/${r.youth}`, { ...fields, parentId: ids.musterstadt }, cookie).expect(403)).body.code).toBe('masterdata.departmentMoveNeedsRoles');
+    await put(`departments/${r.youth}`, { ...fields, name: 'Jugendfeuerwehr Prüfung' }, cookie).expect(200);
+
+    // Cycles, also over several levels, are refused.
+    const review = (await get('departments')).body.find((d: { id: string }) => d.id === r.review);
+    const { id: _rid, version: _rv, ...reviewFields } = review;
+    expect((await put(`departments/${r.review}`, { ...reviewFields, parentId: r.youth }).expect(400)).body.code).toBe('masterdata.departmentCycle');
+    const group = (await post('departments', { name: 'Kindergruppe Prüfung', shortName: 'KiFw Prüfung', type: 'children', parentId: r.youth }).expect(201)).body.id;
+    expect((await put(`departments/${r.review}`, { ...reviewFields, parentId: group }).expect(400)).body.code).toBe('masterdata.departmentCycle');
+
+    await put(`departments/${group}`, { name: 'Kindergruppe Prüfung', shortName: 'KiFw Prüfung', type: 'children', parentId: r.review }).expect(200);
+    const audit = (await test.http.get('/api/core/audit?action=masterdata.department-moved').set('Cookie', admin).expect(200)).body as { details: { departmentId: string; from: string; to: string } }[];
+    expect(audit[0].details).toMatchObject({ departmentId: group, from: r.youth, to: r.review });
+  });
+
+  it('checks status, ages and dates against the department and the birth', async () => {
+    const create = (body: object) => post('persons', { firstName: 'Plausi', lastName: 'Prüfung', ...body });
+    // A six-year-old cannot join the youth brigade, and members of a youth department are youth members.
+    expect((await create({ status: 'youth', birthDate: '2020-01-01', memberships: [{ departmentId: r.youth, from: '2026-06-01', primary: true }] }).expect(400)).body).toMatchObject({ code: 'masterdata.belowMinimumAgeYouth', age: 10 });
+    expect((await create({ status: 'active', birthDate: '2014-01-01', memberships: [{ departmentId: r.youth, from: '2026-06-01', primary: true }] }).expect(400)).body).toMatchObject({ code: 'masterdata.statusDoesNotFitDepartment', status: 'active', departmentType: 'youth' });
+    expect((await create({ status: 'youth', birthDate: '1990-01-01', memberships: [{ departmentId: r.review, from: '2020-01-01', primary: true }] }).expect(400)).body.code).toBe('masterdata.statusDoesNotFitDepartment');
+    // No membership, qualification or honor before the birth.
+    expect((await create({ status: 'active', birthDate: '2000-01-01', memberships: [{ departmentId: r.review, from: '1999-01-01', primary: true }] }).expect(400)).body.code).toBe('masterdata.dateBeforeBirth');
+    const id = (await create({ status: 'active', birthDate: '2000-01-01', memberships: [{ departmentId: r.review, from: '2020-01-01', primary: true }] }).expect(201)).body.id;
+    expect((await post(`persons/${id}/qualifications`, { qualification: 'machinist', acquiredOn: '1999-12-31' }).expect(400)).body.code).toBe('masterdata.dateBeforeBirth');
+    expect((await post(`persons/${id}/honors`, { honor: 'state-honor-silver', awardedOn: '1999-12-31' }).expect(400)).body.code).toBe('masterdata.dateBeforeBirth');
+    // Another primary department must fit the status: an active member does not become a youth member by editing memberships.
+    expect((await put(`persons/${id}/memberships`, [{ departmentId: r.youth, from: '2020-01-01', primary: true }]).expect(400)).body.code).toBe('masterdata.statusDoesNotFitDepartment');
+    // A birth date after recorded dates is refused.
+    const person = (await get(`persons/${id}`)).body;
+    const { id: _i, version, rank: _rk, memberships: _ms, qualifications: _qs, ranks: _rs, honors: _hs, offices: _o, restPeriods: _rp, sensitiveHidden: _sh, status: _st, probationEndsOn: _pe, probationDecidedOn: _pd, admittedOn: _a, leftOn: _l, exitReason: _e, anonymizedAt: _an, ...fields } = person;
+    expect((await put(`persons/${id}`, { ...fields, version, birthDate: '2021-01-01' }).expect(400)).body.code).toBe('masterdata.dateBeforeBirth');
+  });
+
+  it('validates nominations and closes them with the result', async () => {
+    const nominate = (personId: string, course: string, body: object = {}) => post('course-nominations', { personId, course, ...body });
+    // Status not intended, course held already, conditions not met.
+    expect((await nominate(r.yuna, 'review-course').expect(400)).body.code).toBe('masterdata.statusNotAllowedForCourse');
+    expect((await nominate(r.anna, 'truppmann-1').expect(400)).body.code).toBe('masterdata.courseHeldAlready');
+    expect((await nominate(r.paul, 'radio-operator').expect(400)).body.code).toBe('masterdata.courseConditionsNotMet');
+    expect((await nominate(r.anna, 'radio-operator', { status: 'completed' }).expect(400)).body.code).toBe('masterdata.nominationStatusByAttendance');
+    const bulk = (await post('course-nominations/bulk', { course: 'radio-operator', personIds: [r.anna, r.paul, r.yuna] }).expect(201)).body;
+    expect(bulk.created).toBe(1);
+    expect(bulk.skipped).toEqual(expect.arrayContaining([{ personId: r.paul, code: 'masterdata.courseConditionsNotMet' }, { personId: r.yuna, code: 'masterdata.statusNotAllowedForCourse' }]));
+
+    // The bulk change sets run and status; completed only follows from an attendance.
+    const run = (await post('course-runs', { course: 'radio-operator', startsOn: '2026-09-01', endsOn: '2026-09-05' }).expect(201)).body;
+    const anna = ((await get('course-nominations?course=radio-operator')).body as { id: string; personId: string; status: string }[]).find((n) => n.personId === r.anna)!;
+    const changed = (await post('course-nominations/bulk-update', { nominationIds: [anna.id], status: 'confirmed', runId: run.id }).expect(201)).body;
+    expect(changed).toEqual({ updated: 1, skipped: [] });
+    const updated = ((await get('course-nominations?course=radio-operator')).body as { id: string; status: string; runId: string }[]).find((n) => n.id === anna.id)!;
+    expect(updated).toMatchObject({ status: 'confirmed', runId: run.id });
+    expect((await put(`course-nominations/${anna.id}`, { ...updated, status: 'completed' }).expect(400)).body.code).toBe('masterdata.nominationStatusByAttendance');
+
+    // Failed: the nomination is closed and the person is not offered again for the run.
+    const results = (await post('course-results', { course: 'radio-operator', runId: run.id, results: [{ personId: r.anna, result: 'failed' }] }).expect(201)).body;
+    expect(results).toEqual({ recorded: 1, skipped: [] });
+    const failed = ((await get('course-nominations?course=radio-operator')).body as { id: string; status: string }[]).find((n) => n.id === anna.id)!;
+    expect(failed.status).toBe('failed');
+    expect(((await get('course-planning/radio-operator')).body.nominations as { person: { id: string } }[]).some((n) => n.person.id === r.anna)).toBe(false);
+    expect((await post('course-results', { course: 'radio-operator', runId: run.id, results: [{ personId: r.anna, result: 'passed' }] }).expect(201)).body).toEqual({ recorded: 0, skipped: [{ personId: r.anna, code: 'masterdata.resultRecordedAlready' }] });
+    // A new nomination is possible; reopening the old one next to it is not.
+    await nominate(r.anna, 'radio-operator').expect(201);
+    expect((await put(`course-nominations/${anna.id}`, { ...failed, status: 'nominated' }).expect(400)).body.code).toBe('masterdata.nominationStatusByAttendance');
+
+    // A run with results keeps its dates.
+    expect((await put(`course-runs/${run.id}`, { course: 'radio-operator', startsOn: '2026-09-08', endsOn: '2026-09-12' }).expect(409)).body.code).toBe('masterdata.courseRunHasResults');
+    await put(`course-runs/${run.id}`, { course: 'radio-operator', startsOn: '2026-09-01', endsOn: '2026-09-05', location: 'Gerätehaus' }).expect(200);
+  });
+
+  it('records courses whose qualifications are held only after confirmation, without a second allowance', async () => {
+    const events: string[] = [];
+    test.app.get(DomainEvents).subscribe<{ personId: string }>(MASTERDATA_EVENTS.coursePassed, (body) => {
+      if (body.personId === r.anna) events.push('passed');
+    });
+    const attend = (body: object) => post(`persons/${r.anna}/course-attendances`, { course: 'breathing-apparatus', startsOn: '2026-02-01', endsOn: '2026-02-10', result: 'passed', ...body });
+    // Anna holds the qualification from a manual entry.
+    expect((await attend({}).expect(409)).body.code).toBe('masterdata.qualificationsHeld');
+    await attend({ confirmHeld: true }).expect(201);
+    expect(events).toEqual([]);
+    const qualifications = (await get(`persons/${r.anna}`)).body.qualifications as { qualification: string }[];
+    expect(qualifications.filter((q) => q.qualification === 'breathing-apparatus')).toHaveLength(1);
+
+    // Dates: not in the future, not before 1900, not before the birth.
+    const other = (body: object) => post(`persons/${r.anna}/course-attendances`, { course: 'machinist', result: 'failed', ...body });
+    expect((await other({ startsOn: '2099-01-01' }).expect(400)).body.code).toBe('masterdata.attendanceInFuture');
+    expect((await other({ startsOn: '0202-01-01' }).expect(400)).body.code).toBe('validation.failed');
+    expect((await other({ startsOn: '1985-01-01' }).expect(400)).body.code).toBe('masterdata.dateBeforeBirth');
+  });
+
+  it('counts course needs only for members the course is intended for', async () => {
+    const needs = (await get('course-needs').expect(200)).body as { course: string; departmentId: string; have: number }[];
+    // Youth members count for Truppmann Teil 1, the youth brigade needs no platoon leaders.
+    expect(needs.find((n) => n.course === 'truppmann-1' && n.departmentId === r.youth)).toBeDefined();
+    expect(needs.find((n) => n.course === 'platoon-leader' && n.departmentId === r.youth)).toBeUndefined();
+    expect(needs.find((n) => n.course === 'platoon-leader' && n.departmentId === r.review)).toBeDefined();
   });
 });

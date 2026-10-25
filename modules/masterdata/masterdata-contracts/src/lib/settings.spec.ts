@@ -1,4 +1,4 @@
-import { probationEnd } from './settings.js';
+import { BW_MEMBERSHIP_TEMPLATE, MembershipSettings, probationEnd } from './settings.js';
 
 describe('probationEnd', () => {
   it('ends on the day before the anniversary', () => {
@@ -9,5 +9,13 @@ describe('probationEnd', () => {
   it('clamps the anniversary to the end of the month', () => {
     expect(probationEnd('2026-08-31', 6)).toBe('2027-02-27');
     expect(probationEnd('2028-02-29', 12)).toBe('2029-02-27');
+  });
+});
+
+describe('MembershipSettings', () => {
+  it('has neutral defaults and keeps the BW values in the template', () => {
+    const defaults = MembershipSettings.parse({});
+    expect(defaults).toMatchObject({ admissionDecidedBy: '', probationQualifications: [], minimumAgeYouth: 10 });
+    expect(MembershipSettings.parse(BW_MEMBERSHIP_TEMPLATE)).toMatchObject({ admissionDecidedBy: 'Feuerwehrausschuss', probationQualifications: ['truppmann-1'] });
   });
 });

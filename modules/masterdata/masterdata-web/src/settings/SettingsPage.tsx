@@ -1,12 +1,12 @@
 import { Button, Group, MultiSelect, NumberInput, SimpleGrid, Stack, TagsInput, Text, TextInput } from '@mantine/core';
 import { useState } from 'react';
-import { MEMBERSHIP_AGE_BOUNDS, MembershipSettings } from '@forga/masterdata-contracts';
+import { BW_MEMBERSHIP_TEMPLATE, MEMBERSHIP_AGE_BOUNDS, MembershipSettings } from '@forga/masterdata-contracts';
 import { send, useLocalized, useTranslation } from '@forga/web-sdk';
-import { PageHeader, Panel, useAction } from '@forga/web-ui';
+import { Notice, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { useCatalog, useMembershipRules } from '../api';
 
 type Rules = MembershipSettings;
-const AGES = ['minimumAgeOperational', 'minimumAgeIncidents', 'youthEndAge', 'veteransApplicationAge', 'ageLimitOperational'] as const;
+const AGES = ['minimumAgeYouth', 'minimumAgeOperational', 'minimumAgeIncidents', 'youthEndAge', 'veteransApplicationAge', 'ageLimitOperational'] as const;
 
 function RulesForm({ value }: { value: Rules }) {
   const { t } = useTranslation('masterdata');
@@ -14,6 +14,7 @@ function RulesForm({ value }: { value: Rules }) {
   const localized = useLocalized();
   const { data: qualifications = [] } = useCatalog('qualification');
   const [form, setForm] = useState(value);
+  const [template, setTemplate] = useState(false);
   const set = <K extends keyof Rules>(key: K, v: Rules[K]) => setForm((f) => ({ ...f, [key]: v }));
   const save = useAction((rules: Rules) => send('PUT', 'core/settings/masterdata.membership', rules), {
     success: t('settings.saved'),
@@ -67,8 +68,21 @@ function RulesForm({ value }: { value: Rules }) {
           />
         </SimpleGrid>
       </Panel>
+      {template && <Notice kind="info">{t('settings.bwApplied')}</Notice>}
       <Group justify="space-between">
-        <Button variant="default" onClick={() => setForm(MembershipSettings.parse({}))}>{t('settings.reset')}</Button>
+        <Group gap="xs">
+          <Button variant="default" onClick={() => setForm(MembershipSettings.parse({}))}>{t('settings.reset')}</Button>
+          {/* Template values, not legal advice: the user compares them with the own statute before saving. */}
+          <Button
+            variant="default"
+            onClick={() => {
+              setForm({ ...form, ...BW_MEMBERSHIP_TEMPLATE, probationQualifications: [...BW_MEMBERSHIP_TEMPLATE.probationQualifications] });
+              setTemplate(true);
+            }}
+          >
+            {t('settings.applyBw')}
+          </Button>
+        </Group>
         <Button loading={save.isPending} disabled={invalid} onClick={() => save.mutate(form)}>{common('actions.save')}</Button>
       </Group>
     </Stack>

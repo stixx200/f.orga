@@ -28,6 +28,7 @@ import {
   type MembershipSettings,
   OfficeAssignmentInput,
   RestPeriodInput,
+  STATUSES_BY_DEPARTMENT_TYPE,
   type Person as PersonDto,
   PersonInput,
   PersonQualificationInput,
@@ -44,11 +45,11 @@ import {
 import { z } from 'zod';
 import { CatalogEntry, CatalogService } from '../catalog/catalog.js';
 import { Department, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod } from '../masterdata.entities.js';
-import { requireDepartment, today } from '../shared/access.js';
+import { requireBrigade, requireDepartment, today } from '../shared/access.js';
 import { addDays, addMonths, ageOn } from '../shared/dates.js';
 import { DepartmentGroup } from '../organization/group.entities.js';
 import { PersonHoldingsRegistry } from './holdings.js';
-import { activeMemberships, PersonsService, READ, SENSITIVE, WRITE } from './persons.service.js';
+import { activeMemberships, assertNotBeforeBirth, PersonsService, primaryDepartment, READ, recordedDates, SENSITIVE, WRITE } from './persons.service.js';
 
 type ParsedPerson = ReturnType<typeof PersonInput.parse>;
 type ParsedCreate = ReturnType<typeof CreatePersonInput.parse>;
@@ -112,7 +113,10 @@ export class PersonsController {
     const start = input.joinedOn ?? memberships.map((m) => m.from).toSorted()[0];
     const rules = await this.membershipRules();
     const master = this.masterFields(fields, user, null);
-    await this.assertMinimumAge(em, 'birthDate' in master ? (master.birthDate ?? null) : null, memberships, rules);
+    const birthDate = 'birthDate' in master ? (master.birthDate ?? null) : null;
+    assertNotBeforeBirth(birthDate, [input.joinedOn, ...memberships.map((m) => m.from)]);
+    await this.assertMinimumAge(em, birthDate, memberships, rules);
+    await this.assertStatusFitsDepartment(em, status, memberships);
     const person = em.create(Person, {
       ...master,
       status,
@@ -135,7 +139,13 @@ export class PersonsController {
     const person = await this.persons.load(em, id, user, WRITE);
     assertVersion(person, input.version);
     await this.assertPersonnelNumberFree(em, input.personnelNumber, person.id);
-    em.assign(person, this.masterFields(input, user, person));
+    const master = this.masterFields(input, user, person);
+    // A changed birth date must not lie after what the file records, a changed joining date not before the birth.
+    // Unchanged values are not checked again, so saving other fields works for older entries.
+    const birthDate = 'birthDate' in master ? (master.birthDate ?? null) : (person.birthDate ?? null);
+    if (birthDate !== (person.birthDate ?? null)) assertNotBeforeBirth(birthDate, [person.joinedOn, ...recordedDates(person)]);
+    if (input.joinedOn !== (person.joinedOn ?? null)) assertNotBeforeBirth(birthDate, [input.joinedOn]);
+    em.assign(person, master);
     await em.flush();
     return this.persons.toDto(person, user);
   }
@@ -161,8 +171,12 @@ export class PersonsController {
     const kept = foreign.map((f) => ({ departmentId: f.department.id, from: f.from, to: f.to ?? null, primary: f.primary }));
     // Only new or changed memberships are checked against the minimum age, existing ones stay valid.
     const added = memberships.filter((m) => !person.memberships.getItems().some((x) => same(m, x)));
+    assertNotBeforeBirth(person.birthDate, added.map((m) => m.from));
     await this.assertMinimumAge(em, person.birthDate ?? null, added, await this.membershipRules());
-    await this.replaceMemberships(em, person, [...memberships.filter((m) => user.can(WRITE, m.departmentId)), ...kept]);
+    const next = [...memberships.filter((m) => user.can(WRITE, m.departmentId)), ...kept];
+    // Another primary department must fit the status (e.g. no active member with the youth department as primary one).
+    if (primaryOf(next) !== primaryDepartment(person)) await this.assertStatusFitsDepartment(em, person.status, next);
+    await this.replaceMemberships(em, person, next);
     await em.flush();
     return this.persons.toDto(person, user);
   }
@@ -177,6 +191,7 @@ export class PersonsController {
     const em = this.em.fork();
     const person = await this.persons.load(em, id, user, WRITE);
     const entry = await this.catalogs.requireKey('qualification', input.qualification, em);
+    assertNotBeforeBirth(person.birthDate, [input.acquiredOn]);
     const months = entry.attributes['validityMonths'] as number | null | undefined;
     person.qualifications.add(
       em.create(PersonQualification, {
@@ -215,6 +230,10 @@ export class PersonsController {
     return this.persons.toDto(person, user);
   }
 
+  /**
+   * Direct rank entries (historic ranks, corrections) only with the brigade-wide permission; promotions of department
+   * members go through the promotion lists, whose execution enters the rank.
+   */
   @Post(':id/ranks')
   @RequirePermissions(WRITE)
   async addRank(
@@ -222,9 +241,11 @@ export class PersonsController {
     @Body(new ZodPipe(RankAssignmentInput)) input: ReturnType<typeof RankAssignmentInput.parse>,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<PersonDto> {
+    requireBrigade(user, WRITE);
     const em = this.em.fork();
     const person = await this.persons.load(em, id, user, WRITE);
     await this.catalogs.requireKey('rank', input.rank, em);
+    assertNotBeforeBirth(person.birthDate, [input.since]);
     person.ranks.add(em.create(RankAssignment, { person, ...input }));
     await em.flush();
     return this.persons.toDto(person, user);
@@ -233,6 +254,7 @@ export class PersonsController {
   @Delete(':id/ranks/:entryId')
   @RequirePermissions(WRITE)
   removeRank(@Param('id') id: string, @Param('entryId') entryId: string, @CurrentUser() user: AuthenticatedUser) {
+    requireBrigade(user, WRITE);
     return this.removeChild(id, user, (p) => p.ranks, entryId);
   }
 
@@ -244,9 +266,12 @@ export class PersonsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<PersonDto> {
     const em = this.em.fork();
+    // Offices of a department need the permission there, offices of the whole brigade the brigade-wide one.
+    requireDepartment(user, WRITE, input.departmentId ?? null);
     const person = await this.persons.load(em, id, user, WRITE);
     await this.catalogs.requireKey('office', input.office, em);
     if (input.departmentId && !(await em.count(Department, input.departmentId))) throw new BadRequestException({ code: 'masterdata.unknownDepartment' });
+    assertNotBeforeBirth(person.birthDate, [input.from]);
     person.offices.add(em.create(OfficeAssignment, { person, ...input }));
     await em.flush();
     return this.persons.toDto(person, user);
@@ -265,7 +290,11 @@ export class PersonsController {
     const person = await this.persons.load(em, id, user, WRITE);
     const entry = person.offices.getItems().find((o) => o.id === entryId);
     if (!entry) throw new NotFoundException();
+    requireDepartment(user, WRITE, entry.departmentId ?? null);
+    requireDepartment(user, WRITE, input.departmentId ?? null);
     await this.catalogs.requireKey('office', input.office, em);
+    if (input.departmentId && !(await em.count(Department, input.departmentId))) throw new BadRequestException({ code: 'masterdata.unknownDepartment' });
+    assertNotBeforeBirth(person.birthDate, [input.from]);
     em.assign(entry, input);
     await em.flush();
     return this.persons.toDto(person, user);
@@ -311,7 +340,7 @@ export class PersonsController {
   @Delete(':id/offices/:entryId')
   @RequirePermissions(WRITE)
   removeOffice(@Param('id') id: string, @Param('entryId') entryId: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.removeChild(id, user, (p) => p.offices, entryId);
+    return this.removeChild(id, user, (p) => p.offices, entryId, false, (office) => requireDepartment(user, WRITE, (office as OfficeAssignment).departmentId ?? null));
   }
 
   /** Number of honor certificates for the same parameters as the PDF, so the UI can say beforehand that there are none. */
@@ -387,6 +416,7 @@ export class PersonsController {
     const em = this.em.fork();
     const person = await this.persons.load(em, id, user, WRITE);
     await this.catalogs.requireKey('honor', input.honor, em);
+    assertNotBeforeBirth(person.birthDate, [input.awardedOn]);
     person.honors.add(em.create(HonorAward, { person, ...input }));
     await em.flush();
     return this.persons.toDto(person, user);
@@ -453,12 +483,13 @@ export class PersonsController {
   ): Promise<PersonDto> {
     const em = this.em.fork();
     const person = await this.persons.load(em, id, user, WRITE);
-    if (person.status === 'left' || person.status === 'probation') {
-      throw new BadRequestException({ code: 'masterdata.statusChangeNotAllowed', from: person.status });
-    }
     // Leaving the youth brigade and joining the veterans change memberships and probation: only via the transfers.
-    if (person.status === 'youth' && input.status !== 'youth') throw new BadRequestException({ code: 'masterdata.useTransfer', transfer: 'operational' });
+    if (person.status === 'youth') throw new BadRequestException({ code: 'masterdata.useTransfer', transfer: 'operational' });
     if (input.status === 'veterans' && person.status !== 'veterans') throw new BadRequestException({ code: 'masterdata.useTransfer', transfer: 'veterans' });
+    // Only active and passive members switch between active and passive; the other statuses have their own ways.
+    if ((person.status !== 'active' && person.status !== 'passive') || (input.status !== 'active' && input.status !== 'passive')) {
+      throw new BadRequestException({ code: 'masterdata.statusChangeNotAllowed', from: person.status, to: input.status });
+    }
     // The history records the change; the effective date is the day of the request.
     person.status = input.status;
     await em.flush();
@@ -480,6 +511,7 @@ export class PersonsController {
     const em = this.em.fork();
     const person = await this.persons.load(em, id, user, WRITE);
     if (person.status !== 'youth') throw new BadRequestException({ code: 'masterdata.transferNotAllowed', from: person.status });
+    assertTransferDate(input.on);
     const rules = await this.membershipRules();
     if (person.birthDate && ageOn(person.birthDate, input.on) < rules.minimumAgeOperational) {
       throw new BadRequestException({ code: 'masterdata.belowMinimumAge', age: rules.minimumAgeOperational });
@@ -510,6 +542,7 @@ export class PersonsController {
     const em = this.em.fork();
     const person = await this.persons.load(em, id, user, WRITE);
     if (person.status !== 'active' && person.status !== 'passive') throw new BadRequestException({ code: 'masterdata.transferNotAllowed', from: person.status });
+    assertTransferDate(input.on);
     await this.holdings.assertNothingHeld(person.id);
     await this.transferMembership(em, user, person, input.departmentId, input.on, 'veterans', ['operational', 'command']);
     person.status = 'veterans';
@@ -592,12 +625,14 @@ export class PersonsController {
     collection: (person: Person) => { getItems(): { id: string }[]; remove(item: never): void },
     entryId: string,
     sensitive = false,
+    guard: (entry: { id: string }) => void = () => undefined,
   ): Promise<PersonDto> {
     const em = this.em.fork();
     const person = sensitive ? await this.loadSensitive(em, id, user) : await this.persons.load(em, id, user, WRITE);
     const items = collection(person);
     const entry = items.getItems().find((item) => item.id === entryId);
     if (!entry) throw new NotFoundException();
+    guard(entry);
     items.remove(entry as never);
     await em.flush();
     return this.persons.toDto(person, user);
@@ -648,15 +683,33 @@ export class PersonsController {
   }
 
   /**
-   * Persons below `minimumAgeOperational` cannot become members of an operational department (unknown birth dates pass).
+   * Persons below `minimumAgeOperational` cannot become members of an operational department, persons below
+   * `minimumAgeYouth` not of a youth department (unknown birth dates pass).
    * Memberships that ended before today are history (e.g. entered from old files) and are not checked.
    */
   private async assertMinimumAge(em: EntityManager, birthDate: string | null, all: { departmentId: string; from: string; to?: string | null }[], rules: MembershipSettings): Promise<void> {
     const memberships = all.filter((m) => !m.to || m.to >= today());
     if (!birthDate || !memberships.length) return;
-    const operational = new Set((await em.find(Department, { id: { $in: memberships.map((m) => m.departmentId) }, type: 'operational' })).map((d) => d.id));
-    if (memberships.some((m) => operational.has(m.departmentId) && ageOn(birthDate, m.from) < rules.minimumAgeOperational)) {
-      throw new BadRequestException({ code: 'masterdata.belowMinimumAge', age: rules.minimumAgeOperational });
+    const types = new Map((await em.find(Department, { id: { $in: memberships.map((m) => m.departmentId) } })).map((d) => [d.id, d.type]));
+    const limits = [
+      ['operational', rules.minimumAgeOperational, 'masterdata.belowMinimumAge'],
+      ['youth', rules.minimumAgeYouth, 'masterdata.belowMinimumAgeYouth'],
+    ] as const;
+    for (const [type, age, code] of limits) {
+      if (memberships.some((m) => types.get(m.departmentId) === type && ageOn(birthDate, m.from) < age)) throw new BadRequestException({ code, age });
+    }
+  }
+
+  /**
+   * The status must fit the type of the primary department (`STATUSES_BY_DEPARTMENT_TYPE`): of the current primary
+   * membership, or, without a current one, of the latest primary membership.
+   */
+  private async assertStatusFitsDepartment(em: EntityManager, status: Person['status'], memberships: readonly MembershipLike[]): Promise<void> {
+    const departmentId = primaryOf(memberships);
+    if (!departmentId || status === 'left') return;
+    const department = await em.findOne(Department, departmentId);
+    if (department && !STATUSES_BY_DEPARTMENT_TYPE[department.type].includes(status)) {
+      throw new BadRequestException({ code: 'masterdata.statusDoesNotFitDepartment', status, departmentType: department.type });
     }
   }
 
@@ -670,6 +723,24 @@ export class PersonsController {
   private async membershipRules(): Promise<MembershipSettings> {
     return (await this.settings.get<MembershipSettings>('masterdata.membership')) as MembershipSettings;
   }
+}
+
+type MembershipLike = { departmentId: string; from: string; to?: string | null; primary: boolean };
+
+/** Department of the current primary membership, or of the latest primary one when none is current. */
+function primaryOf(memberships: readonly MembershipLike[]): string | null {
+  const date = today();
+  const primary = memberships.filter((m) => m.primary);
+  const current = primary.find((m) => m.from <= date && (!m.to || m.to >= date));
+  return (current ?? primary.toSorted((a, b) => b.from.localeCompare(a.from))[0])?.departmentId ?? null;
+}
+
+/**
+ * Transfers take effect when they are recorded (status, probation): a date ahead would e.g. make a youth member a
+ * probationer before leaving the youth brigade. So transfers are recorded on or after their date.
+ */
+function assertTransferDate(on: string): void {
+  if (on > today()) throw new BadRequestException({ code: 'masterdata.transferInFuture' });
 }
 
 function appendNote(notes: string, line: string): string {

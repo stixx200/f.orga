@@ -15,7 +15,9 @@ test('administrator uses vehicles, course planning and catalogs', async ({ brows
   await expect(page.getByRole('heading', { name: 'Lehrgangsplanung', level: 1 })).toBeVisible();
   await page.getByRole('cell', { name: 'Truppführer', exact: true }).click();
   await expect(page.getByText(/Weitere Kandidaten \(\d+\)/)).toBeVisible();
-  const candidates = page.getByRole('checkbox');
+  // Only the candidates panel: the nominations above have selection boxes as well.
+  const panel = page.locator('div:has(> div > h2)').filter({ has: page.getByRole('heading', { name: /Weitere Kandidaten/ }) });
+  const candidates = panel.getByRole('checkbox');
   if (await candidates.count()) {
     await candidates.first().check();
     await page.getByRole('button', { name: '1 Person vormerken' }).click();

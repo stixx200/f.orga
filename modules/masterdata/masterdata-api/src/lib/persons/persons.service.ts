@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { type AuthenticatedUser, wordsWhere } from '@forga/core-api';
 import type { Person as PersonDto, PersonSnapshot, PersonSummary } from '@forga/masterdata-contracts';
@@ -51,6 +51,25 @@ export function validQualifications(person: Person, date = today()): string[] {
         .map((q) => q.qualification),
     ),
   ].toSorted();
+}
+
+/**
+ * Refuses dates before the birth (memberships, qualifications, ranks, courses …); unknown birth dates pass.
+ * The birth date is not part of the error, as the user may lack `masterdata.persons.sensitive`.
+ */
+export function assertNotBeforeBirth(birthDate: string | null | undefined, dates: readonly (string | null | undefined)[]): void {
+  if (birthDate && dates.some((date) => date && date < birthDate)) throw new BadRequestException({ code: 'masterdata.dateBeforeBirth' });
+}
+
+/** Dates of the child lists of the person file that must not lie before the birth. */
+export function recordedDates(person: Person): string[] {
+  return [
+    ...person.memberships.getItems().map((m) => m.from),
+    ...person.qualifications.getItems().map((q) => q.acquiredOn),
+    ...person.ranks.getItems().map((r) => r.since),
+    ...person.honors.getItems().map((h) => h.awardedOn),
+    ...person.offices.getItems().map((o) => o.from),
+  ];
 }
 
 /** A visibility condition for all persons (`{}`). */

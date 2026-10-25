@@ -1,12 +1,12 @@
-import { ActionIcon, Button, Group, Radio, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Checkbox, Group, Radio, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { IconTrash } from '@tabler/icons-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
-import type { Course, CourseAttendance, CourseNomination, Person } from '@forga/masterdata-contracts';
+import { type Course, type CourseAttendance, type CourseNomination, OPEN_NOMINATION_STATUSES, type Person } from '@forga/masterdata-contracts';
 import { api, can, formatDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { ConfirmDialog, DataTable, Notice, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, loadPerson, today } from '../api';
 
 export const PLAN = 'masterdata.courses.plan';
@@ -33,7 +33,7 @@ export function CoursesTab({ person, disabled, onChanged }: { person: Person; di
   });
   const [dialog, setDialog] = useState<'attendance' | 'nomination' | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
-  const [form, setForm] = useState({ course: null as string | null, startsOn: today() as string | null, endsOn: null as string | null, result: 'passed', location: '', priority: 2, desiredPeriod: '' });
+  const [form, setForm] = useState({ course: null as string | null, startsOn: today() as string | null, endsOn: null as string | null, result: 'passed', location: '', priority: 2, desiredPeriod: '', confirmHeld: false });
   const courseName = (key: string) => {
     const course = courses.find((c) => c.key === key);
     return course ? localized(course.name) : key;
@@ -45,7 +45,7 @@ export function CoursesTab({ person, disabled, onChanged }: { person: Person; di
     setDialog(null);
   };
   const addAttendance = useAction(
-    () => send('POST', `masterdata/persons/${person.id}/course-attendances`, { course: form.course, startsOn: form.startsOn, endsOn: form.endsOn, result: form.result, location: form.location }),
+    () => send('POST', `masterdata/persons/${person.id}/course-attendances`, { course: form.course, startsOn: form.startsOn, endsOn: form.endsOn, result: form.result, location: form.location, confirmHeld: form.confirmHeld }),
     { success: t('person.saved'), invalidate: [['masterdata', 'course-nominations']], onSuccess: () => void refresh() },
   );
   const removeAttendance = useAction((id: string) => send('DELETE', `masterdata/persons/${person.id}/course-attendances/${id}`), { success: t('person.saved'), onSuccess: () => void refresh() });
@@ -54,19 +54,23 @@ export function CoursesTab({ person, disabled, onChanged }: { person: Person; di
     { success: t('person.saved'), invalidate: [['masterdata', 'course-nominations']], onSuccess: () => setDialog(null) },
   );
   const open = (d: 'attendance' | 'nomination') => {
-    setForm({ course: null, startsOn: today(), endsOn: null, result: 'passed', location: '', priority: 2, desiredPeriod: '' });
+    setForm({ course: null, startsOn: today(), endsOn: null, result: 'passed', location: '', priority: 2, desiredPeriod: '', confirmHeld: false });
     setDialog(d);
   };
   // An attendance ends after it starts; a passed course must have ended.
   const endError = form.endsOn && form.startsOn && form.endsOn < form.startsOn ? t('courses.endBeforeStart') : undefined;
   const futureError = dialog === 'attendance' && form.result === 'passed' && (form.endsOn ?? form.startsOn ?? '') > today() ? t('courses.notFinished') : undefined;
+  // Whoever holds all qualifications of the course already (e.g. imported) is recorded only after confirming; nothing is granted twice.
+  const passedOn = form.endsOn ?? form.startsOn ?? today();
+  const granted = courses.find((c) => c.key === form.course)?.grantsQualifications ?? [];
+  const held = form.result === 'passed' && granted.length > 0 && granted.every((q) => person.qualifications.some((x) => x.qualification === q && x.acquiredOn <= passedOn && (!x.validUntil || x.validUntil >= passedOn)));
   const actions = (submit: () => void, loading: boolean, ok = true) => (
     <Group justify="flex-end">
       <Button variant="default" onClick={() => setDialog(null)}>{common('actions.cancel')}</Button>
       <Button onClick={submit} loading={loading} disabled={!form.course || !ok}>{common('actions.save')}</Button>
     </Group>
   );
-  const own = nominations.filter((n) => n.personId === person.id && n.status !== 'completed');
+  const own = nominations.filter((n) => n.personId === person.id && (OPEN_NOMINATION_STATUSES as readonly string[]).includes(n.status));
 
   return (
     <Stack gap="lg">
@@ -109,11 +113,11 @@ export function CoursesTab({ person, disabled, onChanged }: { person: Person; di
         </Panel>
       )}
       {dialog === 'attendance' && (
-        <ResponsiveDialog opened onClose={() => setDialog(null)} title={t('courses.addAttendance')} actions={actions(() => addAttendance.mutate(undefined), addAttendance.isPending, !endError && !futureError && Boolean(form.startsOn))}>
+        <ResponsiveDialog opened onClose={() => setDialog(null)} title={t('courses.addAttendance')} actions={actions(() => addAttendance.mutate(undefined), addAttendance.isPending, !endError && !futureError && Boolean(form.startsOn) && (!held || form.confirmHeld))}>
           <Stack gap="sm">
             <Select label={t('courses.course')} data={courses.filter((c) => c.active).map((c) => ({ value: c.key, label: localized(c.name) }))} value={form.course} onChange={(v) => setForm({ ...form, course: v })} searchable required />
             <SimpleGrid cols={2}>
-              <DateInput label={t('courses.startsOn')} value={form.startsOn} onChange={(v) => setForm({ ...form, startsOn: v })} valueFormat="DD.MM.YYYY" required />
+              <DateInput label={t('courses.startsOn')} value={form.startsOn} onChange={(v) => setForm({ ...form, startsOn: v })} valueFormat="DD.MM.YYYY" minDate="1900-01-01" maxDate={today()} required />
               <DateInput label={t('courses.endsOn')} value={form.endsOn} onChange={(v) => setForm({ ...form, endsOn: v })} valueFormat="DD.MM.YYYY" clearable error={endError ?? futureError} />
             </SimpleGrid>
             <Radio.Group label={t('courses.result')} value={form.result} onChange={(v) => setForm({ ...form, result: v })}>
@@ -123,6 +127,11 @@ export function CoursesTab({ person, disabled, onChanged }: { person: Person; di
               </Group>
             </Radio.Group>
             <TextInput label={t('courses.location')} value={form.location} onChange={(e) => setForm({ ...form, location: e.currentTarget.value })} />
+            {held && (
+              <Notice kind="warning">
+                <Checkbox label={t('planning.confirmHeld')} checked={form.confirmHeld} onChange={(e) => setForm({ ...form, confirmHeld: e.currentTarget.checked })} />
+              </Notice>
+            )}
             <Text size="xs" c="dimmed">{t('courses.passedHint')}</Text>
           </Stack>
         </ResponsiveDialog>
