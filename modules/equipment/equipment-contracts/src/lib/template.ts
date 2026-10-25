@@ -49,18 +49,34 @@ export const DGUV_TYPES: EquipmentTypeInput[] = [
   t('gas-detector', 'Gasmessgerät', 'Gas detector', 'radio', [i('calibration', 'Kalibrierung nach Hersteller', 'Calibration per manufacturer', 12, 'expert')]),
   t('fuel-can', 'Kraftstoffkanister PE', 'Fuel can PE', 'consumables', [i('can-check', 'Sichtprüfung', 'Visual check', 6)]),
   t('oil-binder', 'Ölbindemittel (Sack)', 'Oil binder (bag)', 'consumables', []),
-  // Vehicles by weight class. The intervals of the roadworthiness test and the safety inspection are template values:
-  // check them against the registration of each vehicle and override them per item where they differ.
-  t('fire-vehicle', 'Feuerwehrfahrzeug über 3,5 t', 'Fire vehicle over 3.5 t', 'vehicles', [
-    i('vehicle-annual', 'Jährliche Prüfung (DGUV Vorschrift 70, Grundsatz 305-002)', 'Annual inspection (DGUV regulation 70, principle 305-002)', 12),
-    i('vehicle-hu', 'Hauptuntersuchung (HU)', 'Roadworthiness test', 12, 'expert'),
-    i('vehicle-safety', 'Sicherheitsprüfung', 'Safety inspection', 6, 'expert'),
-  ]),
-  t('fire-vehicle-light', 'Feuerwehrfahrzeug bis 3,5 t (z. B. KdoW, MTW)', 'Fire vehicle up to 3.5 t (e.g. command car, crew van)', 'vehicles', [
+  // Vehicles by weight class (permissible total mass). The intervals of the roadworthiness test (HU) and of the safety
+  // inspection (SP) are template values, not legal advice: check them against the registration of each vehicle and
+  // override them per item where they differ. The safety inspection is only in the class over 7.5 t.
+  t('fire-vehicle-light', 'Feuerwehrfahrzeug bis 3,5 t (z. B. KdoW, MTW) – Vorlagewerte prüfen', 'Fire vehicle up to 3.5 t (e.g. command car, crew van) – check template values', 'vehicles', [
     i('vehicle-annual', 'Jährliche Prüfung (DGUV Vorschrift 70, Grundsatz 305-002)', 'Annual inspection (DGUV regulation 70, principle 305-002)', 12),
     i('vehicle-hu', 'Hauptuntersuchung (HU)', 'Roadworthiness test', 24, 'expert'),
   ]),
+  t('fire-vehicle-medium', 'Feuerwehrfahrzeug über 3,5 t bis 7,5 t (z. B. TSF, MLF, ELW 1) – Vorlagewerte prüfen', 'Fire vehicle over 3.5 t up to 7.5 t (e.g. TSF, MLF, ELW 1) – check template values', 'vehicles', [
+    i('vehicle-annual', 'Jährliche Prüfung (DGUV Vorschrift 70, Grundsatz 305-002)', 'Annual inspection (DGUV regulation 70, principle 305-002)', 12),
+    i('vehicle-hu', 'Hauptuntersuchung (HU)', 'Roadworthiness test', 12, 'expert'),
+  ]),
+  t('fire-vehicle', 'Feuerwehrfahrzeug über 7,5 t – Vorlagewerte prüfen', 'Fire vehicle over 7.5 t – check template values', 'vehicles', [
+    i('vehicle-annual', 'Jährliche Prüfung (DGUV Vorschrift 70, Grundsatz 305-002)', 'Annual inspection (DGUV regulation 70, principle 305-002)', 12),
+    i('vehicle-hu', 'Hauptuntersuchung (HU)', 'Roadworthiness test', 12, 'expert'),
+    i('vehicle-safety', 'Sicherheitsprüfung (SP)', 'Safety inspection', 6, 'expert'),
+  ]),
 ];
 
-/** Vehicle types of the master data catalog that get the template type for vehicles up to 3.5 t. */
+/**
+ * Vehicle types of the master data catalog (template BW) by weight class, for taking over the vehicles: up to 3.5 t
+ * and over 3.5 t up to 7.5 t; all other vehicle types count as over 7.5 t. Typical classes, to be checked per vehicle.
+ */
 export const LIGHT_VEHICLE_TYPES = ['kdow', 'mtw'];
+export const MEDIUM_VEHICLE_TYPES = ['tsf', 'tsf-w', 'mlf', 'elw-1'];
+
+/** Template type of a vehicle type of the master data: `fire-vehicle-light`, `fire-vehicle-medium` or `fire-vehicle`. */
+export function vehicleTemplateType(vehicleType: string): string {
+  if (LIGHT_VEHICLE_TYPES.includes(vehicleType)) return 'fire-vehicle-light';
+  if (MEDIUM_VEHICLE_TYPES.includes(vehicleType)) return 'fire-vehicle-medium';
+  return 'fire-vehicle';
+}

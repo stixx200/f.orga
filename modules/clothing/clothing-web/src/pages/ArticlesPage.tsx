@@ -1,8 +1,9 @@
 import { Button, Checkbox, Group, NumberInput, Select, SimpleGrid, Stack, Switch, TagsInput, Text, TextInput } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { Article, ArticleInput } from '@forga/clothing-contracts';
-import { send, useLocalized, useTranslation } from '@forga/web-sdk';
-import { DataTable, PageHeader, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { type Article, type ArticleInput, ClothingSettings } from '@forga/clothing-contracts';
+import { api, can, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
+import { DataTable, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, useArticles } from '../api';
 
 type Form = Required<ArticleInput>;
@@ -83,11 +84,37 @@ function ArticleDialog({ article, onClose }: { article?: Article; onClose: () =>
   );
 }
 
-/** Administration: articles of the clothing store, with an optional template. */
+const SETTINGS_KEY = ['core', 'settings', 'clothing.settings'];
+
+/** Settings of the clothing store (section `clothing.settings`), for those managing them. */
+function SettingsPanel() {
+  const { t } = useTranslation('clothing');
+  const { t: common } = useTranslation('common');
+  const { data } = useQuery({ queryKey: SETTINGS_KEY, queryFn: async () => ClothingSettings.parse((await api<ClothingSettings | null>('core/settings/clothing.settings')) ?? {}) });
+  const [form, setForm] = useState<ClothingSettings | null>(null);
+  const value = form ?? data ?? ClothingSettings.parse({});
+  const save = useAction(() => send('PUT', 'core/settings/clothing.settings', value), { success: t('articles.settingsSaved'), invalidate: [SETTINGS_KEY], onSuccess: () => setForm(null) });
+  return (
+    <Panel title={t('articles.settings')} aside={<Button size="xs" disabled={!form} loading={save.isPending} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>}>
+      <NumberInput
+        maw={360}
+        label={t('articles.laundryReminderDays')}
+        description={t('articles.laundryReminderHint')}
+        value={value.laundryReminderDays}
+        onChange={(v) => setForm({ ...value, laundryReminderDays: Number(v) || 0 })}
+        min={0}
+        max={365}
+      />
+    </Panel>
+  );
+}
+
+/** Administration: articles of the clothing store, with an optional template, and the settings. */
 export function ArticlesPage() {
   const { t } = useTranslation('clothing');
   const localized = useLocalized();
   const { data: articles = [], isLoading } = useArticles();
+  const session = useSession().data;
   const [editing, setEditing] = useState<Article | 'new' | null>(null);
   const template = useAction(() => send<{ added: number }>('POST', 'clothing/articles/template'), { invalidate: [keys.all], success: t('articles.templateApplied') });
   return (
@@ -116,6 +143,7 @@ export function ArticlesPage() {
           { key: 'inspection', header: t('articles.inspectionMonths'), align: 'right', render: (a) => a.inspectionMonths ?? '' },
         ]}
       />
+      {can(session, 'clothing.settings.manage') && <SettingsPanel />}
       {editing && <ArticleDialog article={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
     </Stack>
   );

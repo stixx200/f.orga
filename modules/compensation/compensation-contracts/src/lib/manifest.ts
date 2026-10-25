@@ -28,9 +28,15 @@ export const COMPENSATION_MANIFEST = {
     { key: 'group-leader', permissions: [SELF] },
     { key: 'course-coordinator', permissions: [SELF] },
     { key: 'equipment-officer', permissions: [SELF] },
+    { key: 'clothing-officer', permissions: [SELF] },
     { key: 'commander', permissions: ['compensation.read', 'compensation.runs.read', 'compensation.approve', SELF] },
     { key: 'department-commander', permissions: ['compensation.read', SELF] },
-    { key: 'administration', permissions: ['compensation.*'], permissionsAllDepartments: ['compensation.read'] },
+    // Without `compensation.approve`: the factual approval is a control by someone other than who prepares the run.
+    {
+      key: 'administration',
+      permissions: ['compensation.read', 'compensation.runs', 'compensation.runs.read', 'compensation.items.manual', 'compensation.settings.manage', SELF],
+      permissionsAllDepartments: ['compensation.read'],
+    },
   ],
   frontend: { remote: 'compensation_web', exposed: './Module' },
 } satisfies ModuleManifest;

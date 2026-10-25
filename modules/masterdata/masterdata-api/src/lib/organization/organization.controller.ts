@@ -1,6 +1,6 @@
 import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { type AuthenticatedUser, CurrentUser, RequirePermissions, SettingsService, ZodPipe } from '@forga/core-api';
+import { Audit, type AuthenticatedUser, CurrentUser, RequirePermissions, SettingsService, ZodPipe } from '@forga/core-api';
 import {
   type Department as DepartmentDto,
   DepartmentInput,
@@ -17,6 +17,8 @@ import { OrganizationReferenceRegistry } from './references.js';
 import { requireBrigade, requireDepartment } from '../shared/access.js';
 
 const MANAGE = 'masterdata.organization.manage';
+/** Moving a department changes which departments the department-scoped roles of the parents reach (sub-departments inherit). */
+const ROLES_MANAGE = 'core.roles.manage';
 const sorted = (values: readonly string[]) => JSON.stringify([...values].toSorted());
 
 type ParsedDepartment = ReturnType<typeof DepartmentInput.parse>;
@@ -82,6 +84,7 @@ export class OrganizationController {
     private readonly catalogs: CatalogService,
     private readonly references: OrganizationReferenceRegistry,
     private readonly settings: SettingsService,
+    private readonly audit: Audit,
   ) {}
 
   @Get('departments')
@@ -137,8 +140,14 @@ export class OrganizationController {
       if (changed.length) throw new ForbiddenException({ code: 'masterdata.departmentFieldsBrigadeOnly', fields: changed, permissions: [MANAGE] });
       fields = { ...input, ...stored };
     }
+    // Sub-departments inherit the department-scoped roles of their parents: another parent widens or narrows them,
+    // also for rights the user does not hold. So it needs the right to manage roles as well and is logged.
+    const previousParent = department.parent?.id ?? null;
+    const moved = fields.parentId !== previousParent;
+    if (moved && !user.can(ROLES_MANAGE)) throw new ForbiddenException({ code: 'masterdata.departmentMoveNeedsRoles', permissions: [MANAGE, ROLES_MANAGE] });
     em.assign(department, await this.departmentFields(em, fields, id));
     await em.flush();
+    if (moved) await this.audit.log('masterdata.department-moved', { departmentId: id, name: department.name, from: previousParent, to: fields.parentId });
     return toDepartmentDto(department);
   }
 
@@ -287,6 +296,7 @@ export class OrganizationController {
   private async departmentFields(em: EntityManager, input: ParsedDepartment, ownId: string | null) {
     const { parentId, commanderId, deputyIds, ...rest } = input;
     if (parentId && parentId === ownId) throw new BadRequestException({ code: 'masterdata.departmentOwnParent' });
+    if (parentId && ownId) await this.assertNoCycle(em, ownId, parentId);
     // Short names appear wherever space is short (lists, badges), so they must tell the departments apart.
     const sameShortName = await em.findOne(Department, { shortName: { $ilike: input.shortName }, ...(ownId ? { id: { $ne: ownId } } : {}) });
     const own = ownId ? await em.findOne(Department, ownId) : null;
@@ -305,6 +315,16 @@ export class OrganizationController {
       parent: parentId ? await this.department(em, parentId) : null,
       commander: commanderId ? em.getReference(Person, commanderId) : null,
     };
+  }
+
+  /** Refuses a parent that lies below the department (directly or further down), which would form a cycle. */
+  private async assertNoCycle(em: EntityManager, ownId: string, parentId: string): Promise<void> {
+    const parents = new Map((await em.find(Department, {}, { fields: ['id', 'parent'] })).map((d) => [d.id, d.parent?.id ?? null]));
+    const seen = new Set<string>();
+    for (let current: string | null = parentId; current; current = parents.get(current) ?? null) {
+      if (current === ownId || seen.has(current)) throw new BadRequestException({ code: 'masterdata.departmentCycle' });
+      seen.add(current);
+    }
   }
 
   /** Seats and statistics category default to the values of the vehicle type. */

@@ -1,6 +1,6 @@
 import { defineEntity, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import type { ItemKind, ItemSource, RunStatus } from '@forga/compensation-contracts';
+import type { ItemKind, ItemSource, ManualPayout, RunStatus } from '@forga/compensation-contracts';
 
 export const RunSchema = defineEntity({
   name: 'RunEntity',
@@ -14,8 +14,12 @@ export const RunSchema = defineEntity({
     status: p.string().$type<RunStatus>().default('draft'),
     closedAt: p.datetime().nullable(),
     closedBy: p.string().nullable(),
+    /** User who closed the run: may not approve it as factually correct. */
+    closedById: p.string().nullable(),
     /** Names of persons without valid IBAN confirmed when closing (left out of the transfer files). */
     withoutIban: p.json<string[]>().defaultRaw("'[]'::jsonb"),
+    /** Payouts of those payees, paid another way and marked as paid one by one. */
+    manualPayouts: p.json<ManualPayout[]>().defaultRaw("'[]'::jsonb"),
     /** Factual approval ("sachlich richtig") by the commander, when the setting asks for it. */
     approvedAt: p.datetime().nullable(),
     approvedBy: p.string().nullable(),

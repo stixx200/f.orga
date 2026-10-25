@@ -1,11 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import { type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, SettingsService, wordsWhere } from '@forga/core-api';
+import { type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, SettingsService, User, wordsWhere } from '@forga/core-api';
 import { type LocalizedText, normalizeRfid, type SearchHit } from '@forga/core-contracts';
 import { EquipmentSettings } from '@forga/equipment-contracts';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
 import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, UsageEntity } from '../equipment.entities.js';
 import { BREATHING_INSPECT, BREATHING_WRITE, INSPECT, ItemsService, READ, REPORT_DEFECTS, WRITE } from '../items/items.service.js';
+
+/** The item of a defect or an inspection in the data access request. */
+const itemReference = (i: EquipmentItemEntity) => ({ id: i.id, inventoryNumber: i.inventoryNumber, name: i.name });
 
 /** Deadlines (inspections, expiry, open defects), search and export of the equipment module. */
 @Injectable()
@@ -58,6 +61,7 @@ export class EquipmentData implements DeadlineProvider {
           departmentIds: [item.departmentId],
           permission: inspect(item.categoryKey),
           group: group(item.categoryKey, item.vehicleId),
+          to: `/equipment/items/${item.id}?tab=inspections`,
         });
       }
       if (item.expiresOn) {
@@ -71,6 +75,7 @@ export class EquipmentData implements DeadlineProvider {
           departmentIds: [item.departmentId],
           permission: write(item.categoryKey),
           group: group(item.categoryKey, item.vehicleId),
+          to: `/equipment/items/${item.id}`,
         });
       }
     }
@@ -79,11 +84,13 @@ export class EquipmentData implements DeadlineProvider {
         id: `defect:${defect.id}`,
         kind: 'equipment-defect',
         title: { de: 'Mangel bearbeiten', en: 'Handle defect' },
-        subject: { type: 'equipment.item', id: defect.item.id, label: `${defect.item.inventoryNumber} ${defect.item.name}: ${defect.description}` },
+        // The label names the reported text; a finding of an inspection without notes only names the item.
+        subject: { type: 'equipment.item', id: defect.item.id, label: [`${defect.item.inventoryNumber} ${defect.item.name}`, defect.description].filter(Boolean).join(': ') },
         dueOn: berlinDate(defect.reportedAt),
         leadDays: 0,
         departmentIds: [defect.item.departmentId],
         permission: write(defect.item.categoryKey),
+        to: `/equipment/items/${defect.item.id}?tab=defects`,
       });
     }
     return deadlines;
@@ -134,6 +141,18 @@ export class EquipmentData implements DeadlineProvider {
       inspections: await plain(InspectionEntity),
       defects: await plain(DefectEntity),
       usage: await plain(UsageEntity),
+    };
+  }
+
+  /** Data access request: defects the person reported (with the accounts linked to the person) and inspections by the person. */
+  async exportPerson(personId: string): Promise<Record<string, unknown>> {
+    const em = this.em.fork();
+    const userIds = (await em.find(User, { personId })).map((u) => u.id);
+    const defects = userIds.length ? await em.find(DefectEntity, { reportedByUserId: { $in: userIds } }, { populate: ['item'], orderBy: { reportedAt: 'asc' } }) : [];
+    const inspections = await em.find(InspectionEntity, { inspectorPersonId: personId }, { populate: ['item'], orderBy: { date: 'asc' } });
+    return {
+      reportedDefects: defects.map((d) => ({ ...wrap(d).toObject(), item: itemReference(d.item) })),
+      inspections: inspections.map((i) => ({ ...wrap(i).toObject(), item: itemReference(i.item) })),
     };
   }
 }

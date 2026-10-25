@@ -145,7 +145,7 @@ export class RespiratoryProtectionLists {
       name: { de: 'Atemschutznachweis', en: 'Breathing apparatus record' },
       description: { de: 'Nachweise einer Person mit Bestätigung durch den Kommandanten (FwDV 7)', en: 'Evidence of a person with confirmation by the commander (FwDV 7)' },
       permission: READ,
-      parameters: [{ key: 'personId', label: { de: 'Person (ID)', en: 'Person (ID)' }, type: 'text', required: true }],
+      parameters: [{ key: 'personId', label: { de: 'Person', en: 'Person' }, type: 'person', required: true }],
       schema: PersonParams,
       signatureColumn: true,
       columns: [col('date', 'Datum', 'Date'), col('kind', 'Art', 'Kind', 1.3), col('details', 'Ort / Tätigkeit', 'Place / activity', 2.5), col('minutes', 'Minuten', 'Minutes', 0.7, 'right')],

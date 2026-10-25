@@ -6,6 +6,7 @@ import {
   CancelInput,
   type Care,
   CareInput,
+  ConsumableCountInput,
   ConsumableIssueInput,
   ConsumableReceiptInput,
   type Inspection,
@@ -176,6 +177,13 @@ export class ClothingController {
   @RequirePermissions(MANAGE)
   receiveConsumable(@Body(new ZodPipe(ConsumableReceiptInput)) input: Parsed<typeof ConsumableReceiptInput>, @CurrentUser() user: AuthenticatedUser): Promise<StockRow[]> {
     return this.clothing.receiveConsumable(user, input);
+  }
+
+  /** Counted in the store: sets the counter of a consumable to the count; returns the new stock. */
+  @Post('consumables/counts')
+  @RequirePermissions(MANAGE)
+  countConsumable(@Body(new ZodPipe(ConsumableCountInput)) input: Parsed<typeof ConsumableCountInput>, @CurrentUser() user: AuthenticatedUser): Promise<StockRow[]> {
+    return this.clothing.countConsumable(user, input);
   }
 
   /** Stock per article and size with the minimum stock. */

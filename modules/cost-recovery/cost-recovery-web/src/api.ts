@@ -5,6 +5,7 @@ import { api, ApiError, apiUrl, useLocalized, withQuery } from '@forga/web-sdk';
 export const READ = 'cost-recovery.read';
 export const WRITE = 'cost-recovery.write';
 export const ISSUE = 'cost-recovery.issue';
+export const REFUND = 'cost-recovery.refund';
 export const SETTINGS = 'cost-recovery.settings.manage';
 
 export const keys = {
@@ -13,7 +14,7 @@ export const keys = {
   settings: ['core', 'settings', 'cost-recovery.general'] as const,
 };
 
-export type ListFilter = { status?: string; year?: number; q?: string; overdue?: 'true' };
+export type ListFilter = { status?: string; year?: number; q?: string; overdue?: 'true'; refund?: 'true' };
 
 export const useCandidates = (filter: { from?: string; to?: string }) => useQuery({ queryKey: [...keys.all, 'candidates', filter], queryFn: () => api<Candidate[]>(withQuery('cost-recovery/candidates', filter)) });
 export const useNotices = (filter: ListFilter) => useQuery({ queryKey: [...keys.all, 'notices', filter], queryFn: () => api<Notice[]>(withQuery('cost-recovery/notices', filter)) });

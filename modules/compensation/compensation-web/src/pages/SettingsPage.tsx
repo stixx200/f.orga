@@ -2,7 +2,7 @@ import { ActionIcon, Button, Group, MultiSelect, NumberInput, Select, SimpleGrid
 import { DateInput } from '@mantine/dates';
 import { IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
-import { CompensationSettings, type CourseAllowance, type FunctionAllowance, type Rounding, SAMPLE_STATUTE, statuteMissing, validIban } from '@forga/compensation-contracts';
+import { CompensationSettings, type CourseAllowance, PaidStatus, type FunctionAllowance, type Rounding, SAMPLE_STATUTE, statuteMissing, validIban } from '@forga/compensation-contracts';
 import { send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, Notice, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { keys, useCompensationSettings, useCourses, useDepartments, useOffices } from '../api';
@@ -82,6 +82,13 @@ function Form({ value }: { value: CompensationSettings }) {
       />
       <Panel title={t('settings.statute')}>
         <SimpleGrid cols={{ base: 1, sm: 3 }}>
+          <MultiSelect
+            label={t('settings.paidStatuses')}
+            description={t('settings.paidStatusesHint')}
+            data={PaidStatus.options.map((v) => ({ value: v, label: t(`settings.statuses.${v}`) }))}
+            value={form.paidStatuses}
+            onChange={(v) => set('paidStatuses', v as CompensationSettings['paidStatuses'])}
+          />
           <NumberInput label={t('settings.minimumHours')} description={t('settings.minimumHoursHint')} value={form.incidentMinimumHours ?? ''} onChange={(v) => set('incidentMinimumHours', optional(v))} min={0} max={24} decimalScale={2} suffix=" h" />
           <NumberInput label={t('settings.refreshmentAfter')} value={form.refreshment.afterHours} onChange={(v) => set('refreshment', { ...form.refreshment, afterHours: Number(v) || 0 })} min={0} decimalScale={1} suffix=" h" />
           <NumberInput label={t('settings.refreshmentAmount')} description={t('settings.refreshmentHint')} value={form.refreshment.amount ?? ''} onChange={(v) => set('refreshment', { ...form.refreshment, amount: optional(v) })} min={0} decimalScale={2} suffix=" €" />

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { SubDepartments } from './authenticated-user.js';
+import type { AuthenticatedUser, SubDepartments } from './authenticated-user.js';
 
 export interface DepartmentNode {
   id: string;
@@ -13,6 +13,8 @@ export interface PersonSummary {
   lastName: string;
   /** Empty when the person has no e-mail address. */
   email: string;
+  /** Departments that decide who may see the person's data (current memberships, or the last ones after leaving). */
+  departmentIds: string[];
 }
 
 /**
@@ -24,6 +26,13 @@ export interface OrganizationProvider {
   persons(ids: readonly string[]): Promise<PersonSummary[]>;
   /** Number of catalog entries, for the setup checklist. */
   catalogEntries(): Promise<number>;
+  /**
+   * Permission needed (in a department of the person, or brigade-wide) to link a user to the person: the linked user
+   * reads and changes the person's own data, including sensitive fields.
+   */
+  linkPermission: string;
+  /** Persons whose name matches the query, as far as the user may see them (pickers, e.g. list parameters). */
+  searchPersons?(user: AuthenticatedUser, query: string, limit: number): Promise<{ id: string; label: string }[]>;
 }
 
 @Injectable()
@@ -83,5 +92,14 @@ export class OrganizationDirectory {
 
   async catalogEntries(): Promise<number | null> {
     return this.provider ? this.provider.catalogEntries() : null;
+  }
+
+  /** Permission needed to link a user to a person; `null` without a provider. */
+  get linkPermission(): string | null {
+    return this.provider?.linkPermission ?? null;
+  }
+
+  async searchPersons(user: AuthenticatedUser, query: string, limit = 20): Promise<{ id: string; label: string }[]> {
+    return this.provider?.searchPersons ? this.provider.searchPersons(user, query, limit) : [];
   }
 }

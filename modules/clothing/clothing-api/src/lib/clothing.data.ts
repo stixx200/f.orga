@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager, type FilterQuery, wrap } from '@mikro-orm/core';
 import { z } from 'zod';
 import { type ListColumn, normalizeRfid, type SearchHit } from '@forga/core-contracts';
-import { type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, type ListDefinition, wordsWhere } from '@forga/core-api';
+import { addBerlinDays, type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, HistoryEntry, type ListDefinition, SettingsService, wordsWhere } from '@forga/core-api';
+import { ClothingSettings } from '@forga/clothing-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, ConsumableReceiptEntity, IssueEntity, SizeProfileEntity } from './clothing.entities.js';
 import { ClothingService, ISSUE, READ, SELF } from './clothing.service.js';
@@ -20,6 +21,7 @@ export class ClothingData implements DeadlineProvider {
   constructor(
     private readonly em: EntityManager,
     private readonly clothing: ClothingService,
+    private readonly settings: SettingsService,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
   ) {}
 
@@ -27,15 +29,33 @@ export class ClothingData implements DeadlineProvider {
     return new Map((await this.em.fork().find(ArticleEntity, {})).map((a) => [a.key, a.name]));
   }
 
+  /**
+   * Impregnation and inspection per piece (30 days ahead); at once a piece still issued although its last inspection
+   * failed (to fetch back and repair); a piece taken back to the laundry and not washed after `laundryReminderDays`.
+   */
   async deadlines(): Promise<DeadlineInput[]> {
     const em = this.em.fork();
     const items = await this.clothing.toDtos(em, await em.find(ClothingItemEntity, { status: { $ne: 'retired' } }));
     const names = await this.names();
+    const { laundryReminderDays } = ClothingSettings.parse((await this.settings.get('clothing.settings')) ?? {});
+    const laundry = items.filter((i) => i.blockedBy.includes('laundry'));
+    const returns = laundry.length && laundryReminderDays
+      ? await em.find(IssueEntity, { itemId: { $in: laundry.map((i) => i.id) }, kind: 'return', laundry: true, cancelledAt: null })
+      : [];
     const deadlines: DeadlineInput[] = [];
     for (const item of items) {
       const name = names.get(item.articleKey) ?? { de: item.articleKey, en: item.articleKey };
       const subject = { type: 'clothing.item', id: item.id, label: `${item.inventoryNumber} ${name.de}` };
       const group = { de: name.de, en: name.en || name.de };
+      const to = `/clothing/items/${item.id}`;
+      if (item.status === 'issued' && item.blockedBy.includes('inspection') && item.lastInspectedOn) {
+        deadlines.push({ id: `defective:${item.id}`, kind: 'clothing-defective', title: { de: 'Stück zurückholen und reparieren lassen', en: 'Fetch back the piece and have it repaired' }, subject, dueOn: item.lastInspectedOn, leadDays: 0, departmentIds: [item.departmentId], permission: ISSUE, group, to });
+      }
+      const returnedOn = returns.filter((r) => r.itemId === item.id).map((r) => r.date).toSorted().at(-1);
+      if (returnedOn) {
+        const dueOn = berlinDate(addBerlinDays(new Date(`${returnedOn}T12:00:00Z`), laundryReminderDays));
+        deadlines.push({ id: `laundry:${item.id}`, kind: 'clothing-laundry', title: { de: 'Zur Wäsche: Wäsche erfassen', en: 'To the laundry: record the washing' }, subject, dueOn, leadDays: 0, departmentIds: [item.departmentId], permission: ISSUE, group, to });
+      }
       if (item.impregnationDueOn) {
         deadlines.push({ id: `impregnation:${item.id}`, kind: 'clothing-impregnation', title: { de: 'Waschen und imprägnieren', en: 'Wash and impregnate' }, subject, dueOn: item.impregnationDueOn, leadDays: 30, departmentIds: [item.departmentId], permission: ISSUE, group });
       }
@@ -96,6 +116,32 @@ export class ClothingData implements DeadlineProvider {
       sizeProfiles: await plain(SizeProfileEntity),
       consumableReceipts: await plain(ConsumableReceiptEntity),
     };
+  }
+
+  /** Data access request: what was issued to and returned by the person, pieces held now, and the size profile. */
+  async exportPerson(personId: string): Promise<Record<string, unknown>> {
+    const em = this.em.fork();
+    return {
+      issues: (await em.find(IssueEntity, { personId }, { orderBy: { date: 'asc', recordedAt: 'asc' } })).map((e) => wrap(e).toObject()),
+      heldItems: (await em.find(ClothingItemEntity, { holderId: personId }, { orderBy: { inventoryNumber: 'asc' } })).map((e) => wrap(e).toObject()),
+      sizeProfile: (await em.findOne(SizeProfileEntity, { personId }))?.sizes ?? null,
+    };
+  }
+
+  /** Anonymised persons: the size profile is deleted, notes and cancel reasons of their issues are emptied. */
+  async anonymize(personIds: readonly string[]): Promise<void> {
+    const em = this.em.fork();
+    const ids = [...personIds];
+    const profiles = await em.find(SizeProfileEntity, { personId: { $in: ids } });
+    if (profiles.length) {
+      await em.nativeDelete(HistoryEntry, { entity: 'clothing.size_profile', entityId: { $in: profiles.map((p) => p.id) } });
+      await em.nativeDelete(SizeProfileEntity, { personId: { $in: ids } });
+    }
+    const issues = await em.find(IssueEntity, { personId: { $in: ids } });
+    if (issues.length) {
+      await em.nativeDelete(HistoryEntry, { entity: 'clothing.issue', entityId: { $in: issues.map((i) => i.id) } });
+      await em.nativeUpdate(IssueEntity, { personId: { $in: ids } }, { notes: '', cancelReason: '' });
+    }
   }
 
   lists(): ListDefinition<never>[] {

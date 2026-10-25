@@ -9,6 +9,7 @@ import {
   type Care,
   CareInput,
   CancelInput,
+  ConsumableCountInput,
   ConsumableIssueInput,
   ConsumableReceiptInput,
   dueDates,
@@ -119,6 +120,17 @@ export class ClothingService {
   /** The size must be one of the article's sizes (when it has any). */
   private assertSize(article: ArticleEntity, size: string): void {
     if (size && article.sizes.length && !article.sizes.includes(size)) throw new BadRequestException({ code: 'clothing.unknownSize', size });
+  }
+
+  /** Consumables of an article with sizes are counted per size: handing out, receiving and counting need one. */
+  private assertConsumableSize(article: ArticleEntity, size: string): void {
+    if (article.sizes.length && !size) throw new BadRequestException({ code: 'clothing.sizeRequired', articleKey: article.key });
+    this.assertSize(article, size);
+  }
+
+  /** Washing and inspections of a piece are recorded after its purchase. */
+  private notBeforePurchase(item: ClothingItemEntity, date: string): void {
+    if (item.purchasedOn && date < item.purchasedOn) throw new BadRequestException({ code: 'clothing.dateBeforePurchase', number: item.inventoryNumber, purchasedOn: item.purchasedOn });
   }
 
   // ----- articles -----
@@ -361,7 +373,7 @@ export class ClothingService {
     return (await this.returnMany(user, { date: input.date, notes: input.notes, items: [{ itemId: id, retire: input.retire, laundry: input.laundry }] }))[0];
   }
 
-  /** Takes several pieces back in one step (all or none), e.g. everything a person holds. */
+  /** Takes several pieces back in one step (all or none), e.g. everything a person holds; retiring needs `clothing.manage`. */
   async returnMany(user: AuthenticatedUser, input: Parsed<typeof ReturnManyInput>): Promise<Item[]> {
     const em = this.em.fork();
     this.notFuture(input.date);
@@ -373,6 +385,8 @@ export class ClothingService {
       if (item.status !== 'issued' || !item.holderId) throw new BadRequestException({ code: 'clothing.notIssued', number: item.inventoryNumber });
       if (item.issuedOn && input.date < item.issuedOn) throw new BadRequestException({ code: 'clothing.returnBeforeIssue', number: item.inventoryNumber });
       if (entry.laundry && !entry.retire && !textile.has(item.articleKey)) throw new BadRequestException({ code: 'clothing.notTextile', number: item.inventoryNumber });
+      // Taking a piece out of use is managing the stock, as with `retireItem`.
+      if (entry.retire) this.require(user, MANAGE, item.departmentId);
     }
     const recordedAt = new Date();
     for (const [index, item] of items.entries()) {
@@ -403,9 +417,14 @@ export class ClothingService {
     const article = await this.article(em, input.articleKey);
     if (article.kind !== 'consumable') throw new BadRequestException({ code: 'clothing.inventoried' });
     if (!article.active) throw new BadRequestException({ code: 'clothing.articleInactive' });
-    this.assertSize(article, input.size);
+    this.assertConsumableSize(article, input.size);
     this.notFuture(input.date);
     const person = await this.recipient(user, input.personId);
+    // Only a store that keeps a counter for the article (any receipt) warns; handing out stays possible when confirmed.
+    if (!input.acceptLowStock && (await em.count(ConsumableReceiptEntity, { articleKey: article.key }))) {
+      const available = await this.counter(em, article.key, input.size);
+      if (available < input.quantity) throw new ConflictException({ code: 'clothing.stockInsufficient', available });
+    }
     const record = em.create(IssueEntity, {
       personId: person.id, kind: 'issue', articleKey: article.key, itemId: null, inventoryNumber: null, size: input.size,
       quantity: input.quantity, date: input.date, notes: input.notes, recordedBy: user.displayName, recordedById: user.id, recordedAt: new Date(),
@@ -414,15 +433,39 @@ export class ClothingService {
     return toIssueDto(record);
   }
 
-  /** Consumables received into the store (or corrected after counting); the stock is kept for the whole brigade. */
-  async receiveConsumable(user: AuthenticatedUser, input: Parsed<typeof ConsumableReceiptInput>): Promise<StockRow[]> {
+  /** Counter of a consumable in one size: received (and corrected) minus handed out, for the whole brigade. */
+  private async counter(em: EntityManager, articleKey: string, size: string): Promise<number> {
+    const [receipts, handedOut] = await Promise.all([
+      em.find(ConsumableReceiptEntity, { articleKey, size }),
+      em.find(IssueEntity, { kind: 'issue', itemId: null, cancelledAt: null, articleKey, size }),
+    ]);
+    return receipts.reduce((sum, r) => sum + r.quantity, 0) - handedOut.reduce((sum, r) => sum + r.quantity, 0);
+  }
+
+  private async consumable(user: AuthenticatedUser, em: EntityManager, input: { articleKey: string; size: string; date: string }): Promise<ArticleEntity> {
     if (!user.can(MANAGE)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [MANAGE] });
-    const em = this.em.fork();
     const article = await this.article(em, input.articleKey);
     if (article.kind !== 'consumable') throw new BadRequestException({ code: 'clothing.inventoried' });
-    this.assertSize(article, input.size);
+    this.assertConsumableSize(article, input.size);
     this.notFuture(input.date);
-    em.create(ConsumableReceiptEntity, { ...input, recordedBy: user.displayName, recordedAt: new Date() });
+    return article;
+  }
+
+  /** Consumables received into the store; the stock is kept for the whole brigade. */
+  async receiveConsumable(user: AuthenticatedUser, input: Parsed<typeof ConsumableReceiptInput>): Promise<StockRow[]> {
+    const em = this.em.fork();
+    await this.consumable(user, em, input);
+    em.create(ConsumableReceiptEntity, { ...input, counted: null, recordedBy: user.displayName, recordedAt: new Date() });
+    await em.flush();
+    return this.stock(user, {});
+  }
+
+  /** Counting in the store sets the counter to the count; the difference is recorded with the count. */
+  async countConsumable(user: AuthenticatedUser, input: Parsed<typeof ConsumableCountInput>): Promise<StockRow[]> {
+    const em = this.em.fork();
+    await this.consumable(user, em, input);
+    const quantity = input.counted - (await this.counter(em, input.articleKey, input.size));
+    em.create(ConsumableReceiptEntity, { articleKey: input.articleKey, size: input.size, quantity, counted: input.counted, date: input.date, notes: input.notes, recordedBy: user.displayName, recordedAt: new Date() });
     await em.flush();
     return this.stock(user, {});
   }
@@ -480,6 +523,7 @@ export class ClothingService {
       this.require(user, ISSUE, item.departmentId);
       if (!textile.has(item.articleKey)) throw new BadRequestException({ code: 'clothing.notTextile', number: item.inventoryNumber });
       if (item.status === 'retired') throw new BadRequestException({ code: 'clothing.retired', number: item.inventoryNumber });
+      this.notBeforePurchase(item, input.date);
     }
     const created = items.map((item) => em.create(CareEntity, { item, kind: input.kind, date: input.date, place: input.place, notes: input.notes, recordedBy: user.displayName, recordedById: user.id }));
     await em.flush();
@@ -499,7 +543,10 @@ export class ClothingService {
     const em = this.em.fork();
     const results = [...new Map(input.results.map((r) => [r.itemId, r])).values()];
     const items = await Promise.all(results.map((r) => this.load(em, user, r.itemId, ISSUE)));
-    for (const item of items) if (item.status === 'retired') throw new BadRequestException({ code: 'clothing.retired', number: item.inventoryNumber });
+    for (const item of items) {
+      if (item.status === 'retired') throw new BadRequestException({ code: 'clothing.retired', number: item.inventoryNumber });
+      this.notBeforePurchase(item, input.date);
+    }
     const created = items.map((item, index) =>
       em.create(ClothingInspectionEntity, { item, date: input.date, passed: results[index].passed, inspector: input.inspector, notes: results[index].notes, recordedBy: user.displayName, recordedById: user.id }),
     );
@@ -563,7 +610,8 @@ export class ClothingService {
         Object.assign(item, { status: 'stock', holderId: null, issuedOn: null });
       } else {
         if (!(item.status === 'stock' || (item.status === 'retired' && record.retire))) throw new ConflictException({ code: 'clothing.notLastEntry' });
-        if ((await this.person(record.personId)).status === 'left') throw new BadRequestException({ code: 'clothing.personLeft' });
+        // The piece goes back to the person: only to whom it could be issued now (not left, not in the veterans).
+        await this.recipient(user, record.personId);
         const issuedOn = records.findLast((r) => r.kind === 'issue')?.date ?? record.date;
         Object.assign(item, { status: 'issued', holderId: record.personId, issuedOn });
       }
@@ -589,14 +637,21 @@ export class ClothingService {
     return { items: await this.toDtos(em, items), history: history.map(toIssueDto), sizes: profile?.sizes ?? {} };
   }
 
-  /** Clothing sizes of a person by article key; empty sizes are removed. */
+  /**
+   * Clothing sizes of a person by article key; empty sizes and unknown articles are removed. A size must be one of the
+   * article's sizes, unless it is the one stored before (recorded before the article's sizes were set).
+   */
   async setSizes(user: AuthenticatedUser, personId: string, input: Parsed<typeof SizeProfileInput>): Promise<PersonClothing> {
     const person = await this.person(personId);
     if (!this.canForPerson(user, ISSUE, person)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [ISSUE] });
     const em = this.em.fork();
-    const articles = new Set((await em.find(ArticleEntity, {})).map((a) => a.key));
-    const sizes = Object.fromEntries(Object.entries(input.sizes).filter(([key, size]) => size && articles.has(key)));
+    const articles = new Map((await em.find(ArticleEntity, {})).map((a) => [a.key, a]));
     const profile = await em.findOne(SizeProfileEntity, { personId });
+    const sizes = Object.fromEntries(Object.entries(input.sizes).filter(([key, size]) => size && articles.has(key)));
+    for (const [key, size] of Object.entries(sizes)) {
+      const article = articles.get(key)!;
+      if (article.sizes.length && !article.sizes.includes(size) && profile?.sizes[key] !== size) throw new BadRequestException({ code: 'clothing.unknownSize', articleKey: key, size });
+    }
     if (profile) profile.sizes = sizes;
     else em.create(SizeProfileEntity, { personId, sizes });
     await em.flush();

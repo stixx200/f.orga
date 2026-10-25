@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { berlinDayEnd, wordsWhere } from '@forga/core-api';
+import { berlinDayEnd, HistoryEntry, wordsWhere } from '@forga/core-api';
 import { EntityManager, wrap } from '@mikro-orm/core';
 import type { AuthenticatedUser, DeadlineInput, DeadlineProvider } from '@forga/core-api';
 import type { SearchHit } from '@forga/core-contracts';
@@ -42,6 +42,15 @@ export class TrainingData implements DeadlineProvider {
   async exportPerson(personId: string): Promise<Record<string, unknown>> {
     const rows = await this.em.fork().find(AttendanceEntity, { personId }, { populate: ['session'] });
     return { attendance: rows.map((a) => ({ ...wrap(a).toObject(), session: { id: a.session.id, title: a.session.title, startsAt: a.session.startsAt } })) };
+  }
+
+  /** Anonymised persons: excuse texts of their attendances are emptied, and so is the history holding them. */
+  async anonymize(personIds: readonly string[]): Promise<void> {
+    const em = this.em.fork();
+    const attendances = await em.find(AttendanceEntity, { personId: { $in: [...personIds] } });
+    if (!attendances.length) return;
+    await em.nativeUpdate(AttendanceEntity, { personId: { $in: [...personIds] } }, { note: '' });
+    await em.nativeDelete(HistoryEntry, { entity: 'training.attendance', entityId: { $in: attendances.map((a) => a.id) } });
   }
 
   /** Past sessions without attendance (for those who record it) and held sessions not closed after 14 days. */

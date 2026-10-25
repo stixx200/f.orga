@@ -34,7 +34,9 @@ import { ZodPipe } from '../zod.pipe.js';
 import { AuthService, ORIGINAL_SESSION_COOKIE, SESSION_COOKIE, sessionCookieOptions } from './auth.service.js';
 import type { AuthenticatedUser } from './authenticated-user.js';
 import { CurrentUser, Public, RequirePermissions } from './decorators.js';
+import { assertEmailFree, sameEmail } from './emails.js';
 import { hashPassword, hashSecret, verifyPassword } from './password.js';
+import { PasswordResetService } from './password-reset.js';
 import { RoleTemplates } from './role-templates.js';
 import { Role, RoleAssignment, Session, User } from './security.entities.js';
 
@@ -46,6 +48,7 @@ export class AuthController {
     private readonly settings: SettingsService,
     private readonly audit: Audit,
     private readonly roleTemplates: RoleTemplates,
+    private readonly resets: PasswordResetService,
     @Inject(FORGA_CORE_OPTIONS) private readonly options: ForgaCoreOptions,
   ) {}
 
@@ -83,7 +86,7 @@ export class AuthController {
     const user = await em.transactional(async (tx) => {
       await tx.getConnection().execute('select pg_advisory_xact_lock(4711)', [], 'all', tx.getTransactionContext());
       if (await tx.count(User, { technical: false })) throw new ConflictException({ code: 'setup.done' });
-      await this.roleTemplates.createMissing(tx, input.language);
+      await this.roleTemplates.createMissing(tx);
       const role = await tx.findOneOrFail(Role, { templateKey: 'administrator' });
       const created = tx.create(User, { username: input.username, displayName: input.displayName, email: input.email, passwordHash, language: input.language });
       tx.create(RoleAssignment, { user: created, role, departmentId: null });
@@ -100,8 +103,8 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(200)
-  async login(@Body(new ZodPipe(Login)) input: Login, @Res({ passthrough: true }) res: Response) {
-    const result = await this.auth.login(input.username, input.password);
+  async login(@Body(new ZodPipe(Login)) input: Login, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const result = await this.auth.login(input.username, input.password, req.ip ?? '');
     if (result === 'locked') throw new HttpException({ code: 'auth.locked' }, HttpStatus.TOO_MANY_REQUESTS);
     if (!result) throw new UnauthorizedException({ code: 'auth.invalidCredentials' });
     this.setCookie(res, result.token);
@@ -131,7 +134,9 @@ export class AuthController {
         personId: user.personId,
         language: user.language,
         email: stored.email ?? null,
+        pendingEmail: await this.resets.pendingEmail(user.id),
         receiveDigest: stored.receiveDigest,
+        hiddenTasks: stored.hiddenTasks ?? [],
       },
       permissions: Object.fromEntries(user.grants),
       impersonator: user.impersonator && { id: user.impersonator.id, displayName: user.impersonator.displayName, endsAt: user.impersonator.endsAt.toISOString() },
@@ -169,20 +174,35 @@ export class AuthController {
     return { ok: true };
   }
 
+  /**
+   * Language, weekly e-mail and hidden tasks take effect at once. Changing or removing the e-mail address needs the
+   * current password (the address receives password reset links); a new address takes effect only once it is confirmed
+   * with the link sent to it. Returns whether such a confirmation is pending.
+   */
   @Put('profile')
   async updateProfile(@Body(new ZodPipe(UpdateProfile)) input: ReturnType<typeof UpdateProfile.parse>, @CurrentUser() current: AuthenticatedUser) {
     const em = this.em.fork();
-    const user = await em.findOneOrFail(User, current.id);
-    user.language = input.language;
-    user.receiveDigest = input.receiveDigest;
-    if (input.email !== undefined && input.email !== user.email) {
+    const user = await em.findOneOrFail(User, current.id, { populate: ['passwordHash'] });
+    const emailChange = input.email !== undefined && !sameEmail(input.email, user.email) ? input.email : undefined;
+    if (emailChange !== undefined) {
       // During an impersonation the address (and with it password resets) stays the user's own business.
       if (current.impersonator) throw new ForbiddenException({ code: 'auth.impersonationNotAllowed' });
-      user.email = input.email;
-      await this.audit.log('auth.email-changed', {});
+      if (!input.currentPassword || !user.passwordHash || !(await verifyPassword(input.currentPassword, user.passwordHash))) {
+        throw new UnauthorizedException({ code: 'auth.passwordRequired' });
+      }
+      if (emailChange) await assertEmailFree(em, emailChange, user.id, 'auth.emailTaken');
+    }
+    user.language = input.language;
+    user.receiveDigest = input.receiveDigest;
+    if (input.hiddenTasks) user.hiddenTasks = [...new Set(input.hiddenTasks)];
+    if (emailChange === null) {
+      user.email = null;
+      await this.resets.invalidateLinks(em, user.id);
+      await this.audit.log('auth.email-changed', { removed: true });
     }
     await em.flush();
-    return { ok: true };
+    if (emailChange) await this.resets.requestEmailChange(user, emailChange);
+    return { ok: true, confirmationSent: Boolean(emailChange) };
   }
 
   /** Changes the own password and ends all other sessions of the user. */
@@ -202,6 +222,8 @@ export class AuthController {
     const own = (req.cookies as Record<string, string> | undefined)?.[SESSION_COOKIE] ?? '';
     await em.nativeDelete(Session, { user, id: { $ne: hashSecret(own) } });
     await em.flush();
+    // Open reset links would set another password behind the user's back.
+    await this.resets.invalidateLinks(em, user.id);
     await this.audit.log('auth.password-changed');
     return { ok: true };
   }

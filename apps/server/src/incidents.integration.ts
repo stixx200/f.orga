@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SAMPLE_STATUTE } from '@forga/compensation-contracts';
 import { DomainEvents, MailService } from '@forga/core-api';
-import { INCIDENTS_EVENTS, INCIDENTS_LOOKUP, type IncidentsLookup, type ReportReleasedEvent } from '@forga/incidents-contracts';
+import { INCIDENTS_EVENTS, INCIDENTS_LOOKUP, type IncidentsLookup, type ReportReleasedEvent, type ReportUnlockedEvent } from '@forga/incidents-contracts';
 import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
 
 let test: TestApp;
@@ -19,6 +19,13 @@ const put = (path: string, body: unknown, cookie = admin) =>
   test.http.put(`/api${path}`).set('Cookie', cookie).set(UI).send(body as object);
 const get = (path: string, cookie = admin) => test.http.get(`/api${path}`).set('Cookie', cookie);
 const del = (path: string, cookie = admin) => test.http.delete(`/api${path}`).set('Cookie', cookie).set(UI);
+/** Saves a report with the version currently stored, as the editor does with the version it loaded. */
+const save = (reportId: string, body: object, cookie = admin) => ({
+  expect: async (status: number) => {
+    const current = await get(`/incidents/reports/${reportId}`, cookie);
+    return put(`/incidents/reports/${reportId}`, { version: current.body?.version ?? 0, ...body }, cookie).expect(status);
+  },
+});
 
 const rules = (report: { findings: { rule: string; level: string; subject: string | null }[] }) =>
   report.findings.map((f) => `${f.level}:${f.rule}`);
@@ -136,7 +143,7 @@ describe('incidents and reports', () => {
   });
 
   it('computes compensation and checks personnel against the other report of the incident', async () => {
-    const musterstadt = await put(`/incidents/reports/${ids.musterstadtReport}`, content(
+    const musterstadt = await save(ids.musterstadtReport, content(
       [
         { personId: ids.jonas, vehicleId: ids.lf, function: 'attack-team', breathingApparatus: true, breathingMinutes: 28 },
         { personId: ids.max, vehicleId: ids.lf, breathingApparatus: true },
@@ -150,9 +157,9 @@ describe('incidents and reports', () => {
     expect(rules(musterstadt.body)).toEqual(['warning:breathing-without-qualification']);
 
     // The group leader of Musterstadt cannot even see the report of Ahornfeld.
-    await put(`/incidents/reports/${ids.ahornfeldReport}`, content([{ personId: ids.lena, standbyStationId: ids.station }]), writer).expect(404);
+    await save(ids.ahornfeldReport, content([{ personId: ids.lena, standbyStationId: ids.station }]), writer).expect(404);
 
-    const ahornfeld = await put(`/incidents/reports/${ids.ahornfeldReport}`, content([
+    const ahornfeld = await save(ids.ahornfeldReport, content([
       { personId: ids.lena, standbyStationId: ids.station },
       { personId: ids.jonas, vehicleId: ids.tsf, from: T('15:00'), to: T('16:30') },
     ])).expect(200);
@@ -160,18 +167,18 @@ describe('incidents and reports', () => {
     // Jonas belongs to Musterstadt and stays beyond the end of the report.
     expect(rules(ahornfeld.body)).toEqual(['warning:personnel-times-outside', 'warning:person-not-member', 'error:personnel-overlap-incident']);
     // Secondary reports carry no statistics.
-    const withStatistics = await put(`/incidents/reports/${ids.ahornfeldReport}`, content([{ personId: ids.lena, standbyStationId: ids.station }], { statistics })).expect(200);
+    const withStatistics = await save(ids.ahornfeldReport, content([{ personId: ids.lena, standbyStationId: ids.station }], { statistics })).expect(200);
     expect(rules(withStatistics.body)).toEqual(['error:statistics-not-allowed']);
-    await put(`/incidents/reports/${ids.ahornfeldReport}`, content([{ personId: ids.lena, standbyStationId: ids.station }])).expect(200);
+    await save(ids.ahornfeldReport, content([{ personId: ids.lena, standbyStationId: ids.station }])).expect(200);
   });
 
   it('computes with the incident rates of the compensation statute', async () => {
     const before = (await get('/core/settings/compensation.general').expect(200)).body ?? {};
     await put('/core/settings/compensation.general', { ...before, incidentRates: [{ kind: 'incident', validFrom: '2026-01-01', amount: 20 }], incidentRounding: 'exact-minutes' }).expect(200);
-    const report = await put(`/incidents/reports/${ids.ahornfeldReport}`, content([{ personId: ids.jonas, vehicleId: ids.tsf, from: T('15:00'), to: T('16:30') }])).expect(200);
+    const report = await save(ids.ahornfeldReport, content([{ personId: ids.jonas, vehicleId: ids.tsf, from: T('15:00'), to: T('16:30') }])).expect(200);
     expect(report.body.personnel[0].compensation).toMatchObject({ hours: 1.5, rate: 20, amount: 30 });
     await put('/core/settings/compensation.general', before).expect(200);
-    await put(`/incidents/reports/${ids.ahornfeldReport}`, content([{ personId: ids.lena, standbyStationId: ids.station }])).expect(200);
+    await save(ids.ahornfeldReport, content([{ personId: ids.lena, standbyStationId: ids.station }])).expect(200);
   });
 
   it('previews an incident with unsaved compensation settings', async () => {
@@ -199,7 +206,7 @@ describe('incidents and reports', () => {
     // Once submitted, the author can neither submit again nor change the report until it is returned.
     const again = await post(`/incidents/reports/${ids.musterstadtReport}/submit`, {}, writer).expect(403);
     expect(again.body.code).toBe('incidents.notDraft');
-    await put(`/incidents/reports/${ids.musterstadtReport}`, content([{ personId: ids.jonas, vehicleId: ids.lf }], { statistics }), writer).expect(403);
+    await save(ids.musterstadtReport, content([{ personId: ids.jonas, vehicleId: ids.lf }], { statistics }), writer).expect(403);
   });
 
   it('returns a report to the author and accepts it again', async () => {
@@ -239,8 +246,16 @@ describe('incidents and reports', () => {
       }),
     ]);
 
-    const locked = await put(`/incidents/reports/${ids.musterstadtReport}`, content([]), writer).expect(403);
-    expect(locked.body.code).toBe('incidents.reportLocked');
+    // A released report is changed by nobody, not even by releasers: they unlock it first, so the receivers learn of it.
+    const locked = await save(ids.musterstadtReport, content([]), writer).expect(403);
+    expect(locked.body.code).toBe('incidents.reportReleased');
+    expect((await save(ids.musterstadtReport, content([])).expect(403)).body.code).toBe('incidents.reportReleased');
+    const revisions = (await get(`/incidents/reports/${ids.musterstadtReport}/revisions`).expect(200)).body as { id: string }[];
+    expect((await post(`/incidents/reports/${ids.musterstadtReport}/revisions/${revisions.at(-1)!.id}/restore`, {}).expect(403)).body.code).toBe('incidents.reportReleased');
+    // Making another report primary would take the statistics away from the released one.
+    expect((await post(`/incidents/reports/${ids.ahornfeldReport}/primary`, {}).expect(403)).body.code).toBe('incidents.reportReleased');
+    expect((await post(`/incidents/reports/${ids.musterstadtReport}/primary`, {}).expect(403)).body.code).toBe('incidents.reportReleased');
+    expect((await post(`/incidents/reports/${ids.musterstadtReport}/author`, { authorPersonId: null }).expect(403)).body.code).toBe('incidents.reportReleased');
     await post(`/incidents/reports/${ids.musterstadtReport}/release`, { level: 'compensation' }).expect(409);
 
     const unlocked = await post(`/incidents/reports/${ids.musterstadtReport}/unlock`, { reason: 'Personal korrigieren' }).expect(200);
@@ -306,7 +321,7 @@ describe('API for external systems', () => {
     expect(second.body).toMatchObject({ created: false, reports: [{ created: false, updated: false }] });
 
     // Once a person edited the report, the API leaves it alone.
-    await put(`/incidents/reports/${first.body.reports[0].id}`, content([])).expect(200);
+    await save(first.body.reports[0].id, content([])).expect(200);
     await test.http.post('/api/incidents/v1/incidents').set(bearer).send(payload).expect(200);
     expect((await get(`/incidents/reports/${first.body.reports[0].id}`)).body.personnel).toEqual([]);
 
@@ -481,7 +496,7 @@ describe('MP-Feuer import', () => {
     expect(again.body.counts).toMatchObject({ create: 0, update: 3, error: 1 });
 
     // Once a person edited a report, the import leaves it alone.
-    await put(`/incidents/reports/${ahornfeld.id}`, content([{ personId: ids.lena, standbyStationId: ids.station }])).expect(200);
+    await save(ahornfeld.id, content([{ personId: ids.lena, standbyStationId: ids.station }])).expect(200);
     const third = await run(false);
     expect(third.body.rows.filter((r: { action: string }) => r.action === 'unchanged')).toHaveLength(2);
   });
@@ -543,9 +558,9 @@ describe('undo and payout check', () => {
   it('keeps revisions of a report and restores an earlier state', async () => {
     const incident = await post('/incidents/incidents', { alarmKeyword: 'TH1', alarmedAt: T('09:00'), departmentIds: [ids.musterstadt] }).expect(201);
     const reportId = incident.body.reports[0].id;
-    await put(`/incidents/reports/${reportId}`, content([{ personId: ids.jonas, vehicleId: ids.lf }], { times: { alarmedAt: T('09:00'), returnedAt: T('10:00') } }), writer).expect(200);
+    await save(reportId, content([{ personId: ids.jonas, vehicleId: ids.lf }], { times: { alarmedAt: T('09:00'), returnedAt: T('10:00') } }), writer).expect(200);
     // Auto-save of the same user within minutes updates the latest revision.
-    await put(`/incidents/reports/${reportId}`, content([{ personId: ids.jonas, vehicleId: ids.lf }, { personId: ids.max, vehicleId: ids.lf }], { times: { alarmedAt: T('09:00'), returnedAt: T('10:00') } }), writer).expect(200);
+    await save(reportId, content([{ personId: ids.jonas, vehicleId: ids.lf }, { personId: ids.max, vehicleId: ids.lf }], { times: { alarmedAt: T('09:00'), returnedAt: T('10:00') } }), writer).expect(200);
 
     const revisions = (await get(`/incidents/reports/${reportId}/revisions`, writer).expect(200)).body as { id: string; personnelCount: number; userName: string }[];
     expect(revisions.map((r) => [r.userName, r.personnelCount])).toEqual([
@@ -565,7 +580,7 @@ describe('undo and payout check', () => {
 
     // Before the first rate is valid (2026-01-01) a member gets nothing: reported as "zero-amount".
     const old = await post('/incidents/incidents', { alarmKeyword: 'B1', alarmedAt: '2025-12-31T10:00:00+01:00', departmentIds: [ids.musterstadt] }).expect(201);
-    await put(`/incidents/reports/${old.body.reports[0].id}`, content([{ personId: ids.max, vehicleId: ids.lf }], {
+    await save(old.body.reports[0].id, content([{ personId: ids.max, vehicleId: ids.lf }], {
       times: { alarmedAt: '2025-12-31T10:00:00+01:00', returnedAt: '2025-12-31T11:00:00+01:00' },
       statistics,
     })).expect(200);
@@ -580,7 +595,7 @@ describe('undo and payout check', () => {
     await put('/core/settings/incidents.general', { homeMunicipalities: ['Musterstadt'], compensationRelease: false }).expect(200);
     const incident = await post('/incidents/incidents', { alarmKeyword: 'B1', alarmedAt: T('22:00'), departmentIds: [ids.musterstadt] }).expect(201);
     const reportId = incident.body.reports[0].id;
-    await put(`/incidents/reports/${reportId}`, content([{ personId: ids.max, vehicleId: ids.lf }], { times: { alarmedAt: T('22:00'), returnedAt: T('23:00') }, statistics })).expect(200);
+    await save(reportId, content([{ personId: ids.max, vehicleId: ids.lf }], { times: { alarmedAt: T('22:00'), returnedAt: T('23:00') }, statistics })).expect(200);
     const refused = await post(`/incidents/reports/${reportId}/release`, { level: 'compensation' }).expect(400);
     expect(refused.body.code).toBe('incidents.compensationReleaseDisabled');
     // A draft is submitted before it is released.
@@ -656,10 +671,10 @@ describe('review fixes', () => {
     const moved = await put(`/incidents/incidents/${incident.id}`, { dispatchNumber: '2026-900003', alarmKeyword: 'B1', alarmedAt: day('09:45'), version: incident.version }).expect(200);
     // The unconfirmed default end moves along.
     expect((await get(`/incidents/reports/${reportId}`).expect(200)).body.times).toMatchObject({ alarmedAt: '2026-09-15T07:45:00.000Z', returnedAt: '2026-09-15T08:45:00.000Z' });
-    const saved = (await put(`/incidents/reports/${reportId}`, ready()).expect(200)).body;
+    const saved = (await save(reportId, ready()).expect(200)).body;
     // A primary report starting later than the incident is flagged.
     expect(rules(saved)).toEqual(['warning:incident-time-differs']);
-    await put(`/incidents/reports/${reportId}`, ready({ times: { alarmedAt: day('09:45'), returnedAt: day('11:30') } })).expect(200);
+    await save(reportId, ready({ times: { alarmedAt: day('09:45'), returnedAt: day('11:30') } })).expect(200);
     await post(`/incidents/reports/${reportId}/submit`, {}).expect(200);
     await post(`/incidents/reports/${reportId}/release`, { level: 'compensation' }).expect(200);
     const refused = await put(`/incidents/incidents/${incident.id}`, { dispatchNumber: '2026-900003', alarmKeyword: 'B2', alarmedAt: day('09:45'), version: moved.body.version }).expect(409);
@@ -669,7 +684,7 @@ describe('review fixes', () => {
   it('releases only submitted reports and unlocks drafts only back to draft', async () => {
     const incident = await draft('2026-900004', [ids.musterstadt]);
     const reportId = incident.reports[0].id;
-    await put(`/incidents/reports/${reportId}`, ready()).expect(200);
+    await save(reportId, ready()).expect(200);
     expect((await post(`/incidents/reports/${reportId}/release`, { level: 'compensation' }).expect(409)).body.code).toBe('incidents.invalidTransition');
     // Saved by the releaser, the draft is locked; unlocking it never skips the submit.
     expect((await post(`/incidents/reports/${reportId}/unlock`, { reason: 'x', toStatus: 'review' }).expect(409)).body.code).toBe('incidents.invalidTransition');
@@ -679,7 +694,7 @@ describe('review fixes', () => {
   it('releases several reports at once and reminds of the release for billing', async () => {
     const incident = await draft('2026-900005', [ids.musterstadt, ids.ahornfeld]);
     const [musterstadt, ahornfeld] = incident.reports;
-    await put(`/incidents/reports/${musterstadt.id}`, ready()).expect(200);
+    await save(musterstadt.id, ready()).expect(200);
     // Max is in the other incidents of the day as well.
     await post(`/incidents/reports/${musterstadt.id}/submit`, { acknowledgements: [{ rule: 'personnel-overlap-other', subject: ids.max, reason: 'Übung' }] }).expect(200);
     const result = await post('/incidents/reports/release', { reportIds: [musterstadt.id, ahornfeld.id], level: 'compensation' }).expect(200);
@@ -718,7 +733,7 @@ describe('review fixes', () => {
     expect((await get('/core/search?q=Lindenweg Musterstadt').expect(200)).body.length).toBeGreaterThan(0);
     const without = (await get('/incidents/incidents?from=2026-09-15&to=2026-09-15&withoutStatistics=true').expect(200)).body as { id: string }[];
     expect(without.map((i) => i.id)).toContain(incident.id);
-    await put(`/incidents/reports/${incident.reports[0].id}`, ready()).expect(200);
+    await save(incident.reports[0].id, ready()).expect(200);
     const after = (await get('/incidents/incidents?from=2026-09-15&to=2026-09-15&withoutStatistics=true').expect(200)).body as { id: string }[];
     expect(after.map((i) => i.id)).not.toContain(incident.id);
   });
@@ -741,7 +756,7 @@ describe('review fixes', () => {
     const incident = await draft('2026-900007', [ids.musterstadt, ids.ahornfeld]);
     const [musterstadt, ahornfeld] = incident.reports;
     await post(`/incidents/reports/${musterstadt.id}/author`, { authorPersonId: tom }).expect(200);
-    await put(`/incidents/reports/${musterstadt.id}`, ready({ authorPersonId: tom, personnel: [{ personId: tom, vehicleId: ids.lf }] }), writer).expect(200);
+    await save(musterstadt.id, ready({ authorPersonId: tom, personnel: [{ personId: tom, vehicleId: ids.lf }] }), writer).expect(200);
     await post(`/incidents/reports/${musterstadt.id}/submit`, {}, writer).expect(200);
     await post(`/incidents/reports/${musterstadt.id}/return`, { comment: 'Please add the commander' }, commander).expect(200);
     const mail = test.app.get(MailService).sent.at(-1)!;
@@ -783,5 +798,150 @@ describe('review fixes', () => {
 
   it('starts without compensation rates; the example rates are a template', async () => {
     expect((await get('/core/settings/incidents.general').expect(200)).body.rates).toEqual([]);
+  });
+});
+
+const aug = (time: string) => `2026-08-10T${time}:00+02:00`;
+/** Ready to submit; every incident of these tests at its own hour, so the crew does not overlap. */
+const augReady = (hour: number, extra: object = {}) =>
+  content([{ personId: ids.max, vehicleId: ids.lf }], { times: { alarmedAt: aug(`${hour}:00`), returnedAt: aug(`${hour}:45`) }, statistics, ...extra });
+const augIncident = async (dispatchNumber: string, hour: number, departmentIds: string[], cookie = admin, extra: object = {}) =>
+  (await post('/incidents/incidents', { dispatchNumber, alarmKeyword: 'B1', alarmedAt: aug(`${hour}:00`), location: { street: 'Mühlweg', city: 'Ahornfeld' }, departmentIds, ...extra }, cookie).expect(201)).body;
+const tasksOf = async (cookie: string, asOf = '2026-08-12') => (await get(`/core/tasks?asOf=${asOf}`, cookie).expect(200)).body as { kind: string; subject: { id: string } }[];
+const auditOf = async () => (await get('/core/audit').expect(200)).body as { action: string; details: Record<string, unknown> }[];
+
+describe('review round 2', () => {
+  it('refuses saving a report without the version the client loaded', async () => {
+    const incident = await augIncident('2026-950000', 10, [ids.musterstadt], writer);
+    await put(`/incidents/reports/${incident.reports[0].id}`, augReady(10), writer).expect(400);
+    await save(incident.reports[0].id, augReady(10), writer).expect(200);
+  });
+
+  it('keeps incident data and returns of submitted reports with the reviewers', async () => {
+    const commander = await test.login({ username: 'ak.musterstadt', password: 'auch-sehr-geheim' });
+    const incident = await augIncident('2026-950001', 11, [ids.musterstadt], writer);
+    const reportId = incident.reports[0].id as string;
+    await save(reportId, augReady(11), writer).expect(200);
+    await post(`/incidents/reports/${reportId}/submit`, {}, writer).expect(200);
+
+    // Submitted: the writer no longer changes the incident data, the releaser does.
+    const current = (await get(`/incidents/incidents/${incident.id}`).expect(200)).body;
+    const data = { dispatchNumber: '2026-950001', alarmKeyword: 'B1', alarmedAt: aug('11:00'), location: { street: 'Mühlweg 2', city: 'Ahornfeld' }, version: current.version };
+    expect((await put(`/incidents/incidents/${incident.id}`, data, writer).expect(403)).body.code).toBe('incidents.incidentSubmitted');
+    await put(`/incidents/incidents/${incident.id}`, data).expect(200);
+
+    // Pre-reviewers get the review as their task, for their department only; group leaders do not.
+    expect((await tasksOf(commander)).find((t) => t.subject.id === reportId)?.kind).toBe('report-review');
+    expect((await tasksOf(writer)).some((t) => t.subject.id === reportId)).toBe(false);
+    expect((await tasksOf(ahornfeldWriter)).some((t) => t.subject.id === reportId)).toBe(false);
+
+    // Locked by a releaser: only releasers return it; with the permission to unlock the lock is lifted.
+    await save(reportId, augReady(11, { cause: 'Defekt' })).expect(200);
+    expect((await post(`/incidents/reports/${reportId}/return`, { comment: 'x' }, commander).expect(403)).body.code).toBe('incidents.reportLocked');
+    expect((await post(`/incidents/reports/${reportId}/return`, { comment: 'Bitte Ursache prüfen' }).expect(200)).body).toMatchObject({ status: 'draft', locked: false });
+
+    // A releaser without the permission to unlock returns the report, but his lock stays.
+    const role = (await post('/core/roles', { name: 'Freigeber ohne Entsperren', permissions: [], permissionsAllDepartments: ['incidents.reports.read', 'incidents.reports.write', 'incidents.reports.release'] }).expect(201)).body.id;
+    await post('/core/users', { username: 'freigeber', displayName: 'Freigeber Test', password: 'auch-sehr-geheim', roles: [{ roleId: role, departmentId: null }] }).expect(201);
+    const releaser = await test.login({ username: 'freigeber', password: 'auch-sehr-geheim' });
+    await post(`/incidents/reports/${reportId}/submit`, {}, writer).expect(200);
+    await save(reportId, augReady(11, { cause: 'Defekt am Herd' }), releaser).expect(200);
+    expect((await post(`/incidents/reports/${reportId}/return`, { comment: 'Bitte ergänzen' }, releaser).expect(200)).body).toMatchObject({ status: 'draft', locked: true });
+
+    const audit = await auditOf();
+    expect(audit.find((e) => e.action === 'incidents.report-returned')?.details).toMatchObject({ reportId, reportNumber: incident.reports[0].number, comment: 'Bitte ergänzen' });
+  });
+
+  it('stores acknowledgements only with a successful submit', async () => {
+    const incident = await augIncident('2026-950002', 12, [ids.musterstadt], writer);
+    const reportId = incident.reports[0].id as string;
+    // No narrative (error) and Max with breathing apparatus without qualification (warning).
+    await save(reportId, augReady(12, { situation: '', actions: '', personnel: [{ personId: ids.max, vehicleId: ids.lf, breathingApparatus: true }] }), writer).expect(200);
+    const acknowledgements = [{ rule: 'breathing-without-qualification', subject: ids.max, reason: 'Nachweis folgt' }];
+    expect((await post(`/incidents/reports/${reportId}/submit`, { acknowledgements }, writer).expect(400)).body.code).toBe('incidents.findingsOpen');
+    const report = (await get(`/incidents/reports/${reportId}`, writer).expect(200)).body;
+    expect(report.findings.find((f: { rule: string }) => f.rule === 'breathing-without-qualification')).toMatchObject({ acknowledged: false, reason: null });
+    await save(reportId, augReady(12, { personnel: [{ personId: ids.max, vehicleId: ids.lf, breathingApparatus: true }] }), writer).expect(200);
+    const submitted = (await post(`/incidents/reports/${reportId}/submit`, { acknowledgements }, writer).expect(200)).body;
+    expect(submitted.findings.find((f: { rule: string }) => f.rule === 'breathing-without-qualification')).toMatchObject({ acknowledged: true, reason: 'Nachweis folgt' });
+  });
+
+  it('finds existing incidents by number regardless of case and by place regardless of keyword', async () => {
+    const incident = await augIncident('2026-ABC-1', 13, [ids.musterstadt], writer);
+    const at = encodeURIComponent(aug('13:30'));
+    const byNumber = (await get(`/incidents/incidents/matches?dispatchNumber=2026-abc-1&alarmedAt=${at}`, ahornfeldWriter).expect(200)).body as { id: string; sameDispatchNumber: boolean; ownReports: unknown[] }[];
+    expect(byNumber.find((m) => m.id === incident.id)).toMatchObject({ sameDispatchNumber: true, ownReports: [] });
+    // Another keyword, but the same street within two hours.
+    const byPlace = (await get(`/incidents/incidents/matches?alarmKeyword=TH1&street=m%C3%BChlweg&city=Ahornfeld&alarmedAt=${at}`, writer).expect(200)).body as { id: string; ownReports: { reportId: string }[] }[];
+    // The writer of Musterstadt already has a report there: he opens it instead of joining.
+    expect(byPlace.find((m) => m.id === incident.id)?.ownReports).toEqual([{ reportId: incident.reports[0].id, departmentId: ids.musterstadt }]);
+    const elsewhere = (await get(`/incidents/incidents/matches?alarmKeyword=TH1&street=Kirchweg&city=Ahornfeld&alarmedAt=${at}`, writer).expect(200)).body as { id: string }[];
+    expect(elsewhere.map((m) => m.id)).not.toContain(incident.id);
+    // Taken numbers are recognized regardless of case as well.
+    const other = await augIncident('2026-950003', 13, [ids.musterstadt], writer);
+    const version = (await get(`/incidents/incidents/${other.id}`, writer).expect(200)).body.version;
+    expect((await put(`/incidents/incidents/${other.id}`, { dispatchNumber: '2026-abc-1', alarmKeyword: 'B1', alarmedAt: aug('13:00'), version }, writer).expect(409)).body.code).toBe('incidents.dispatchNumberTaken');
+  });
+
+  it('makes the creator author of his own department only and offers only authors who can write', async () => {
+    const erik = (await post('/masterdata/persons', { firstName: 'Erik', lastName: 'Test', status: 'active', memberships: [{ departmentId: ids.musterstadt, from: '2020-01-01', primary: true }] }).expect(201)).body.id;
+    const role = (await post('/core/roles', { name: 'GF beide Test', permissions: ['incidents.reports.read', 'incidents.reports.write'] }).expect(201)).body.id;
+    await post('/core/users', { username: 'erik', displayName: 'Erik Test', password: 'auch-sehr-geheim', personId: erik, roles: [{ roleId: role, departmentId: ids.musterstadt }, { roleId: role, departmentId: ids.ahornfeld }] }).expect(201);
+    const cookie = await test.login({ username: 'erik', password: 'auch-sehr-geheim' });
+    const incident = await augIncident('2026-950004', 14, [ids.ahornfeld, ids.musterstadt], cookie);
+    const byDepartment = new Map((incident.reports as { departmentId: string; authorPersonId: string | null; id: string }[]).map((r) => [r.departmentId, r]));
+    expect(byDepartment.get(ids.musterstadt)?.authorPersonId).toBe(erik);
+    expect(byDepartment.get(ids.ahornfeld)?.authorPersonId).toBeNull();
+
+    // Only persons with an account that may write the department's reports are offered as authors.
+    const authors = (await get(`/incidents/authors?departmentId=${ids.musterstadt}`, writer).expect(200)).body as string[];
+    expect(authors).toContain(erik);
+    expect(authors).not.toContain(ids.max);
+    await get(`/incidents/authors?departmentId=${ids.ahornfeld}`, writer).expect(403);
+
+    // An author without an account would never see the report: the writers of the department are asked.
+    const musterstadt = byDepartment.get(ids.musterstadt)!.id;
+    await post(`/incidents/reports/${musterstadt}/author`, { authorPersonId: ids.max }).expect(200);
+    expect((await tasksOf(writer)).find((t) => t.subject.id === musterstadt)?.kind).toBe('report-no-author');
+    // With a proper author the draft is his task; once overdue the writers of the department are asked as well.
+    await post(`/incidents/reports/${musterstadt}/author`, { authorPersonId: erik }).expect(200);
+    expect((await tasksOf(cookie)).find((t) => t.subject.id === musterstadt)?.kind).toBe('report-open');
+    expect((await tasksOf(writer)).some((t) => t.subject.id === musterstadt)).toBe(false);
+    expect((await tasksOf(writer, '2026-10-25')).find((t) => t.subject.id === musterstadt)?.kind).toBe('report-overdue');
+  });
+
+  it('removes statistics and accepts them only for keywords that count', async () => {
+    const incident = await augIncident('2026-950005', 15, [ids.musterstadt]);
+    const reportId = incident.reports[0].id as string;
+    const saved = (await save(reportId, augReady(15)).expect(200)).body;
+    const removed = (await put(`/incidents/reports/${reportId}/statistics`, { statistics: null, version: saved.version }).expect(200)).body;
+    expect(removed.statistics).toBeNull();
+    const watch = await augIncident('2026-950006', 16, [ids.musterstadt], admin, { alarmKeyword: 'BSW' });
+    const report = (await get(`/incidents/reports/${watch.reports[0].id}`).expect(200)).body;
+    const refused = await put(`/incidents/reports/${report.id}/statistics`, { statistics, version: report.version }).expect(400);
+    expect(refused.body.code).toBe('incidents.statisticsNotCounted');
+  });
+
+  it('logs releases with the report number and tells the receivers about deleted reports', async () => {
+    const incident = await augIncident('2026-950007', 17, [ids.musterstadt, ids.ahornfeld]);
+    const [musterstadt, ahornfeld] = incident.reports as { id: string; number: string }[];
+    await save(musterstadt.id, augReady(17)).expect(200);
+    await post(`/incidents/reports/${musterstadt.id}/submit`, {}).expect(200);
+    await post('/incidents/reports/release', { reportIds: [musterstadt.id, ahornfeld.id], level: 'compensation' }).expect(200);
+    const audit = await auditOf();
+    expect(audit.find((e) => e.action === 'incidents.report-released' && e.details['reportId'] === musterstadt.id)?.details).toMatchObject({ reportNumber: musterstadt.number, level: 'compensation' });
+    expect(audit.find((e) => e.action === 'incidents.reports-released')?.details).toMatchObject({ released: 1, failed: [{ reportId: ahornfeld.id, code: 'incidents.invalidTransition' }] });
+
+    const events: ReportUnlockedEvent[] = [];
+    test.app.get(DomainEvents).subscribe<ReportUnlockedEvent>(INCIDENTS_EVENTS.reportUnlocked, (e) => {
+      events.push(e);
+    });
+    await post(`/incidents/reports/${musterstadt.id}/unlock`, { reason: 'Korrektur', toStatus: 'draft' }).expect(200);
+    await del(`/incidents/reports/${ahornfeld.id}`).expect(204);
+    expect(events).toEqual([
+      { reportId: musterstadt.id, incidentId: incident.id, reason: 'Korrektur' },
+      { reportId: ahornfeld.id, incidentId: incident.id, reason: 'deleted' },
+    ]);
+    expect((await auditOf()).find((e) => e.action === 'incidents.report-deleted')?.details).toMatchObject({ reportId: ahornfeld.id, reportNumber: ahornfeld.number });
   });
 });

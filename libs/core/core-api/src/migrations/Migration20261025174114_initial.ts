@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261025154236_initial extends Migration {
+export class Migration20261025174114_initial extends Migration {
 
-  override name = 'Migration20261025154236_initial';
+  override name = 'Migration20261025174114_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"core\";");
@@ -17,18 +17,17 @@ export class Migration20261025154236_initial extends Migration {
     this.addSql("create table \"core\".\"import_transfer\" (\"id\" uuid not null, \"user_id\" varchar(255) not null, \"archives\" jsonb not null, \"datasets\" jsonb not null, \"created_at\" timestamptz not null, primary key (\"id\"));");
     this.addSql("create table \"core\".\"import_upload\" (\"id\" uuid not null, \"user_id\" varchar(255) not null, \"file_name\" varchar(255) not null, \"headers\" jsonb not null, \"rows\" jsonb not null, \"created_at\" timestamptz not null, primary key (\"id\"));");
     this.addSql("create table \"core\".\"module\" (\"id\" varchar(255) not null, \"active\" boolean not null default true, \"granted_templates\" jsonb null, \"updated_at\" timestamptz not null, primary key (\"id\"));");
-    this.addSql("create table \"core\".\"role\" (\"id\" uuid not null, \"name\" varchar(255) not null, \"template_key\" varchar(255) null, \"description\" varchar(255) not null default '', \"permissions\" jsonb not null, \"permissions_all_departments\" jsonb not null default '[]', \"version\" int not null default 1, primary key (\"id\"));");
-    this.addSql("alter table \"core\".\"role\" add constraint \"role_name_unique\" unique (\"name\");");
+    this.addSql("create table \"core\".\"role\" (\"id\" uuid not null, \"name\" jsonb not null, \"template_key\" varchar(255) null, \"description\" jsonb not null default '{\"de\":\"\",\"en\":\"\"}', \"permissions\" jsonb not null, \"permissions_all_departments\" jsonb not null default '[]', \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"role\" add constraint \"role_template_key_unique\" unique (\"template_key\");");
     this.addSql("create table \"core\".\"setting\" (\"section\" varchar(255) not null, \"value\" jsonb not null, \"version\" int not null default 1, primary key (\"section\"));");
-    this.addSql("create table \"core\".\"user\" (\"id\" uuid not null, \"username\" varchar(255) not null, \"display_name\" varchar(255) not null, \"email\" varchar(255) null, \"password_hash\" varchar(255) null, \"person_id\" varchar(255) null, \"language\" varchar(255) not null default 'de', \"receive_digest\" boolean not null default true, \"active\" boolean not null default true, \"technical\" boolean not null default false, \"last_login\" timestamptz null, \"oidc_subject\" varchar(255) null, \"version\" int not null default 1, primary key (\"id\"));");
+    this.addSql("create table \"core\".\"user\" (\"id\" uuid not null, \"username\" varchar(255) not null, \"display_name\" varchar(255) not null, \"email\" varchar(255) null, \"password_hash\" varchar(255) null, \"person_id\" varchar(255) null, \"language\" varchar(255) not null default 'de', \"receive_digest\" boolean not null default true, \"hidden_tasks\" jsonb not null default '[]', \"active\" boolean not null default true, \"technical\" boolean not null default false, \"last_login\" timestamptz null, \"oidc_subject\" varchar(255) null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"user\" add constraint \"user_username_unique\" unique (\"username\");");
     this.addSql("alter table \"core\".\"user\" add constraint \"user_person_id_unique\" unique (\"person_id\");");
     this.addSql("alter table \"core\".\"user\" add constraint \"user_oidc_subject_unique\" unique (\"oidc_subject\");");
     this.addSql("create table \"core\".\"session\" (\"id\" varchar(255) not null, \"user_id\" uuid not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz not null, \"impersonator_id\" uuid null, \"impersonation_reason\" text null, primary key (\"id\"));");
     this.addSql("create index \"session_expires_at_index\" on \"core\".\"session\" (\"expires_at\");");
     this.addSql("create table \"core\".\"role_assignment\" (\"id\" uuid not null, \"user_id\" uuid not null, \"role_id\" uuid not null, \"department_id\" varchar(255) null, primary key (\"id\"));");
-    this.addSql("create table \"core\".\"password_reset\" (\"id\" uuid not null, \"user_id\" uuid not null, \"hash\" varchar(255) not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz not null, \"used_at\" timestamptz null, primary key (\"id\"));");
+    this.addSql("create table \"core\".\"password_reset\" (\"id\" uuid not null, \"user_id\" uuid not null, \"purpose\" varchar(255) not null default 'reset', \"email\" varchar(255) null, \"hash\" varchar(255) not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz not null, \"used_at\" timestamptz null, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"password_reset\" add constraint \"password_reset_hash_unique\" unique (\"hash\");");
     this.addSql("create table \"core\".\"api_token\" (\"id\" uuid not null, \"name\" varchar(255) not null, \"user_id\" uuid not null, \"scopes\" jsonb not null, \"prefix\" varchar(255) not null, \"hash\" varchar(255) not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz null, \"last_used_at\" timestamptz null, \"revoked_at\" timestamptz null, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"api_token\" add constraint \"api_token_hash_unique\" unique (\"hash\");");

@@ -8,6 +8,7 @@ let test: TestApp;
 let admin: string;
 let leader: string;
 let officer: string;
+let commander: string;
 const ids: Record<string, string> = {};
 const changes: StatusChangedEvent[] = [];
 
@@ -38,12 +39,19 @@ beforeAll(async () => {
   ids.jonas = await person('Jonas', ids.musterstadt, '1995-03-01');
   ids.max = await person('Max', ids.musterstadt, '1990-07-15', false);
   ids.lena = await person('Lena', ids.ahornfeld, '1970-01-20');
+  // A veteran with the qualification does not count as wearer.
+  const veterans = (await post('/masterdata/departments', { name: 'Altersabteilung Musterstadt', shortName: 'Alters Musterstadt', type: 'veterans', parentId: ids.musterstadt }).expect(201)).body.id;
+  ids.vera = (await post('/masterdata/persons', { firstName: 'Vera', lastName: 'Test', status: 'veterans', birthDate: '1960-05-05', memberships: [{ departmentId: veterans, from: '2000-01-01', primary: true }] }).expect(201)).body.id;
+  await post(`/masterdata/persons/${ids.vera}/qualifications`, { qualification: 'breathing-apparatus', acquiredOn: '2000-06-01' }).expect(201);
 
   const roles = (await get('/core/roles')).body as { id: string; templateKey: string }[];
   const role = (key: string) => roles.find((r) => r.templateKey === key)!.id;
   await post('/core/users', { username: 'gf.musterstadt', displayName: 'GF Musterstadt', password: 'auch-sehr-geheim', personId: ids.max, roles: [{ roleId: role('group-leader'), departmentId: ids.musterstadt }] }).expect(201);
   await post('/core/users', { username: 'agw', displayName: 'AGW', email: 'agw@example.org', password: 'auch-sehr-geheim', roles: [{ roleId: role('breathing-apparatus-officer'), departmentId: null }] }).expect(201);
+  // Department commander: records evidence (deadlines), may not see examinations.
+  await post('/core/users', { username: 'abtkdt', displayName: 'Abteilungskommandant', password: 'auch-sehr-geheim', roles: [{ roleId: role('department-commander'), departmentId: ids.musterstadt }] }).expect(201);
   leader = await test.login({ username: 'gf.musterstadt', password: 'auch-sehr-geheim' });
+  commander = await test.login({ username: 'abtkdt', password: 'auch-sehr-geheim' });
   officer = await test.login({ username: 'agw', password: 'auch-sehr-geheim' });
 });
 
@@ -156,6 +164,11 @@ describe('respiratory protection', () => {
     expect(officerView).toMatchObject({ key: 'examination', met: false, concerns: true });
     const leaderView = (await get(`/respiratory-protection/persons/${ids.jonas}`, leader)).body.status.conditions[0];
     expect(leaderView).toEqual({ key: 'examination', met: false, lastDate: null, dueOn: null });
+    // Neither the next due date nor the deadline of the department commander shows the date of the examination.
+    expect((await get(`/respiratory-protection/persons/${ids.jonas}`, leader)).body.status.nextDue).not.toBe(daysAgo(1));
+    const tasks = (await get(`/core/tasks?asOf=${today}`, commander).expect(200)).body as { kind: string; subject: { id: string }; dueOn: string; title: { de: string }; to?: string }[];
+    const examinationTask = tasks.find((t) => t.kind === 'breathing-apparatus-examination' && t.subject.id === ids.jonas);
+    expect(examinationTask).toMatchObject({ dueOn: today, title: { de: 'Eignungsuntersuchung erforderlich' }, to: `/masterdata/persons/${ids.jonas}?tab=respiratory-protection` });
     expect(mail.sent).toHaveLength(sent);
     // The next check of the person sends the pending e-mail.
     const briefing = (await post('/respiratory-protection/evidence', { personId: ids.jonas, kind: 'briefing', date: daysAgo(5) }, officer).expect(201)).body;
@@ -164,6 +177,31 @@ describe('respiratory protection', () => {
     await del(`/respiratory-protection/evidence/${concerns.id}`, officer).expect(204);
     expect(await color(ids.jonas, officer)).toBe('green');
     expect(mail.sent).toHaveLength(sent + 1);
+  });
+
+  it('requires the work of a stress exercise and refuses evidence in the future', async () => {
+    // Passed without kJ does not count unless the note gives the reason it was not measured.
+    const unmeasured = { personId: ids.jonas, kind: 'stress-exercise', date: daysAgo(4), passed: true };
+    expect((await post('/respiratory-protection/evidence', unmeasured, officer).expect(400)).body.code).toBe('respiratory-protection.kilojoulesRequired');
+    const reasoned = (await post('/respiratory-protection/evidence', { ...unmeasured, note: 'ohne Messung: Anlage defekt' }, officer).expect(201)).body.id;
+    await del(`/respiratory-protection/evidence/${reasoned}`, officer).expect(204);
+    expect((await post('/respiratory-protection/evidence/quick', { kind: 'stress-exercise', date: daysAgo(4), entries: [{ personId: ids.jonas, passed: true }] }, officer).expect(400)).body.code).toBe('respiratory-protection.kilojoulesRequired');
+    // Not in the future: single, quick entry and import.
+    expect((await post('/respiratory-protection/evidence', { personId: ids.jonas, kind: 'briefing', date: daysAgo(-1) }, officer).expect(400)).body.code).toBe('respiratory-protection.dateInFuture');
+    expect((await post('/respiratory-protection/evidence/quick', { kind: 'briefing', date: daysAgo(-1), entries: [{ personId: ids.jonas }] }, officer).expect(400)).body.code).toBe('respiratory-protection.dateInFuture');
+    const future = `Name;Datum;kJ\nJonas Test;${daysAgo(-3).split('-').toReversed().join('.')};95\n`;
+    const upload = await test.http.post('/api/core/imports').set('Cookie', officer).set(UI).attach('file', Buffer.from(future, 'utf8'), 'zukunft.csv').expect(201);
+    const result = await post(`/core/imports/${upload.body.id}/preview`, { profile: 'respiratory-protection.stress-exercises', mapping: upload.body.suggestions['respiratory-protection.stress-exercises'] }, officer).expect(200);
+    expect(result.body.rows[0].messages[0].code).toBe('respiratory-protection.dateInFuture');
+  });
+
+  it('counts only active members and members on probation as wearers', async () => {
+    expect(((await get('/respiratory-protection/status', officer)).body as { personId: string }[]).map((s) => s.personId)).not.toContain(ids.vera);
+    await post('/respiratory-protection/evidence', { personId: ids.vera, kind: 'briefing', date: daysAgo(3) }, officer).expect(201);
+    // No traffic light change (no red e-mail) and no deadlines for the veteran.
+    expect(changes.some((c) => c.personId === ids.vera)).toBe(false);
+    const tasks = (await get(`/core/tasks?asOf=${today}`, officer).expect(200)).body as { subject: { id: string } }[];
+    expect(tasks.some((t) => t.subject.id === ids.vera)).toBe(false);
   });
 
   it('applies the configurable rule; the officer may change it', async () => {

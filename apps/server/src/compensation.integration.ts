@@ -28,6 +28,13 @@ const released = (personnel: { personId: string; amount: number; hours?: number;
   vehicleIds: [],
 });
 
+/** Gives the person an account and assigns the loss of earnings to the employer (with its own account). */
+async function assignToEmployer(personId: string, employer: string): Promise<void> {
+  const person = (await get(`/masterdata/persons/${personId}`).expect(200)).body;
+  const { id: _id, version, sensitiveHidden: _h, anonymizedAt: _a, memberships: _m, qualifications: _q, ranks: _r, honors: _o, offices: _f, restPeriods: _p, status: _s, ...fields } = person;
+  await put(`/masterdata/persons/${personId}`, { ...fields, version, bank: { iban: 'DE02120300000000202051', accountHolder: '' }, employer: { ...person.employer, name: employer, iban: 'DE02500105170137075030', lossOfEarningsAssignedFrom: '2026-01-01' } }).expect(200);
+}
+
 beforeAll(async () => {
   test = await startTestApp();
   admin = await setUp(test);
@@ -109,7 +116,19 @@ describe('compensation', () => {
     await get(`/compensation/runs/${run.id}/transfer.csv`).expect(409);
     expect((await post(`/compensation/runs/${run.id}/close`, {}).expect(409)).body).toMatchObject({ code: 'compensation.ibanMissing', names: ['Max Test'] });
     const closed = (await post(`/compensation/runs/${run.id}/close`, { acceptMissingIban: true }).expect(200)).body;
-    expect(closed).toMatchObject({ status: 'closed', total: 215, withoutIban: ['Max Test'] });
+    expect(closed).toMatchObject({ status: 'closed', total: 215, withoutIban: ['Max Test'], manualPayouts: [{ key: ids.max, name: 'Max Test', personIds: [ids.max], amount: 125, paidAt: null }] });
+    // After closing, Max shows as paid another way, not as missing bank account; the treasury gets a task.
+    const maxProblems = (closed.problems as { code: string; personId: string }[]).filter((p) => p.personId === ids.max).map((p) => p.code);
+    expect(maxProblems).toContain('other-payment');
+    expect(maxProblems).not.toContain('no-iban');
+    const payoutTasks = async () => ((await get(`/core/tasks?asOf=2099-01-01`).expect(200)).body as { kind: string; subject: { id: string } }[]).filter((t) => t.kind === 'compensation-manual-payout' && t.subject.id === run.id);
+    expect(await payoutTasks()).toHaveLength(1);
+    // Max sees his items as settled ("abgerechnet"), not paid out.
+    const roles = (await get('/core/roles')).body as { id: string; templateKey: string }[];
+    await post('/core/users', { username: 'max', displayName: 'Max Test', password: 'auch-sehr-geheim', personId: ids.max, roles: [{ roleId: roles.find((r) => r.templateKey === 'member')!.id, departmentId: ids.musterstadt }] }).expect(201);
+    const maxUser = await test.login({ username: 'max', password: 'auch-sehr-geheim' });
+    const maxState = async () => ((await get('/compensation/me?year=2026', maxUser).expect(200)).body as { items: { runId: string | null; state: string }[] }).items.filter((i) => i.runId === run.id).map((i) => i.state);
+    expect(await maxState()).toEqual(['settled', 'settled']);
     expect(closed.persons.find((p: { personId: string }) => p.personId === ids.jonas)).toMatchObject({ incidents: 1, sessions: 1, amount: 90 });
     await put(`/compensation/items/${loss.id}/amount`, { amount: 90 }).expect(409);
     await post(`/compensation/runs/${run.id}/paid`, {}).expect(409);
@@ -124,16 +143,20 @@ describe('compensation', () => {
     // Max was confirmed without IBAN: he is left out of the files.
     expect((await get(`/compensation/runs/${run.id}/transfer.xml`).expect(200)).text).not.toContain('Max');
     expect((await get(`/compensation/runs/${run.id}/transfer.csv`).expect(200)).text).not.toContain('Max');
-    // Max gets an account and assigns his loss of earnings to the employer: two transfers.
-    const max = (await get(`/masterdata/persons/${ids.max}`).expect(200)).body;
-    const { id: _id, version, sensitiveHidden: _h, anonymizedAt: _a, memberships: _m, qualifications: _q, ranks: _r, honors: _o, offices: _f, restPeriods: _p, status: _s, ...fields } = max;
-    await put(`/masterdata/persons/${ids.max}`, { ...fields, version, bank: { iban: 'DE02120300000000202051', accountHolder: '' }, employer: { ...max.employer, name: 'Firma Max', iban: 'DE02500105170137075030', lossOfEarningsAssignedFrom: '2026-01-01' } }).expect(200);
+    // Max gets an account and assigns his loss of earnings to the employer: confirmed without IBAN at closing, he is
+    // paid another way and stays out of the files (no double payout).
+    await assignToEmployer(ids.max, 'Firma Max');
     const xml = (await get(`/compensation/runs/${run.id}/transfer.xml?executionDate=2026-04-15`).expect(200)).text;
-    expect(xml).toContain('<Nm>Firma Max</Nm>');
-    expect(xml).toContain('<InstdAmt Ccy="EUR">80.00</InstdAmt>');
-    expect(xml).toContain('Verdienstausfall');
+    expect(xml).not.toContain('Max');
     await post(`/compensation/runs/${run.id}/hand-over`, {}).expect(200);
     await post(`/compensation/runs/${run.id}/paid`, {}).expect(200);
+    // The run is paid, but Max's payout another way is still open.
+    expect(await maxState()).toEqual(['settled', 'settled']);
+    await post(`/compensation/runs/${run.id}/payouts/unknown/paid`, {}).expect(404);
+    const marked = (await post(`/compensation/runs/${run.id}/payouts/${ids.max}/paid`, {}).expect(200)).body;
+    expect(marked.manualPayouts[0]).toMatchObject({ paidBy: 'Admin', paidAt: expect.any(String) });
+    expect(await maxState()).toEqual(['paid-out', 'paid-out']);
+    expect(await payoutTasks()).toEqual([]);
   });
 
   it('exports the run for the treasury', async () => {
@@ -319,16 +342,30 @@ describe('compensation', () => {
     expect((await post(`/compensation/runs/${run.id}/refresh`, {}).expect(200)).body.deferred).toHaveLength(others.length);
     expect((await post(`/compensation/runs/${run.id}/undefer`, { itemIds: others }).expect(200)).body.deferred).toHaveLength(0);
     await post(`/compensation/runs/${run.id}/defer`, { itemIds: others }).expect(200);
+    // Jonas assigned his loss of earnings to the employer: it gets its own transfer.
+    await assignToEmployer(ids.jonas, 'Firma Jonas');
     await post(`/compensation/runs/${run.id}/close`, { acceptMissingIban: true }).expect(200);
 
     // Factual approval by the commander before the handover.
     const config = (await get('/core/settings/compensation.general').expect(200)).body;
     await put('/core/settings/compensation.general', { ...config, factualApproval: true }).expect(200);
     expect((await post(`/compensation/runs/${run.id}/hand-over`, {}).expect(409)).body.code).toBe('compensation.approvalMissing');
+    // No transfer files before the approval, and who closed the run cannot approve it.
+    expect((await get(`/compensation/runs/${run.id}/transfer.csv`).expect(409)).body.code).toBe('compensation.approvalMissing');
+    expect((await get(`/compensation/runs/${run.id}/transfer.xml`).expect(409)).body.code).toBe('compensation.approvalMissing');
+    expect((await post(`/compensation/runs/${run.id}/approve`, {}).expect(403)).body.code).toBe('compensation.approverIsCloser');
     await post(`/compensation/runs/${run.id}/approve`, {}, reader).expect(403);
     expect((await post(`/compensation/runs/${run.id}/approve`, {}, commander).expect(200)).body).toMatchObject({ approvedBy: 'Kommandant' });
+    const xml = (await get(`/compensation/runs/${run.id}/transfer.xml?executionDate=2026-12-20`).expect(200)).text;
+    expect(xml).toContain('<Nm>Firma Jonas</Nm>');
+    expect(xml).toContain('<InstdAmt Ccy="EUR">55.00</InstdAmt>');
+    expect(xml).toContain('Verdienstausfall');
     await post(`/compensation/runs/${run.id}/hand-over`, {}).expect(200);
     await put('/core/settings/compensation.general', { ...config, factualApproval: false }).expect(200);
+    // The role template of the administration prepares runs, but does not approve them.
+    const administration = ((await get('/core/roles').expect(200)).body as { templateKey: string; permissions: string[] }[]).find((r) => r.templateKey === 'administration')!;
+    expect(administration.permissions).toContain('compensation.runs');
+    expect(administration.permissions).not.toContain('compensation.approve');
 
     // The deferred items wait for the next run.
     const open = (await get('/compensation/items?open=true').expect(200)).body as { id: string; runId: string | null }[];
@@ -336,11 +373,63 @@ describe('compensation', () => {
   });
 
   it('shows the own compensation in "My area"', async () => {
-    const mine = (await get('/compensation/me?year=2026', reader).expect(200)).body as { items: { personId: string; paidOut: boolean }[]; open: number; paid: number };
+    const mine = (await get('/compensation/me?year=2026', reader).expect(200)).body as { items: { personId: string; state: string; runId: string | null }[]; open: number; settled: number; paid: number };
     expect(mine.items.length).toBeGreaterThan(0);
     expect(mine.items.every((i) => i.personId === ids.lena)).toBe(true);
-    expect(mine.items.some((i) => i.paidOut)).toBe(true);
+    // The paid run with Lena's IBAN: paid out; the run only handed over: settled; no run: open.
+    expect(mine.items.filter((i) => i.runId === ids.run).every((i) => i.state === 'paid-out')).toBe(true);
+    expect(mine.items.some((i) => i.state === 'paid-out')).toBe(true);
+    expect(mine.items.some((i) => i.state === 'settled')).toBe(true);
+    expect(mine.items.filter((i) => !i.runId).every((i) => i.state === 'open')).toBe(true);
     // Without a linked person there is nothing to show.
     await get('/compensation/me', commander).expect(404);
+  });
+
+  it('keeps open items in their draft run when a report is released again, and withdraws them when it is unlocked', async () => {
+    const bus = test.app.get(DomainEvents);
+    const event: ReportReleasedEvent = {
+      ...released([{ personId: ids.lena, amount: 30, lossOfEarnings: true, from: '2027-02-05T08:00:00Z', to: '2027-02-05T10:00:00Z' }, { personId: ids.jonas, amount: 30, from: '2027-02-05T08:00:00Z', to: '2027-02-05T10:00:00Z' }]),
+      reportId: '01a16846-0000-7000-8000-00000000e001', dispatchNumber: '2027-001',
+    };
+    await bus.publish(INCIDENTS_EVENTS.reportReleased, event);
+    const run = (await post('/compensation/runs', { from: '2027-02-01', to: '2027-02-28' }).expect(201)).body;
+    const own = (run.items as { id: string; personId: string; kind: string; label: string }[]).filter((i) => i.label.startsWith('2027-001'));
+    const loss = own.find((i) => i.kind === 'loss-of-earnings')!;
+    const jonas = own.find((i) => i.personId === ids.jonas)!;
+    // The loss of earnings has its own label, not the one of the compensation.
+    expect(loss.label).toBe('2027-001 · B2 · Verdienstausfall');
+    await put(`/compensation/items/${loss.id}/amount`, { amount: 70, reason: 'Bescheinigung' }).expect(200);
+    await post(`/compensation/runs/${run.id}/defer`, { itemIds: [jonas.id] }).expect(200);
+
+    // Released again with other amounts: the items stay in the draft (resp. deferred), the entered amount stays.
+    await bus.publish(INCIDENTS_EVENTS.reportReleased, { ...event, personnel: event.personnel.map((p) => ({ ...p, amount: 35 })) });
+    const detail = (await get(`/compensation/runs/${run.id}`).expect(200)).body;
+    const items = (detail.items as { id: string; kind: string; amount: number; reason: string; label: string }[]).filter((i) => i.label.startsWith('2027-001'));
+    expect(items.find((i) => i.id === loss.id)).toMatchObject({ amount: 70, reason: expect.stringContaining('Bescheinigung') });
+    expect(items.find((i) => i.kind === 'compensation')).toMatchObject({ amount: 35 });
+    expect(detail.deferred).toEqual([expect.objectContaining({ id: jonas.id, amount: 35 })]);
+
+    // Unlocked for correction: the open items are withdrawn; an amount already paid out is reversed.
+    const sql = test.app.get(EntityManager).getConnection();
+    await sql.execute(`update compensation.item set run_id = '${ids.run}', deferred_from = null where id = '${jonas.id}'`);
+    await bus.publish(INCIDENTS_EVENTS.reportUnlocked, { reportId: event.reportId, incidentId: event.incidentId, reason: 'Korrektur' });
+    const after = ((await get('/compensation/items?open=true').expect(200)).body as { label: string; personId: string; amount: number; correction: boolean }[]).filter((i) => i.label.startsWith('2027-001'));
+    expect(after).toEqual([expect.objectContaining({ personId: ids.jonas, amount: -35, correction: true })]);
+    await test.http.delete(`/api/compensation/runs/${run.id}`).set('Cookie', admin).set(UI).expect(204);
+  });
+
+  it('pays training only for the statuses of the statute, a guest for the primary department', async () => {
+    const person = async (firstName: string, status: string, departmentId: string) =>
+      (await post('/masterdata/persons', { firstName, lastName: 'Test', status, birthDate: status === 'youth' ? '2012-01-01' : '1990-01-01', memberships: [{ departmentId, from: '2024-01-01', primary: true }] }).expect(201)).body.id as string;
+    const youth = (await post('/masterdata/departments', { name: 'Jugendfeuerwehr Musterstadt', shortName: 'JF', type: 'youth' }).expect(201)).body.id as string;
+    const tim = await person('Tim', 'youth', youth);
+    const gina = await person('Gina', 'active', ids.ahornfeld);
+    const session = (await post('/training/sessions', { type: 'exercise', title: 'Übung mit Gästen', startsAt: '2026-03-03T18:00:00Z', endsAt: '2026-03-03T20:00:00Z', departmentIds: [ids.musterstadt, youth] }).expect(201)).body.id;
+    await put(`/training/sessions/${session}/attendance`, [{ personId: tim, status: 'present' }, { personId: gina, status: 'present' }, { personId: ids.jonas, status: 'present' }]).expect(200);
+    await post(`/training/sessions/${session}/close`, {}).expect(200);
+    const items = await openItems('Übung mit Gästen') as unknown as { personId: string; departmentId: string }[];
+    expect(items.map((i) => i.personId).toSorted()).toEqual([gina, ids.jonas].toSorted());
+    expect(items.find((i) => i.personId === gina)!.departmentId).toBe(ids.ahornfeld);
+    expect(items.find((i) => i.personId === ids.jonas)!.departmentId).toBe(ids.musterstadt);
   });
 });

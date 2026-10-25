@@ -67,4 +67,6 @@ try {
 // A watch build may have compiled the briefly emptied migration lists; without its incremental state the next build
 // compiles the new migrations again instead of keeping the empty lists in `dist`.
 for (const id of modules) rmSync(join(directory(id), 'dist/tsconfig.lib.tsbuildinfo'), { force: true });
+// The Nx cache may restore such an output as well, so the libraries are built again without it.
+execFileSync('npx', ['nx', 'run-many', '-t', 'build', '--skip-nx-cache', '--projects', modules.map((id) => (id === 'core' ? '@forga/core-api' : `@forga/${id}-api`)).join(',')], { stdio: 'inherit' });
 console.log('Done. Recreate the development database; the server applies the new migrations on its next start.');

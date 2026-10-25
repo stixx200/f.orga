@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Put, Query, Res } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Inject, NotFoundException, Param, Post, Put, Query, Res } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import type { Response } from 'express';
 import { z } from 'zod';
@@ -17,7 +17,9 @@ import {
   SessionTypeInput,
   type TrainingSettings,
 } from '@forga/training-contracts';
+import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { SessionEntity, SessionTypeEntity } from '../training.entities.js';
+import { participation } from './participation.js';
 import { ATTENDANCE, PLAN, READ, SessionsService, SETTINGS } from './sessions.service.js';
 
 type Parsed<T extends z.ZodType> = z.infer<T>;
@@ -38,6 +40,7 @@ export function toTypeDto(type: SessionTypeEntity): SessionType {
 
 /** Text of an iCalendar field: escapes commas, semicolons and line breaks. */
 const icsText = (value: string) => value.replace(/[\\,;]/g, (c) => `\\${c}`).replace(/\n/g, '\\n');
+const toDate = (value: string | null) => (value ? new Date(value) : null);
 const icsTime = (date: Date) => date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 
 @Controller('training')
@@ -46,6 +49,7 @@ export class SessionsController {
     private readonly em: EntityManager,
     private readonly sessions: SessionsService,
     private readonly settings: SettingsService,
+    @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
   ) {}
 
   // ----- Session types -----
@@ -154,6 +158,15 @@ export class SessionsController {
     return this.sessions.toDto(session, await this.sessions.overlaps(session));
   }
 
+  /** "Discard check-in": removes an unconfirmed QR check-in, e.g. of a wrong person. */
+  @Post('sessions/:id/check-ins/:personId/discard')
+  @HttpCode(200)
+  @RequirePermissions(ATTENDANCE)
+  async discardCheckIn(@Param('id') id: string, @Param('personId') personId: string, @CurrentUser() user: AuthenticatedUser): Promise<Session> {
+    const session = await this.sessions.discardCheckIn(user, id, personId);
+    return this.sessions.toDto(session, await this.sessions.overlaps(session));
+  }
+
   @Post('sessions/:id/close')
   @HttpCode(200)
   @RequirePermissions('training.close')
@@ -174,7 +187,20 @@ export class SessionsController {
     return this.sessions.checkInCode(user, id);
   }
 
-  /** Every logged-in member linked to a person can check in with the code of the QR code. */
+  /**
+   * Target of the QR code (no login): exchanges the code for a ticket valid some minutes and opens the check-in page
+   * with it, so the code does not expire while the member logs in. An unknown or expired code is passed on as it is
+   * (the page then names the error).
+   */
+  @Public()
+  @Get('check-in/start')
+  async startCheckIn(@Query('code') code: string | undefined, @Res() res: Response): Promise<void> {
+    const value = typeof code === 'string' ? code.slice(0, 200) : '';
+    const ticket = value ? await this.sessions.checkInTicket(value) : null;
+    res.redirect(302, `/training/check-in?code=${encodeURIComponent(ticket ?? value)}`);
+  }
+
+  /** Every logged-in member linked to a person can check in with the code of the QR code (or a ticket for it). */
   @Post('check-in')
   @HttpCode(200)
   checkIn(@Body(new ZodPipe(z.object({ code: z.string().min(8) }))) input: { code: string }, @CurrentUser() user: AuthenticatedUser) {
@@ -200,24 +226,15 @@ export class SessionsController {
     @Query('departmentId') departmentId?: string,
   ): Promise<Participation[]> {
     const year = new Date().getFullYear();
-    const sessions = await this.sessions.list(user, { from: from ?? `${year}-01-01`, to: to ?? `${year}-12-31`, departmentId });
+    const period = { from: from ?? `${year}-01-01`, to: to ?? `${year}-12-31` };
+    const sessions = await this.sessions.list(user, { ...period, departmentId });
     const types = new Map((await this.em.fork().find(SessionTypeEntity, {})).map((t) => [t.key, t]));
     const counted = sessions.filter((s) => s.status !== 'planned' && types.get(s.type)?.countsForParticipation !== false);
-    const byPerson = new Map<string, Participation>();
-    for (const session of counted) {
-      for (const a of session.attendance) {
-        const entry = byPerson.get(a.personId) ?? { personId: a.personId, sessions: 0, present: 0, excused: 0, rate: 0, hours: 0 };
-        if (a.status === 'present') {
-          entry.present++;
-          const start = new Date(a.from ?? session.startsAt).getTime();
-          const end = new Date(a.to ?? session.endsAt).getTime();
-          entry.hours += Math.round(((end - start) / 3_600_000) * 10) / 10;
-        }
-        if (a.status === 'excused') entry.excused++;
-        byPerson.set(a.personId, entry);
-      }
-    }
-    return [...byPerson.values()].map((e) => ({ ...e, sessions: counted.length, rate: counted.length ? Math.round((e.present / counted.length) * 100) : 0 }));
+    return participation(
+      counted.map((s) => ({ startsAt: new Date(s.startsAt), endsAt: new Date(s.endsAt), departmentIds: s.departmentIds, attendance: s.attendance.map((a) => ({ personId: a.personId, status: a.status, from: toDate(a.from), to: toDate(a.to) })) })),
+      await this.directory.memberPeriods(),
+      { to: period.to, departmentId },
+    );
   }
 
   /** Calendar feed for calendar apps (no login): `/api/training/feed/<token>.ics?departmentId=…`. */

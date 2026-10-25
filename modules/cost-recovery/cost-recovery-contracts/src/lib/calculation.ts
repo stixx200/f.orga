@@ -1,4 +1,4 @@
-import type { CostRounding, Payment, PersonnelKind, PersonnelRate, Position, VehicleRate } from './cost-recovery.js';
+import type { CostRounding, NoticeStatus, Payment, PersonnelKind, PersonnelRate, Position, VehicleRate } from './cost-recovery.js';
 
 const MINUTE = 60_000;
 
@@ -35,6 +35,36 @@ export const missingReasons = <P extends Pick<Position, 'amount' | 'computedAmou
 
 /** Sum of the payments not reversed. */
 export const paidOf = (payments: Pick<Payment, 'amount' | 'reversal'>[]) => round2(payments.filter((p) => !p.reversal).reduce((s, p) => s + p.amount, 0));
+
+/** Statuses in which payments count: in effect, paid, or cancelled (then everything paid is refunded). */
+const SETTLED_AGAINST: NoticeStatus[] = ['issued', 'handed-over', 'objection', 'paid', 'cancelled'];
+
+/** The amount the debtor owes: the total, nothing after a cancellation. */
+export const claimOf = (n: { status: NoticeStatus; positions: Pick<Position, 'amount'>[] }) => (n.status === 'cancelled' ? 0 : totalOf(n.positions));
+
+/** Overpaid amount to refund: payments above the claim (on a cancelled notice all payments); 0 = none. */
+export function refundDueOf(n: { status: NoticeStatus; positions: Pick<Position, 'amount'>[]; payments: Pick<Payment, 'amount' | 'reversal'>[] }): number {
+  if (!SETTLED_AGAINST.includes(n.status)) return 0;
+  return Math.max(0, round2(paidOf(n.payments) - claimOf(n)));
+}
+
+/**
+ * Amount of a payment file in German or international notation: `1.234,50`, `1234,5`, `1.000` (thousands separator,
+ * no decimals), `1234.50`, `1,234.50`; `null` when it is no number.
+ */
+export function parseAmount(text: string): number | null {
+  const cleaned = text.replace(/[€\s\u00a0]/g, '').replace(/EUR$/i, '');
+  if (!/^-?[\d.,]+$/.test(cleaned)) return null;
+  const comma = cleaned.lastIndexOf(',');
+  const dot = cleaned.lastIndexOf('.');
+  let normalized: string;
+  if (comma > dot) normalized = cleaned.replace(/\./g, '').replace(',', '.');
+  else if (dot > comma && /^-?\d{1,3}(\.\d{3})+$/.test(cleaned)) normalized = cleaned.replace(/\./g, '');
+  else normalized = cleaned.replace(/,/g, '');
+  if ((normalized.match(/\./g) ?? []).length > 1) return null;
+  const value = Number(normalized);
+  return Number.isFinite(value) ? round2(value) : null;
+}
 
 /**
  * Removes repeated parts of a location text, e.g. "Hauptstraße 1, 12345 Musterstadt, Musterstadt" (district equal

@@ -3,9 +3,10 @@ import { berlinDayStart, berlinDayAfter } from '@forga/core-api';
 import { EntityManager } from '@mikro-orm/core';
 import { z } from 'zod';
 import type { Language, ListColumn } from '@forga/core-contracts';
-import type { AuthenticatedUser, ListDefinition } from '@forga/core-api';
+import type { AuthenticatedUser, ListDefinition, ListParameterDefinition } from '@forga/core-api';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { SessionEntity, SessionTypeEntity } from '../training.entities.js';
+import { participation } from '../sessions/participation.js';
 import { READ, SessionsService } from '../sessions/sessions.service.js';
 
 const col = (key: string, de: string, en: string, width?: number, align?: ListColumn['align']): ListColumn => ({ key, label: { de, en }, ...(width ? { width } : {}), ...(align ? { align } : {}) });
@@ -137,29 +138,52 @@ export class TrainingLists {
       permission: READ,
       parameters: periodParameters,
       schema: Period,
-      columns: [col('name', 'Name', 'Name', 2), col('present', 'anwesend', 'present', 1, 'right'), col('excused', 'entschuldigt', 'excused', 1, 'right'), col('rate', 'Quote %', 'Rate %', 1, 'right'), col('hours', 'Stunden', 'Hours', 1, 'right')],
+      // The rate counts the sessions of the person's departments while a member, not all sessions of the brigade.
+      columns: [
+        col('name', 'Name', 'Name', 2),
+        col('department', 'Abteilung', 'Department', 1.2),
+        col('sessions', 'Dienste', 'Sessions', 0.8, 'right'),
+        col('present', 'anwesend', 'present', 1, 'right'),
+        col('excused', 'entschuldigt', 'excused', 1, 'right'),
+        col('rate', 'Quote %', 'Rate %', 1, 'right'),
+        col('hours', 'Stunden', 'Hours', 1, 'right'),
+      ],
       rows: async (user, params) => {
         const { from, to, sessions, types } = await this.load(user, params);
         const counted = sessions.filter((s) => s.status !== 'planned' && types.get(s.type)?.countsForParticipation !== false);
-        const totals = new Map<string, { present: number; excused: number; hours: number }>();
-        for (const s of counted) {
-          for (const a of s.attendance.getItems()) {
-            const t = totals.get(a.personId) ?? { present: 0, excused: 0, hours: 0 };
-            if (a.status === 'present') {
-              t.present++;
-              t.hours += hours(a.from ?? s.startsAt, a.to ?? s.endsAt);
-            }
-            if (a.status === 'excused') t.excused++;
-            totals.set(a.personId, t);
-          }
-        }
-        const names = await this.names([...totals.keys()]);
+        const rows = participation(
+          counted.map((s) => ({ startsAt: s.startsAt, endsAt: s.endsAt, departmentIds: s.departmentIds, attendance: s.attendance.getItems().map((a) => ({ personId: a.personId, status: a.status, from: a.from ?? null, to: a.to ?? null })) })),
+          await this.directory.memberPeriods(),
+          { to, departmentId: params.departmentId },
+        );
+        const [names, departments] = await Promise.all([this.names(rows.map((r) => r.personId)), this.organization.departments()]);
+        const shortNames = new Map(departments.map((d) => [d.id, d.shortName]));
         return {
           subtitle: `${from} – ${to} · ${counted.length}`,
-          rows: [...totals]
-            .map(([id, t]) => ({ name: names.get(id) ?? '', present: t.present, excused: t.excused, rate: counted.length ? Math.round((t.present / counted.length) * 100) : 0, hours: Math.round(t.hours * 10) / 10 }))
+          rows: rows
+            .map((r) => ({ name: names.get(r.personId) ?? '', department: shortNames.get(r.departmentId ?? '') ?? '', sessions: r.sessions, present: r.present, excused: r.excused, rate: r.rate, hours: r.hours }))
             .toSorted((a, b) => String(a.name).localeCompare(String(b.name))),
         };
+      },
+    };
+  }
+
+  /** A session, chosen from those of the last year and the next three months the user may see, newest first. */
+  private sessionParameter(): ListParameterDefinition {
+    return {
+      key: 'sessionId',
+      label: { de: 'Dienst', en: 'Session' },
+      type: 'choice',
+      required: true,
+      choices: async (user, query, language) => {
+        const today = new Date();
+        const from = new Date(today.getTime() - 365 * 86_400_000).toISOString().slice(0, 10);
+        const to = new Date(today.getTime() + 90 * 86_400_000).toISOString().slice(0, 10);
+        const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+        return (await this.sessions.list(user, { from, to }))
+          .filter((s) => words.every((w) => s.title.toLowerCase().includes(w)))
+          .toSorted((a, b) => b.startsAt.localeCompare(a.startsAt))
+          .map((s) => ({ value: s.id, label: s.title, description: dateTime(new Date(s.startsAt), language) }));
       },
     };
   }
@@ -169,7 +193,7 @@ export class TrainingLists {
       id: 'training.participants',
       name: { de: 'Teilnehmerliste', en: 'Participants' },
       permission: READ,
-      parameters: [{ key: 'sessionId', label: { de: 'Dienst (ID)', en: 'Session (ID)' }, type: 'text', required: true }],
+      parameters: [this.sessionParameter()],
       schema: SessionParam,
       columns: [col('name', 'Name', 'Name', 2), col('status', 'Status', 'Status'), col('role', 'Funktion', 'Role'), col('ba', 'Atemschutz', 'BA', 0.8, 'center')],
       rows: async (user, params, language) => {
@@ -192,7 +216,7 @@ export class TrainingLists {
       id: 'training.signatures',
       name: { de: 'Unterschriftenliste Dienst', en: 'Signature list (session)' },
       permission: READ,
-      parameters: [{ key: 'sessionId', label: { de: 'Dienst (ID)', en: 'Session (ID)' }, type: 'text', required: true }],
+      parameters: [this.sessionParameter()],
       schema: SessionParam,
       signatureColumn: true,
       columns: [col('name', 'Name', 'Name', 2), col('department', 'Abteilung', 'Department')],

@@ -5,10 +5,12 @@ import type { Defect, DefectStatus } from '@forga/equipment-contracts';
 import { formatDate, send, useTranslation } from '@forga/web-sdk';
 import { Attachments, DataTable, PageHeader, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, useDefects, useItemAccess } from '../api';
+import { useDefectText } from '../parts';
 
 function DefectStatusDialog({ defect, onClose }: { defect: Defect; onClose: () => void }) {
   const { t } = useTranslation('equipment');
   const { t: common } = useTranslation('common');
+  const text = useDefectText();
   const [status, setStatus] = useState<DefectStatus>(defect.status === 'reported' ? 'in-progress' : defect.status);
   const [resolution, setResolution] = useState(defect.resolution);
   const save = useAction(() => send('PUT', `equipment/defects/${defect.id}`, { status, resolution }), { success: t('defect.updated'), invalidate: [keys.all], onSuccess: onClose });
@@ -24,7 +26,7 @@ function DefectStatusDialog({ defect, onClose }: { defect: Defect; onClose: () =
         </Group>
       }
     >
-      <Text size="sm">{defect.inventoryNumber} · {defect.itemName}: {defect.description}</Text>
+      <Text size="sm">{defect.inventoryNumber} · {defect.itemName}: {text(defect)}</Text>
       <Select label={t('fields.status')} data={(['reported', 'in-progress', 'fixed'] as const).map((s) => ({ value: s, label: t(`defectStatus.${s}`) }))} value={status} onChange={(v) => v && setStatus(v as DefectStatus)} allowDeselect={false} />
       <TextInput label={t('defect.resolution')} description={status === 'fixed' ? t('defect.fixedHint') : undefined} value={resolution} onChange={(e) => setResolution(e.currentTarget.value)} required={status === 'fixed'} />
       <Text size="sm" fw={700} mt="sm">{common('attachments.title')}</Text>
@@ -38,6 +40,7 @@ export function DefectsPage() {
   const { t, i18n } = useTranslation('equipment');
   const navigate = useNavigate();
   const access = useItemAccess();
+  const text = useDefectText();
   const [all, setAll] = useState(false);
   const { data = [], isLoading } = useDefects({ open: all ? undefined : 'true' });
   const [handling, setHandling] = useState<Defect | null>(null);
@@ -51,9 +54,9 @@ export function DefectsPage() {
         columns={[
           { key: 'date', header: t('defect.reportedAt'), render: (d) => formatDate(d.reportedAt, i18n.language) },
           { key: 'item', header: t('fields.name'), render: (d) => <Text size="sm" fw={700} c="brand" style={{ cursor: 'pointer' }} onClick={() => navigate(`/equipment/items/${d.itemId}?tab=defects`)}>{d.inventoryNumber} · {d.itemName}</Text> },
-          { key: 'description', header: t('defect.description'), render: (d) => <><Text size="sm">{d.description}</Text>{d.resolution && <Text size="xs" c="dimmed">{d.resolution}</Text>}</> },
+          { key: 'description', header: t('defect.description'), render: (d) => <><Text size="sm">{text(d)}</Text>{d.resolution && <Text size="xs" c="dimmed">{d.resolution}</Text>}</> },
           { key: 'by', header: t('defect.by'), render: (d) => d.reportedBy },
-          { key: 'status', header: t('fields.status'), render: (d) => <StatusBadge tone={d.status === 'fixed' ? 'done' : d.status === 'retired' ? 'neutral' : d.status === 'in-progress' ? 'warning' : 'error'}>{t(`defectStatus.${d.status}`)}</StatusBadge> },
+          { key: 'status', header: t('fields.status'), render: (d) => <StatusBadge tone={d.status === 'fixed' ? 'done' : d.status === 'retired' || d.status === 'withdrawn' ? 'neutral' : d.status === 'in-progress' ? 'warning' : 'error'}>{t(`defectStatus.${d.status}`)}</StatusBadge> },
           { key: 'actions', header: '', align: 'right', render: (d) => access.canWrite(d) && (d.status === 'reported' || d.status === 'in-progress') && <Button size="compact-xs" onClick={() => setHandling(d)}>{t('defect.handle')}</Button> },
         ]}
       />

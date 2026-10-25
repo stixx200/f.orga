@@ -1,6 +1,6 @@
 import { Button, FileInput, Group, Text } from '@mantine/core';
-import type { ItemStatus } from '@forga/equipment-contracts';
-import { formatDate, upload, useTranslation } from '@forga/web-sdk';
+import type { Defect, ItemStatus } from '@forga/equipment-contracts';
+import { formatDate, upload, useLocalized, useTranslation } from '@forga/web-sdk';
 import { Attachments, ResponsiveDialog, StatusBadge, type Tone } from '@forga/web-ui';
 import { useDueSoon } from './api';
 
@@ -13,13 +13,20 @@ export function ItemStatusBadge({ status, blocked = false }: { status: ItemStatu
   return <StatusBadge tone={TONES[status]}>{t(`status.${status}`)}</StatusBadge>;
 }
 
-/** Next due date with traffic light: red when due, yellow within the configured days. */
-export function DueDate({ dueOn }: { dueOn: string | null }) {
+/** Next due date with traffic light: red when due, yellow within the configured days; "not recorded yet" without dates. */
+export function DueDate({ dueOn, notRecorded = false }: { dueOn: string | null; notRecorded?: boolean }) {
   const { t, i18n } = useTranslation('equipment');
   const { today, soon } = useDueSoon();
-  if (!dueOn) return <Text size="sm" c="dimmed">–</Text>;
+  if (!dueOn) return <Text size="sm" c="dimmed">{notRecorded ? t('due.notRecorded') : '–'}</Text>;
   const color = dueOn <= today ? 'red.8' : dueOn <= soon ? 'orange.8' : undefined;
   return <Text size="sm" c={color} fw={color ? 700 : undefined}>{dueOn <= today ? t('due.overdue', { date: formatDate(dueOn, i18n.language) }) : formatDate(dueOn, i18n.language)}</Text>;
+}
+
+/** Text of a defect: as reported, or for a finding of an inspection "<inspection type>: <notes or result>". */
+export function useDefectText(): (defect: Pick<Defect, 'description' | 'finding'>) => string {
+  const { t } = useTranslation('equipment');
+  const localized = useLocalized();
+  return (d) => (d.finding ? `${localized(d.finding.name)}: ${d.description || t(`result.${d.finding.result}`)}` : d.description);
 }
 
 /** Attachments of an inspection or a defect in a dialog. */

@@ -7,7 +7,7 @@ import { api, withQuery, useTranslation } from '@forga/web-sdk';
 import { DataTable, PageHeader } from '@forga/web-ui';
 import { personName, useDepartments, usePersons } from '../api';
 
-type Row = Participation & { name: string };
+type Row = Participation & { name: string; department: string };
 
 /** Participation rate per person in a period: base for honours, promotions and the annual report. */
 export function ParticipationPage() {
@@ -21,7 +21,10 @@ export function ParticipationPage() {
   const filter = { from: from ?? undefined, to: to ?? undefined, departmentId: departmentId ?? undefined };
   const { data = [], isLoading } = useQuery({ queryKey: ['training', 'participation', filter], queryFn: () => api<Participation[]>(withQuery('training/participation', filter)) });
   const rows: Row[] = data
-    .map((p) => { const person = persons.find((x) => x.id === p.personId); return { ...p, name: person ? personName(person) : '–' }; })
+    .map((p) => {
+      const person = persons.find((x) => x.id === p.personId);
+      return { ...p, name: person ? personName(person) : '–', department: departments.find((d) => d.id === p.departmentId)?.shortName ?? '' };
+    })
     .toSorted((a, b) => b.rate - a.rate || a.name.localeCompare(b.name));
 
   return (
@@ -38,6 +41,7 @@ export function ParticipationPage() {
         empty={isLoading ? t('loading') : t('participation.empty')}
         columns={[
           { key: 'name', header: t('attendance.person'), render: (r) => <Text fw={700} size="sm">{r.name}</Text> },
+          { key: 'department', header: t('participation.department'), render: (r) => r.department },
           { key: 'present', header: t('participation.present'), align: 'right', render: (r) => `${r.present} / ${r.sessions}` },
           { key: 'excused', header: t('participation.excused'), align: 'right', render: (r) => r.excused },
           { key: 'hours', header: t('participation.hours'), align: 'right', render: (r) => r.hours.toLocaleString() },

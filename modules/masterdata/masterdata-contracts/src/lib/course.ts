@@ -9,6 +9,8 @@ export type CourseLevel = z.infer<typeof CourseLevel>;
 export const DEFAULT_COURSE_STATUSES: readonly Exclude<PersonStatus, 'left'>[] = ['probation', 'active'];
 
 const date = z.iso.date();
+/** Course dates: not before 1900 (typos such as 0202 instead of 2020). */
+const courseDate = date.refine((d) => d >= '1900-01-01', { message: 'Before 1900' });
 
 /** A course of the course catalog; only administrators maintain it. */
 export const CourseInput = z.object({
@@ -52,15 +54,22 @@ export type Course = z.infer<typeof Course>;
 export const CourseResult = z.enum(['passed', 'failed']);
 export type CourseResult = z.infer<typeof CourseResult>;
 
-/** End not before the start. A passed course must have ended (checked on the server against today, `masterdata.courseNotFinished`). */
+/**
+ * End not before the start. Checked on the server against today and the person: a passed course must have ended
+ * (`masterdata.courseNotFinished`), no course starts in the future (`masterdata.attendanceInFuture`) or before the birth
+ * (`masterdata.dateBeforeBirth`). Whoever holds all qualifications of the course already (e.g. imported or entered by
+ * hand) is recorded only with `confirmHeld` (`masterdata.qualificationsHeld`); then no qualification is added twice
+ * and no `masterdata.course.passed` is published (so no second course allowance).
+ */
 export const CourseAttendanceInput = z
   .object({
     course: z.string().min(1),
-    startsOn: date,
-    endsOn: date.nullable().default(null),
+    startsOn: courseDate,
+    endsOn: courseDate.nullable().default(null),
     result: CourseResult,
     location: z.string().trim().default(''),
     notes: z.string().default(''),
+    confirmHeld: z.boolean().default(false),
   })
   .refine((a) => !a.endsOn || a.endsOn >= a.startsOn, { message: 'End before start', path: ['endsOn'] });
 export type CourseAttendanceInput = z.input<typeof CourseAttendanceInput>;
@@ -79,8 +88,15 @@ export const CourseAttendance = z.object({
 });
 export type CourseAttendance = z.infer<typeof CourseAttendance>;
 
-export const NominationStatus = z.enum(['nominated', 'registered', 'confirmed', 'rejected', 'completed']);
+/** `completed` (passed) and `failed` are set only by recording an attendance; deleting it reopens the nomination. */
+export const NominationStatus = z.enum(['nominated', 'registered', 'confirmed', 'rejected', 'completed', 'failed']);
 export type NominationStatus = z.infer<typeof NominationStatus>;
+
+/** Statuses of an open nomination, i.e. one still waiting for the course. */
+export const OPEN_NOMINATION_STATUSES = ['nominated', 'registered', 'confirmed'] as const;
+/** Statuses the planners set by hand. */
+export const PlannedNominationStatus = z.enum(['nominated', 'registered', 'confirmed', 'rejected']);
+export type PlannedNominationStatus = z.infer<typeof PlannedNominationStatus>;
 
 export const CourseNominationInput = z.object({
   personId: z.uuid(),
@@ -88,6 +104,7 @@ export const CourseNominationInput = z.object({
   /** 1 = high. */
   priority: z.number().int().min(1).max(3).default(2),
   desiredPeriod: z.string().trim().default(''),
+  /** `completed` and `failed` are refused unless unchanged (`masterdata.nominationStatusByAttendance`). */
   status: NominationStatus.default('nominated'),
   notes: z.string().default(''),
   /** Planned course run (date) the person is meant to attend. */
@@ -95,13 +112,17 @@ export const CourseNominationInput = z.object({
 });
 export type CourseNominationInput = z.input<typeof CourseNominationInput>;
 
-/** Nominates several persons at once; persons already nominated are skipped, not refused. */
+/**
+ * Nominates several persons at once, optionally for a run and with a status. Persons who cannot be nominated
+ * (already nominated, course held, status or prerequisites not met, not visible) are skipped with the reason.
+ */
 export const BulkNominationInput = z.object({
   course: z.string().min(1),
   personIds: z.array(z.uuid()).min(1).max(500),
   priority: z.number().int().min(1).max(3).default(2),
   desiredPeriod: z.string().trim().default(''),
   runId: z.uuid().nullable().default(null),
+  status: z.enum(OPEN_NOMINATION_STATUSES).default('nominated'),
 });
 export type BulkNominationInput = z.input<typeof BulkNominationInput>;
 
@@ -111,6 +132,23 @@ export const BulkNominationResult = z.object({
   skipped: z.array(z.object({ personId: z.string(), code: z.string() })),
 });
 export type BulkNominationResult = z.infer<typeof BulkNominationResult>;
+
+/** Sets status and/or run of several open nominations; fields left out stay as they are. */
+export const BulkNominationUpdate = z
+  .object({
+    nominationIds: z.array(z.uuid()).min(1).max(500),
+    status: PlannedNominationStatus.optional(),
+    runId: z.uuid().nullable().optional(),
+  })
+  .refine((u) => u.status !== undefined || u.runId !== undefined, { message: 'Nothing to change', path: ['status'] });
+export type BulkNominationUpdate = z.input<typeof BulkNominationUpdate>;
+
+export const BulkNominationUpdateResult = z.object({
+  updated: z.number(),
+  /** Nominations not changed with the reason, e.g. `masterdata.nominationStatusByAttendance`. */
+  skipped: z.array(z.object({ nominationId: z.string(), code: z.string() })),
+});
+export type BulkNominationUpdateResult = z.infer<typeof BulkNominationUpdateResult>;
 
 export const CourseNomination = z.object({
   id: z.uuid(),
@@ -134,8 +172,8 @@ export type CourseNomination = z.infer<typeof CourseNomination>;
 export const CourseRunInput = z
   .object({
     course: z.string().min(1),
-    startsOn: date,
-    endsOn: date.nullable().default(null),
+    startsOn: courseDate,
+    endsOn: courseDate.nullable().default(null),
     location: z.string().trim().default(''),
     notes: z.string().default(''),
   })
@@ -158,18 +196,20 @@ export const CourseRun = z.object({
 export type CourseRun = z.infer<typeof CourseRun>;
 
 /**
- * Results of a course for several persons at once, e.g. all confirmed nominations of a run.
- * Persons who did not attend are simply left out.
+ * Results of a course for several persons at once, e.g. all nominations of a run.
+ * Persons who did not attend are simply left out; persons with a result for the run already are skipped
+ * (`masterdata.resultRecordedAlready`). `confirmHeld` as in `CourseAttendanceInput`.
  */
 export const CourseResultsInput = z
   .object({
     course: z.string().min(1),
     /** Dates and location are taken from the run when given. */
     runId: z.uuid().nullable().default(null),
-    startsOn: date.nullable().default(null),
-    endsOn: date.nullable().default(null),
+    startsOn: courseDate.nullable().default(null),
+    endsOn: courseDate.nullable().default(null),
     location: z.string().trim().default(''),
     results: z.array(z.object({ personId: z.uuid(), result: CourseResult, notes: z.string().default('') })).min(1).max(500),
+    confirmHeld: z.boolean().default(false),
   })
   .refine((r) => r.runId !== null || r.startsOn !== null, { message: 'Start or run required', path: ['startsOn'] })
   .refine((r) => !r.endsOn || !r.startsOn || r.endsOn >= r.startsOn, { message: 'End before start', path: ['endsOn'] });
@@ -186,6 +226,7 @@ export type CourseResultsOutcome = z.infer<typeof CourseResultsOutcome>;
 export const CoursePlanning = z.object({
   course: Course,
   nominations: z.array(
+    /** `prerequisitesMet`: status allowed, conditions met and the course not held yet. */
     z.object({ nomination: CourseNomination, person: PersonSummary, prerequisitesMet: z.boolean() }),
   ),
   /** Persons who meet all conditions of the course, have not passed it and are not nominated. */
@@ -194,11 +235,14 @@ export const CoursePlanning = z.object({
 });
 export type CoursePlanning = z.infer<typeof CoursePlanning>;
 
-/** Course needs: per course and department the persons with the course, the target and the open nominations. */
+/**
+ * Course needs: per course and department the persons with the course, the target and the open nominations.
+ * Only members whose status the course allows count; departments without such members (and without a target) are left out.
+ */
 export const CourseNeed = z.object({
   course: z.string(),
   departmentId: z.uuid(),
-  /** Members (in probation or active) who have the course or all its qualifications. */
+  /** Members with a status allowed for the course who have the course or all its qualifications. */
   have: z.number(),
   target: z.number().nullable(),
   nominated: z.number(),

@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { SECRET_SETTING_FIELDS } from '@forga/core-contracts';
 import { AuditEntry } from '../audit/audit.js';
+import { HistoryEntry } from '../history/history.entity.js';
+import type { AuthenticatedUser } from '../security/authenticated-user.js';
+import { PasswordReset } from '../security/password-reset.js';
 import { ApiToken, Role, Session, User } from '../security/security.entities.js';
-import { Setting } from '../settings/settings.js';
+import { Setting, SettingsService } from '../settings/settings.js';
 
 const auditDto = (e: AuditEntry) => ({
   timestamp: e.timestamp.toISOString(),
@@ -13,24 +15,36 @@ const auditDto = (e: AuditEntry) => ({
   details: e.details,
 });
 
+/** Display name of the accounts of anonymised persons; reads the same in every language. */
+const ANONYMIZED_NAME = 'N. N.';
+
 /**
- * The core's part of the full export and of the data access request: users, roles and settings,
+ * The core's part of the full export, of the data access request and of the anonymisation: users, roles and settings,
  * never password hashes, session or token secrets and write-only settings.
  */
 @Injectable()
 export class CoreExport {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly settings: SettingsService,
+  ) {}
 
-  async all(): Promise<Record<string, unknown>> {
+  /**
+   * Settings sections reserved for their managers (SMTP account, OIDC client, …) and managers' fields (e.g. the secret
+   * of a calendar feed) are only exported for users who manage them.
+   */
+  async all(user: AuthenticatedUser): Promise<Record<string, unknown>> {
     const em = this.em.fork();
     const users = await em.find(User, {}, { populate: ['roles.role'], orderBy: { username: 'asc' } });
-    const roles = await em.find(Role, {}, { orderBy: { name: 'asc' } });
+    const roles = await em.find(Role, {});
     const settings = await em.find(Setting, {}, { orderBy: { section: 'asc' } });
     const tokens = await em.find(ApiToken, {}, { orderBy: { createdAt: 'asc' } });
     return {
       users: users.map((u) => this.user(u)),
-      roles: roles.map((r) => ({ id: r.id, name: r.name, templateKey: r.templateKey ?? null, description: r.description, permissions: r.permissions, permissionsAllDepartments: r.permissionsAllDepartments })),
-      settings: Object.fromEntries(settings.map((s) => [s.section, this.withoutSecrets(s.section, s.value)])),
+      roles: roles
+        .toSorted((a, b) => a.name.de.localeCompare(b.name.de))
+        .map((r) => ({ id: r.id, name: r.name, templateKey: r.templateKey ?? null, description: r.description, permissions: r.permissions, permissionsAllDepartments: r.permissionsAllDepartments })),
+      settings: Object.fromEntries(settings.filter((s) => this.settings.mayRead(user, s.section)).map((s) => [s.section, this.settings.redact(s.section, s.value, user)])),
       apiTokens: tokens.map((t) => ({ id: t.id, name: t.name, scopes: t.scopes, prefix: t.prefix, createdAt: t.createdAt.toISOString(), expiresAt: t.expiresAt?.toISOString() ?? null, revokedAt: t.revokedAt?.toISOString() ?? null })),
     };
   }
@@ -58,6 +72,27 @@ export class CoreExport {
     };
   }
 
+  /**
+   * Accounts of anonymised persons are locked and lose name, e-mail address, password, sessions, tokens, open links and
+   * their own history; the account itself stays, so other histories refer to "N. N." instead of a missing user.
+   */
+  async anonymize(personIds: readonly string[]): Promise<void> {
+    const em = this.em.fork();
+    const users = await em.find(User, { personId: { $in: [...personIds] } }, { populate: ['passwordHash'] });
+    if (!users.length) return;
+    for (const user of users) {
+      // The username must stay unique; the ID does not reveal anything about the person.
+      em.assign(user, { username: `anonymized-${user.id}`, displayName: ANONYMIZED_NAME, email: null, passwordHash: null, oidcSubject: null, active: false, hiddenTasks: [] });
+    }
+    await em.flush();
+    const ids = users.map((u) => u.id);
+    await em.nativeDelete(Session, { user: { $in: ids } });
+    await em.nativeDelete(PasswordReset, { user: { $in: ids } });
+    await em.nativeUpdate(ApiToken, { user: { $in: ids }, revokedAt: null }, { revokedAt: new Date() });
+    // The history of the accounts holds the former names and addresses.
+    await em.nativeDelete(HistoryEntry, { $or: [{ entity: 'core.user', entityId: { $in: ids } }, { parentEntity: 'core.user', parentId: { $in: ids } }] });
+  }
+
   private user(u: User) {
     return {
       id: u.id,
@@ -73,11 +108,5 @@ export class CoreExport {
       oidcLinked: Boolean(u.oidcSubject),
       roles: u.roles.getItems().map((a) => ({ roleId: a.role.id, role: a.role.name, departmentId: a.departmentId ?? null })),
     };
-  }
-
-  private withoutSecrets(section: string, value: Record<string, unknown>): Record<string, unknown> {
-    const visible = { ...value };
-    for (const field of SECRET_SETTING_FIELDS[section] ?? []) delete visible[field];
-    return visible;
   }
 }

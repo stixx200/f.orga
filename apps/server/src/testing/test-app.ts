@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import { applyTrustProxy } from '@forga/core-api';
 import { resetTestDatabase, TEST_DATABASE_URL } from './test-database';
 
 /** Header that marks requests from the UI (CSRF protection). */
@@ -32,6 +33,7 @@ export async function startTestApp(options: Parameters<typeof import('../app/app
   const moduleRef = await Test.createTestingModule({ imports: [AppModule.register(options)] }).compile();
   const app = moduleRef.createNestApplication();
   app.setGlobalPrefix('api');
+  applyTrustProxy(app);
   servePluginFrontends(app, options.plugins?.states ?? []);
   app.use(cookieParser());
   await app.init();

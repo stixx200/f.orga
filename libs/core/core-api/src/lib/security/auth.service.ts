@@ -17,6 +17,15 @@ const IMPERSONATION_MS = 60 * 60_000;
 export const SESSION_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
 export const API_TOKEN_PREFIX = 'forga_';
 
+/** `active`: permissions of active modules (what a user may do); `all`: also those of deactivated modules. */
+export type PermissionScope = 'active' | 'all';
+
+/** A role assignment as far as grants are concerned. */
+export interface RoleGrantInput {
+  role: Pick<Role, 'permissions' | 'permissionsAllDepartments'>;
+  departmentId: string | null;
+}
+
 /** Options of the session cookie (also used by the OIDC sign-in). */
 export const sessionCookieOptions = (secure: boolean) => ({ httpOnly: true, sameSite: 'lax' as const, secure, path: '/', maxAge: SESSION_DURATION_MS });
 
@@ -26,7 +35,7 @@ const LOCK_MS = 60 * 1000;
 
 @Injectable()
 export class AuthService implements OnApplicationBootstrap {
-  /** Failed logins per username (insertion order = oldest first); after too many, the account is locked for a minute. */
+  /** Failed logins per username and address (insertion order = oldest first); after too many, locked for a minute. */
   private readonly failures = new Map<string, { count: number; lockedUntil: number }>();
   private readonly logger = new Logger('Setup');
   private generatedSetupToken: string | null = null;
@@ -62,9 +71,13 @@ export class AuthService implements OnApplicationBootstrap {
     return timingSafeEqual(Buffer.from(hashSecret(token)), Buffer.from(hashSecret(this.setupToken())));
   }
 
-  /** Checks the credentials and opens a session. Returns the cookie value, or `null`. */
-  async login(username: string, password: string): Promise<{ token: string; user: User } | 'locked' | null> {
-    const key = username.toLowerCase();
+  /**
+   * Checks the credentials and opens a session. Returns the cookie value, or `null`. Failed attempts lock the username
+   * for a minute only for the address they came from (`ip`, the client address behind a trusted proxy), so nobody
+   * can lock others out of their account by guessing wrong passwords.
+   */
+  async login(username: string, password: string, ip: string): Promise<{ token: string; user: User } | 'locked' | null> {
+    const key = `${username.toLowerCase()}|${ip}`;
     const failure = this.failures.get(key);
     if (failure && failure.lockedUntil > Date.now()) return 'locked';
 
@@ -136,8 +149,8 @@ export class AuthService implements OnApplicationBootstrap {
     const em = this.em.fork();
     const target = await em.findOne(User, { id: targetId, active: true, technical: false });
     if (!target) throw new NotFoundException({ code: 'auth.impersonationUnknownUser' });
-    const targetUser = await this.load(em, target, 'session');
-    const wider = widerThan(actor, targetUser.grants);
+    await em.populate(target, ['roles.role']);
+    const wider = await this.widerThanActor(actor, target.roles.getItems().map((a) => ({ role: a.role, departmentId: a.departmentId ?? null })));
     if (wider.length) throw new ForbiddenException({ code: 'auth.impersonationWider', permissions: wider });
 
     const token = generateSecret();
@@ -178,19 +191,28 @@ export class AuthService implements OnApplicationBootstrap {
     return new AuthenticatedUser(user.id, user.username, user.displayName, null, user.language, grants, 'token');
   }
 
-  /** Permissions of deactivated modules do not count: their lists, imports, search hits and deadlines disappear too. */
-  private async activePermissions(): Promise<Permission[]> {
+  /**
+   * Permissions of deactivated modules do not count for what a user may do: their lists, imports, search hits and
+   * deadlines disappear too. Checks whether someone may hand out permissions use `all`, so permissions of a deactivated
+   * module cannot be granted unnoticed and take effect when it is activated again.
+   */
+  private async permissions(scope: PermissionScope): Promise<readonly Permission[]> {
+    if (scope === 'all') return this.registry.all;
     const inactive = await this.modules.inactiveIds();
     return this.registry.all.filter((p) => !inactive.has(p.id.slice(0, p.id.indexOf('.'))));
   }
 
+  private activePermissions(): Promise<readonly Permission[]> {
+    return this.permissions('active');
+  }
+
   /**
-   * Effective grants of role assignments, as a user holding them would get them:
-   * without deactivated modules, and an assignment to a department covers the departments below it.
+   * Effective grants of role assignments, as a user holding them would get them: by default without deactivated
+   * modules, and an assignment to a department covers the departments below it.
    */
-  async grantsFor(assignments: readonly { role: Pick<Role, 'permissions' | 'permissionsAllDepartments'>; departmentId: string | null }[]): Promise<Map<string, Grant>> {
+  async grantsFor(assignments: readonly RoleGrantInput[], scope: PermissionScope = 'active'): Promise<Map<string, Grant>> {
     return computeGrants(
-      await this.activePermissions(),
+      await this.permissions(scope),
       assignments.flatMap((a) => [
         { patterns: a.role.permissions, departmentId: a.departmentId },
         { patterns: a.role.permissionsAllDepartments ?? [], departmentId: null },
@@ -200,12 +222,40 @@ export class AuthService implements OnApplicationBootstrap {
   }
 
   /**
+   * Permissions of the assignments that `actor` does not hold to the same extent. Both sides count the permissions of
+   * deactivated modules as well, so nobody can hand out (or take over) permissions of a module that is switched off.
+   */
+  async widerThanActor(actor: AuthenticatedUser, assignments: readonly RoleGrantInput[]): Promise<string[]> {
+    return widerThan(await this.allGrantsOf(actor), await this.grantsFor(assignments, 'all'));
+  }
+
+  /** Does the actor hold the permission (counting deactivated modules) brigade-wide or in one of the departments? */
+  async holds(actor: AuthenticatedUser, permission: string, departmentIds: readonly string[]): Promise<boolean> {
+    const grant = (await this.allGrantsOf(actor)).grant(permission);
+    return grant === 'brigade' || (Array.isArray(grant) && departmentIds.some((d) => grant.includes(d)));
+  }
+
+  /** Grants of a user's role assignments including deactivated modules. */
+  async allGrantsOfUser(em: EntityManager, user: User): Promise<Map<string, Grant>> {
+    await em.populate(user, ['roles.role']);
+    return this.grantsFor(user.roles.getItems().map((a) => ({ role: a.role, departmentId: a.departmentId ?? null })), 'all');
+  }
+
+  /** The actor's grants including deactivated modules; tokens (no roles) keep their effective grants. */
+  private async allGrantsOf(actor: AuthenticatedUser): Promise<Pick<AuthenticatedUser, 'grant'>> {
+    if (actor.via === 'token') return actor;
+    const user = await this.em.fork().findOne(User, actor.id, { populate: ['roles.role'] });
+    if (!user) return actor;
+    const grants = await this.grantsFor(user.roles.getItems().map((a) => ({ role: a.role, departmentId: a.departmentId ?? null })), 'all');
+    return { grant: (permission) => grants.get(permission) ?? null };
+  }
+
+  /**
    * A user may only be changed (password, e-mail, lock, roles, OIDC link) by someone holding all of his permissions,
    * so `core.users.manage` cannot take over an administrator account. `user.roles.role` must be populated.
    */
   async assertMayManage(actor: AuthenticatedUser, user: User): Promise<void> {
-    const grants = await this.grantsFor(user.roles.getItems().map((a) => ({ role: a.role, departmentId: a.departmentId ?? null })));
-    const wider = widerThan(actor, grants);
+    const wider = await this.widerThanActor(actor, user.roles.getItems().map((a) => ({ role: a.role, departmentId: a.departmentId ?? null })));
     if (wider.length) throw new ForbiddenException({ code: 'users.targetWider', permissions: wider });
   }
 

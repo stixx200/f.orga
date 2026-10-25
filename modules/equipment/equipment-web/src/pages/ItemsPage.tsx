@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router';
 import type { Item } from '@forga/equipment-contracts';
 import { can, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, PageHeader, StatusBadge } from '@forga/web-ui';
-import { useCategories, useCategoryName, useDepartments, useDueSoon, useItems, usePlace, WRITE } from '../api';
+import { BREATHING_WRITE, useCategories, useCategoryName, useDepartments, useDueSoon, useItems, usePlace, WRITE } from '../api';
 import { DueDate, ItemStatusBadge } from '../parts';
 import { ItemDialog } from './ItemDialog';
 
@@ -42,7 +42,7 @@ export function ItemsPage() {
         actions={
           <Group gap="sm">
             <Button component={Link} to="/equipment/labels" variant="default">{t('labels.title')}</Button>
-            {can(session, WRITE) && <Button onClick={() => setCreating(true)}>{t('item.new')}</Button>}
+            {(can(session, WRITE) || can(session, BREATHING_WRITE)) && <Button onClick={() => setCreating(true)}>{t('item.new')}</Button>}
           </Group>
         }
       />
@@ -63,7 +63,7 @@ export function ItemsPage() {
           { key: 'name', header: t('fields.name'), render: (i) => <><Text size="sm" fw={700}>{i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ''}</Text><Text size="xs" c="dimmed">{category(i.categoryKey)}</Text></> },
           { key: 'place', header: t('fields.place'), render: (i) => place(i) },
           { key: 'status', header: t('fields.status'), render: (i) => <Group gap={4}><ItemStatusBadge status={i.status} blocked={i.blocked} />{i.openDefects > 0 && <StatusBadge tone="error">{t('items.defects', { count: i.openDefects })}</StatusBadge>}</Group> },
-          { key: 'next', header: t('items.nextInspection'), render: (i) => <DueDate dueOn={i.nextDue} /> },
+          { key: 'next', header: t('items.nextInspection'), render: (i) => <DueDate dueOn={i.nextDue} notRecorded={i.dues.some((d) => d.notRecorded)} /> },
         ]}
       />
       {creating && <ItemDialog onClose={() => setCreating(false)} />}

@@ -27,6 +27,7 @@ export const EQUIPMENT_MANIFEST = {
   ],
   roles: [
     { key: 'member', permissions: ['equipment.defects.report'] },
+    { key: 'clothing-officer', permissions: ['equipment.defects.report'] },
     { key: 'commander', permissions: ['equipment.read', 'equipment.defects.report'], permissionsAllDepartments: ['equipment.read'] },
     { key: 'department-commander', permissions: ['equipment.read', 'equipment.write', 'equipment.defects.report'] },
     { key: 'group-leader', permissions: ['equipment.read', 'equipment.defects.report'] },

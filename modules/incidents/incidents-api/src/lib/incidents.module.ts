@@ -31,6 +31,7 @@ import { StatisticsController } from './statistics/statistics.controller.js';
 import { IncidentsController } from './reports/incidents.controller.js';
 import { ReportContextLoader } from './reports/report-context.js';
 import { ReportPdf } from './reports/report-pdf.js';
+import { ReportWriters } from './reports/report-writers.js';
 import { READ, RELEASE, ReportsService } from './reports/reports.service.js';
 
 /** Global, so other modules can inject `INCIDENTS_LOOKUP`. */
@@ -38,7 +39,7 @@ import { READ, RELEASE, ReportsService } from './reports/reports.service.js';
 @Module({
   controllers: [KeywordsController, IncidentsController, PersonAssignmentsController, MyIncidentsController, ExternalController, CompensationExportController, StatisticsController, DutyController],
   providers: [
-    IncidentsData, ReportContextLoader, ReportsService, ReportPdf, IncidentsDeadlines, AssignmentLines, IncidentsLists, DutyRosterImport, DutyEvents, MpFeuerIncidentsImport, CompensationChecker,
+    IncidentsData, ReportContextLoader, ReportsService, ReportPdf, ReportWriters, IncidentsDeadlines, AssignmentLines, IncidentsLists, DutyRosterImport, DutyEvents, MpFeuerIncidentsImport, CompensationChecker,
     IncidentsLookupService, { provide: INCIDENTS_LOOKUP, useExisting: IncidentsLookupService },
   ],
   exports: [INCIDENTS_LOOKUP],

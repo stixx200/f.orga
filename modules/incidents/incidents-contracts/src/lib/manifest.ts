@@ -58,7 +58,7 @@ export const INCIDENTS_MANIFEST = {
   ],
   navigation: [
     { label: { de: 'Einsätze', en: 'Incidents' }, path: 'incidents', permission: 'incidents.reports.read', icon: 'firetruck' },
-    { label: { de: 'Zur Prüfung', en: 'For review' }, path: 'review', permission: 'incidents.reports.release', icon: 'check' },
+    { label: { de: 'Zur Prüfung', en: 'For review' }, path: 'review', permission: 'incidents.reports.review', icon: 'check' },
     { label: { de: 'Offene Berichte', en: 'Open reports' }, path: 'open', permission: 'incidents.reports.read', icon: 'alert' },
     {
       label: { de: 'Prüfung Entschädigung (Einsatzberichte)', en: 'Compensation check (incident reports)' },
@@ -81,6 +81,7 @@ export const INCIDENTS_MANIFEST = {
     { key: 'course-coordinator', permissions: ['incidents.self'] },
     { key: 'breathing-apparatus-officer', permissions: ['incidents.reports.read', 'incidents.self'] },
     { key: 'equipment-officer', permissions: ['incidents.self'] },
+    { key: 'clothing-officer', permissions: ['incidents.self'] },
     {
       key: 'administration',
       permissions: ['incidents.reports.read', 'incidents.compensation.export', 'incidents.statistics', 'incidents.duty.manage', 'incidents.self'],

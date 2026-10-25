@@ -20,7 +20,8 @@ export function StatisticsSection({ content, report, draft, setDraft, update, di
   update: (change: (c: Content) => Content) => void;
   disabled: boolean;
   primaryReportId?: string;
-  onSaveSeparately?: (statistics: Statistics) => void;
+  /** `null` removes the statistics (e.g. entered for a keyword that does not count). */
+  onSaveSeparately?: (statistics: Statistics | null) => void;
   saving?: boolean;
 }) {
   const { t } = useTranslation('incidents');
@@ -53,6 +54,11 @@ export function StatisticsSection({ content, report, draft, setDraft, update, di
     <NumberInput label={t(`statistics.${key}`)} description={hint} value={value?.[key] ?? 0} onChange={(v) => change({ [key]: Number(v) || 0 })} min={0} disabled={disabled || !value} />
   );
   const incomplete = value && !completeStatistics(value);
+  const remove = () => {
+    setDraft(null);
+    if (onSaveSeparately) onSaveSeparately(null);
+    else update((c) => ({ ...c, statistics: null }));
+  };
   const separate = onSaveSeparately && draft && completeStatistics(draft);
 
   return (
@@ -122,6 +128,11 @@ export function StatisticsSection({ content, report, draft, setDraft, update, di
             {count('animalsRescued')}
           </SimpleGrid>
           <Text size="xs" c="dimmed">{t('statistics.ownForces')}</Text>
+          {!disabled && (content.statistics || draft) && (
+            <Group justify="flex-end">
+              <Button size="xs" variant="subtle" loading={saving} onClick={remove}>{t('statistics.remove')}</Button>
+            </Group>
+          )}
         </Stack>
       </Panel>
     </Stack>

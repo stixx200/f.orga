@@ -4,16 +4,30 @@ import { Link } from 'react-router';
 import type { Incident } from '@forga/incidents-contracts';
 import { can, formatDateTime, localDate, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, KpiTile, Panel } from '@forga/web-ui';
-import { RELEASE, useIncidents, useNames, useSettings } from './api';
+import { RELEASE, REVIEW, useIncidents, useNames, useSettings } from './api';
+import { useForeignBufferCleanup } from './report/editor';
 import { DepartmentBadge, incidentStatus, keywordLabel, locationLabel, ReportStatusBadge } from './parts';
 
-/** Number of reports in the given status among the incidents returned. */
-const countReports = (incidents: Incident[], status: string) => incidents.flatMap((i) => i.reports).filter((r) => r.status === status).length;
+/** Number of reports in the given status among the incidents returned (optionally only of some departments). */
+const countReports = (incidents: Incident[], status: string, departments: (id: string) => boolean = () => true) =>
+  incidents.flatMap((i) => i.reports).filter((r) => r.status === status && departments(r.departmentId)).length;
+
+/** The setting `compensationRelease` (two-step release) as the server applies it: on unless switched off. */
+const twoStepRelease = (settings: { compensationRelease?: boolean } | undefined) => settings?.compensationRelease ?? true;
+
+/** Releasers review all departments, pre-reviewers (`incidents.reports.review`) theirs. */
+function useReviewer() {
+  const session = useSession().data;
+  const releaser = can(session, RELEASE);
+  return { releaser, reviewer: releaser || can(session, REVIEW), reviews: (departmentId: string) => releaser || can(session, REVIEW, departmentId) };
+}
 
 export function ReviewTile() {
   const { t } = useTranslation('incidents');
-  const { data = [] } = useIncidents({ status: 'review' });
-  const count = countReports(data, 'review');
+  const { reviewer, reviews } = useReviewer();
+  const { data = [] } = useIncidents({ status: 'review' }, reviewer);
+  if (!reviewer) return null;
+  const count = countReports(data, 'review', reviews);
   return <KpiTile value={count} label={t('dashboard.review')} hint={t('dashboard.reviewHint')} to="/incidents/review" attention={count > 0} />;
 }
 
@@ -21,7 +35,7 @@ export function ReviewTile() {
 export function BillingTile() {
   const { t } = useTranslation('incidents');
   const { data: settings } = useSettings();
-  const twoSteps = settings?.compensationRelease ?? false;
+  const twoSteps = twoStepRelease(settings);
   const { data = [] } = useIncidents({ status: 'released-compensation' }, twoSteps);
   if (!twoSteps) return null;
   const count = countReports(data, 'released-compensation');
@@ -67,14 +81,18 @@ export function RecentIncidents() {
   );
 }
 
-/** Counter at "Zur Prüfung" in the menu for users who release reports: for review and, with two steps, for billing. */
+/**
+ * Counter at "Zur Prüfung" in the menu: reports for review (pre-reviewers: of their departments) and, for releasers
+ * with two steps, for billing.
+ */
 export function useNavigationBadges(): Record<string, number | undefined> {
-  const session = useSession().data;
-  const releaser = can(session, RELEASE);
+  // Runs for every logged-in user: unsaved report content of other users is removed from this browser.
+  useForeignBufferCleanup();
+  const { releaser, reviewer, reviews } = useReviewer();
   const { data: settings } = useSettings();
-  const twoSteps = releaser && (settings?.compensationRelease ?? false);
-  const { data = [] } = useIncidents({ status: 'review' }, releaser);
+  const twoSteps = releaser && twoStepRelease(settings);
+  const { data = [] } = useIncidents({ status: 'review' }, reviewer);
   const { data: billing = [] } = useIncidents({ status: 'released-compensation' }, twoSteps);
-  const count = countReports(data, 'review') + (twoSteps ? countReports(billing, 'released-compensation') : 0);
-  return { review: releaser ? count || undefined : undefined };
+  const count = countReports(data, 'review', reviews) + (twoSteps ? countReports(billing, 'released-compensation') : 0);
+  return { review: reviewer ? count || undefined : undefined };
 }

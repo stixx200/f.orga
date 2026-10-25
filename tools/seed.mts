@@ -1,6 +1,7 @@
 /**
  * Fills a running f.orga instance with demo data through the public API:
- * organization, one user per standard role, persons and incidents, protective equipment of the clothing store (imported from generated files in the
+ * organization, one user per standard role (department roles linked to fitting persons of Musterstadt), groups, course
+ * planning (runs, nominations, targets), bank accounts with made-up IBANs, persons and incidents, protective equipment of the clothing store (imported from generated files in the
  * format of the MP-Feuer exports `Personal.xlsx` and `MP-EXCEL.xlsx`) and a duty roster calendar.
  *
  * All persons and incidents are made up; a fixed random seed keeps them identical between runs, so running
@@ -16,6 +17,7 @@ import ExcelJS from 'exceljs';
 import { VWV_2022_RULES } from '@forga/promotions-contracts';
 import { BW_TEMPLATE } from '@forga/cost-recovery-contracts';
 import { SAMPLE_STATUTE } from '@forga/compensation-contracts';
+import { BW_MEMBERSHIP_TEMPLATE } from '@forga/masterdata-contracts';
 
 const BASE = (process.env['FORGA_URL'] ?? 'http://localhost:3000').replace(/\/$/, '');
 const ADMIN = { username: process.env['FORGA_ADMIN_USER'] ?? 'admin', password: process.env['FORGA_ADMIN_PASSWORD'] ?? 'sehr-geheim-123' };
@@ -390,6 +392,9 @@ async function settings(): Promise<void> {
   await call('PUT', 'core/settings/incidents.general', { ...general, homeMunicipalities: ['Musterstadt'] });
   await call('POST', 'masterdata/catalog/templates/bw', {});
   await call('POST', 'masterdata/courses/templates/bw', {}).catch(() => undefined);
+  // Statute values of the BW template (template values; a real brigade compares them with its own statute).
+  const membership = (await call<Record<string, unknown> | null>('GET', 'core/settings/masterdata.membership')) ?? {};
+  if (!membership['admissionDecidedBy']) await call('PUT', 'core/settings/masterdata.membership', { ...membership, ...BW_MEMBERSHIP_TEMPLATE });
   await call('POST', 'incidents/keywords/templates/bw', {});
   await call('POST', 'core/roles/templates', {});
 }
@@ -457,28 +462,58 @@ async function careers(planned: PlannedPerson[], persons: PersonRef[]): Promise<
   console.log(`  Laufbahn für ${updated} Personen ergänzt`);
 }
 
-/** One user per standard role; the department roles apply to Abteilung Musterstadt. */
-async function users(persons: PersonRef[], departments: Map<string, string>): Promise<void> {
-  const roles = await call<{ id: string; name: string; templateKey: string | null }[]>('GET', 'core/roles');
-  const existing = new Set((await call<{ username: string }[]>('GET', 'core/users')).map((u) => u.username));
+/** Adds a qualification unless the person holds it already. */
+async function ensureQualification(person: PersonRef, qualification: string, acquiredOn: string): Promise<void> {
+  if (person.qualifications.includes(qualification)) return;
+  await call('POST', `masterdata/persons/${person.id}/qualifications`, { qualification, acquiredOn });
+  person.qualifications.push(qualification);
+}
+
+/**
+ * One user per standard role. The department roles apply to Abteilung Musterstadt and belong to persons there whose
+ * file fits the role: the department commander holds the office, the group leader the qualification; the equipment
+ * and breathing apparatus officers hold theirs as well.
+ */
+async function users(persons: PersonRef[], departments: Map<string, string>): Promise<Map<string, PersonRef>> {
+  const roles = await call<{ id: string; name: { de: string; en: string }; templateKey: string | null }[]>('GET', 'core/roles');
+  const accounts = await call<{ username: string; personId: string | null }[]>('GET', 'core/users');
+  const existing = new Set(accounts.map((u) => u.username));
   const departmentRoles = new Set(['department-commander', 'group-leader', 'member']);
   const musterstadt = departments.get('Abteilung Musterstadt')!;
   const available = persons.filter((p) => p.status === 'active');
-  // The member of "My area" is a breathing apparatus wearer of Musterstadt, so all sections have content.
-  const member = available.find((p) => p.primaryDepartmentId === musterstadt && p.qualifications.includes('breathing-apparatus'));
+  const local = available.filter((p) => p.primaryDepartmentId === musterstadt);
+  const taken = new Set<string>(accounts.flatMap((u) => (u.personId ? [u.personId] : [])));
+  // Persons per role: from Musterstadt with a fitting qualification (in the order of preference).
+  const prefer = (...qualifications: string[]) => qualifications.map((q) => local.find((p) => p.qualifications.includes(q) && !taken.has(p.id))).find(Boolean) ?? local.find((p) => !taken.has(p.id));
+  const chosen = new Map<string, PersonRef>();
+  // Persons of users created earlier keep their role.
+  for (const account of accounts) {
+    const person = persons.find((p) => p.id === account.personId);
+    if (person) chosen.set(account.username, person);
+  }
+  for (const [username, qualifications] of [
+    ['member', ['breathing-apparatus']],
+    ['department-commander', ['platoon-leader', 'group-leader']],
+    ['group-leader', ['group-leader', 'squad-leader']],
+  ] as const) {
+    if (chosen.has(username)) continue;
+    const person = prefer(...qualifications);
+    if (!person) continue;
+    chosen.set(username, person);
+    taken.add(person.id);
+  }
   let created = 0;
-  // Each person belongs to at most one user; the member's person is reserved for the user "member".
-  const taken = new Set(member ? [member.id] : []);
   for (const [index, role] of roles.filter((r) => r.templateKey).entries()) {
     const username = role.templateKey!;
     if (existing.has(username) || username === ADMIN.username) continue;
     let candidate = (index * 7) % available.length;
     while (taken.has(available[candidate].id)) candidate = (candidate + 1) % available.length;
-    const person = (username === 'member' && member) || available[candidate];
+    const person = chosen.get(username) ?? available[candidate];
+    chosen.set(username, person);
     taken.add(person.id);
     await call('POST', 'core/users', {
       username,
-      displayName: `${person.firstName} ${person.lastName} (${role.name})`,
+      displayName: `${person.firstName} ${person.lastName} (${role.name.de})`,
       email: null,
       personId: person.id,
       password: USER_PASSWORD,
@@ -486,8 +521,115 @@ async function users(persons: PersonRef[], departments: Map<string, string>): Pr
     });
     created++;
   }
+  // The files fit the roles: qualifications of the group leader and the officers, office of the department commander.
+  const since = isoDate(new Date(new Date().getFullYear() - 3, 2, 1));
+  const groupLeader = chosen.get('group-leader');
+  if (groupLeader) await ensureQualification(groupLeader, 'group-leader', since);
+  const equipmentOfficer = chosen.get('equipment-officer');
+  if (equipmentOfficer) await ensureQualification(equipmentOfficer, 'equipment-officer', since);
+  const apparatusOfficer = chosen.get('breathing-apparatus-officer');
+  if (apparatusOfficer) {
+    await ensureQualification(apparatusOfficer, 'breathing-apparatus', since);
+    await ensureQualification(apparatusOfficer, 'breathing-apparatus-officer', since);
+  }
+  const commander = chosen.get('department-commander');
+  if (commander) {
+    const file = await call<{ offices: { office: string }[] }>('GET', `masterdata/persons/${commander.id}`);
+    if (!file.offices.some((o) => o.office === 'department-commander')) {
+      await call('POST', `masterdata/persons/${commander.id}/offices`, { office: 'department-commander', departmentId: musterstadt, from: since });
+    }
+    const department = (await call<{ id: string; commanderId: string | null }[]>('GET', 'masterdata/departments')).find((d) => d.id === musterstadt)!;
+    if (!department.commanderId) await call('PUT', `masterdata/departments/${musterstadt}`, { ...department, commanderId: commander.id });
+  }
   console.log(`  ${created} Benutzer angelegt (Passwort: ${USER_PASSWORD})`);
-  for (const role of roles.filter((r) => r.templateKey)) console.log(`    ${role.templateKey!.padEnd(30)} ${role.name}`);
+  for (const role of roles.filter((r) => r.templateKey)) console.log(`    ${role.templateKey!.padEnd(30)} ${role.name.de}`);
+  return chosen;
+}
+
+/** Three groups in Musterstadt; the user "group-leader" leads the first. */
+async function groups(persons: PersonRef[], departments: Map<string, string>, accounts: Map<string, PersonRef>): Promise<void> {
+  const musterstadt = departments.get('Abteilung Musterstadt')!;
+  if ((await call<unknown[]>('GET', `masterdata/groups?departmentId=${musterstadt}`)).length) return;
+  const local = persons.filter((p) => p.primaryDepartmentId === musterstadt && (p.status === 'active' || p.status === 'probation'));
+  const first = accounts.get('group-leader');
+  const leaders = [first, ...local.filter((p) => p !== first && p.qualifications.includes('group-leader'))].filter((p): p is PersonRef => Boolean(p)).slice(0, 3);
+  const others = local.filter((p) => !leaders.includes(p));
+  for (const [index, leader] of leaders.entries()) {
+    const memberIds = others.filter((_, i) => i % leaders.length === index).slice(0, 9).map((p) => p.id);
+    await call('POST', 'masterdata/groups', { departmentId: musterstadt, name: `${index + 1}. Gruppe`, leaderId: leader.id, memberIds });
+  }
+  console.log(`  ${leaders.length} Gruppen in Musterstadt`);
+}
+
+/**
+ * Course planning: targets for Musterstadt and the youth brigade, a past run with results, coming runs with
+ * nominations, and further nominations without a run, so planning and needs show something.
+ */
+async function coursePlanning(departments: Map<string, string>): Promise<void> {
+  const musterstadt = departments.get('Abteilung Musterstadt')!;
+  const youth = departments.get('Jugendfeuerwehr Musterstadt')!;
+  type Course = { id: string; key: string; targets: Record<string, number> } & Record<string, unknown>;
+  const courses = await call<Course[]>('GET', 'masterdata/courses');
+  const targets: Record<string, Record<string, number>> = {
+    'truppmann-1': { [youth]: 10 },
+    // Some targets above the current numbers, so the needs show gaps.
+    'breathing-apparatus': { [musterstadt]: 44 },
+    machinist: { [musterstadt]: 24 },
+    'squad-leader': { [musterstadt]: 24 },
+    'group-leader': { [musterstadt]: 15 },
+  };
+  for (const course of courses) {
+    const wanted = targets[course.key];
+    if (!wanted || Object.keys(course.targets).length) continue;
+    const { id, version: _version, ...fields } = course;
+    await call('PUT', `masterdata/courses/${id}`, { ...fields, targets: wanted });
+  }
+  if ((await call<unknown[]>('GET', 'masterdata/course-runs')).length) return;
+
+  type Planning = { candidates: { id: string; primaryDepartmentId: string | null }[] };
+  const year = new Date().getFullYear();
+  const run = (course: string, startsOn: string, endsOn: string, location: string) => call<{ id: string }>('POST', 'masterdata/course-runs', { course, startsOn, endsOn, location });
+  const candidates = async (course: string, departmentId: string, count: number) =>
+    (await call<Planning>('GET', `masterdata/course-planning/${course}`)).candidates.filter((p) => p.primaryDepartmentId === departmentId).slice(0, count).map((p) => p.id);
+  const nominate = async (course: string, personIds: string[], body: object = {}) => {
+    if (personIds.length) await call('POST', 'masterdata/course-nominations/bulk', { course, personIds, desiredPeriod: String(year + 1), ...body });
+  };
+
+  // Past: Truppmann Teil 2 in the municipality, two passed and one failed.
+  const past = await run('truppmann-2', daysAgo(70), daysAgo(60), 'Feuerwehrhaus Musterstadt');
+  const attended = await candidates('truppmann-2', musterstadt, 3);
+  await nominate('truppmann-2', attended, { runId: past.id, status: 'confirmed', desiredPeriod: String(year) });
+  if (attended.length) {
+    await call('POST', 'masterdata/course-results', { course: 'truppmann-2', runId: past.id, results: attended.map((personId, i) => ({ personId, result: i === 2 ? 'failed' : 'passed' })) });
+  }
+  // Coming runs with registered persons, further nominations without a run.
+  const spring = await run('breathing-apparatus', `${year + 1}-03-07`, `${year + 1}-03-21`, 'Feuerwehrhaus Ahornfeld');
+  await nominate('breathing-apparatus', await candidates('breathing-apparatus', musterstadt, 6), { runId: spring.id, status: 'registered', priority: 1 });
+  const basic = await run('truppmann-1', `${year + 1}-02-14`, `${year + 1}-04-25`, 'Kreisfeuerwehrzentrale');
+  await nominate('truppmann-1', await candidates('truppmann-1', youth, 4), { runId: basic.id, status: 'confirmed' });
+  await nominate('machinist', await candidates('machinist', musterstadt, 4));
+  await nominate('squad-leader', await candidates('squad-leader', musterstadt, 3), { priority: 1 });
+  console.log('  Lehrgangstermine, Vormerkungen und Soll angelegt');
+}
+
+/** A valid German IBAN for a made-up account at the bank code 00000000, which no bank uses. */
+function demoIban(account: number): string {
+  const bban = `00000000${String(account).padStart(10, '0')}`;
+  // Check digits per ISO 13616: BBAN + "DE00" with letters as numbers (D = 13, E = 14), 98 − remainder mod 97.
+  const check = 98n - (BigInt(`${bban}131400`) % 97n);
+  return `DE${String(check).padStart(2, '0')}${bban}`;
+}
+
+/** Bank accounts for some active members (made up, valid check digits), e.g. for the compensation payments. */
+async function bankAccounts(persons: PersonRef[]): Promise<void> {
+  let updated = 0;
+  for (const [index, person] of persons.filter((p) => p.status === 'active').slice(0, 20).entries()) {
+    const file = await call<{ bank?: { iban: string }; sensitiveHidden: boolean } & Record<string, unknown>>('GET', `masterdata/persons/${person.id}`);
+    if (file.sensitiveHidden || file.bank?.iban) continue;
+    await call('PUT', `masterdata/persons/${person.id}`, { ...file, bank: { iban: demoIban(4_711_000 + index * 37), accountHolder: `${person.firstName} ${person.lastName}` } });
+    updated++;
+  }
+  console.log(`  ${updated} Bankverbindungen ergänzt`);
 }
 
 /** Training sessions every second week per department this year; past ones with attendance, older ones closed. */
@@ -535,7 +677,9 @@ async function training(members: Map<string, PersonRef[]>, departments: Map<stri
 /** Evidence of the breathing apparatus wearers: most are fit, some expire soon, a few are not fit. */
 async function respiratoryProtection(persons: PersonRef[]): Promise<void> {
   reseed(112);
-  const wearers = persons.filter((p) => p.status !== 'left' && p.qualifications.includes('breathing-apparatus'));
+  await qualifyUser(persons, 'breathing-apparatus-officer', 'breathing-apparatus-officer');
+  // Wearers count only as active members or on probation (`WEARER_STATUSES`).
+  const wearers = persons.filter((p) => (p.status === 'active' || p.status === 'probation') && p.qualifications.includes('breathing-apparatus'));
   const existing = await call<{ evidence: unknown[] }>('GET', `respiratory-protection/persons/${wearers[0]?.id}`).catch(() => ({ evidence: [1] }));
   if (!wearers.length || existing.evidence.length) {
     console.log('  Nachweise vorhanden');
@@ -567,7 +711,8 @@ async function compensation(persons: PersonRef[]): Promise<void> {
   }
   // The statute values are taken over explicitly from the sample statute (example values).
   const statute = (await call<Record<string, unknown> | null>('GET', 'core/settings/compensation.general')) ?? {};
-  await call('PUT', 'core/settings/compensation.general', { ...statute, ...SAMPLE_STATUTE });
+  // The payer account of the SEPA file is an example (test IBAN), so the payout run demo has transfer files.
+  await call('PUT', 'core/settings/compensation.general', { ...statute, ...SAMPLE_STATUTE, payer: { name: 'Stadt Musterstadt (Beispiel)', iban: 'DE02120300000000202051', bic: '' } });
   for (const y of [year - 1, year]) {
     await call('POST', 'incidents/reports/republish', { from: `${y}-01-01`, to: `${y}-12-31` });
     await call('POST', 'training/sessions/republish', { from: `${y}-01-01`, to: `${y}-12-31` });
@@ -580,21 +725,43 @@ async function compensation(persons: PersonRef[]): Promise<void> {
   }
   await call('POST', 'compensation/functions/generate', { year: year - 1 });
   // A closed and paid run for the previous year; the current year stays open.
-  const run = await call<{ id: string; items: { id: string; amount: number | null }[] }>('POST', 'compensation/runs', { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` });
+  const run = await call<{ id: string; items: { id: string; amount: number | null }[]; problems: { code: string }[] }>('POST', 'compensation/runs', { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` });
   for (const item of run.items.filter((i) => i.amount === null)) await call('PUT', `compensation/items/${item.id}/amount`, { amount: between(40, 180), reason: 'Bescheinigung Arbeitgeber' });
-  // Demo persons without bank account are confirmed explicitly; they are left out of the transfer files.
-  await call('POST', `compensation/runs/${run.id}/close`, { acceptMissingIban: true });
+  // Only if demo persons still lack a valid bank account, they are confirmed explicitly (paid another way).
+  await call('POST', `compensation/runs/${run.id}/close`, { acceptMissingIban: run.problems.some((p) => p.code === 'no-iban') });
   await call('POST', `compensation/runs/${run.id}/hand-over`, {});
   await call('POST', `compensation/runs/${run.id}/paid`, {});
   const open = await call<unknown[]>('GET', 'compensation/items?open=true');
   console.log(`  Lauf ${year - 1} mit ${run.items.length} Posten ausgezahlt, ${open.length} offene Posten`);
 }
 
+/**
+ * The person of the user of a role (`users`: user name = role template) gets the qualification of its office, e.g. the
+ * equipment officer `equipment-officer`, so inspections recorded by them carry no qualification warning.
+ */
+async function qualifyUser(persons: PersonRef[], username: string, qualification: string): Promise<void> {
+  const user = (await call<{ username: string; personId: string | null }[]>('GET', 'core/users')).find((u) => u.username === username);
+  const person = persons.find((p) => p.id === user?.personId);
+  if (!person || person.qualifications.includes(qualification)) return;
+  await call('POST', `masterdata/persons/${person.id}/qualifications`, { qualification, acquiredOn: daysAgo(730) });
+  person.qualifications.push(qualification);
+  console.log(`  ${person.firstName} ${person.lastName} (${username}) hat die Qualifikation ${qualification}`);
+}
+
 /** Equipment: DGUV template, vehicles, typical equipment per vehicle with past inspections, some defects. */
 async function equipment(persons: PersonRef[]): Promise<void> {
   reseed(305);
+  await qualifyUser(persons, 'equipment-officer', 'equipment-officer');
   await call('POST', 'equipment/templates/dguv', {});
   await call('POST', 'equipment/vehicles/sync', {});
+  // Vehicles are taken over without dates ("not recorded yet"): the last inspections as from the vehicle papers.
+  const synced = await call<{ id: string; dues: { key: string; notRecorded: boolean }[]; inspections: { key: string; intervalMonths: number | null; inspector: string }[] }[]>('GET', 'equipment/items?categoryKey=vehicles');
+  for (const vehicle of synced) {
+    for (const inspection of vehicle.inspections.filter((i) => i.intervalMonths && vehicle.dues.some((d) => d.key === i.key && d.notRecorded))) {
+      const date = daysAgo(between(10, inspection.intervalMonths! * 30 - 10));
+      await call('POST', `equipment/items/${vehicle.id}/inspections`, { inspectionKey: inspection.key, date, inspectorCompany: inspection.inspector === 'expert' ? 'Prüfstelle (Beispiel)' : '', result: 'passed' });
+    }
+  }
   const existing = await call<unknown[]>('GET', 'equipment/items?categoryKey=breathing');
   if (existing.length) {
     console.log('  Geräte vorhanden');
@@ -698,7 +865,7 @@ async function clothing(persons: PersonRef[]): Promise<void> {
   const members = persons.filter((p) => ['active', 'probation'].includes(p.status) && operationalIds.has(p.primaryDepartmentId ?? ''));
   const counters = new Map<string, number>();
   const prefixes: Record<string, string> = { jacket: 'J', trousers: 'H', 'breathing-apparatus-trousers': 'AH', boots: 'S', helmet: 'HM' };
-  type Piece = { id: string; articleKey: string; departmentId: string };
+  type Piece = { id: string; articleKey: string; departmentId: string; purchasedOn: string };
   const create = async (articleKey: string, departmentId: string, size: string, purchasedOn: string): Promise<Piece> => {
     const n = (counters.get(articleKey) ?? 0) + 1;
     counters.set(articleKey, n);
@@ -708,12 +875,26 @@ async function clothing(persons: PersonRef[]): Promise<void> {
       // Washable RFID tags in jackets and trousers, barcodes on most labels.
       barcode: chance(0.9) ? barcode('2100') : null, rfid: ['jacket', 'trousers', 'breathing-apparatus-trousers'].includes(articleKey) ? rfidChip() : null,
     });
-    return { id: created.id, articleKey, departmentId };
+    return { id: created.id, articleKey, departmentId, purchasedOn };
   };
 
-  // Consumables received into the store (counter: received minus handed out).
+  // Consumables handed out to each member: gloves now and then, a cap and T-shirts, hoods for breathing apparatus wearers.
+  const handOuts = new Map<string, [string, string, number][]>();
+  for (const person of members) {
+    const handOut: [string, string, number][] = [['cap', '', 1], ['t-shirt', pick(sizes['t-shirt']), between(1, 3)]];
+    const gloves = pick(sizes.gloves);
+    for (let k = between(1, 3); k > 0; k--) handOut.push(['gloves', gloves, 1]);
+    if (person.qualifications.includes('breathing-apparatus')) handOut.push(['hood', '', 1]);
+    handOuts.set(person.id, handOut);
+  }
+  // Received into the store before: what is handed out plus a remainder, so the counter never drops below zero.
+  const demand = new Map<string, number>();
+  for (const [articleKey, size, quantity] of [...handOuts.values()].flat()) demand.set(`${articleKey}|${size}`, (demand.get(`${articleKey}|${size}`) ?? 0) + quantity);
   for (const [articleKey, articleSizes] of [['gloves', sizes.gloves], ['cap', ['']], ['t-shirt', sizes['t-shirt']], ['hood', ['']]] as const) {
-    for (const size of articleSizes) await call('POST', 'clothing/consumables/receipts', { articleKey, size, quantity: between(15, 40), date: daysAgo(1600), notes: 'Erstausstattung' });
+    for (const size of articleSizes) {
+      const quantity = (demand.get(`${articleKey}|${size}`) ?? 0) + between(3, 15);
+      await call('POST', 'clothing/consumables/receipts', { articleKey, size, quantity, date: daysAgo(1600), notes: 'Erstausstattung' });
+    }
   }
 
   const issued: Piece[] = [];
@@ -729,7 +910,7 @@ async function clothing(persons: PersonRef[]): Promise<void> {
     for (const [articleKey, size] of kit) {
       // Some members had a worn piece replaced: the old one was taken back and retired.
       if (articleKey !== 'helmet' && chance(0.12)) {
-        const old = await create(articleKey, departmentId, size, isoDate(new Date(between(2012, 2016), between(0, 11), between(1, 28))));
+        const old = await create(articleKey, departmentId, size, isoDate(new Date(between(2012, 2015), between(0, 11), between(1, 28))));
         const issuedOn = later('2016-01-01');
         await call('POST', `clothing/items/${old.id}/issue`, { personId: person.id, date: issuedOn, acceptOverdueInspection: true });
         await call('POST', `clothing/items/${old.id}/return`, { date: later(issuedOn), retire: true, notes: pick(['verschlissen', 'Riss im Obermaterial', 'Reflexstreifen beschädigt', 'zu klein']) });
@@ -740,14 +921,9 @@ async function clothing(persons: PersonRef[]): Promise<void> {
       await call('POST', `clothing/items/${piece.id}/issue`, { personId: person.id, date: later(purchasedOn), acceptOverdueInspection: true });
       issued.push(piece);
     }
-    // Consumables: gloves now and then, a cap and T-shirts, hoods for breathing apparatus wearers.
-    const handOut: [string, string, number][] = [['gloves', pick(sizes.gloves), 1], ['cap', '', 1], ['t-shirt', pick(sizes['t-shirt']), between(1, 3)]];
-    if (person.qualifications.includes('breathing-apparatus')) handOut.push(['hood', '', 1]);
-    for (const [articleKey, size, quantity] of handOut) {
-      for (let k = 0; k < (articleKey === 'gloves' ? between(1, 3) : 1); k++) {
-        await call('POST', 'clothing/consumables', { personId: person.id, articleKey, size, quantity, date: daysAgo(between(10, 1500)) });
-        consumables++;
-      }
+    for (const [articleKey, size, quantity] of handOuts.get(person.id) ?? []) {
+      await call('POST', 'clothing/consumables', { personId: person.id, articleKey, size, quantity, date: daysAgo(between(10, 1500)) });
+      consumables++;
     }
   }
 
@@ -773,10 +949,13 @@ async function clothing(persons: PersonRef[]): Promise<void> {
   // Collection days every few weeks, so the pieces of one laundry trip share a date.
   const days = Array.from({ length: 30 }, (_, i) => daysAgo(i * 17 + 3));
   for (const piece of issued.filter((p) => textile.has(p.articleKey))) {
+    // Washing is recorded after the purchase only.
+    const owned = days.filter((d) => d >= piece.purchasedOn);
     const overdue = chance(0.1);
-    const impregnated = overdue ? days.filter((d) => d < daysAgo(380))[between(0, 5)] : days.filter((d) => d >= daysAgo(360))[between(0, 20)];
+    const impregnated = overdue ? owned.filter((d) => d < daysAgo(380))[between(0, 5)] : owned.filter((d) => d >= daysAgo(360))[between(0, 20)];
     if (impregnated) add('impregnation', impregnated, pick(laundries.slice(0, 2)), piece.id);
-    for (let k = 0; k < between(0, 3); k++) add('wash', pick(days.slice(0, 20)), pick(laundries), piece.id);
+    const washed = owned.filter((d) => d >= days[19]);
+    for (let k = 0; k < between(0, 3); k++) if (washed.length) add('wash', pick(washed), pick(laundries), piece.id);
   }
   for (const [key, itemIds] of batches) {
     const [kind, date, place] = key.split('|');
@@ -784,12 +963,14 @@ async function clothing(persons: PersonRef[]): Promise<void> {
   }
 
   // Yearly inspections by the clothing officers; some are overdue.
-  const all = await call<{ id: string; articleKey: string; status: string }[]>('GET', 'clothing/items');
+  const all = await call<{ id: string; articleKey: string; status: string; purchasedOn: string | null }[]>('GET', 'clothing/items');
   const inspected = new Set(['jacket', 'trousers', 'breathing-apparatus-trousers', 'boots', 'helmet']);
   let inspections = 0;
   for (const piece of all.filter((p) => inspected.has(p.articleKey) && p.status !== 'retired')) {
     if (chance(0.15)) continue;
-    const date = chance(0.9) ? daysAgo(between(5, 350)) : daysAgo(between(380, 500));
+    const drawn = chance(0.9) ? daysAgo(between(5, 350)) : daysAgo(between(380, 500));
+    // Not before the purchase.
+    const date = piece.purchasedOn && drawn < piece.purchasedOn ? piece.purchasedOn : drawn;
     await call('POST', `clothing/items/${piece.id}/inspections`, { date, passed: chance(0.97), inspector: pick(['Kleiderwart', 'Gerätewart', 'Fachfirma']), notes: chance(0.1) ? pick(['Klettverschluss erneuert', 'Reflexstreifen nachgenäht', 'Innenfutter geprüft']) : '' });
     inspections++;
   }
@@ -823,11 +1004,19 @@ async function costRecovery(): Promise<void> {
   for (const incident of alarms) {
     const primary = incident.reports.find((r) => r.primary) ?? incident.reports[0];
     if (!primary) continue;
+    // Released reports are changed through the workflow: unlock, add the operator as party, submit, release again.
+    const status = (await call<{ status: string }>('GET', `incidents/reports/${primary.id}`)).status;
+    if (status.startsWith('released')) await call('POST', `incidents/reports/${primary.id}/unlock`, { reason: 'Betreiber als Beteiligten ergänzt (Demodaten)', toStatus: 'draft' });
     const report = await call<Record<string, unknown>>('GET', `incidents/reports/${primary.id}`);
-    await call('PUT', `incidents/reports/${primary.id}`, {
+    const saved = await call<{ findings: { rule: string; level: string; subject: string | null; acknowledged: boolean }[] }>('PUT', `incidents/reports/${primary.id}`, {
       ...report,
       involvedParties: [{ role: 'owner', name: 'Muster Logistik GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
+      statistics: report['statistics'] ?? { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
     });
+    // Notices need reports released for billing.
+    const acknowledgements = saved.findings.filter((f) => f.level === 'warning' && !f.acknowledged).map((f) => ({ rule: f.rule, subject: f.subject, reason: 'Demodaten' }));
+    if ((await call<{ status: string }>('GET', `incidents/reports/${primary.id}`)).status === 'draft') await call('POST', `incidents/reports/${primary.id}/submit`, { acknowledgements });
+    await call('POST', `incidents/reports/${primary.id}/release`, { level: 'billing' });
     // Costs apply to the whole incident.
     await call('PUT', `incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Fehlalarm der Brandmeldeanlage', notes: 'Betreiber über Kostenpflicht informiert' });
   }
@@ -880,7 +1069,12 @@ async function main(): Promise<void> {
   persons = await call<PersonRef[]>('GET', 'masterdata/persons');
 
   console.log('Benutzer je Rolle …');
-  await users(persons, departments);
+  const accounts = await users(persons, departments);
+  console.log('Gruppen, Lehrgänge und Bankverbindungen …');
+  await groups(persons, departments, accounts);
+  await coursePlanning(departments);
+  await bankAccounts(persons);
+  persons = await call<PersonRef[]>('GET', 'masterdata/persons');
 
   console.log('Einsätze (MP-EXCEL.xlsx) …');
   const byNumber = new Map(persons.map((p) => [p.personnelNumber, p]));

@@ -4,6 +4,12 @@ import { z } from 'zod';
  * Kinds of evidence a breathing apparatus wearer collects (FwDV 7). `training-track` (Atemschutzstrecke) is a stress
  * exercise with fixed work and duration (rule `trackKilojoules`, `trackMinutes`); it counts as stress exercise.
  */
+/**
+ * Person statuses (master data) that count as breathing apparatus wearers: active members and members on probation.
+ * Veterans, passive members and youth do not get traffic lights, deadlines or e-mails.
+ */
+export const WEARER_STATUSES: readonly string[] = ['active', 'probation'];
+
 export const EvidenceKind = z.enum(['examination', 'stress-exercise', 'training-track', 'briefing', 'exercise', 'incident', 'chemical-suit']);
 export type EvidenceKind = z.infer<typeof EvidenceKind>;
 

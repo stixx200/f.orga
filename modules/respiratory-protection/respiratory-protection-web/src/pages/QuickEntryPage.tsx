@@ -13,7 +13,8 @@ const QUICK_KINDS: Exclude<EvidenceKind, 'examination'>[] = ['stress-exercise', 
 
 /**
  * Several wearers at once, e.g. after the training track with kJ per person. Search by name, select all found;
- * for stress exercises the minimum work of each wearer is shown and "passed" is only possible from it on.
+ * for stress exercises the minimum work of each wearer is shown, "passed" is ticked per person (no default) and needs the
+ * measured kJ, at least the minimum.
  */
 export function QuickEntryPage() {
   const { t } = useTranslation('respiratory-protection');
@@ -29,7 +30,8 @@ export function QuickEntryPage() {
   const writable = wearers.filter((w) => w.departmentIds.some((d) => can(session, EVIDENCE, d)));
   const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const shown = writable.filter((w) => words.every((word) => `${w.firstName} ${w.lastName}`.toLowerCase().includes(word)));
-  const entry = (id: string): Entry => entries[id] ?? { selected: false, kilojoules: null, passed: true, minutes: null };
+  // No default "passed": it is ticked per person.
+  const entry = (id: string): Entry => entries[id] ?? { selected: false, kilojoules: null, passed: false, minutes: null };
   const set = (id: string, change: Partial<Entry>) => setEntries((e) => ({ ...e, [id]: { ...entry(id), ...change } }));
   const selected = writable.filter((w) => entry(w.personId).selected);
   const stress = kind === 'stress-exercise';
@@ -38,6 +40,8 @@ export function QuickEntryPage() {
   const below = (w: FitnessStatus) => stress && entry(w.personId).kilojoules !== null && entry(w.personId).kilojoules! < w.minimumKilojoules;
   const passed = (w: FitnessStatus) => entry(w.personId).passed && !below(w);
   const blocked = selected.filter((w) => below(w) && entry(w.personId).passed);
+  // A passed stress exercise needs the measured work.
+  const unmeasured = selected.filter((w) => stress && entry(w.personId).passed && entry(w.personId).kilojoules === null);
   const allShownSelected = shown.length > 0 && shown.every((w) => entry(w.personId).selected);
   const selectShown = (on: boolean) => setEntries((e) => ({ ...e, ...Object.fromEntries(shown.map((w) => [w.personId, { ...entry(w.personId), selected: on }])) }));
 
@@ -71,6 +75,7 @@ export function QuickEntryPage() {
         </Group>
       </Panel>
       {blocked.length > 0 && <Notice kind="warning">{t('quick.belowMinimum', { count: blocked.length })}</Notice>}
+      {unmeasured.length > 0 && <Notice kind="error">{t('quick.kilojoulesRequired', { count: unmeasured.length })}</Notice>}
       <DataTable<FitnessStatus>
         exportable={false}
         rows={shown}
@@ -87,7 +92,7 @@ export function QuickEntryPage() {
                   header: t('evidence.kilojoules'),
                   render: (w: FitnessStatus) => (
                     <Stack gap={2}>
-                      <NumberInput size="xs" w={90} min={0} aria-label={t('evidence.kilojoules')} disabled={!entry(w.personId).selected} value={entry(w.personId).kilojoules ?? ''} onChange={(v) => set(w.personId, { kilojoules: v === '' ? null : Number(v) })} error={below(w)} />
+                      <NumberInput size="xs" w={90} min={0} aria-label={t('evidence.kilojoules')} disabled={!entry(w.personId).selected} value={entry(w.personId).kilojoules ?? ''} onChange={(v) => set(w.personId, { kilojoules: v === '' ? null : Number(v) })} error={below(w) || unmeasured.includes(w)} />
                       <Text size="xs" c={below(w) ? 'red.8' : 'dimmed'}>{t('evidence.minimum', { kilojoules: w.minimumKilojoules })}</Text>
                     </Stack>
                   ),
@@ -107,7 +112,7 @@ export function QuickEntryPage() {
         ]}
       />
       <ActionBar info={t('quick.selected', { count: selected.length })}>
-        <Button loading={save.isPending} disabled={!selected.length || !date} onClick={() => save.mutate(undefined)}>{t('quick.save')}</Button>
+        <Button loading={save.isPending} disabled={!selected.length || !date || unmeasured.length > 0} onClick={() => save.mutate(undefined)}>{t('quick.save')}</Button>
       </ActionBar>
     </Stack>
   );

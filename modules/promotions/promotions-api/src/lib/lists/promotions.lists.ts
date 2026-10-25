@@ -2,7 +2,9 @@ import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import type { ListColumn } from '@forga/core-contracts';
 import { berlinDate, type ListDefinition } from '@forga/core-api';
+import { EntityManager } from '@mikro-orm/core';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
+import { PromotionListEntity } from '../promotions.entities.js';
 import { PromotionsService, READ } from '../promotions/promotions.service.js';
 
 const col = (key: string, de: string, en: string, width?: number, align?: ListColumn['align']): ListColumn => ({
@@ -32,6 +34,7 @@ export class PromotionsLists {
   constructor(
     private readonly promotions: PromotionsService,
     @Inject(ORGANIZATION) private readonly organization: Organization,
+    private readonly em: EntityManager,
   ) {}
 
   definitions(): ListDefinition<never>[] {
@@ -46,7 +49,18 @@ export class PromotionsLists {
       description: { de: 'Vorschläge einer Liste mit Grundlage und Entscheidung, gesamt oder je Abteilung', en: 'Proposals of a list with basis and decision, in total or per department' },
       permission: READ,
       parameters: [
-        { key: 'listId', label: { de: 'Liste (ID)', en: 'List (ID)' }, type: 'text', required: true },
+        {
+          key: 'listId',
+          label: { de: 'Beförderungsliste', en: 'Promotion list' },
+          type: 'choice',
+          required: true,
+          choices: async (_user, query) => {
+            const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+            return (await this.em.fork().find(PromotionListEntity, {}, { orderBy: { referenceDate: 'desc' } }))
+              .filter((l) => words.every((w) => l.title.toLowerCase().includes(w)))
+              .map((l) => ({ value: l.id, label: l.title, description: l.referenceDate }));
+          },
+        },
         { key: 'departmentId', label: { de: 'Abteilung', en: 'Department' }, type: 'department' },
       ],
       schema: ListParams,

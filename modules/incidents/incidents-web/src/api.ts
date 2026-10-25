@@ -60,6 +60,19 @@ export function useActiveModules() {
   });
 }
 
+/**
+ * Persons who may write the reports of the department (with an account); only they are offered as authors, others
+ * would never see the report.
+ */
+export function useAuthors(departmentId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['incidents', 'authors', departmentId],
+    queryFn: () => api<string[]>(withQuery('incidents/authors', { departmentId: departmentId ?? undefined })),
+    enabled: Boolean(departmentId),
+    staleTime: LONG,
+  });
+}
+
 export function useRevisions(id: string, enabled: boolean) {
   return useQuery({ queryKey: keys.revisions(id), queryFn: () => api<ReportRevision[]>(`incidents/reports/${id}/revisions`), enabled });
 }

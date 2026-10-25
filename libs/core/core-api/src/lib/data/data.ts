@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -17,6 +18,7 @@ import type { Response } from 'express';
 import { type PrivacySettings, type RetentionResult, RetentionRun, type SearchHit } from '@forga/core-contracts';
 import { Audit, AuditEntry } from '../audit/audit.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
+import { OrganizationDirectory } from '../security/organization-directory.js';
 import { CurrentUser, RequirePermissions } from '../security/decorators.js';
 import { SettingsService } from '../settings/settings.js';
 import { IMPORT_EXPIRY_MS, ImportUploadEntity } from '../imports/imports.js';
@@ -24,6 +26,7 @@ import { ImportTransferEntity } from '../imports/transfers.js';
 import { ZodPipe } from '../zod.pipe.js';
 
 export const EXPORT_PERMISSION = 'core.data.export';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ----- Global search -----
 
@@ -74,8 +77,8 @@ export class CodeRegistry {
 // ----- Full export and data access request -----
 
 export interface ExportSource {
-  /** All data of the module, with IDs, as plain JSON. */
-  all(): Promise<Record<string, unknown>>;
+  /** All data of the module, with IDs, as plain JSON; `user` is the exporting user (e.g. to leave out managers' fields). */
+  all(user: AuthenticatedUser): Promise<Record<string, unknown>>;
   /** Everything the module stores about a person (data access request, Art. 15 GDPR). */
   person?(personId: string): Promise<Record<string, unknown>>;
 }
@@ -86,6 +89,32 @@ export class ExportRegistry {
 
   register(module: string, source: ExportSource): void {
     this.sources.set(module, source);
+  }
+}
+
+// ----- Personal data -----
+
+/** What a module does with the data of a person who is anonymised (e.g. long after leaving). */
+export interface PersonDataHandler {
+  /** Removes or neutralises everything the module stores about these persons beyond what statistics need. */
+  anonymize(personIds: readonly string[]): Promise<void>;
+}
+
+/**
+ * Modules register how they anonymise the data they keep about persons; the master data module calls `anonymize`
+ * when it anonymises persons, so no module keeps names, notes or health data of them.
+ */
+@Injectable()
+export class PersonDataRegistry {
+  readonly handlers = new Map<string, PersonDataHandler>();
+
+  register(module: string, handler: PersonDataHandler): void {
+    this.handlers.set(module, handler);
+  }
+
+  async anonymize(personIds: readonly string[]): Promise<void> {
+    if (!personIds.length) return;
+    for (const handler of this.handlers.values()) await handler.anonymize(personIds);
   }
 }
 
@@ -166,6 +195,7 @@ export class DataController {
     private readonly exports: ExportRegistry,
     private readonly retention: RetentionService,
     private readonly audit: Audit,
+    private readonly organization: OrganizationDirectory,
   ) {}
 
   @Get('search')
@@ -196,11 +226,11 @@ export class DataController {
   /** Full export of one module as versioned JSON file. */
   @Get('export/:module')
   @RequirePermissions(EXPORT_PERMISSION)
-  async export(@Param('module') module: string, @Res() res: Response): Promise<void> {
+  async export(@Param('module') module: string, @CurrentUser() user: AuthenticatedUser, @Res() res: Response): Promise<void> {
     const source = this.exports.sources.get(module);
     if (!source) throw new NotFoundException();
     const exportedAt = new Date();
-    const body = { format: 'forga.export', version: 1, module, exportedAt: exportedAt.toISOString(), data: await source.all() };
+    const body = { format: 'forga.export', version: 1, module, exportedAt: exportedAt.toISOString(), data: await source.all(user) };
     await this.audit.log('data.exported', { module });
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="forga-${module}-${exportedAt.toISOString().slice(0, 10)}.json"`);
@@ -211,6 +241,10 @@ export class DataController {
   @Get('export/person/:personId')
   @RequirePermissions(EXPORT_PERMISSION)
   async person(@Param('personId') personId: string, @Res() res: Response): Promise<void> {
+    if (!UUID.test(personId)) throw new BadRequestException({ code: 'data.invalidPersonId' });
+    // Without the master data module persons cannot be checked; the modules answer for the ID as given.
+    const known = await this.organization.persons([personId]);
+    if (known && !known.length) throw new NotFoundException({ code: 'data.unknownPerson' });
     const data: Record<string, unknown> = {};
     for (const [module, source] of this.exports.sources) {
       if (source.person) data[module] = await source.person(personId);

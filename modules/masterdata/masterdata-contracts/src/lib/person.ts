@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { DepartmentType } from './department.js';
 import { isValidIban, normalizeIban } from './iban.js';
 
 export const Gender = z.enum(['female', 'male', 'diverse', 'unspecified']);
@@ -17,6 +18,21 @@ export type Employment = z.infer<typeof Employment>;
 
 export const PersonStatus = z.enum(['probation', 'active', 'passive', 'youth', 'veterans', 'left']);
 export type PersonStatus = z.infer<typeof PersonStatus>;
+
+/**
+ * Statuses that fit the type of the primary department: youth and children's departments hold youth members,
+ * veterans departments veterans, all others members in probation, active or passive.
+ * Moving between youth, operational and veterans happens only through the transfers.
+ */
+export const STATUSES_BY_DEPARTMENT_TYPE: Record<DepartmentType, readonly Exclude<PersonStatus, 'left'>[]> = {
+  youth: ['youth'],
+  children: ['youth'],
+  veterans: ['veterans'],
+  operational: ['probation', 'active', 'passive'],
+  command: ['probation', 'active', 'passive'],
+  'special-service': ['probation', 'active', 'passive'],
+  music: ['probation', 'active', 'passive'],
+};
 
 const date = z.iso.date();
 const text = z.string().trim().default('');

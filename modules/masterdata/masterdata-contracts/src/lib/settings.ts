@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 /** Allowed range of the ages in the membership rules (years); keeps out typos such as negative values or 170 instead of 17. */
 export const MEMBERSHIP_AGE_BOUNDS = {
+  minimumAgeYouth: [6, 18],
   minimumAgeOperational: [10, 30],
   minimumAgeIncidents: [10, 30],
   ageLimitOperational: [40, 99],
@@ -12,24 +13,44 @@ export const MEMBERSHIP_AGE_BOUNDS = {
 const age = (key: keyof typeof MEMBERSHIP_AGE_BOUNDS, fallback: number) =>
   z.number().int().min(MEMBERSHIP_AGE_BOUNDS[key][0]).max(MEMBERSHIP_AGE_BOUNDS[key][1]).default(fallback);
 
-/** Membership rules from the brigade statute (Feuerwehrsatzung). Defaults are common example values. */
+/**
+ * Membership rules from the brigade statute (Feuerwehrsatzung). The ages are common example values; the deciding body
+ * and the probation qualifications are empty until the brigade enters them or applies a template (`BW_MEMBERSHIP_TEMPLATE`).
+ */
 export const MembershipSettings = z.object({
   probationMonths: z.number().int().min(0).max(60).default(12),
-  /** Who decides on admission, shown in the UI, e.g. "Feuerwehrausschuss". */
-  admissionDecidedBy: z.string().default('Feuerwehrausschuss'),
+  /** Who decides on admission, shown in the UI, e.g. "Feuerwehrausschuss"; empty = not named. */
+  admissionDecidedBy: z.string().default(''),
+  /** Minimum age on joining a youth department (children's departments are not checked). */
+  minimumAgeYouth: age('minimumAgeYouth', 10),
   minimumAgeOperational: age('minimumAgeOperational', 17),
   minimumAgeIncidents: age('minimumAgeIncidents', 18),
   ageLimitOperational: age('ageLimitOperational', 65),
   veteransApplicationAge: age('veteransApplicationAge', 55),
   youthEndAge: age('youthEndAge', 18),
-  /** Qualifications to acquire during the probation (catalog keys), e.g. basic training part 1. */
-  probationQualifications: z.array(z.string()).default(['truppmann-1']),
+  /** Qualifications to acquire during the probation (catalog keys), e.g. basic training part 1; empty = none. */
+  probationQualifications: z.array(z.string()).default([]),
   /** Years of service listed as anniversaries. */
   jubileeYears: z.array(z.number().int().min(1).max(100)).default([10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70]),
   /** Deputies per department commander. */
   maxDeputies: z.number().int().min(0).max(10).default(3),
 });
 export type MembershipSettings = z.infer<typeof MembershipSettings>;
+
+/**
+ * Template values for a brigade in Baden-Württemberg (common example values, not legally verified):
+ * every brigade compares them with its own statute (Feuerwehrsatzung) before saving them.
+ */
+export const BW_MEMBERSHIP_TEMPLATE = {
+  probationMonths: 12,
+  admissionDecidedBy: 'Feuerwehrausschuss',
+  minimumAgeYouth: 10,
+  minimumAgeOperational: 17,
+  minimumAgeIncidents: 18,
+  ageLimitOperational: 65,
+  youthEndAge: 18,
+  probationQualifications: ['truppmann-1'],
+} as const satisfies Partial<z.input<typeof MembershipSettings>>;
 
 /**
  * End of a probation of `months` starting on `date` (`YYYY-MM-DD`): the day before the anniversary, the anniversary

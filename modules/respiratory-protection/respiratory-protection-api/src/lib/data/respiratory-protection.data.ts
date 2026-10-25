@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import { berlinDate, type DeadlineInput, type DeadlineProvider } from '@forga/core-api';
+import { berlinDate, type DeadlineInput, type DeadlineProvider, HistoryEntry } from '@forga/core-api';
 import type { LocalizedText } from '@forga/core-contracts';
 import type { ConditionKey } from '@forga/respiratory-protection-contracts';
 import { EvidenceEntity, StatusEntity } from '../respiratory-protection.entities.js';
 import { EVIDENCE, EvidenceService, SELF } from '../evidence/evidence.service.js';
 
 const TITLES: Partial<Record<ConditionKey, LocalizedText>> = {
-  examination: { de: 'Eignungsuntersuchung fällig', en: 'Medical examination due' },
+  // Due, missing or with concerns alike: the deadline does not tell why (health data).
+  examination: { de: 'Eignungsuntersuchung erforderlich', en: 'Medical examination required' },
   briefing: { de: 'Atemschutz-Unterweisung fällig', en: 'BA briefing due' },
   'stress-exercise': { de: 'Belastungsübung fällig', en: 'Stress exercise due' },
   exercise: { de: 'Einsatzübung unter Atemschutz fällig', en: 'Exercise under BA due' },
@@ -34,8 +35,9 @@ export class RespiratoryProtectionData implements DeadlineProvider {
   /**
    * One deadline per condition of each wearer that expires (or is missing), for those who record evidence in the
    * wearer's department (`evidence`), and the same for the wearer, who sees it in "My area" and the weekly e-mail.
-   * The examination deadline only names the due date, like the status those responsible see; results and findings
-   * stay with the examinations permission.
+   * The examination deadline only names the due date of a valid examination; after an examination with concerns it is
+   * due today like a missing one, so neither the date of that examination nor a date derived from it shows. Results and
+   * findings stay with the examinations permission.
    */
   async deadlines(asOf: string): Promise<DeadlineInput[]> {
     const rule = await this.evidence.rule();
@@ -63,7 +65,8 @@ export class RespiratoryProtectionData implements DeadlineProvider {
           kind: `breathing-apparatus-${c.key}`,
           title: TITLES[c.key]!,
           subject: { type: 'masterdata.person', id: s.personId, label: `${s.lastName}, ${s.firstName}` },
-          dueOn: c.dueOn ?? berlinDate(),
+          dueOn: (!c.concerns && c.dueOn) || berlinDate(),
+          to: `/masterdata/persons/${s.personId}?tab=respiratory-protection`,
           leadDays: rule.leadDays,
           departmentIds: s.departmentIds,
           permission: EVIDENCE,
@@ -81,5 +84,20 @@ export class RespiratoryProtectionData implements DeadlineProvider {
 
   async exportPerson(personId: string): Promise<Record<string, unknown>> {
     return { evidence: (await this.em.fork().find(EvidenceEntity, { personId }, { orderBy: { date: 'asc' } })).map((e) => wrap(e).toObject()) };
+  }
+
+  /**
+   * Anonymised persons: medical examinations (health data) are deleted; other evidence keeps date and kind for the
+   * statistics but loses examiner, facility, restrictions and notes. Their history and the stored status go as well.
+   */
+  async anonymize(personIds: readonly string[]): Promise<void> {
+    const em = this.em.fork();
+    const evidence = await em.find(EvidenceEntity, { personId: { $in: [...personIds] } });
+    if (evidence.length) {
+      await em.nativeDelete(HistoryEntry, { entity: 'respiratory_protection.evidence', entityId: { $in: evidence.map((e) => e.id) } });
+      await em.nativeDelete(EvidenceEntity, { personId: { $in: [...personIds] }, kind: 'examination' });
+      await em.nativeUpdate(EvidenceEntity, { personId: { $in: [...personIds] } }, { examiner: '', facility: '', restrictions: '', note: '' });
+    }
+    await em.nativeDelete(StatusEntity, { personId: { $in: [...personIds] } });
   }
 }

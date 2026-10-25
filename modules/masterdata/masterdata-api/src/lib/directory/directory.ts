@@ -70,7 +70,7 @@ export class PersonDirectoryService implements PersonDirectory {
       id: p.id,
       firstName: p.firstName,
       lastName: p.lastName,
-      periods: p.memberships.getItems().map((m) => ({ from: m.from, to: m.to ?? null })),
+      periods: p.memberships.getItems().map((m) => ({ from: m.from, to: m.to ?? null, departmentId: m.department.id, primary: m.primary })),
     }));
   }
 

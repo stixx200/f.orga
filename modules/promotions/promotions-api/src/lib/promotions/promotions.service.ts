@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import type { z } from 'zod';
-import { assertVersion, type AuthenticatedUser, berlinDate, brigadeLogoDataUrl, type Certificate, DomainEvents, renderCertificatesPdf, SettingsService } from '@forga/core-api';
+import { assertVersion, Audit, type AuthenticatedUser, berlinDate, brigadeLogoDataUrl, type Certificate, DomainEvents, renderCertificatesPdf, SettingsService } from '@forga/core-api';
 import type { BrigadeSettings } from '@forga/core-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonCareer, type PersonDirectory } from '@forga/masterdata-contracts';
 import {
@@ -78,6 +78,7 @@ export class PromotionsService {
     private readonly em: EntityManager,
     private readonly settings: SettingsService,
     private readonly events: DomainEvents,
+    private readonly audit: Audit,
     @Inject(PERSON_DIRECTORY) private readonly persons: PersonDirectory,
     @Inject(ORGANIZATION) private readonly organization: Organization,
   ) {}
@@ -158,28 +159,33 @@ export class PromotionsService {
 
   // ---- lists ----
 
-  async lists(): Promise<PromotionListSummary[]> {
+  /** Lists with the counts of the entries the user may see (as in `list`). */
+  async lists(user: AuthenticatedUser): Promise<PromotionListSummary[]> {
     const lists = await this.em.fork().find(PromotionListEntity, {}, { orderBy: { referenceDate: 'desc', createdAt: 'desc' } });
-    return lists.map((l) => ({
-      id: l.id,
-      title: l.title,
-      referenceDate: l.referenceDate,
-      effectiveDate: l.effectiveDate,
-      status: l.status,
-      promote: l.entries.filter((e) => e.decision === 'promote').length,
-      total: l.entries.length,
-    }));
+    return lists.map((l) => {
+      const entries = this.visibleEntries(user, l.entries);
+      return {
+        id: l.id,
+        title: l.title,
+        referenceDate: l.referenceDate,
+        effectiveDate: l.effectiveDate,
+        status: l.status,
+        promote: entries.filter((e) => e.decision === 'promote').length,
+        total: entries.length,
+      };
+    });
+  }
+
+  /** Entries of the departments the user may read (all with the brigade-wide permission). */
+  private visibleEntries(user: AuthenticatedUser, entries: ListEntry[]): ListEntry[] {
+    return user.grant(READ) === 'brigade' ? entries : entries.filter((e) => user.can(READ, e.departmentId));
   }
 
   /** A list with the entries the user may see (department commanders: their departments). */
   async list(user: AuthenticatedUser, id: string): Promise<PromotionList> {
     const list = await this.load(this.em.fork(), id);
     const dto = { ...toListDto(list), excluded: list.status === 'draft' ? await this.excludedOn(user, list.referenceDate) : [] };
-    if (user.grant(READ) === 'brigade') return dto;
-    return {
-      ...dto,
-      entries: dto.entries.filter((e) => user.can(READ, e.departmentId)),
-    };
+    return { ...dto, entries: this.visibleEntries(user, dto.entries) };
   }
 
   /** Excluded persons the rules would propose on the date (candidates are already limited to visible persons). */
@@ -355,6 +361,12 @@ export class PromotionsService {
       notes: input.notes || list.notes,
     });
     await em.flush();
+    await this.audit.log('promotions.list-decided', {
+      listId: list.id,
+      title: list.title,
+      decidedOn: input.decidedOn,
+      promote: list.entries.filter((e) => e.decision === 'promote').map((e) => ({ personId: e.personId, rank: e.targetRank })),
+    });
     return toListDto(list);
   }
 
@@ -396,6 +408,12 @@ export class PromotionsService {
         since: list.effectiveDate,
         notes: list.title,
       });
+    await this.audit.log('promotions.list-executed', {
+      listId: list.id,
+      title: list.title,
+      effectiveDate: list.effectiveDate,
+      promotions: promoted.map((e) => ({ personId: e.personId, rank: e.targetRank })),
+    });
     await this.events.publish<PromotionsExecutedEvent>(PROMOTIONS_EVENTS.executed, {
       listId: list.id,
       effectiveDate: list.effectiveDate,

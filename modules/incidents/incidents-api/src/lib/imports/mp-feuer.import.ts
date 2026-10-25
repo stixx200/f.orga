@@ -240,7 +240,7 @@ export class MpFeuerIncidentsImport {
         });
         // Chargeable applies to the whole incident; one department's report marking it is enough.
         if (yes(first['chargeable'])) current.chargeable = true;
-        if (group.some((r) => yes(r.values['primary']))) await this.reports.setPrimary(em, report);
+        if (group.some((r) => yes(r.values['primary']))) await this.reports.setPrimary(em, report, true);
         else if (current.reports.count() > 1) report.primary = false;
 
         for (const item of report.personnel.getItems()) em.remove(item);

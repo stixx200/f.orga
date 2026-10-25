@@ -2,21 +2,22 @@ import { Button, Checkbox, Group, SegmentedControl, Stack, Text, Textarea } from
 import { DateInput } from '@mantine/dates';
 import { useState } from 'react';
 import type { Item } from '@forga/clothing-contracts';
-import { localDate, send, useTranslation } from '@forga/web-sdk';
+import { can, localDate, send, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, ResponsiveDialog, useAction } from '@forga/web-ui';
-import { keys, useArticleName, useArticles } from '../api';
+import { keys, MANAGE, useArticleName, useArticles } from '../api';
 
 type Disposition = 'stock' | 'laundry' | 'retire';
 
 /**
  * Takes back pieces a person holds, each into stock, to the laundry (only issued again after a recorded washing) or
- * out of use. `all` preselects every piece ("take back everything").
+ * out of use (with `clothing.manage` for the piece's store). `all` preselects every piece ("take back everything").
  */
 export function ReturnDialog({ items, all = false, onClose }: { items: Item[]; all?: boolean; onClose: () => void }) {
   const { t } = useTranslation('clothing');
   const { t: common } = useTranslation('common');
   const articleName = useArticleName();
   const { data: articles = [] } = useArticles();
+  const session = useSession().data;
   const textile = new Set(articles.filter((a) => a.textile).map((a) => a.key));
   const [selected, setSelected] = useState<Set<string>>(() => new Set(all ? items.map((i) => i.id) : []));
   const [dispositions, setDispositions] = useState<Record<string, Disposition>>({});
@@ -71,7 +72,7 @@ export function ReturnDialog({ items, all = false, onClose }: { items: Item[]; a
                   value={dispositions[i.id] ?? 'stock'}
                   onChange={(v) => setDispositions((d) => ({ ...d, [i.id]: v as Disposition }))}
                   data={(['stock', 'laundry', 'retire'] as const)
-                    .filter((d) => d !== 'laundry' || textile.has(i.articleKey))
+                    .filter((d) => (d !== 'laundry' || textile.has(i.articleKey)) && (d !== 'retire' || can(session, MANAGE, i.departmentId)))
                     .map((d) => ({ value: d, label: t(`returns.dispositions.${d}`) }))}
                 />
               ),

@@ -57,6 +57,7 @@ export class ExaminationsImport {
       if (!personId) { error('respiratory-protection.import.unknownPerson', { name: label }); continue; }
       const date = parseDate(values['date'] ?? '');
       if (!date) { error('imports.invalidDate'); continue; }
+      if (date > berlinDate()) { error('respiratory-protection.dateInFuture', { date }); continue; }
       const validUntil = values['validUntil'] ? parseDate(values['validUntil']) : null;
       if (values['validUntil'] && !validUntil) { error('imports.invalidDate'); continue; }
       if (validUntil && validUntil <= date) { error('respiratory-protection.validUntilNotAfterDate'); continue; }

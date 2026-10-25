@@ -1,10 +1,79 @@
-import { Button, Group, PasswordInput, SimpleGrid, Stack, Switch, Text, TextInput } from '@mantine/core';
+import { Button, Checkbox, Group, PasswordInput, SimpleGrid, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { LocalizedText, Session } from '@forga/core-contracts';
-import { api, send, SESSION_QUERY_KEY, useTranslation } from '@forga/web-sdk';
-import { Notice, PageHeader, Panel, useAction } from '@forga/web-ui';
+import type { Deadline, LocalizedText, Session } from '@forga/core-contracts';
+import { api, send, SESSION_QUERY_KEY, useLocalized, useTranslation } from '@forga/web-sdk';
+import { Notice, notifySuccess, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { LanguageSwitch } from '../frame/LanguageSwitch';
+import type { LoadedModule } from '../modules';
+
+/**
+ * Which tasks show in the bell and on the start page: whole modules or single kinds, chosen from the current tasks
+ * (including hidden ones). Stored in the profile on the server, so it applies on every device.
+ */
+function HiddenTasksPanel({ session, modules }: { session: Session; modules: LoadedModule[] }) {
+  const { t, i18n } = useTranslation('shell');
+  const localized = useLocalized();
+  const { data: tasks = [] } = useQuery({ queryKey: ['core', 'tasks', 'all'], queryFn: () => api<Deadline[]>('core/tasks?all=true'), staleTime: 60_000 });
+  const hidden = new Set(session.user.hiddenTasks);
+  const save = useAction(
+    (next: string[]) => send('PUT', 'core/profile', { language: i18n.language, receiveDigest: session.user.receiveDigest, hiddenTasks: next }),
+    { invalidate: [SESSION_QUERY_KEY, ['core', 'tasks']], success: t('profile.tasksSaved') },
+  );
+  const toggle = (key: string, hide: boolean) => save.mutate(hide ? [...hidden, key] : [...hidden].filter((k) => k !== key));
+  const moduleName = (id: string) => {
+    const module = modules.find((m) => m.info.id === id);
+    return module ? localized(module.info.name) : id;
+  };
+  const kinds = new Map<string, Map<string, LocalizedText>>();
+  for (const task of tasks) {
+    const byKind = kinds.get(task.module) ?? new Map<string, LocalizedText>();
+    if (!byKind.has(task.kind)) byKind.set(task.kind, task.title);
+    kinds.set(task.module, byKind);
+  }
+  // Hidden entries without current tasks stay visible here, so they can be shown again.
+  const others = [...hidden].filter((key) => {
+    const [module, kind] = key.split(':');
+    return kind ? !kinds.get(module)?.has(kind) : !kinds.has(module);
+  });
+
+  return (
+    <Panel title={t('profile.tasks')}>
+      <Stack gap="sm">
+        <Text size="sm" c="dimmed">{t('profile.tasksHint')}</Text>
+        {!tasks.length && !others.length && <Text size="sm">{t('profile.tasksNone')}</Text>}
+        {[...kinds].map(([module, byKind]) => (
+          <Stack key={module} gap={4}>
+            <Checkbox
+              label={<Text fw={700} size="sm">{`${moduleName(module)}: ${t('profile.tasksModule')}`}</Text>}
+              checked={!hidden.has(module)}
+              disabled={save.isPending}
+              onChange={(e) => toggle(module, !e.currentTarget.checked)}
+            />
+            {[...byKind].map(([kind, title]) => (
+              <Checkbox
+                key={kind}
+                ml="lg"
+                label={localized(title)}
+                checked={!hidden.has(module) && !hidden.has(`${module}:${kind}`)}
+                disabled={save.isPending || hidden.has(module)}
+                onChange={(e) => toggle(`${module}:${kind}`, !e.currentTarget.checked)}
+              />
+            ))}
+          </Stack>
+        ))}
+        {others.length > 0 && (
+          <Stack gap={4}>
+            <Text fw={700} size="sm">{t('profile.tasksOther')}</Text>
+            {others.map((key) => (
+              <Checkbox key={key} label={moduleName(key.split(':')[0])} checked={false} disabled={save.isPending} onChange={() => toggle(key, false)} />
+            ))}
+          </Stack>
+        )}
+      </Stack>
+    </Panel>
+  );
+}
 
 /** Set after linking the municipal account (`/profile?oidcLinked=1`), read once. */
 function linkedNow(): boolean {
@@ -14,7 +83,7 @@ function linkedNow(): boolean {
 }
 
 /** The user's own settings: language, e-mail address, weekly e-mail, password and the link to the municipal account. */
-export function ProfilePage({ session }: { session: Session }) {
+export function ProfilePage({ session, modules }: { session: Session; modules: LoadedModule[] }) {
   const { t, i18n } = useTranslation('shell');
   const { t: common } = useTranslation('common');
   const [passwords, setPasswords] = useState({ current: '', next: '', repeat: '' });
@@ -28,11 +97,27 @@ export function ProfilePage({ session }: { session: Session }) {
   });
   const mismatch = passwords.repeat !== '' && passwords.next !== passwords.repeat;
   const [email, setEmail] = useState(session.user.email ?? '');
+  const [emailPassword, setEmailPassword] = useState('');
   const [linked] = useState(linkedNow);
   const saveEmail = useAction(
-    () => send('PUT', 'core/profile', { language: i18n.language, receiveDigest: session.user.receiveDigest, email: email.trim() || null }),
-    { invalidate: [SESSION_QUERY_KEY], success: t('profile.emailSaved') },
+    () =>
+      send<{ confirmationSent: boolean }>('PUT', 'core/profile', {
+        language: i18n.language,
+        receiveDigest: session.user.receiveDigest,
+        email: email.trim() || null,
+        currentPassword: emailPassword,
+      }),
+    {
+      invalidate: [SESSION_QUERY_KEY],
+      onSuccess: ({ confirmationSent }) => {
+        notifySuccess(t(confirmationSent ? 'profile.emailConfirmationSent' : 'profile.emailSaved'));
+        setEmailPassword('');
+        // The stored address stays until the new one is confirmed.
+        if (confirmationSent) setEmail(session.user.email ?? '');
+      },
+    },
   );
+  const emailChanged = email.trim() !== (session.user.email ?? '');
   const { data: setup } = useQuery({ queryKey: ['core', 'setup'], queryFn: () => api<{ oidc: { label: LocalizedText } | null }>('core/setup') });
   const linkOidc = useAction(() => send<{ url: string }>('POST', 'core/oidc/link'), { onSuccess: ({ url }) => window.location.assign(url) });
 
@@ -89,13 +174,18 @@ export function ProfilePage({ session }: { session: Session }) {
             }}
           >
             <Stack gap="sm">
+              {session.user.pendingEmail && <Notice kind="info">{t('profile.emailPending', { email: session.user.pendingEmail })}</Notice>}
               <TextInput label={t('profile.email')} description={t('profile.emailHint')} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} />
+              {emailChanged && (
+                <PasswordInput label={t('profile.emailPassword')} value={emailPassword} onChange={(e) => setEmailPassword(e.currentTarget.value)} required autoComplete="current-password" />
+              )}
               <Group justify="flex-end">
-                <Button type="submit" loading={saveEmail.isPending} disabled={email.trim() === (session.user.email ?? '') || Boolean(session.impersonator)}>{common('actions.save')}</Button>
+                <Button type="submit" loading={saveEmail.isPending} disabled={!emailChanged || !emailPassword || Boolean(session.impersonator)}>{common('actions.save')}</Button>
               </Group>
             </Stack>
           </form>
         </Panel>
+        <HiddenTasksPanel session={session} modules={modules} />
         {setup?.oidc && (
           <Panel title={t('profile.oidc')}>
             <Stack gap="sm">

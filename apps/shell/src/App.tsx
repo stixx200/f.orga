@@ -7,6 +7,7 @@ import type { Session } from '@forga/core-contracts';
 import { api, can, currentLanguage, setLanguage, useSession, useTranslation } from '@forga/web-sdk';
 import { EmptyState } from '@forga/web-ui';
 import { LoginPage } from './auth/LoginPage';
+import { ConfirmEmailPage } from './auth/ConfirmEmailPage';
 import { ResetPasswordPage } from './auth/ResetPasswordPage';
 import { SetupPage } from './auth/SetupPage';
 import { AppFrame } from './frame/AppFrame';
@@ -44,7 +45,7 @@ function Router({ modules, session }: { modules: LoadedModule[]; session: Sessio
           element: <AppFrame modules={modules} session={session} />,
           children: [
             { index: true, element: <StartPage modules={modules} session={session} /> },
-            { path: 'profile', element: <ProfilePage session={session} /> },
+            { path: 'profile', element: <ProfilePage session={session} modules={modules} /> },
             { path: 'me', element: <MyAreaPage session={session} /> },
             { path: 'lists', element: <ListsPage modules={modules} /> },
             { path: 'scan', element: <ScanPage /> },
@@ -81,6 +82,7 @@ function LoggedIn({ session }: { session: Session }) {
 
 export function App() {
   if (window.location.pathname === '/reset-password') return <ResetPasswordPage />;
+  if (window.location.pathname === '/confirm-email') return <ConfirmEmailPage />;
   return <Main />;
 }
 
