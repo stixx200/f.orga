@@ -17,6 +17,7 @@ const toReference = (r: ReportEntity): ReportReference => ({
   reportNumber: r.number,
   departmentId: r.departmentId,
   status: r.status,
+  locked: r.locked,
   incidentId: r.incident.id,
   dispatchNumber: r.incident.dispatchNumber,
   alarmKeyword: r.incident.alarmKeyword,

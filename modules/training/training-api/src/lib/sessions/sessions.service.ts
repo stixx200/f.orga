@@ -12,7 +12,9 @@ import {
   type SessionCopyResult,
   SessionInput,
   TRAINING_EVENTS,
+  type SessionReference,
   type TrainingCasualties,
+  type TrainingSessions,
   type TrainingSettings,
 } from '@forga/training-contracts';
 import { AttendanceEntity, SessionEntity, SessionTypeEntity } from '../training.entities.js';
@@ -32,7 +34,7 @@ type ParsedAttendance = ReturnType<typeof AttendanceInput.parse>;
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 
 @Injectable()
-export class SessionsService implements TrainingCasualties {
+export class SessionsService implements TrainingCasualties, TrainingSessions {
   constructor(
     private readonly em: EntityManager,
     private readonly events: DomainEvents,
@@ -57,6 +59,12 @@ export class SessionsService implements TrainingCasualties {
     const session = await em.findOne(SessionEntity, id, { populate: ['attendance'] });
     if (!session || !this.can(user, READ, session)) throw new NotFoundException();
     return session;
+  }
+
+  async sessions(sessionIds: readonly string[]): Promise<SessionReference[]> {
+    if (!sessionIds.length) return [];
+    const sessions = await this.em.fork().find(SessionEntity, { id: { $in: [...sessionIds] } });
+    return sessions.map((s) => ({ sessionId: s.id, departmentIds: [...s.departmentIds], status: s.status }));
   }
 
   async list(user: AuthenticatedUser, filter: { from?: string; to?: string; departmentId?: string; type?: string }): Promise<Session[]> {

@@ -10,6 +10,23 @@ export interface TrainingCasualties {
   injured(year: number): Promise<{ personId: string; sessionId: string; departmentIds: string[] }[]>;
 }
 
+/**
+ * Departments and status of sessions, e.g. to check access to data other modules keep per session.
+ * Inject optionally: `@Optional() @Inject(TRAINING_SESSIONS) sessions?: TrainingSessions`.
+ */
+export const TRAINING_SESSIONS = 'training.Sessions';
+
+export interface SessionReference {
+  sessionId: string;
+  departmentIds: string[];
+  status: 'planned' | 'held' | 'closed';
+}
+
+export interface TrainingSessions {
+  /** The given sessions; unknown IDs are omitted. */
+  sessions(sessionIds: readonly string[]): Promise<SessionReference[]>;
+}
+
 export const TRAINING_EVENTS = {
   sessionClosed: 'training.session.closed',
   /** A closed session was reopened: receivers withdraw what they derived from it until it is closed again. */
