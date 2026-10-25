@@ -28,7 +28,7 @@ import { OrganizationReferenceRegistry } from './organization/references.js';
 import { PersonHoldingsRegistry } from './persons/holdings.js';
 import { PersonsController } from './persons/persons.controller.js';
 import { SelfController } from './self/self.controller.js';
-import { PersonsService, READ, SENSITIVE } from './persons/persons.service.js';
+import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/persons.service.js';
 
 /** Global, so other modules can inject `PERSON_DIRECTORY`, `ORGANIZATION`, `ORGANIZATION_REFERENCES` and `PERSON_HOLDINGS` without importing this package. */
 @Global()
@@ -89,8 +89,20 @@ export class MasterdataModule implements OnModuleInit {
     this.organization.register({
       departments: async () => (await this.em.fork().find(Department, {}, { fields: ['id', 'parent'] })).map((d) => ({ id: d.id, parentId: d.parent?.id ?? null })),
       persons: async (ids) =>
-        (await this.em.fork().find(Person, { id: { $in: [...ids] } }, { fields: ['id', 'firstName', 'lastName', 'email'] })).map((p) => ({ id: p.id, firstName: p.firstName, lastName: p.lastName, email: p.email })),
+        (await this.em.fork().find(Person, { id: { $in: [...ids] } }, { populate: ['memberships.department'] })).map((p) => ({
+          id: p.id,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          email: p.email,
+          departmentIds: departmentsOf(p),
+        })),
       catalogEntries: () => this.em.fork().count(CatalogEntry, {}),
+      // A linked user reads and changes the person's own data including the sensitive fields.
+      linkPermission: SENSITIVE,
+      searchPersons: async (user, query, limit) =>
+        (await this.persons.list(user, { query, includeLeft: true }))
+          .slice(0, limit)
+          .map((p) => ({ id: p.id, label: `${p.lastName}, ${p.firstName}${p.personnelNumber ? ` (${p.personnelNumber})` : ''}` })),
     });
     this.search.register('masterdata', (user, query) => this.data.search(user, query));
     this.exports.register('masterdata', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });

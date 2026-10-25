@@ -2,17 +2,19 @@ import { BadRequestException, Body, Controller, HttpCode, HttpException, HttpSta
 import { defineEntity, EntityManager, p } from '@mikro-orm/core';
 import type { Request } from 'express';
 import { v7 as uuidv7 } from 'uuid';
-import { type BrigadeSettings, PasswordResetConfirm, PasswordResetRequest } from '@forga/core-contracts';
+import { type BrigadeSettings, ConfirmEmail, PasswordResetConfirm, PasswordResetRequest } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
 import { SettingsService } from '../settings/settings.js';
 import { MailService } from '../tasks/mail.service.js';
 import { ZodPipe } from '../zod.pipe.js';
 import { Public } from './decorators.js';
+import { assertEmailFree, usersWithEmail } from './emails.js';
 import { generateSecret, hashPassword, hashSecret } from './password.js';
 import { Session, User } from './security.entities.js';
 
 const RESET_VALID_MS = 60 * 60_000;
 const INVITATION_VALID_DAYS = 7;
+const EMAIL_VALID_MS = 24 * 60 * 60_000;
 const WINDOW_MS = 15 * 60_000;
 /** Requests per address within the window; generous, since behind a proxy many users may share one address. */
 const MAX_PER_ADDRESS = 20;
@@ -20,7 +22,10 @@ const MAX_PER_ADDRESS = 20;
 const MAX_PER_ACCOUNT = 3;
 const MAX_TRACKED = 10_000;
 
-/** A one-time link to set a new password (reset or invitation); only the SHA-256 of the token is stored. */
+/** What a one-time link does: set a password (reset, invitation) or confirm a new e-mail address. */
+export type LinkPurpose = 'reset' | 'invitation' | 'email';
+
+/** A one-time link sent by e-mail; only the SHA-256 of the token is stored. */
 export const PasswordResetSchema = defineEntity({
   name: 'PasswordReset',
   schema: 'core',
@@ -28,6 +33,9 @@ export const PasswordResetSchema = defineEntity({
   properties: {
     id: p.uuid().primary().onCreate(() => uuidv7()),
     user: () => p.manyToOne(User).deleteRule('cascade'),
+    purpose: p.string().$type<LinkPurpose>().default('reset'),
+    /** For `email`: the new address that becomes effective with the link. */
+    email: p.string().nullable(),
     hash: p.string().unique(),
     createdAt: p.datetime(),
     expiresAt: p.datetime(),
@@ -83,9 +91,14 @@ export class PasswordResetService {
     return base;
   }
 
-  /** Throws `auth.resetNotConfigured` before anything is created, if no link could be sent. */
-  assertConfigured(): Promise<string> {
-    return this.baseUrl();
+  /**
+   * Throws before anything is created if no link could be sent: `auth.resetNotConfigured` without the public address,
+   * `mail.notConfigured` without SMTP server and sender.
+   */
+  async assertConfigured(): Promise<string> {
+    const base = await this.baseUrl();
+    await this.mail.assertConfigured();
+    return base;
   }
 
   /**
@@ -104,7 +117,7 @@ export class PasswordResetService {
   private async send(login: string, base: string): Promise<void> {
     const em = this.em.fork();
     const byName = await em.findOne(User, { username: login, active: true, technical: false });
-    const candidates = byName ? [byName] : (await em.find(User, { active: true, technical: false, email: { $ne: null } })).filter((u) => u.email?.toLowerCase() === login.toLowerCase());
+    const candidates = byName ? [byName] : await usersWithEmail(em, login);
     if (candidates.length !== 1 || !candidates[0].email) {
       await this.audit.log(candidates.length > 1 ? 'auth.password-reset-ambiguous' : 'auth.password-reset-unknown', { login, accounts: candidates.length }, null);
       return;
@@ -114,7 +127,7 @@ export class PasswordResetService {
       await this.audit.log('auth.password-reset-limited', {}, user.id);
       return;
     }
-    const link = await this.createLink(em, user, base, RESET_VALID_MS);
+    const link = await this.createLink(em, user, base, RESET_VALID_MS, 'reset');
     const german = user.language === 'de';
     await this.mail.send({
       to: user.email!,
@@ -127,12 +140,16 @@ export class PasswordResetService {
     await this.audit.log('auth.password-reset-requested', {}, user.id);
   }
 
-  /** Invitation of a new user: a link to set the own password, valid for a week. Mail errors reach the caller. */
-  async invite(user: User): Promise<void> {
+  /**
+   * Invitation of a new user: a link to set the own password, valid for a week; earlier links of the user end.
+   * Mail errors reach the caller. With the `em` of a transaction, the link is created inside it, so a failed e-mail
+   * rolls back the user as well.
+   */
+  async invite(user: User, em: EntityManager = this.em.fork()): Promise<void> {
     if (!user.email) throw new BadRequestException({ code: 'mail.noRecipient' });
     const base = await this.baseUrl();
-    const em = this.em.fork();
-    const link = await this.createLink(em, em.getReference(User, user.id), base, INVITATION_VALID_DAYS * 24 * 60 * 60_000);
+    await this.invalidateLinks(em, user.id);
+    const link = await this.createLink(em, em.getReference(User, user.id), base, INVITATION_VALID_DAYS * 24 * 60 * 60_000, 'invitation');
     const german = user.language === 'de';
     await this.mail.send({
       to: user.email,
@@ -144,18 +161,83 @@ export class PasswordResetService {
     });
   }
 
-  private async createLink(em: EntityManager, user: User, base: string, validMs: number): Promise<string> {
-    const token = generateSecret();
-    const now = new Date();
-    em.create(PasswordReset, { user, hash: hashSecret(token), createdAt: now, expiresAt: new Date(now.getTime() + validMs), usedAt: null });
-    await em.flush();
-    return `${base}/reset-password?token=${token}`;
+  /**
+   * Sends a link to confirm a new e-mail address of the user to that address; the address takes effect only with the
+   * link (so nobody can redirect password resets to an address he does not own). Earlier links end.
+   */
+  async requestEmailChange(user: User, email: string): Promise<void> {
+    const base = await this.assertConfigured();
+    await this.em.fork().transactional(async (em) => {
+      await assertEmailFree(em, email, user.id, 'auth.emailTaken');
+      await em.nativeUpdate(PasswordReset, { user: user.id, purpose: 'email', usedAt: null }, { usedAt: new Date() });
+      const link = await this.createLink(em, em.getReference(User, user.id), base, EMAIL_VALID_MS, 'email', email, 'confirm-email');
+      const german = user.language === 'de';
+      await this.mail.send({
+        to: email,
+        subject: german ? 'f.orga: E-Mail-Adresse bestätigen' : 'f.orga: confirm e-mail address',
+        text: (german
+          ? [`Hallo ${user.displayName},`, '', 'mit diesem Link bestätigen Sie Ihre neue E-Mail-Adresse für f.orga (24 Stunden gültig):', link, '', 'Wenn Sie das nicht angefordert haben, ignorieren Sie diese E-Mail.']
+          : [`Hello ${user.displayName},`, '', 'use this link to confirm your new e-mail address for f.orga (valid for 24 hours):', link, '', 'If you did not ask for it, ignore this e-mail.']
+        ).join('\n'),
+      });
+    });
+    await this.audit.log('auth.email-change-requested', {}, user.id);
   }
 
-  /** Sets the new password and ends all sessions of the user. */
+  /** The new address that waits for confirmation, if any. */
+  async pendingEmail(userId: string): Promise<string | null> {
+    const link = await this.em.fork().findOne(PasswordReset, { user: userId, purpose: 'email', usedAt: null, expiresAt: { $gt: new Date() } }, { orderBy: { createdAt: 'desc' } });
+    return link?.email ?? null;
+  }
+
+  /** Makes the confirmed address the user's address; all other open links of the user end. */
+  async confirmEmail(token: string): Promise<void> {
+    const changed = await this.em.fork().transactional(async (em) => {
+      const link = await em.findOne(PasswordReset, { hash: hashSecret(token), purpose: 'email' }, { populate: ['user'] });
+      if (!link?.email || link.usedAt || link.expiresAt < new Date() || !link.user.active) throw new BadRequestException({ code: 'auth.emailLinkInvalid' });
+      await assertEmailFree(em, link.email, link.user.id, 'auth.emailTaken');
+      const user = link.user;
+      const previous = user.email ?? null;
+      user.email = link.email;
+      link.usedAt = new Date();
+      await em.flush();
+      await this.invalidateLinks(em, user.id);
+      return { user, previous };
+    });
+    await this.audit.log('auth.email-changed', {}, changed.user.id);
+    // The old address learns of the change, in case somebody else made it.
+    if (changed.previous) {
+      const german = changed.user.language === 'de';
+      await this.mail
+        .send({
+          to: changed.previous,
+          subject: german ? 'f.orga: E-Mail-Adresse geändert' : 'f.orga: e-mail address changed',
+          text: (german
+            ? [`Hallo ${changed.user.displayName},`, '', `die E-Mail-Adresse Ihres f.orga-Zugangs wurde in ${changed.user.email} geändert.`, 'Wenn Sie das nicht waren, wenden Sie sich bitte an die Verwaltung Ihrer Feuerwehr.']
+            : [`Hello ${changed.user.displayName},`, '', `the e-mail address of your f.orga account was changed to ${changed.user.email}.`, 'If this was not you, please contact the administration of your fire brigade.']
+          ).join('\n'),
+        })
+        .catch(() => undefined);
+    }
+  }
+
+  /** Ends all open links of the user, e.g. after a change of e-mail address or password, or a new invitation. */
+  async invalidateLinks(em: EntityManager, userId: string): Promise<void> {
+    await em.nativeUpdate(PasswordReset, { user: userId, usedAt: null }, { usedAt: new Date() });
+  }
+
+  private async createLink(em: EntityManager, user: User, base: string, validMs: number, purpose: LinkPurpose, email: string | null = null, page = 'reset-password'): Promise<string> {
+    const token = generateSecret();
+    const now = new Date();
+    em.create(PasswordReset, { user, purpose, email, hash: hashSecret(token), createdAt: now, expiresAt: new Date(now.getTime() + validMs), usedAt: null });
+    await em.flush();
+    return `${base}/${page}?token=${token}`;
+  }
+
+  /** Sets the new password and ends all sessions and other open links of the user. */
   async confirm(token: string, password: string): Promise<void> {
     const em = this.em.fork();
-    const reset = await em.findOne(PasswordReset, { hash: hashSecret(token) }, { populate: ['user'] });
+    const reset = await em.findOne(PasswordReset, { hash: hashSecret(token), purpose: { $in: ['reset', 'invitation'] } }, { populate: ['user'] });
     if (!reset || reset.usedAt || reset.expiresAt < new Date() || !reset.user.active) {
       throw new BadRequestException({ code: 'auth.resetInvalid' });
     }
@@ -164,6 +246,7 @@ export class PasswordResetService {
     reset.usedAt = new Date();
     await em.nativeDelete(Session, { user });
     await em.flush();
+    await this.invalidateLinks(em, user.id);
     await this.audit.log('auth.password-reset', {}, user.id);
   }
 }
@@ -185,6 +268,20 @@ export class PasswordResetController {
   @HttpCode(200)
   async confirm(@Body(new ZodPipe(PasswordResetConfirm)) input: PasswordResetConfirm) {
     await this.resets.confirm(input.token, input.password);
+    return { ok: true };
+  }
+}
+
+/** The link sent to a new e-mail address; works without being logged in (e.g. opened on the phone). */
+@Controller('core/email-confirmation')
+export class EmailConfirmationController {
+  constructor(private readonly resets: PasswordResetService) {}
+
+  @Public()
+  @Post()
+  @HttpCode(200)
+  async confirm(@Body(new ZodPipe(ConfirmEmail)) input: ConfirmEmail) {
+    await this.resets.confirmEmail(input.token);
     return { ok: true };
   }
 }

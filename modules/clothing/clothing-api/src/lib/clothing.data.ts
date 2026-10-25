@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager, type FilterQuery, wrap } from '@mikro-orm/core';
 import { z } from 'zod';
 import { type ListColumn, normalizeRfid, type SearchHit } from '@forga/core-contracts';
-import { addBerlinDays, type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, type ListDefinition, SettingsService, wordsWhere } from '@forga/core-api';
+import { addBerlinDays, type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, HistoryEntry, type ListDefinition, SettingsService, wordsWhere } from '@forga/core-api';
 import { ClothingSettings } from '@forga/clothing-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, ConsumableReceiptEntity, IssueEntity, SizeProfileEntity } from './clothing.entities.js';
@@ -116,6 +116,32 @@ export class ClothingData implements DeadlineProvider {
       sizeProfiles: await plain(SizeProfileEntity),
       consumableReceipts: await plain(ConsumableReceiptEntity),
     };
+  }
+
+  /** Data access request: what was issued to and returned by the person, pieces held now, and the size profile. */
+  async exportPerson(personId: string): Promise<Record<string, unknown>> {
+    const em = this.em.fork();
+    return {
+      issues: (await em.find(IssueEntity, { personId }, { orderBy: { date: 'asc', recordedAt: 'asc' } })).map((e) => wrap(e).toObject()),
+      heldItems: (await em.find(ClothingItemEntity, { holderId: personId }, { orderBy: { inventoryNumber: 'asc' } })).map((e) => wrap(e).toObject()),
+      sizeProfile: (await em.findOne(SizeProfileEntity, { personId }))?.sizes ?? null,
+    };
+  }
+
+  /** Anonymised persons: the size profile is deleted, notes and cancel reasons of their issues are emptied. */
+  async anonymize(personIds: readonly string[]): Promise<void> {
+    const em = this.em.fork();
+    const ids = [...personIds];
+    const profiles = await em.find(SizeProfileEntity, { personId: { $in: ids } });
+    if (profiles.length) {
+      await em.nativeDelete(HistoryEntry, { entity: 'clothing.size_profile', entityId: { $in: profiles.map((p) => p.id) } });
+      await em.nativeDelete(SizeProfileEntity, { personId: { $in: ids } });
+    }
+    const issues = await em.find(IssueEntity, { personId: { $in: ids } });
+    if (issues.length) {
+      await em.nativeDelete(HistoryEntry, { entity: 'clothing.issue', entityId: { $in: issues.map((i) => i.id) } });
+      await em.nativeUpdate(IssueEntity, { personId: { $in: ids } }, { notes: '', cancelReason: '' });
+    }
   }
 
   lists(): ListDefinition<never>[] {

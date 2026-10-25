@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MailService } from '@forga/core-api';
+import { MailService, PasswordResetService } from '@forga/core-api';
 import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
 
 let test: TestApp;
@@ -13,6 +13,7 @@ const del = (path: string, cookie = admin) => test.http.delete(`/api${path}`).se
 const get = (path: string, cookie = admin) => test.http.get(`/api${path}`).set('Cookie', cookie);
 const user = async (username: string, roleIds: { roleId: string; departmentId?: string | null }[], extra: Record<string, unknown> = {}) =>
   (await post('/core/users', { username, displayName: username, password: `${username}-passwort-1`, roles: roleIds, ...extra }).expect(201)).body as { id: string };
+const userCount = async () => ((await get('/core/users')).body as unknown[]).length;
 const login = (username: string) => test.login({ username, password: `${username}-passwort-1` });
 
 beforeAll(async () => {
@@ -65,6 +66,33 @@ describe('managing users with fewer permissions than the target', () => {
     expect((await post('/core/users', { ...body, personId: '0190c0de-0000-7000-8000-000000000000' }).expect(400)).body.code).toBe('users.unknownPerson');
     expect((await post('/core/users', { ...body, personId: 'kein-uuid' }).expect(400)).body.code).toBe('users.unknownPerson');
     expect((await post('/core/users', { ...body, personId: ids.commanderPerson }).expect(409)).body.code).toBe('users.personTaken');
+  });
+});
+
+describe('linking users to persons', () => {
+  it('needs the permission for the sensitive data of the person and never changes the own account', async () => {
+    const manager = await login('pfleger');
+    const own = (await get(`/core/users/${ids.manager}`)).body;
+    expect((await put(`/core/users/${ids.manager}`, { ...own, personId: ids.senior }, manager).expect(403)).body.code).toBe('users.cannotRelinkSelf');
+    const colleague = ((await get('/core/users')).body as { id: string; username: string }[]).find((u) => u.username === 'kollege')!;
+    const colleagueBody = (await get(`/core/users/${colleague.id}`)).body;
+    expect((await put(`/core/users/${colleague.id}`, { ...colleagueBody, personId: ids.senior }, manager).expect(403)).body.code).toBe('users.personForbidden');
+    expect((await post('/core/users', { username: 'neuling', displayName: 'Neuling', password: 'neuling-passwort-1', personId: ids.senior }, manager).expect(403)).body.code).toBe('users.personForbidden');
+
+    // Whoever may see the sensitive data of a department links users to its persons, and only to them.
+    const hr = (await post('/core/roles', { name: 'Personalpflege', permissions: ['masterdata.persons.read', 'masterdata.persons.sensitive'], permissionsAllDepartments: ['core.users.manage'] }).expect(201)).body.id;
+    await user('personal', [{ roleId: hr, departmentId: ids.musterstadt }]);
+    const personal = await login('personal');
+    const target = await user('verknuepft', []);
+    const body = (await get(`/core/users/${target.id}`)).body;
+    expect((await put(`/core/users/${target.id}`, { ...body, personId: ids.foreign }, personal).expect(403)).body.code).toBe('users.personForbidden');
+    await put(`/core/users/${target.id}`, { ...body, personId: ids.senior }, personal).expect(200);
+    // Not even the administrator changes the person of his own account.
+    const adminBody = (await get(`/core/users/${ids.admin}`)).body;
+    expect((await put(`/core/users/${ids.admin}`, { ...adminBody, personId: ids.foreign }).expect(403)).body.code).toBe('users.cannotRelinkSelf');
+
+    const audit = (await get('/core/audit?action=users.person-linked')).body as { details: { userId: string; personId: string | null; previousPersonId: string | null } }[];
+    expect(audit.map((e) => e.details)).toContainEqual({ userId: target.id, previousPersonId: null, personId: ids.senior });
   });
 });
 
@@ -126,6 +154,27 @@ describe('deactivated modules', () => {
     expect((await test.http.get('/api/core/session').set(bearer).expect(200)).body.permissions).toEqual({});
     await put('/core/modules/cost-recovery', { active: true }).expect(200);
   });
+
+  it('keep their permissions out of reach of role, token and user managers', async () => {
+    const scope = ((await get('/core/permissions')).body as { id: string }[]).find((p) => p.id.startsWith('cost-recovery.'))!.id;
+    const manager = await login('pfleger');
+    await put('/core/modules/cost-recovery', { active: false }).expect(200);
+    try {
+      // Neither holds the manager these permissions, nor would they be "wider" only while the module is off.
+      expect((await post('/core/roles', { name: 'Kostenersatz heimlich', permissions: ['cost-recovery.*'] }, manager).expect(403)).body.code).toBe('users.roleWider');
+      expect((await post('/core/tokens', { name: 'Kostenersatz heimlich', scopes: [scope] }, manager).expect(403)).body.code).toBe('tokens.scopesWider');
+      // The administrator holds them (`*`) and may prepare a role.
+      const role = (await post('/core/roles', { name: 'Kostenersatz später', permissions: ['cost-recovery.*'] }).expect(201)).body.id;
+      const target = await user('spaeter', []);
+      const body = (await get(`/core/users/${target.id}`)).body;
+      expect((await put(`/core/users/${target.id}`, { ...body, roles: [{ roleId: role }] }, manager).expect(403)).body.code).toBe('users.roleWider');
+      await put(`/core/users/${target.id}`, { ...body, roles: [{ roleId: role }] }).expect(200);
+      // Users holding them cannot be changed by the manager either.
+      expect((await put(`/core/users/${target.id}`, { ...body, roles: [{ roleId: role }], email: 'spaeter@example.org' }, manager).expect(403)).body.code).toBe('users.targetWider');
+    } finally {
+      await put('/core/modules/cost-recovery', { active: true }).expect(200);
+    }
+  });
 });
 
 describe('settings', () => {
@@ -170,6 +219,20 @@ describe('lists', () => {
     for (const list of lists) expect(list.departments === 'brigade' ? [] : list.departments).not.toContain(ids.ahornfeld);
     expect(((await get('/core/lists').expect(200)).body as { departments: unknown }[]).every((l) => l.departments === 'brigade')).toBe(true);
   });
+
+  it('offer persons and entries of the modules instead of IDs to type', async () => {
+    const lists = (await get('/core/lists').expect(200)).body as { id: string; parameters: { key: string; type: string }[] }[];
+    const statement = lists.find((l) => l.id === 'compensation.statement')!;
+    expect(statement.parameters.find((p) => p.key === 'personId')).toEqual(expect.objectContaining({ type: 'person' }));
+    expect(statement.parameters.find((p) => p.key === 'runId')).toEqual(expect.objectContaining({ type: 'choice' }));
+    expect(statement.parameters.find((p) => p.key === 'runId')).not.toHaveProperty('choices');
+    const persons = (await get('/core/lists/compensation.statement/parameters/personId/options?q=Kurt').expect(200)).body as { value: string }[];
+    expect(persons.map((p) => p.value)).toContain(ids.commanderPerson);
+    const sessions = (await get('/core/lists/training.participants/parameters/sessionId/options').expect(200)).body as { label: string }[];
+    expect(sessions.map((s) => s.label)).toContain('Gemeinsame Übung');
+    await get('/core/lists/training.participants/parameters/gibt-es-nicht/options').expect(404);
+    await get('/core/lists/training.participants/parameters/sessionId/options', await login('pfleger')).expect(404);
+  });
 });
 
 describe('invitations', () => {
@@ -208,17 +271,108 @@ describe('invitations', () => {
     expect(second.invited).toHaveLength(1);
     expect(test.app.get(MailService).sent.at(-1)!.to).toBe('anna@example.org');
   });
+
+  it('check the mail server first and leave no user behind when sending fails', async () => {
+    const mail = test.app.get(MailService);
+    const person = async (firstName: string) =>
+      (await post('/masterdata/persons', { firstName, lastName: 'Mail', status: 'active', email: `${firstName.toLowerCase()}@example.org`, memberships: [{ departmentId: ids.musterstadt, from: '2020-01-01', primary: true }] }).expect(201)).body.id as string;
+    const mara = await person('Mara');
+    const malte = await person('Malte');
+    const users = await userCount();
+
+    await put('/core/settings/smtp', { host: '', sender: 'forga@example.org' }).expect(200);
+    expect((await post('/core/users/invitations', { personId: mara }).expect(400)).body.code).toBe('mail.notConfigured');
+    expect((await post('/core/users/invitations/bulk', { personIds: [mara] }).expect(400)).body.code).toBe('mail.notConfigured');
+    await put('/core/settings/smtp', { host: 'smtp.example.org', username: 'forga@example.org', sender: 'forga@example.org' }).expect(200);
+
+    mail.failWith = 'mail.connectionFailed';
+    try {
+      expect((await post('/core/users/invitations', { personId: mara }).expect(502)).body.code).toBe('mail.connectionFailed');
+      expect(await userCount()).toBe(users);
+      const bulk = (await post('/core/users/invitations/bulk', { personIds: [mara, malte] }).expect(200)).body;
+      expect(bulk.invited).toEqual([]);
+      expect(bulk.skipped).toEqual([
+        { personId: mara, reason: 'mailFailed', code: 'mail.connectionFailed' },
+        { personId: malte, reason: 'mailFailed', code: 'mail.connectionFailed' },
+      ]);
+      expect(await userCount()).toBe(users);
+    } finally {
+      mail.failWith = null;
+    }
+
+    // Persons the manager may not link are skipped as well.
+    const forbidden = (await post('/core/users/invitations/bulk', { personIds: [mara] }, await login('pfleger')).expect(200)).body;
+    expect(forbidden.skipped).toEqual([{ personId: mara, reason: 'forbidden' }]);
+    const invited = (await post('/core/users/invitations/bulk', { personIds: [mara, malte] }).expect(200)).body;
+    expect(invited.invited).toHaveLength(2);
+  });
+
+  it('end earlier links when the invitation is sent again', async () => {
+    const mails = test.app.get(MailService).sent;
+    const malte = ((await get('/core/users')).body as { id: string; username: string }[]).find((u) => u.username === 'malte')!;
+    const first = /reset-password\?token=([\w-]+)/.exec(mails.filter((m) => m.to === 'malte@example.org').at(-1)!.text)![1];
+    await post(`/core/users/${malte.id}/invitation`, {}).expect(200);
+    const second = /reset-password\?token=([\w-]+)/.exec(mails.at(-1)!.text)![1];
+    await test.http.post('/api/core/password-reset/confirm').set(UI).send({ token: first, password: 'mein-eigenes-1' }).expect(400);
+    await test.http.post('/api/core/password-reset/confirm').set(UI).send({ token: second, password: 'mein-eigenes-1' }).expect(200);
+  });
 });
 
 describe('own profile', () => {
-  it('sets the own e-mail address', async () => {
+  it('changes the own e-mail address only with the password and a confirmed link', async () => {
     const commander = await login('kommandant');
-    await put('/core/profile', { language: 'de', receiveDigest: true, email: 'keine-adresse' }, commander).expect(400);
-    await put('/core/profile', { language: 'de', receiveDigest: true, email: 'kurt.neu@example.org' }, commander).expect(200);
-    expect((await get('/core/session', commander)).body.user.email).toBe('kurt.neu@example.org');
+    const profile = { language: 'de', receiveDigest: true };
+    const mails = test.app.get(MailService).sent;
+    await put('/core/profile', { ...profile, email: 'keine-adresse', currentPassword: 'kommandant-passwort-1' }, commander).expect(400);
+    // Without (or with a wrong) password nothing changes: the address receives password reset links.
+    expect((await put('/core/profile', { ...profile, email: 'angreifer@example.org' }, commander).expect(401)).body.code).toBe('auth.passwordRequired');
+    await put('/core/profile', { ...profile, email: 'angreifer@example.org', currentPassword: 'falsch-falsch' }, commander).expect(401);
+    // An address of another active user is refused.
+    await put('/core/settings/smtp', { host: 'smtp.example.org', sender: 'forga@example.org' }).expect(200);
+    await put(`/core/users/${ids.manager}`, { ...(await get(`/core/users/${ids.manager}`)).body, email: 'pfleger@example.org' }).expect(200);
+    expect((await put('/core/profile', { ...profile, email: 'Pfleger@example.org', currentPassword: 'kommandant-passwort-1' }, commander).expect(409)).body.code).toBe('auth.emailTaken');
+
+    // A reset link sent before the change stops working once the new address is confirmed.
+    await put(`/core/users/${ids.commander}`, { ...(await get(`/core/users/${ids.commander}`)).body, email: 'kurt@example.org' }).expect(200);
+    await test.http.post('/api/core/password-reset').set(UI).send({ login: 'kommandant' }).expect(200);
+    await test.app.get(PasswordResetService).pending;
+    const resetToken = /reset-password\?token=([\w-]+)/.exec(mails.at(-1)!.text)![1];
+
+    const changed = await put('/core/profile', { ...profile, email: 'kurt.neu@example.org', currentPassword: 'kommandant-passwort-1' }, commander).expect(200);
+    expect(changed.body.confirmationSent).toBe(true);
+    let session = (await get('/core/session', commander)).body.user;
+    expect(session).toMatchObject({ email: 'kurt@example.org', pendingEmail: 'kurt.neu@example.org' });
+    const mail = mails.at(-1)!;
+    expect(mail.to).toBe('kurt.neu@example.org');
+    const token = /confirm-email\?token=([\w-]+)/.exec(mail.text)![1];
+    // The confirmation link cannot set a password.
+    await test.http.post('/api/core/password-reset/confirm').set(UI).send({ token, password: 'uebernommen-1234' }).expect(400);
+    await test.http.post('/api/core/email-confirmation').set(UI).send({ token }).expect(200);
+    await test.http.post('/api/core/email-confirmation').set(UI).send({ token }).expect(400);
+    session = (await get('/core/session', commander)).body.user;
+    expect(session).toMatchObject({ email: 'kurt.neu@example.org', pendingEmail: null });
+    // The old address learns of the change.
+    expect(mails.at(-1)!.to).toBe('kurt@example.org');
+    await test.http.post('/api/core/password-reset/confirm').set(UI).send({ token: resetToken, password: 'uebernommen-1234' }).expect(400);
+
     // Left out: unchanged.
     await put('/core/profile', { language: 'de', receiveDigest: false }, commander).expect(200);
     expect((await get('/core/session', commander)).body.user.email).toBe('kurt.neu@example.org');
+  });
+
+  it('hides chosen modules and kinds of tasks in bell and start page', async () => {
+    const all = (await get('/core/tasks?asOf=2030-01-01&all=true').expect(200)).body as { module: string; kind: string }[];
+    expect(all.length).toBeGreaterThan(0);
+    const [first] = all;
+    await put('/core/profile', { language: 'de', receiveDigest: true, hiddenTasks: [`${first.module}:${first.kind}`] }).expect(200);
+    expect((await get('/core/session')).body.user.hiddenTasks).toEqual([`${first.module}:${first.kind}`]);
+    const shown = (await get('/core/tasks?asOf=2030-01-01').expect(200)).body as { module: string; kind: string }[];
+    expect(shown.some((t) => t.module === first.module && t.kind === first.kind)).toBe(false);
+    expect(shown.length).toBe(all.filter((t) => !(t.module === first.module && t.kind === first.kind)).length);
+    await put('/core/profile', { language: 'de', receiveDigest: true, hiddenTasks: [first.module] }).expect(200);
+    expect(((await get('/core/tasks?asOf=2030-01-01').expect(200)).body as { module: string }[]).some((t) => t.module === first.module)).toBe(false);
+    await put('/core/profile', { language: 'de', receiveDigest: true, hiddenTasks: [] }).expect(200);
+    expect((await get('/core/tasks?asOf=2030-01-01').expect(200)).body).toHaveLength(all.length);
   });
 });
 
@@ -261,7 +415,25 @@ describe('data access request and full export', () => {
     const full = JSON.parse((await get('/core/export/core').expect(200)).text) as { data: { users: unknown[]; roles: unknown[]; settings: Record<string, Record<string, unknown>> } };
     expect(full.data.users.length).toBeGreaterThan(3);
     expect(full.data.settings.smtp).toMatchObject({ host: 'smtp.example.org' });
+    expect(full.data.settings.smtp).not.toHaveProperty('password');
+    expect(full.data.settings['training.general']).toMatchObject({ feedToken: 'geheimer-feed-token-123' });
     expect(JSON.stringify(full)).not.toMatch(/passwordHash|scrypt\$/);
+  });
+
+  it('leave out server accounts and managers\' fields for exporters who do not manage them', async () => {
+    const role = (await post('/core/roles', { name: 'Datenschutz', permissions: ['core.data.export'] }).expect(201)).body.id;
+    await user('datenschutz', [{ roleId: role }]);
+    const cookie = await login('datenschutz');
+    const full = JSON.parse((await get('/core/export/core', cookie).expect(200)).text) as { data: { settings: Record<string, Record<string, unknown>> } };
+    for (const section of ['smtp', 'oidc', 'privacy', 'reminders']) expect(full.data.settings).not.toHaveProperty(section);
+    expect(full.data.settings['training.general']).toBeDefined();
+    expect(full.data.settings['training.general']).not.toHaveProperty('feedToken');
+    expect(full.data.settings.brigade).toMatchObject({ name: 'Feuerwehr Musterstadt' });
+  });
+
+  it('answer 400 for an invalid and 404 for an unknown person', async () => {
+    expect((await get('/core/export/person/kein-uuid').expect(400)).body.code).toBe('data.invalidPersonId');
+    expect((await get('/core/export/person/0190c0de-0000-7000-8000-000000000000').expect(404)).body.code).toBe('data.unknownPerson');
   });
 });
 

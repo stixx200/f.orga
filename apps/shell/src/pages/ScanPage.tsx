@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import type { SearchHit } from '@forga/core-contracts';
 import { api, useLocalized, useTranslation, withQuery } from '@forga/web-sdk';
-import { cameraScanSupported, CodeCamera, Notice, nfcSupported, PageHeader, Panel, readNfc } from '@forga/web-ui';
+import { cameraScanSupported, CodeCamera, Notice, nfcSupported, PageHeader, Panel, readNfc, signalScan } from '@forga/web-ui';
 
 type Result = { code: string; hits: SearchHit[] };
 
@@ -34,6 +34,8 @@ export function ScanPage() {
     setFailed(false);
     try {
       const hits = await api<SearchHit[]>(withQuery('core/codes', { code }));
+      // Hand scanners, the camera and NFC give no feedback of their own: a beep tells whether the code was known.
+      signalScan(hits.length > 0);
       if (hits.length === 1) {
         navigate(hits[0].to);
         return;

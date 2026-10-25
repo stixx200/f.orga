@@ -1,4 +1,4 @@
-import { Button, Grid, Group, Select, SimpleGrid, Stack, Text } from '@mantine/core';
+import { Anchor, Button, Grid, Group, Select, SimpleGrid, Stack, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -116,6 +116,7 @@ export function StartPage({ modules, session }: { modules: LoadedModule[]; sessi
           <Stack gap="lg">
             <Panel title={t('start.tasks')} aside={<Text size="xs" c="dimmed">{t('start.tasksForRoles')}</Text>}>
               <TaskList modules={modules} />
+              <Anchor component={Link} to="/profile" size="xs" mt="sm" display="block">{t('start.chooseTasks')}</Anchor>
             </Panel>
             {area('side').map(({ id, component: Item }) => (
               <Item key={id} />

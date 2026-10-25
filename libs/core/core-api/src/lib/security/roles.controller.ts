@@ -13,15 +13,15 @@ import {
   Put,
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { type Permission, type Role as RoleDto, RoleInput } from '@forga/core-contracts';
+import { type LocalizedText, type Permission, type Role as RoleDto, RoleInput } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
 import { ZodPipe } from '../zod.pipe.js';
 import { assertAdministratorRemains } from './administrators.js';
 import { AuthService } from './auth.service.js';
-import { type AuthenticatedUser, widerThan } from './authenticated-user.js';
+import type { AuthenticatedUser } from './authenticated-user.js';
 import { CurrentUser, RequirePermissions } from './decorators.js';
 import { PermissionRegistry } from './permission-registry.js';
-import { type MergedRoleTemplate, RoleTemplates } from './role-templates.js';
+import { type MergedRoleTemplate, roleNames, RoleTemplates } from './role-templates.js';
 import { Role } from './security.entities.js';
 
 type ParsedRoleInput = ReturnType<typeof RoleInput.parse>;
@@ -31,7 +31,7 @@ function toRoleDto(role: Role): RoleDto {
     id: role.id,
     templateKey: role.templateKey ?? null,
     name: role.name,
-    description: role.description,
+    description: role.description ?? { de: '', en: '' },
     permissions: role.permissions,
     permissionsAllDepartments: role.permissionsAllDepartments ?? [],
     version: role.version,
@@ -67,8 +67,8 @@ export class RolesController {
   /** Creates the standard roles that do not exist yet, e.g. after a module was added. */
   @Post('roles/templates')
   @RequirePermissions('core.roles.manage')
-  async createTemplateRoles(@CurrentUser() user: AuthenticatedUser): Promise<{ created: string[]; skipped: string[] }> {
-    const result = await this.templates.createMissing(this.em.fork(), user.language);
+  async createTemplateRoles(): Promise<{ created: string[]; skipped: string[] }> {
+    const result = await this.templates.createMissing(this.em.fork());
     await this.audit.log('roles.templates-created', result);
     return result;
   }
@@ -76,8 +76,8 @@ export class RolesController {
   /** Readable for role editing and for assigning roles to users. */
   @Get('roles')
   async list(): Promise<RoleDto[]> {
-    const roles = await this.em.fork().find(Role, {}, { orderBy: { name: 'asc' } });
-    return roles.map(toRoleDto);
+    const roles = await this.em.fork().find(Role, {});
+    return roles.map(toRoleDto).toSorted((a, b) => a.name.de.localeCompare(b.name.de, 'de'));
   }
 
   @Post('roles')
@@ -86,7 +86,7 @@ export class RolesController {
     this.validate(input);
     await this.assertNotWider(current, input.permissions, input.permissionsAllDepartments);
     const em = this.em.fork();
-    if (await em.count(Role, { name: input.name })) throw new ConflictException({ code: 'roles.nameTaken' });
+    await this.assertNameFree(em, input.name, null);
     const role = em.create(Role, input);
     await em.flush();
     await this.audit.log('roles.created', { roleId: role.id, permissions: role.permissions, permissionsAllDepartments: role.permissionsAllDepartments });
@@ -105,9 +105,7 @@ export class RolesController {
         input.permissions.filter((p) => !role.permissions.includes(p)),
         input.permissionsAllDepartments.filter((p) => !(role.permissionsAllDepartments ?? []).includes(p)),
       );
-      if (input.name !== role.name && (await em.count(Role, { name: input.name }))) {
-        throw new ConflictException({ code: 'roles.nameTaken' });
-      }
+      await this.assertNameFree(em, input.name, role.id);
       em.assign(role, input);
       await em.flush();
       // Taking `*` from the role of the last administrator would leave nobody to manage f.orga.
@@ -161,9 +159,15 @@ export class RolesController {
 
   /** Permissions added to a role must be held brigade-wide by whoever edits it (no self-promotion via roles). */
   private async assertNotWider(current: AuthenticatedUser, patterns: string[], allDepartments: string[]): Promise<void> {
-    const grants = await this.auth.grantsFor([{ role: { permissions: [...patterns, ...allDepartments], permissionsAllDepartments: [] }, departmentId: null }]);
-    const wider = widerThan(current, grants);
+    const wider = await this.auth.widerThanActor(current, [{ role: { permissions: [...patterns, ...allDepartments], permissionsAllDepartments: [] }, departmentId: null }]);
     if (wider.length) throw new ForbiddenException({ code: 'users.roleWider', permissions: wider });
+  }
+
+  /** A role name is unique in every language, ignoring case (users choose roles by name). */
+  private async assertNameFree(em: EntityManager, name: LocalizedText, exceptId: string | null): Promise<void> {
+    const wanted = roleNames(name);
+    const others = await em.find(Role, exceptId ? { id: { $ne: exceptId } } : {});
+    if (others.some((r) => roleNames(r.name).some((n) => wanted.includes(n)))) throw new ConflictException({ code: 'roles.nameTaken' });
   }
 
   private validate(input: ParsedRoleInput): void {

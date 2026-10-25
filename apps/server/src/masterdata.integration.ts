@@ -238,7 +238,7 @@ describe('course coordinator', () => {
   it('uses the standard role to plan courses and record attendances, but not to edit persons', async () => {
     const roles = (await test.http.get('/api/core/roles').set('Cookie', admin)).body as { templateKey: string; name: string; id: string }[];
     const coordinator = roles.find((r) => r.templateKey === 'course-coordinator')!;
-    expect(coordinator.name).toBe('Lehrgangsbeauftragter');
+    expect(coordinator.name).toEqual({ de: 'Lehrgangsbeauftragter', en: 'Course coordinator' });
     await test.http
       .post('/api/core/users')
       .set('Cookie', admin)

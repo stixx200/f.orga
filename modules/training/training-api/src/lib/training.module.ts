@@ -1,6 +1,6 @@
 import { Global, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Attachments, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
+import { Attachments, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry, SearchRegistry } from '@forga/core-api';
 import { TRAINING_CASUALTIES, TRAINING_MANIFEST, TRAINING_SESSIONS, TRAINING_SETTINGS } from '@forga/training-contracts';
 import { TRAINING_MIGRATIONS } from '../migrations/index.js';
 import { TrainingData } from './data/training.data.js';
@@ -32,6 +32,7 @@ export class TrainingModule implements OnModuleInit {
     private readonly data: TrainingData,
     private readonly sessionsImport: SessionsImport,
     private readonly attachments: Attachments,
+    private readonly personData: PersonDataRegistry,
   ) {}
 
   onModuleInit(): void {
@@ -39,6 +40,7 @@ export class TrainingModule implements OnModuleInit {
     this.deadlines.register(this.data);
     this.search.register('training', (user, query) => this.data.search(user, query));
     this.exports.register('training', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
+    this.personData.register('training', { anonymize: (ids) => this.data.anonymize(ids) });
     this.imports.register('training', this.sessionsImport.profile());
     this.historyAccess.register('training.session', async (user, id) => {
       const session = await this.em.fork().findOne(SessionEntity, id);

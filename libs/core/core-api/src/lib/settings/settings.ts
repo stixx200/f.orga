@@ -95,14 +95,24 @@ export class SettingsService {
    */
   async getVisible(section: string, user: AuthenticatedUser): Promise<Record<string, unknown> | null> {
     this.schema(section);
-    const access = this.access.get(section) ?? {};
-    const manager = this.isManager(user, section);
-    if (access.managersOnly && !manager) throw new ForbiddenException({ code: 'auth.forbidden', permissions: this.managerPermissions(section) });
+    if (!this.mayRead(user, section)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: this.managerPermissions(section) });
     const value = await this.get(section);
-    if (!value) return null;
+    return value && this.redact(section, value, user);
+  }
+
+  /** Sections reserved for the managers (e.g. SMTP account, OIDC client) only for them. */
+  mayRead(user: AuthenticatedUser, section: string): boolean {
+    return !this.access.get(section)?.managersOnly || this.isManager(user, section);
+  }
+
+  /**
+   * A value without write-only fields and, unless the user manages the section, without the managers' fields
+   * (e.g. the secret part of a calendar feed address). Callers check `mayRead` first.
+   */
+  redact(section: string, value: Record<string, unknown>, user: AuthenticatedUser): Record<string, unknown> {
     const visible = { ...value };
     for (const field of SECRET_SETTING_FIELDS[section] ?? []) delete visible[field];
-    if (!manager) for (const field of access.managerFields ?? []) delete visible[field];
+    if (!this.isManager(user, section)) for (const field of this.access.get(section)?.managerFields ?? []) delete visible[field];
     return visible;
   }
 }

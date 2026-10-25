@@ -3,7 +3,8 @@ import { DateInput } from '@mantine/dates';
 import { IconFileSpreadsheet, IconFileText, IconFileTypePdf } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { Fragment, useState } from 'react';
-import type { ListCell, ListData, ListInfo, ListParameter } from '@forga/core-contracts';
+import { useDebouncedValue } from '@mantine/hooks';
+import type { ListCell, ListData, ListInfo, ListOption, ListParameter } from '@forga/core-contracts';
 import { api, apiUrl, formatDate, withQuery, useLocalized, useTranslation } from '@forga/web-sdk';
 import { DataTable, EmptyState, Notice, PageHeader, Panel } from '@forga/web-ui';
 import type { LoadedModule } from '../modules';
@@ -14,7 +15,50 @@ type Values = Record<string, string>;
 const initialValues = (list: ListInfo): Values =>
   Object.fromEntries(list.parameters.map((p) => [p.key, p.type === 'year' ? String(new Date().getFullYear()) : p.type === 'boolean' ? 'false' : '']));
 
-function ParameterField({ parameter, value, onChange, allowed }: { parameter: ListParameter; value: string; onChange: (value: string) => void; allowed: ListInfo['departments'] }) {
+/**
+ * A person or an entry offered by the module (session, payout run, promotion list …), searched on the server as the
+ * user types; the value is the ID.
+ */
+function OptionField({ listId, parameter, label, value, onChange }: { listId: string; parameter: ListParameter; label: string; value: string; onChange: (value: string) => void }) {
+  const { t } = useTranslation('shell');
+  const [search, setSearch] = useState('');
+  const [query] = useDebouncedValue(search, 250);
+  const [known, setKnown] = useState<ListOption[]>([]);
+  const person = parameter.type === 'person';
+  const { data: options = [], isFetching } = useQuery({
+    queryKey: ['core', 'lists', listId, 'options', parameter.key, query],
+    queryFn: () => api<ListOption[]>(withQuery(`core/lists/${listId}/parameters/${parameter.key}/options`, { q: query })),
+    // Persons are only searched by name; module choices are listed right away.
+    enabled: !person || query.trim().length >= 2,
+    staleTime: 60_000,
+  });
+  // Keep the chosen entry, so its label stays when the search changes.
+  const selected = known.find((o) => o.value === value);
+  const data = [...(selected && !options.some((o) => o.value === selected.value) ? [selected] : []), ...options];
+  const required = parameter.required ?? false;
+  return (
+    <Select
+      label={label}
+      placeholder={t('lists.searchPlaceholder')}
+      data={data.map((o) => ({ value: o.value, label: o.description ? `${o.label} · ${o.description}` : o.label }))}
+      value={value || null}
+      onChange={(v) => {
+        setKnown(data);
+        onChange(v ?? '');
+      }}
+      searchable
+      searchValue={search}
+      onSearchChange={setSearch}
+      // The server filters already; the typed text must not hide entries whose description matched.
+      filter={({ options: all }) => all}
+      nothingFoundMessage={isFetching || (person && query.trim().length < 2) ? undefined : t('lists.noOptions')}
+      clearable={!required}
+      required={required}
+    />
+  );
+}
+
+function ParameterField({ listId, parameter, value, onChange, allowed }: { listId: string; parameter: ListParameter; value: string; onChange: (value: string) => void; allowed: ListInfo['departments'] }) {
   const localized = useLocalized();
   const { t } = useTranslation('shell');
   const { data: departments = [] } = useDepartments();
@@ -40,6 +84,9 @@ function ParameterField({ parameter, value, onChange, allowed }: { parameter: Li
       );
     case 'select':
       return <Select label={label} data={(parameter.options ?? []).map((o) => ({ value: o.value, label: localized(o.label) }))} value={value || null} onChange={(v) => onChange(v ?? '')} clearable={!required} required={required} />;
+    case 'person':
+    case 'choice':
+      return <OptionField listId={listId} parameter={parameter} label={label} value={value} onChange={onChange} />;
     case 'boolean':
       return <Checkbox label={label} checked={value === 'true'} onChange={(e) => onChange(String(e.currentTarget.checked))} mt="lg" />;
     default:
@@ -81,7 +128,7 @@ function ListView({ list }: { list: ListInfo }) {
             {list.parameters.length > 0 && (
               <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
                 {list.parameters.map((p) => (
-                  <ParameterField key={p.key} parameter={p} allowed={list.departments} value={values[p.key] ?? ''} onChange={(value) => setValues((v) => ({ ...v, [p.key]: value }))} />
+                  <ParameterField key={p.key} listId={list.id} parameter={p} allowed={list.departments} value={values[p.key] ?? ''} onChange={(value) => setValues((v) => ({ ...v, [p.key]: value }))} />
                 ))}
               </SimpleGrid>
             )}

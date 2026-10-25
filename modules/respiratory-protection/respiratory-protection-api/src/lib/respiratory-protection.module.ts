@@ -1,6 +1,6 @@
 import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry } from '@forga/core-api';
+import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry } from '@forga/core-api';
 import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { RESPIRATORY_PROTECTION_FITNESS, RESPIRATORY_PROTECTION_MANIFEST, RESPIRATORY_PROTECTION_SETTINGS } from '@forga/respiratory-protection-contracts';
 import { RESPIRATORY_PROTECTION_MIGRATIONS } from '../migrations/index.js';
@@ -33,12 +33,14 @@ export class RespiratoryProtectionModule implements OnModuleInit {
     private readonly examinations: ExaminationsImport,
     private readonly stressExercises: StressExercisesImport,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
+    private readonly personData: PersonDataRegistry,
   ) {}
 
   onModuleInit(): void {
     for (const definition of this.moduleLists.definitions()) this.lists.register('respiratory-protection', definition);
     this.deadlines.register(this.data);
     this.exports.register('respiratory-protection', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
+    this.personData.register('respiratory-protection', { anonymize: (ids) => this.data.anonymize(ids) });
     this.imports.register('respiratory-protection', this.examinations.profile());
     this.imports.register('respiratory-protection', this.stressExercises.profile());
     // History of evidence: examinations only with the permission for health data.

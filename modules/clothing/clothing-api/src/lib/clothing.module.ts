@@ -1,6 +1,6 @@
 import { Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
+import { CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry, PersonDataRegistry, SearchRegistry } from '@forga/core-api';
 import { CLOTHING_MANIFEST, CLOTHING_SETTINGS } from '@forga/clothing-contracts';
 import { ORGANIZATION_REFERENCES, type OrganizationReferences, PERSON_HOLDINGS, type PersonHoldings } from '@forga/masterdata-contracts';
 import { CLOTHING_MIGRATIONS } from '../migrations/index.js';
@@ -23,6 +23,7 @@ export class ClothingModule implements OnModuleInit {
     private readonly historyAccess: HistoryAccessRegistry,
     @Inject(ORGANIZATION_REFERENCES) private readonly references: OrganizationReferences,
     @Inject(PERSON_HOLDINGS) private readonly holdings: PersonHoldings,
+    private readonly personData: PersonDataRegistry,
   ) {}
 
   onModuleInit(): void {
@@ -30,7 +31,8 @@ export class ClothingModule implements OnModuleInit {
     this.deadlines.register(this.data);
     this.search.register('clothing', (user, query) => this.data.search(user, query));
     this.codes.register('clothing', (user, code) => this.data.code(user, code));
-    this.exports.register('clothing', { all: () => this.data.exportAll() });
+    this.exports.register('clothing', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
+    this.personData.register('clothing', { anonymize: (ids) => this.data.anonymize(ids) });
     this.historyAccess.register('clothing.item', async (user, id) => {
       const item = await this.em.fork().findOne(ClothingItemEntity, id);
       return { allowed: Boolean(item) && user.can(READ, item!.departmentId) };

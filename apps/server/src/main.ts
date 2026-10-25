@@ -3,7 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { MikroORM } from '@mikro-orm/core';
 import cookieParser from 'cookie-parser';
-import { loadPlugins, pluginConfig } from '@forga/core-api';
+import { applyTrustProxy, loadPlugins, pluginConfig } from '@forga/core-api';
 import { AppModule, servePluginFrontends } from './app/app.module';
 import { INSTALLED_MODULES } from './app/installed-modules';
 
@@ -16,6 +16,7 @@ async function bootstrap() {
   const plugins = await loadPlugins(config, new Set(INSTALLED_MODULES.map((m) => m.manifest.id)), importModule);
   const app = await NestFactory.create(AppModule.register({ modules: [...INSTALLED_MODULES, ...plugins.modules], plugins: { config, states: plugins.states } }));
   app.setGlobalPrefix('api');
+  applyTrustProxy(app);
   servePluginFrontends(app, plugins.states);
   app.use(cookieParser());
   app.enableShutdownHooks();

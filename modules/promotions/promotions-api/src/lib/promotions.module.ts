@@ -1,16 +1,17 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import { defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry } from '@forga/core-api';
+import { defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry, PersonDataRegistry } from '@forga/core-api';
 import { PROMOTIONS_MANIFEST, PROMOTIONS_SETTINGS } from '@forga/promotions-contracts';
 import { PROMOTIONS_MIGRATIONS } from '../migrations/index.js';
 import { PromotionsLists } from './lists/promotions.lists.js';
 import { PromotionsController } from './promotions/promotions.controller.js';
+import { PromotionsData } from './promotions.data.js';
 import { PromotionsService } from './promotions/promotions.service.js';
 import { ExclusionEntity, PromotionListEntity } from './promotions.entities.js';
 
 @Module({
   controllers: [PromotionsController],
-  providers: [PromotionsService, PromotionsLists],
+  providers: [PromotionsService, PromotionsLists, PromotionsData],
 })
 export class PromotionsModule implements OnModuleInit {
   constructor(
@@ -19,6 +20,8 @@ export class PromotionsModule implements OnModuleInit {
     private readonly moduleLists: PromotionsLists,
     private readonly exports: ExportRegistry,
     private readonly historyAccess: HistoryAccessRegistry,
+    private readonly data: PromotionsData,
+    private readonly personData: PersonDataRegistry,
   ) {}
 
   onModuleInit(): void {
@@ -33,7 +36,9 @@ export class PromotionsModule implements OnModuleInit {
           exclusions: (await em.find(ExclusionEntity, {})).map((e) => wrap(e).toObject()),
         };
       },
+      person: (id) => this.data.exportPerson(id),
     });
+    this.personData.register('promotions', { anonymize: (ids) => this.data.anonymize(ids) });
   }
 }
 

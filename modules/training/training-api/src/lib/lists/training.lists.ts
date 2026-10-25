@@ -3,7 +3,7 @@ import { berlinDayStart, berlinDayAfter } from '@forga/core-api';
 import { EntityManager } from '@mikro-orm/core';
 import { z } from 'zod';
 import type { Language, ListColumn } from '@forga/core-contracts';
-import type { AuthenticatedUser, ListDefinition } from '@forga/core-api';
+import type { AuthenticatedUser, ListDefinition, ListParameterDefinition } from '@forga/core-api';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { SessionEntity, SessionTypeEntity } from '../training.entities.js';
 import { participation } from '../sessions/participation.js';
@@ -168,12 +168,32 @@ export class TrainingLists {
     };
   }
 
+  /** A session, chosen from those of the last year and the next three months the user may see, newest first. */
+  private sessionParameter(): ListParameterDefinition {
+    return {
+      key: 'sessionId',
+      label: { de: 'Dienst', en: 'Session' },
+      type: 'choice',
+      required: true,
+      choices: async (user, query, language) => {
+        const today = new Date();
+        const from = new Date(today.getTime() - 365 * 86_400_000).toISOString().slice(0, 10);
+        const to = new Date(today.getTime() + 90 * 86_400_000).toISOString().slice(0, 10);
+        const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+        return (await this.sessions.list(user, { from, to }))
+          .filter((s) => words.every((w) => s.title.toLowerCase().includes(w)))
+          .toSorted((a, b) => b.startsAt.localeCompare(a.startsAt))
+          .map((s) => ({ value: s.id, label: s.title, description: dateTime(new Date(s.startsAt), language) }));
+      },
+    };
+  }
+
   private participants(): ListDefinition<z.infer<typeof SessionParam>> {
     return {
       id: 'training.participants',
       name: { de: 'Teilnehmerliste', en: 'Participants' },
       permission: READ,
-      parameters: [{ key: 'sessionId', label: { de: 'Dienst (ID)', en: 'Session (ID)' }, type: 'text', required: true }],
+      parameters: [this.sessionParameter()],
       schema: SessionParam,
       columns: [col('name', 'Name', 'Name', 2), col('status', 'Status', 'Status'), col('role', 'Funktion', 'Role'), col('ba', 'Atemschutz', 'BA', 0.8, 'center')],
       rows: async (user, params, language) => {
@@ -196,7 +216,7 @@ export class TrainingLists {
       id: 'training.signatures',
       name: { de: 'Unterschriftenliste Dienst', en: 'Signature list (session)' },
       permission: READ,
-      parameters: [{ key: 'sessionId', label: { de: 'Dienst (ID)', en: 'Session (ID)' }, type: 'text', required: true }],
+      parameters: [this.sessionParameter()],
       schema: SessionParam,
       signatureColumn: true,
       columns: [col('name', 'Name', 'Name', 2), col('department', 'Abteilung', 'Department')],

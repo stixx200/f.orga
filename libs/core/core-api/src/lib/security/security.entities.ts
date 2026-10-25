@@ -1,6 +1,6 @@
 import { defineEntity, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import type { Language } from '@forga/core-contracts';
+import type { Language, LocalizedText } from '@forga/core-contracts';
 
 export const UserSchema = defineEntity({
   name: 'User',
@@ -16,6 +16,8 @@ export const UserSchema = defineEntity({
     personId: p.string().nullable().unique(),
     language: p.string().$type<Language>().default('de'),
     receiveDigest: p.boolean().default(true),
+    /** Tasks the user hides in the bell and on the start page: modules (`training`) or kinds (`training:excuse-open`). */
+    hiddenTasks: p.json<string[]>().defaultRaw("'[]'::jsonb").onCreate(() => []),
     active: p.boolean().default(true),
     /** Technical users never log in; they carry API tokens. */
     technical: p.boolean().default(false),
@@ -35,10 +37,11 @@ export const RoleSchema = defineEntity({
   tableName: 'role',
   properties: {
     id: p.uuid().primary().onCreate(() => uuidv7()),
-    name: p.string().unique(),
+    /** In both languages; unique in each language (checked by the server, ignoring case). */
+    name: p.json<LocalizedText>(),
     /** Key of the role template the role was created from; templates are only created once. */
     templateKey: p.string().nullable().unique(),
-    description: p.string().default(''),
+    description: p.json<{ de: string; en: string }>().defaultRaw(`'{"de":"","en":""}'::jsonb`).onCreate(() => ({ de: '', en: '' })),
     /** Permission IDs or patterns (`*`, `masterdata.*`). */
     permissions: p.json<string[]>(),
     /** Apply in all departments even for an assignment to one department. */

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { type EntityClass, EntityManager, wrap } from '@mikro-orm/core';
-import { type AuthenticatedUser, HistoryEntry, wordsWhere } from '@forga/core-api';
+import { type AuthenticatedUser, HistoryEntry, PersonDataRegistry, wordsWhere } from '@forga/core-api';
 import type { PrivacySettings, SearchHit } from '@forga/core-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { Course, CourseAttendance, CourseNomination, CourseRun } from '../courses/course.entities.js';
@@ -20,6 +20,7 @@ export class MasterdataData {
   constructor(
     private readonly em: EntityManager,
     private readonly persons: PersonsService,
+    private readonly personData: PersonDataRegistry,
   ) {}
 
   /**
@@ -119,6 +120,8 @@ export class MasterdataData {
     await em.flush();
     const ids = persons.map((p) => p.id);
     await em.nativeDelete(HistoryEntry, { $or: [{ entity: 'masterdata.person', entityId: { $in: ids } }, { parentEntity: 'masterdata.person', parentId: { $in: ids } }] });
+    // The other modules remove what they keep about the persons (accounts, health data, notes, sizes, …).
+    await this.personData.anonymize(ids);
     return persons.length;
   }
 

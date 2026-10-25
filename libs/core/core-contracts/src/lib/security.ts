@@ -91,14 +91,29 @@ export type Setup = z.input<typeof Setup>;
 export const ChangePassword = z.object({ current: z.string().min(1), new: Password });
 export type ChangePassword = z.infer<typeof ChangePassword>;
 
+/** Hidden tasks: a module (`training`) or a kind of task of a module (`training:excuse-open`). */
+export const HiddenTasks = z.array(z.string().trim().min(1).max(200)).max(200);
+export type HiddenTasks = z.infer<typeof HiddenTasks>;
+
 export const UpdateProfile = z.object({
   language: Language,
   /** Weekly e-mail with the user's deadlines. */
   receiveDigest: z.boolean().default(true),
-  /** Own e-mail address; left out = unchanged, `null` = remove. */
+  /**
+   * Own e-mail address; left out = unchanged, `null` = remove. A new address only takes effect once confirmed with the
+   * link sent to it.
+   */
   email: z.email().nullable().optional(),
+  /** Needed to change or remove the e-mail address. */
+  currentPassword: z.string().optional(),
+  /** Tasks hidden in the bell and on the start page; left out = unchanged. */
+  hiddenTasks: HiddenTasks.optional(),
 });
 export type UpdateProfile = z.input<typeof UpdateProfile>;
+
+/** Confirms a new e-mail address with the token from the link sent to it. */
+export const ConfirmEmail = z.object({ token: z.string().min(10) });
+export type ConfirmEmail = z.infer<typeof ConfirmEmail>;
 
 /** Where a granted permission applies: the whole brigade or the listed department IDs. */
 export const Grant = z.union([z.literal('brigade'), z.array(z.string())]);
@@ -112,7 +127,10 @@ export const Session = z.object({
     personId: z.string().nullable(),
     language: Language,
     email: z.string().nullable(),
+    /** New address waiting for confirmation by the link sent to it. */
+    pendingEmail: z.string().nullable(),
     receiveDigest: z.boolean(),
+    hiddenTasks: HiddenTasks,
   }),
   permissions: z.record(z.string(), Grant),
   /** Set while an administrator acts as this user (impersonation). */
@@ -189,13 +207,29 @@ export type BulkUserInvitation = z.infer<typeof BulkUserInvitation>;
 export const BulkUserInvitationResult = z.object({
   /** IDs of the created users. */
   invited: z.array(z.string()),
-  skipped: z.array(z.object({ personId: z.string(), reason: z.enum(['unknownPerson', 'hasUser', 'noEmail', 'usernameTaken']) })),
+  skipped: z.array(
+    z.object({
+      personId: z.string(),
+      reason: z.enum(['unknownPerson', 'hasUser', 'noEmail', 'emailTaken', 'usernameTaken', 'forbidden', 'mailFailed']),
+      /** For `mailFailed`: the `mail.*` error code. */
+      code: z.string().optional(),
+    }),
+  ),
 });
 export type BulkUserInvitationResult = z.infer<typeof BulkUserInvitationResult>;
 
+const bothLanguages = (value: unknown) => (typeof value === 'string' ? { de: value, en: value } : value);
+
+/** Name of a role in both languages; a single text (older clients, scripts) is used for both. */
+export const RoleName = z.preprocess(bothLanguages, z.object({ de: z.string().trim().min(1).max(100), en: z.string().trim().min(1).max(100) }));
+
+/** Description of a role in both languages, may be empty; a single text is used for both. */
+export const RoleDescription = z.preprocess(bothLanguages, z.object({ de: z.string().trim().max(500), en: z.string().trim().max(500) }));
+export type RoleDescription = z.infer<typeof RoleDescription>;
+
 export const RoleInput = z.object({
-  name: z.string().trim().min(1),
-  description: z.string().trim().default(''),
+  name: RoleName,
+  description: RoleDescription.default({ de: '', en: '' }),
   /**
    * Permission IDs or patterns (`*` = everything, `masterdata.*` = everything of a module)
    * that apply in the area of the assignment: the whole brigade or the assigned department.
@@ -210,8 +244,8 @@ export const Role = z.object({
   id: z.string(),
   /** Key of the role template the role was created from, if any. */
   templateKey: z.string().nullable(),
-  name: z.string(),
-  description: z.string(),
+  name: LocalizedText,
+  description: z.object({ de: z.string(), en: z.string() }),
   permissions: z.array(z.string()),
   permissionsAllDepartments: z.array(z.string()),
   version: z.number(),

@@ -72,7 +72,10 @@ export const OidcSettings = z.object({
   /** Never returned by the API; leave empty to keep the stored secret. */
   clientSecret: z.string().optional(),
   scopes: z.string().trim().default('openid email profile'),
-  /** How a not yet linked account is found: verified e-mail or the `preferred_username` claim. */
+  /**
+   * How a not yet linked account is found: by verified e-mail address, or `username` = not automatically (the username
+   * at the provider is neither unique nor verified; users link their account in the profile).
+   */
   matchBy: z.enum(['email', 'username']).default('email'),
   buttonLabel: LocalizedText.default({ de: 'Mit Konto der Gemeinde anmelden', en: 'Sign in with the municipal account' }),
 });

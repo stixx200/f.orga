@@ -1,6 +1,6 @@
 import { EntityManager } from '@mikro-orm/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DigestService, MailService, PasswordResetService } from '@forga/core-api';
+import { DigestService, MailService, PasswordResetService, User } from '@forga/core-api';
 import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
 
 let test: TestApp;
@@ -208,7 +208,10 @@ describe('password reset, test e-mail and assets', () => {
 
   it('resets no account for an e-mail address shared by several and limits the links per account', async () => {
     await post('/core/users', { username: 'zwilling1', displayName: 'Zwilling 1', email: 'familie@example.org', password: 'zwilling-passwort-1' }).expect(201);
-    await post('/core/users', { username: 'zwilling2', displayName: 'Zwilling 2', email: 'Familie@example.org', password: 'zwilling-passwort-2' }).expect(201);
+    // An address belongs to one active user only; older data may still hold one address twice.
+    expect((await post('/core/users', { username: 'zwilling2', displayName: 'Zwilling 2', email: 'Familie@example.org', password: 'zwilling-passwort-2' }).expect(409)).body.code).toBe('users.emailTaken');
+    await post('/core/users', { username: 'zwilling2', displayName: 'Zwilling 2', email: 'zwilling2@example.org', password: 'zwilling-passwort-2' }).expect(201);
+    await test.app.get(EntityManager).fork().nativeUpdate(User, { username: 'zwilling2' }, { email: 'Familie@example.org' });
     const resets = test.app.get(PasswordResetService);
     const mails = test.app.get(MailService).sent;
     const before = mails.length;
@@ -283,6 +286,15 @@ describe('search, export and retention', () => {
     const access = JSON.parse((await get(`/core/export/person/${person}`).expect(200)).text) as { data: { masterdata: { person: { email: string } } } };
     expect(access.data.masterdata.person.email).toBe('x@example.org');
 
+    // What other modules keep about the person: an account, a reason of a promotion exclusion, a medical examination
+    // and the clothing sizes.
+    const account = (await post('/core/users', { username: 'xaver', displayName: 'Xaver Suchbar', email: 'xaver@example.org', personId: person, password: 'xaver-passwort-1' }).expect(201)).body.id;
+    await post('/promotions/exclusions', { personId: person, from: '2004-01-01', until: '2005-12-31', reason: 'Disziplinarmaßnahme' }).expect(201);
+    await post('/respiratory-protection/evidence', { personId: person, kind: 'examination', date: '2005-01-10', validUntil: '2008-01-10', restrictions: 'Brillenträger', result: 'no-concerns' }).expect(201);
+    await post('/respiratory-protection/evidence', { personId: person, kind: 'stress-exercise', date: '2005-02-10', passed: true, facility: 'Übungsstrecke', note: 'knapp bestanden' }).expect(201);
+    const sql = test.app.get(EntityManager).getConnection();
+    await sql.execute(`insert into clothing.size_profile (id, person_id, sizes, version) values ('0190c0de-0000-7000-8000-00000000abcd', ?, '{"jacket":"52"}', 1)`, [person]);
+
     // Leaving long ago: the retention rule anonymises the person and removes the history.
     await post('/masterdata/catalog/templates/bw', {});
     await post(`/masterdata/persons/${person}/leave`, { leftOn: '2005-12-31', exitReason: 'own-request' }).expect(201);
@@ -300,6 +312,16 @@ describe('search, export and retention', () => {
     expect(anonymised).toMatchObject({ firstName: 'N.', lastName: 'N.', email: '' });
     expect(anonymised.anonymizedAt).not.toBeNull();
     expect((await get(`/core/history/masterdata.person/${person}`)).body).toEqual([]);
+
+    // The other modules anonymise as well: the account is locked and nameless, health data and free texts are gone.
+    expect((await get(`/core/users/${account}`)).body).toMatchObject({ displayName: 'N. N.', email: null, active: false, passwordSet: false });
+    await test.http.post('/api/core/login').send({ username: 'xaver', password: 'xaver-passwort-1' }).expect(401);
+    expect((await get(`/core/history/core.user/${account}`)).body).toEqual([]);
+    const exclusions = await sql.execute('select reason from promotions.exclusion where person_id = ?', [person]);
+    expect(exclusions).toEqual([{ reason: '' }]);
+    const evidence = await sql.execute('select kind, facility, note, restrictions from respiratory_protection.evidence where person_id = ?', [person]);
+    expect(evidence).toEqual([{ kind: 'stress-exercise', facility: '', note: '', restrictions: '' }]);
+    expect(await sql.execute('select * from clothing.size_profile where person_id = ?', [person])).toEqual([]);
   });
 
   it('removes uploads that were never imported after a day', async () => {

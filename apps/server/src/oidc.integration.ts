@@ -138,7 +138,8 @@ describe('OIDC sign-in', () => {
   });
 
   it('never links administrative accounts automatically, only from their own profile', async () => {
-    await test.http.put('/api/core/profile').set('Cookie', admin).set(UI).send({ language: 'de', receiveDigest: true, email: 'admin@example.org' }).expect(200);
+    const own = (await test.http.get('/api/core/users').set('Cookie', admin).expect(200)).body.find((u: { username: string }) => u.username === 'admin');
+    await test.http.put(`/api/core/users/${own.id}`).set('Cookie', admin).set(UI).send({ ...own, email: 'admin@example.org' }).expect(200);
     next.sub = 'admin-at-provider';
     next.email = 'admin@example.org';
     expect((await signIn()).headers['location']).toBe('/?oidcError=auth.oidcLinkManually');
