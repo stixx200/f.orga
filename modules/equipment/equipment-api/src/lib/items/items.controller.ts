@@ -16,11 +16,12 @@ import {
   ItemStatus,
   type ItemSummary,
   LabelsPrintedInput,
+  type ReportableItem,
   type ReportUsage,
   ReportUsageInput,
   RetireInput,
 } from '@forga/equipment-contracts';
-import { ItemsService, READ, REPORT_DEFECTS as REPORT, WRITE } from './items.service.js';
+import { ItemsService, READ, REPORT_DEFECTS as REPORT } from './items.service.js';
 
 type Parsed<T extends z.ZodType> = z.infer<T>;
 const StatusInput = z.object({ status: ItemStatus.exclude(['retired']) });
@@ -53,8 +54,8 @@ export class ItemsController {
     return this.items.labelsPrinted(user, input.itemIds);
   }
 
+  /** `equipment.write` in the department, for breathing apparatus categories also `equipment.breathing.write` (checked in the service); likewise editing and retiring. */
   @Post('items')
-  @RequirePermissions(WRITE)
   create(@Body(new ZodPipe(ItemInput)) input: Parsed<typeof ItemInput>, @CurrentUser() user: AuthenticatedUser): Promise<Item> {
     return this.items.create(user, input);
   }
@@ -72,7 +73,6 @@ export class ItemsController {
   }
 
   @Put('items/:id')
-  @RequirePermissions(WRITE)
   update(@Param('id') id: string, @Body(new ZodPipe(ItemInput)) input: Parsed<typeof ItemInput>, @CurrentUser() user: AuthenticatedUser): Promise<Item> {
     return this.items.update(user, id, input);
   }
@@ -85,7 +85,6 @@ export class ItemsController {
 
   @Post('items/:id/retire')
   @HttpCode(200)
-  @RequirePermissions(WRITE)
   retire(@Param('id') id: string, @Body(new ZodPipe(RetireInput)) input: Parsed<typeof RetireInput>, @CurrentUser() user: AuthenticatedUser): Promise<Item> {
     return this.items.retire(user, id, input);
   }
@@ -135,8 +134,8 @@ export class ItemsController {
 
   @Get('me/items')
   @RequirePermissions(REPORT)
-  reportable(@CurrentUser() user: AuthenticatedUser, @Query('q') q = ''): Promise<{ id: string; inventoryNumber: string; name: string }[]> {
-    return this.items.reportable(user, q);
+  reportable(@CurrentUser() user: AuthenticatedUser, @Query('q') q = '', @Query('code') code = ''): Promise<ReportableItem[]> {
+    return this.items.reportable(user, q, code);
   }
 
   @Get('me/defects')

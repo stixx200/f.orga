@@ -30,7 +30,9 @@ export const RESPIRATORY_PROTECTION_MANIFEST = {
     { key: 'course-coordinator', permissions: ['respiratory-protection.self'] },
     { key: 'equipment-officer', permissions: ['respiratory-protection.self'] },
     { key: 'administration', permissions: ['respiratory-protection.self'] },
-    { key: 'commander', permissions: ['respiratory-protection.read', 'respiratory-protection.evidence'] },
+    // Reads the fitness of all wearers; recording evidence (and with it the deadlines of every wearer) stays with the
+    // breathing apparatus officer and the department commanders.
+    { key: 'commander', permissions: ['respiratory-protection.read'] },
     { key: 'department-commander', permissions: ['respiratory-protection.read', 'respiratory-protection.evidence', 'respiratory-protection.notify'] },
     { key: 'group-leader', permissions: ['respiratory-protection.read'] },
     {

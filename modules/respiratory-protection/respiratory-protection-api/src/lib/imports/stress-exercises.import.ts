@@ -70,6 +70,7 @@ export class StressExercisesImport {
       if (!personId) { error('respiratory-protection.import.unknownPerson', { name: label }); continue; }
       const date = parseDate(values['date'] ?? '');
       if (!date) { error('imports.invalidDate'); continue; }
+      if (date > berlinDate()) { error('respiratory-protection.dateInFuture', { date }); continue; }
       const measuredKilojoules = wholeNumber(values['kilojoules']);
       const measuredMinutes = wholeNumber(values['minutes']);
       const kilojoules = measuredKilojoules === null ? track.kilojoules : measuredKilojoules;

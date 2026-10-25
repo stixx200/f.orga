@@ -109,6 +109,8 @@ export const InspectionSchema = defineEntity({
     cancelled: p.boolean().default(false),
     /** Reason of the last correction or of the cancellation (the history keeps earlier ones). */
     changeReason: p.text().default(''),
+    /** Date of the trigger ("after use", "after washing" …) this inspection settled; restored when it is cancelled. */
+    clearedTrigger: p.string().length(10).nullable(),
   },
 });
 export class InspectionEntity extends InspectionSchema.class {}
@@ -121,7 +123,12 @@ export const DefectSchema = defineEntity({
   properties: {
     id: p.uuid().primary().onCreate(() => uuidv7()),
     item: () => p.manyToOne(EquipmentItemEntity).deleteRule('cascade'),
+    /** Text of the reporter; for a finding of an inspection its notes (may be empty). */
     description: p.text(),
+    /** Finding of an inspection (failed or with defects): the inspection, the name of its type and the result. */
+    inspectionId: p.string().nullable().index(),
+    findingName: p.json<LocalizedText>().nullable(),
+    findingResult: p.string().$type<InspectionResult>().nullable(),
     status: p.string().$type<DefectStatus>().default('reported'),
     resolution: p.text().default(''),
     reportedBy: p.string(),

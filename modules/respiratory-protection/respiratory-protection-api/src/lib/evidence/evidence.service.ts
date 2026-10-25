@@ -18,7 +18,6 @@ import {
   type FitnessStatus,
   minimumKilojoules,
   type PersonRespiratoryProtection,
-  QUALIFICATION_BREATHING_APPARATUS,
   QuickEntryInput,
   RESPIRATORY_PROTECTION_EVENTS,
   type StatusChangedEvent,
@@ -26,6 +25,7 @@ import {
 import { type RecordKind, type SessionClosedEvent, type SessionReopenedEvent, TRAINING_EVENTS } from '@forga/training-contracts';
 import { EvidenceEntity, StatusEntity } from '../respiratory-protection.entities.js';
 import { nextRefresh } from './schedule.js';
+import { isWearer, redact } from './visibility.js';
 
 export const READ = 'respiratory-protection.read';
 export const EVIDENCE = 'respiratory-protection.evidence';
@@ -35,6 +35,11 @@ export const NOTIFY = 'respiratory-protection.notify';
 
 type ParsedEvidence = ReturnType<typeof EvidenceInput.parse>;
 type ParsedQuickEntry = ReturnType<typeof QuickEntryInput.parse>;
+
+/** Evidence lies today or in the past (Europe/Berlin). */
+export function checkDate(date: string): void {
+  if (date > berlinDate()) throw new BadRequestException({ code: 'respiratory-protection.dateInFuture', date });
+}
 
 /** The daily check of the traffic lights runs once shortly after the start, then daily (`nextRefresh`). */
 const STARTUP_DELAY_MS = 60_000;
@@ -73,11 +78,6 @@ export const toEvidenceDto = (e: EvidenceEntity): Evidence => ({
   version: e.version,
 });
 
-
-/** Without the examinations permission: an examination with concerns only shows as not met. */
-function redact(status: FitnessStatus): FitnessStatus {
-  return { ...status, conditions: status.conditions.map((c) => (c.concerns ? { key: c.key, met: false, lastDate: null, dueOn: null } : c)) };
-}
 
 /**
  * Evidence of breathing apparatus wearers and their fitness. Evidence comes from closed training sessions,
@@ -141,16 +141,10 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     return person;
   }
 
-  /** Breathing apparatus wearers (members with the qualification) the user may see. */
+  /** Breathing apparatus wearers (active members and members on probation with the qualification) the user may see. */
   async wearers(user: AuthenticatedUser | null, departmentId?: string): Promise<PersonSnapshot[]> {
     const members = await this.directory.membersOn(berlinDate());
-    return members.filter(
-      (p) =>
-        p.status !== 'left' &&
-        p.qualifications.includes(QUALIFICATION_BREATHING_APPARATUS) &&
-        (!departmentId || p.departmentIds.includes(departmentId)) &&
-        (!user || this.can(user, READ, p)),
-    );
+    return members.filter((p) => isWearer(p) && (!departmentId || p.departmentIds.includes(departmentId)) && (!user || this.can(user, READ, p)));
   }
 
   async statuses(persons: PersonSnapshot[], today = berlinDate()): Promise<FitnessStatus[]> {
@@ -211,11 +205,12 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
   }
 
   /**
-   * Plausibility of manual evidence: an examination needs a result, "valid until" after the date and at most the interval
-   * of the rule (required for "no concerns for a limited time"); a passed stress exercise needs the minimum work at the
-   * age on its date.
+   * Plausibility of manual evidence: not in the future; an examination needs a result, "valid until" after the date and
+   * at most the interval of the rule (required for "no concerns for a limited time"); a stress exercise needs the work
+   * in kJ (passed: at least the minimum at the age on its date), unless the note gives the reason it was not measured.
    */
   private async check(input: ParsedEvidence, rule: FitnessRule): Promise<void> {
+    checkDate(input.date);
     const person = await this.person(input.personId);
     if (input.kind === 'examination') {
       if (!input.result) throw new BadRequestException({ code: 'respiratory-protection.resultRequired' });
@@ -226,12 +221,18 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
         if (input.validUntil > max) throw new BadRequestException({ code: 'respiratory-protection.validUntilTooLate', max });
       }
     }
-    if (input.kind === 'stress-exercise') this.checkKilojoules(rule, person, input.date, input.kilojoules, input.passed);
+    if (input.kind === 'stress-exercise') this.checkKilojoules(rule, person, input.date, input.kilojoules, input.passed, input.note);
   }
 
-  private checkKilojoules(rule: FitnessRule, person: PersonSnapshot, date: string, kilojoules: number | null, passed: boolean | null): void {
+  /**
+   * A stress exercise counts with at least the minimum work: unless failed it needs the kJ (or, without measurement, a note with
+   * the reason), and not below the minimum.
+   */
+  private checkKilojoules(rule: FitnessRule, person: PersonSnapshot, date: string, kilojoules: number | null, passed: boolean | null, note = ''): void {
+    const name = `${person.firstName} ${person.lastName}`;
+    if (passed !== false && kilojoules === null && !note.trim()) throw new BadRequestException({ code: 'respiratory-protection.kilojoulesRequired', name });
     const minimum = minimumKilojoules(rule, person.birthDate, date);
-    if (passed && kilojoules !== null && kilojoules < minimum) throw new BadRequestException({ code: 'respiratory-protection.belowMinimum', minimum, name: `${person.firstName} ${person.lastName}` });
+    if (passed && kilojoules !== null && kilojoules < minimum) throw new BadRequestException({ code: 'respiratory-protection.belowMinimum', minimum, name });
   }
 
   async create(user: AuthenticatedUser, input: ParsedEvidence): Promise<Evidence> {
@@ -245,7 +246,9 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     return toEvidenceDto(evidence);
   }
 
+  /** Several persons at once; a stress exercise needs kJ and "passed" per person (no default). */
   async quickEntry(user: AuthenticatedUser, input: ParsedQuickEntry): Promise<Evidence[]> {
+    checkDate(input.date);
     for (const entry of input.entries) await this.requireWrite(user, entry.personId, input.kind);
     const rule = await this.rule();
     if (input.kind === 'stress-exercise') {
@@ -412,7 +415,8 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
    * check, so no change to red is lost. The first status of a person sends nothing (first check after the installation).
    */
   async refresh(personIds?: string[]): Promise<StatusChangedEvent[]> {
-    const persons = personIds ? await this.directory.snapshots([...new Set(personIds)]) : await this.wearers(null);
+    // Only wearers: veterans or passive members with old evidence get no traffic light changes and no e-mails.
+    const persons = personIds ? (await this.directory.snapshots([...new Set(personIds)])).filter(isWearer) : await this.wearers(null);
     const statuses = await this.statuses(persons);
     const em = this.em.fork();
     const known = new Map((await em.find(StatusEntity, { personId: { $in: statuses.map((s) => s.personId) } })).map((s) => [s.personId, s]));

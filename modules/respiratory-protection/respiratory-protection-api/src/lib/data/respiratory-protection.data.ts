@@ -7,7 +7,8 @@ import { EvidenceEntity, StatusEntity } from '../respiratory-protection.entities
 import { EVIDENCE, EvidenceService, SELF } from '../evidence/evidence.service.js';
 
 const TITLES: Partial<Record<ConditionKey, LocalizedText>> = {
-  examination: { de: 'Eignungsuntersuchung fällig', en: 'Medical examination due' },
+  // Due, missing or with concerns alike: the deadline does not tell why (health data).
+  examination: { de: 'Eignungsuntersuchung erforderlich', en: 'Medical examination required' },
   briefing: { de: 'Atemschutz-Unterweisung fällig', en: 'BA briefing due' },
   'stress-exercise': { de: 'Belastungsübung fällig', en: 'Stress exercise due' },
   exercise: { de: 'Einsatzübung unter Atemschutz fällig', en: 'Exercise under BA due' },
@@ -34,8 +35,9 @@ export class RespiratoryProtectionData implements DeadlineProvider {
   /**
    * One deadline per condition of each wearer that expires (or is missing), for those who record evidence in the
    * wearer's department (`evidence`), and the same for the wearer, who sees it in "My area" and the weekly e-mail.
-   * The examination deadline only names the due date, like the status those responsible see; results and findings
-   * stay with the examinations permission.
+   * The examination deadline only names the due date of a valid examination; after an examination with concerns it is
+   * due today like a missing one, so neither the date of that examination nor a date derived from it shows. Results and
+   * findings stay with the examinations permission.
    */
   async deadlines(asOf: string): Promise<DeadlineInput[]> {
     const rule = await this.evidence.rule();
@@ -63,7 +65,8 @@ export class RespiratoryProtectionData implements DeadlineProvider {
           kind: `breathing-apparatus-${c.key}`,
           title: TITLES[c.key]!,
           subject: { type: 'masterdata.person', id: s.personId, label: `${s.lastName}, ${s.firstName}` },
-          dueOn: c.dueOn ?? berlinDate(),
+          dueOn: (!c.concerns && c.dueOn) || berlinDate(),
+          to: `/masterdata/persons/${s.personId}?tab=respiratory-protection`,
           leadDays: rule.leadDays,
           departmentIds: s.departmentIds,
           permission: EVIDENCE,

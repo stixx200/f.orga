@@ -84,7 +84,7 @@ describe('my area', () => {
 
   it('reports a defect found by inventory number and lists the own reports', async () => {
     const found = (await get('/equipment/me/items?q=LE-00', member).expect(200)).body;
-    expect(found).toEqual([{ id: ids.item, inventoryNumber: 'LE-0007', name: 'Steckleiter' }]);
+    expect(found).toEqual([{ id: ids.item, inventoryNumber: 'LE-0007', name: 'Steckleiter', place: '' }]);
     await post(`/equipment/items/${ids.item}/defects`, { description: 'Sprosse locker' }, member).expect(201);
     // The reporter attaches a photo to the open defect; the content must match the type.
     const defectId = (await get('/equipment/me/defects', member).expect(200)).body[0].id as string;

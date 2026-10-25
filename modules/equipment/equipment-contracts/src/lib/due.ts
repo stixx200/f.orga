@@ -21,12 +21,18 @@ export interface ItemDates {
   purchasedOn: string | null;
   /** Day the item was recorded in f.orga. */
   createdOn: string;
+  /**
+   * `false`: a periodic inspection never done and without purchase date is "not recorded yet" instead of due from the
+   * day of recording (vehicles taken over from the master data, whose last inspections are entered afterwards).
+   */
+  dueFromRecording?: boolean;
 }
 
 /**
  * Due dates of the inspection types of an item:
  * - periodic: last inspection + interval (or the date set on the inspection); a failed inspection stays due from its date;
  *   never inspected: purchase date + interval, without purchase date due from the day the item was recorded
+ *   (or "not recorded yet" without a due date, see `ItemDates.dueFromRecording`)
  * - after use, incident or washing: due when triggered after the last inspection, otherwise not due
  */
 export function computeDues(
@@ -40,12 +46,18 @@ export function computeDues(
     const previous = last.get(type.key);
     const trigger = triggered[type.key];
     let dueOn: string | null;
+    let notRecorded = false;
     if (trigger && (!previous || trigger >= previous.date)) dueOn = trigger;
     else if (previous?.result === 'failed') dueOn = previous.date;
     else if (previous?.nextDueOn) dueOn = previous.nextDueOn;
-    else if (type.intervalMonths) dueOn = previous ? addMonths(previous.date, type.intervalMonths) : item.purchasedOn ? addMonths(item.purchasedOn, type.intervalMonths) : item.createdOn;
-    else dueOn = null;
-    return { key: type.key, name: type.name, lastDate: previous?.date ?? null, dueOn, overdue: dueOn !== null && dueOn <= today };
+    else if (type.intervalMonths && previous) dueOn = addMonths(previous.date, type.intervalMonths);
+    else if (type.intervalMonths && item.purchasedOn) dueOn = addMonths(item.purchasedOn, type.intervalMonths);
+    else if (type.intervalMonths && item.dueFromRecording !== false) dueOn = item.createdOn;
+    else {
+      dueOn = null;
+      notRecorded = Boolean(type.intervalMonths) && !previous;
+    }
+    return { key: type.key, name: type.name, lastDate: previous?.date ?? null, dueOn, overdue: dueOn !== null && dueOn <= today, notRecorded };
   });
 }
 
