@@ -6,6 +6,8 @@ import {
   IncidentInput,
   type Finding,
   INCIDENTS_EVENTS,
+  type IncidentStatistics,
+  type ReleaseLevel,
   type Report,
   ReportInput,
   type ReportReleasedEvent,
@@ -32,6 +34,10 @@ export const READ = 'incidents.reports.read';
 export const WRITE = 'incidents.reports.write';
 export const RELEASE = 'incidents.reports.release';
 export const UNLOCK = 'incidents.reports.unlock';
+/** Department-level pre-review: return reports to their authors and remind authors (e.g. department commanders). */
+export const REVIEW = 'incidents.reports.review';
+/** Own incidents in "My area". */
+export const SELF = 'incidents.self';
 /** Costs and notes of the whole incident (commander). */
 export const COSTS = 'incidents.costs';
 
@@ -57,6 +63,7 @@ export function addCrewVehicles(em: EntityManager, report: ReportEntity): void {
 /** The editable content of a stored report, in the form of `ReportInput`. */
 export function reportToInput(report: ReportEntity): ParsedReportInput {
   return ReportInput.parse({
+    endConfirmed: report.endConfirmed,
     authorPersonId: report.authorPersonId ?? null,
     times: {
       alarmedAt: report.alarmedAt.toISOString(),
@@ -147,6 +154,11 @@ export class ReportsService {
     return user.can(READ, report.departmentId) || user.grant(RELEASE) === 'brigade';
   }
 
+  /** Releasers (brigade) and pre-reviewers of the department may return reports and remind their authors. */
+  canReview(user: AuthenticatedUser, departmentId: string): boolean {
+    return user.grant(RELEASE) === 'brigade' || user.can(REVIEW, departmentId);
+  }
+
   /** Writers of the department may edit unless the report is locked; releasers may always edit. */
   assertWrite(user: AuthenticatedUser, report: ReportEntity): void {
     if (user.grant(RELEASE) === 'brigade') return;
@@ -193,7 +205,10 @@ export class ReportsService {
     });
   }
 
-  /** New draft report; the first report of an incident becomes its primary report. Times default to alarm + 1 h. */
+  /**
+   * New draft report; the first report of an incident becomes its primary report. Times default to alarm + 1 h,
+   * with the end unconfirmed until the author confirms or changes it.
+   */
   async createReport(em: EntityManager, incident: IncidentEntity, departmentId: string, authorPersonId: string | null): Promise<ReportEntity> {
     await em.populate(incident, ['reports']);
     const report = em.create(ReportEntity, {
@@ -204,6 +219,7 @@ export class ReportsService {
       authorPersonId,
       alarmedAt: incident.alarmedAt,
       returnedAt: new Date(incident.alarmedAt.getTime() + 3_600_000),
+      endConfirmed: false,
       weather: { influence: false, conditions: [] },
       acknowledgements: [],
     });
@@ -218,6 +234,8 @@ export class ReportsService {
     const context = await this.contexts.load(personIds, input.times.alarmedAt);
     await this.validateReferences(report, context, input);
     await this.recordRevision(em, report, input, user);
+    // Other systems sending their own times leave the flag out: their end counts as confirmed.
+    report.endConfirmed = input.endConfirmed ?? true;
     this.applyContent(em, report, input);
     report.externallyManaged = false;
     this.lockBy(report, user);
@@ -386,10 +404,19 @@ export class ReportsService {
       {
         primary: report.primary,
         incidentHasPrimary: report.primary || siblings.some((s) => s.primary),
-        times: { alarmedAt: report.alarmedAt.toISOString(), returnedAt: report.returnedAt.toISOString() },
+        times: {
+          alarmedAt: report.alarmedAt.toISOString(),
+          departedAt: iso(report.departedAt),
+          arrivedAt: iso(report.arrivedAt),
+          endedAt: iso(report.endedAt),
+          returnedAt: report.returnedAt.toISOString(),
+        },
+        endConfirmed: report.endConfirmed,
+        incidentAlarmedAt: incident.alarmedAt.toISOString(),
         situation: report.situation,
         actions: report.actions,
         statistics: report.statistics ?? null,
+        departmentId: report.departmentId,
         departmentType: context.departments.get(report.departmentId)?.type ?? 'operational',
         keyword: keyword ? { mainType: keyword.mainType ?? null, requiresVehicle: keyword.requiresVehicle } : null,
         personnel: assignments,
@@ -400,8 +427,10 @@ export class ReportsService {
         otherIncidents: others.flatMap((o) =>
           o.personId ? [{ dispatchNumber: o.report.incident.dispatchNumber, personId: o.personId, ...assignmentTimes(o, o.report) }] : [],
         ),
-        vehicleSeats: new Map([...context.vehicles.values()].map((v) => [v.id, v.seats])),
+        vehicles: new Map([...context.vehicles.values()].map((v) => [v.id, { seats: v.seats, designation: v.designation }])),
         qualifications: new Map([...context.persons.values()].map((p) => [p.id, p.qualifications])),
+        persons: new Map([...context.persons.values()].map((p) => [p.id, { status: p.status, departmentIds: p.departmentIds, birthDate: p.birthDate }])),
+        minimumAge: context.minimumAge,
         breathingFitness,
       },
       context.settings,
@@ -460,6 +489,7 @@ export class ReportsService {
       lockedAt: iso(report.lockedAt),
       returnComment: report.returnComment ?? null,
       authorPersonId: report.authorPersonId ?? null,
+      endConfirmed: report.endConfirmed,
       times: {
         alarmedAt: report.alarmedAt.toISOString(),
         departedAt: iso(report.departedAt),
@@ -557,12 +587,15 @@ export class ReportsService {
    * Releases for compensation or for billing (which includes compensation).
    * Errors block; releasing acknowledges the remaining warnings. The report gets locked.
    */
-  async release(em: EntityManager, report: ReportEntity, user: AuthenticatedUser, level: 'compensation' | 'billing'): Promise<void> {
+  async release(em: EntityManager, report: ReportEntity, user: AuthenticatedUser, level: ReleaseLevel): Promise<void> {
     const target: ReportStatus = level === 'billing' ? 'released-billing' : 'released-compensation';
     if (level === 'compensation' && !(await this.contexts.settingsOnly()).compensationRelease) {
       throw new BadRequestException({ code: 'incidents.compensationReleaseDisabled' });
     }
-    if (report.status === 'released-billing' || report.status === target) {
+    // Only submitted reports are released (drafts are submitted first, with their warnings explained);
+    // billing also follows the release for compensation.
+    const from: ReportStatus[] = level === 'billing' ? ['review', 'released-compensation'] : ['review'];
+    if (!from.includes(report.status)) {
       throw new ConflictException({ code: 'incidents.invalidTransition', from: report.status });
     }
     const findings = await this.findings(em, report, await this.contextFor(report));
@@ -635,6 +668,10 @@ export class ReportsService {
     if (!report.locked && !report.status.startsWith('released')) {
       throw new ConflictException({ code: 'incidents.notLocked' });
     }
+    // A locked draft was never submitted: it stays a draft, so submitting and its warnings are not skipped.
+    if (report.status === 'draft' && toStatus !== 'draft') {
+      throw new ConflictException({ code: 'incidents.invalidTransition', from: report.status });
+    }
     report.locked = false;
     report.lockedBy = null;
     report.lockedAt = null;
@@ -646,6 +683,33 @@ export class ReportsService {
       incidentId: report.incident.id,
       reason,
     });
+  }
+
+  /**
+   * Statistics of a primary report changed by a releaser, also after the release: no new release, no lock and
+   * no events (compensation and respiratory protection do not depend on them).
+   */
+  setStatistics(report: ReportEntity, statistics: IncidentStatistics, version: number): void {
+    assertVersion(report, version);
+    if (!report.primary) throw new BadRequestException({ code: 'incidents.notPrimary' });
+    report.statistics = statistics;
+  }
+
+  /**
+   * Moves the alarm time of the reports that still start with the old alarm time of the incident, and with it
+   * the default end (alarm + 1 h) of reports whose end is not confirmed, and personnel starting at the old time.
+   */
+  moveAlarm(incident: IncidentEntity, previous: Date, next: Date): void {
+    const shift = next.getTime() - previous.getTime();
+    if (!shift) return;
+    for (const report of incident.reports.getItems()) {
+      if (report.alarmedAt.getTime() !== previous.getTime()) continue;
+      report.alarmedAt = next;
+      if (!report.endConfirmed) report.returnedAt = new Date(report.returnedAt.getTime() + shift);
+      for (const p of report.personnel.isInitialized() ? report.personnel.getItems() : []) {
+        if (p.from && p.from.getTime() === previous.getTime()) p.from = next;
+      }
+    }
   }
 
   private addAcknowledgements(report: ReportEntity, user: AuthenticatedUser, acknowledgements: Acknowledgement[]): void {

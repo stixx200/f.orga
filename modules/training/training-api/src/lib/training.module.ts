@@ -1,7 +1,7 @@
 import { Global, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { Attachments, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
-import { TRAINING_CASUALTIES, TRAINING_MANIFEST, TRAINING_SETTINGS } from '@forga/training-contracts';
+import { TRAINING_CASUALTIES, TRAINING_MANIFEST, TRAINING_SESSIONS, TRAINING_SETTINGS } from '@forga/training-contracts';
 import { TRAINING_MIGRATIONS } from '../migrations/index.js';
 import { TrainingData } from './data/training.data.js';
 import { SessionsImport } from './imports/sessions.import.js';
@@ -11,12 +11,12 @@ import { TrainingSelfController } from './sessions/self.controller.js';
 import { ATTENDANCE, PLAN, READ, SessionsService } from './sessions/sessions.service.js';
 import { AttendanceEntity, SessionEntity, SessionTypeEntity } from './training.entities.js';
 
-/** Global, so other modules can inject `TRAINING_CASUALTIES`. */
+/** Global, so other modules can inject `TRAINING_CASUALTIES` and `TRAINING_SESSIONS`. */
 @Global()
 @Module({
   controllers: [SessionsController, TrainingSelfController],
-  providers: [SessionsService, TrainingLists, TrainingData, SessionsImport, { provide: TRAINING_CASUALTIES, useExisting: SessionsService }],
-  exports: [TRAINING_CASUALTIES],
+  providers: [SessionsService, TrainingLists, TrainingData, SessionsImport, { provide: TRAINING_CASUALTIES, useExisting: SessionsService }, { provide: TRAINING_SESSIONS, useExisting: SessionsService }],
+  exports: [TRAINING_CASUALTIES, TRAINING_SESSIONS],
 })
 export class TrainingModule implements OnModuleInit {
   constructor(
@@ -67,4 +67,6 @@ export const trainingModule = defineModule({
   historized: [SessionTypeEntity, SessionEntity, { entity: AttendanceEntity, parent: 'session' }],
   migrations: TRAINING_MIGRATIONS,
   settings: TRAINING_SETTINGS,
+  // Whoever knows the feed token reads all sessions without logging in: only for the managers of the settings.
+  settingsAccess: { 'training.general': { managerFields: ['feedToken'] } },
 });

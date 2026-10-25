@@ -9,9 +9,13 @@
  *   npm run seed
  *   npm run seed -- --only clothing      (only the clothing store, into an instance with persons)
  *   FORGA_URL=http://localhost:3000 FORGA_ADMIN_USER=admin FORGA_ADMIN_PASSWORD=… npm run seed
+ *   FORGA_SETUP_TOKEN=… npm run seed     (empty instance: the setup token from the server log or its environment)
  */
+import { readFileSync } from 'node:fs';
 import ExcelJS from 'exceljs';
 import { VWV_2022_RULES } from '@forga/promotions-contracts';
+import { BW_TEMPLATE } from '@forga/cost-recovery-contracts';
+import { SAMPLE_STATUTE } from '@forga/compensation-contracts';
 
 const BASE = (process.env['FORGA_URL'] ?? 'http://localhost:3000').replace(/\/$/, '');
 const ADMIN = { username: process.env['FORGA_ADMIN_USER'] ?? 'admin', password: process.env['FORGA_ADMIN_PASSWORD'] ?? 'sehr-geheim-123' };
@@ -128,8 +132,8 @@ const DEPARTMENTS: DepartmentPlan[] = [
     station: { name: 'Feuerwehrhaus Weidenhain', street: 'Schulstraße 5' },
     vehicles: [{ designation: 'TSF', radioCallSign: 'Florian Musterstadt 4/48', vehicleType: 'tsf', licensePlate: 'MS-FE 448' }],
   },
-  { name: 'Altersabteilung Musterstadt', shortName: 'Musterstadt', type: 'veterans', parent: 'Abteilung Musterstadt', postalCode: '12345', persons: 12, vehicles: [] },
-  { name: 'Jugendfeuerwehr Musterstadt', shortName: 'Jugendfeuerwehr', type: 'youth', parent: 'Abteilung Musterstadt', postalCode: '12345', persons: 14, vehicles: [] },
+  { name: 'Altersabteilung Musterstadt', shortName: 'Alters Musterstadt', type: 'veterans', parent: 'Abteilung Musterstadt', postalCode: '12345', persons: 12, vehicles: [] },
+  { name: 'Jugendfeuerwehr Musterstadt', shortName: 'JF Musterstadt', type: 'youth', parent: 'Abteilung Musterstadt', postalCode: '12345', persons: 14, vehicles: [] },
 ];
 
 // --- persons ------------------------------------------------------------------------------------
@@ -187,7 +191,7 @@ function planPersons(): PlannedPerson[] {
 }
 
 /** Department column as MP-Feuer writes it ("Abt. Musterstadt", "Altersabt. Musterstadt"). */
-const exportName = (d: DepartmentPlan) => (d.type === 'operational' ? `Abt. ${d.shortName}` : d.type === 'veterans' ? `Altersabt. ${d.shortName}` : d.name);
+const exportName = (d: DepartmentPlan) => (d.type === 'operational' ? `Abt. ${d.shortName}` : d.type === 'veterans' ? `Altersabt. ${d.name.replace(/^Altersabteilung /, '')}` : d.name);
 
 async function personsWorkbook(persons: PlannedPerson[]): Promise<Buffer> {
   const headers = ['Pers.-Nr.', 'Anrede', 'Vorname', 'Nachname', 'Straße', 'PLZ', 'Ort', 'Handy', 'E-Mail', 'Geburtsdatum', 'Eintritt', 'Status', 'Bezeichnung'];
@@ -359,8 +363,11 @@ function dutyCalendar(officers: PersonRef[]): string {
 async function login(): Promise<void> {
   const setup = await call<{ required: boolean }>('GET', 'core/setup');
   if (setup.required) {
+    // The development server reads the same token from `apps/server/.env`.
+    const setupToken = process.env['FORGA_SETUP_TOKEN'] ?? /^FORGA_SETUP_TOKEN=(.+)$/m.exec(readFileSync('apps/server/.env', 'utf8'))?.[1]?.trim();
+    if (!setupToken) throw new Error('Ersteinrichtung nötig: FORGA_SETUP_TOKEN setzen (Wert aus dem Server-Protokoll oder der Umgebung des Servers).');
     console.log('Ersteinrichtung …');
-    await call('POST', 'core/setup', { brigadeName: BRIGADE, username: ADMIN.username, displayName: 'Administrator', password: ADMIN.password });
+    await call('POST', 'core/setup', { setupToken, brigadeName: BRIGADE, username: ADMIN.username, displayName: 'Administrator', email: 'admin@example.org', password: ADMIN.password });
   }
   await call('POST', 'core/login', ADMIN);
 }
@@ -460,10 +467,15 @@ async function users(persons: PersonRef[], departments: Map<string, string>): Pr
   // The member of "My area" is a breathing apparatus wearer of Musterstadt, so all sections have content.
   const member = available.find((p) => p.primaryDepartmentId === musterstadt && p.qualifications.includes('breathing-apparatus'));
   let created = 0;
+  // Each person belongs to at most one user; the member's person is reserved for the user "member".
+  const taken = new Set(member ? [member.id] : []);
   for (const [index, role] of roles.filter((r) => r.templateKey).entries()) {
     const username = role.templateKey!;
     if (existing.has(username) || username === ADMIN.username) continue;
-    const person = (username === 'member' && member) || available[(index * 7) % available.length];
+    let candidate = (index * 7) % available.length;
+    while (taken.has(available[candidate].id)) candidate = (candidate + 1) % available.length;
+    const person = (username === 'member' && member) || available[candidate];
+    taken.add(person.id);
     await call('POST', 'core/users', {
       username,
       displayName: `${person.firstName} ${person.lastName} (${role.name})`,
@@ -535,7 +547,7 @@ async function respiratoryProtection(persons: PersonRef[]): Promise<void> {
     // 75 % fit, 15 % with evidence expiring within 60 days, 10 % with an expired examination.
     const old = roll > 0.75 && roll <= 0.9 ? 330 : 0;
     const examination = roll > 0.9 ? 1200 : between(30, 700);
-    evidence.push({ personId: person.id, kind: 'examination', date: daysAgo(examination), examiner: 'Betriebsarzt' });
+    evidence.push({ personId: person.id, kind: 'examination', date: daysAgo(examination), examiner: 'Betriebsarzt', result: 'no-concerns' });
     evidence.push({ personId: person.id, kind: 'briefing', date: daysAgo(old || between(20, 250)) });
     evidence.push({ personId: person.id, kind: 'stress-exercise', date: daysAgo(old ? old - 5 : between(20, 280)), facility: 'Atemschutzübungsstrecke Kreis', kilojoules: between(82, 110), passed: true });
     evidence.push({ personId: person.id, kind: 'exercise', date: daysAgo(between(10, 300)), minutes: between(15, 35) });
@@ -553,6 +565,9 @@ async function compensation(persons: PersonRef[]): Promise<void> {
     console.log('  Auszahlungsläufe vorhanden');
     return;
   }
+  // The statute values are taken over explicitly from the sample statute (example values).
+  const statute = (await call<Record<string, unknown> | null>('GET', 'core/settings/compensation.general')) ?? {};
+  await call('PUT', 'core/settings/compensation.general', { ...statute, ...SAMPLE_STATUTE });
   for (const y of [year - 1, year]) {
     await call('POST', 'incidents/reports/republish', { from: `${y}-01-01`, to: `${y}-12-31` });
     await call('POST', 'training/sessions/republish', { from: `${y}-01-01`, to: `${y}-12-31` });
@@ -567,7 +582,8 @@ async function compensation(persons: PersonRef[]): Promise<void> {
   // A closed and paid run for the previous year; the current year stays open.
   const run = await call<{ id: string; items: { id: string; amount: number | null }[] }>('POST', 'compensation/runs', { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` });
   for (const item of run.items.filter((i) => i.amount === null)) await call('PUT', `compensation/items/${item.id}/amount`, { amount: between(40, 180), reason: 'Bescheinigung Arbeitgeber' });
-  await call('POST', `compensation/runs/${run.id}/close`, {});
+  // Demo persons without bank account are confirmed explicitly; they are left out of the transfer files.
+  await call('POST', `compensation/runs/${run.id}/close`, { acceptMissingIban: true });
   await call('POST', `compensation/runs/${run.id}/hand-over`, {});
   await call('POST', `compensation/runs/${run.id}/paid`, {});
   const open = await call<unknown[]>('GET', 'compensation/items?open=true');
@@ -618,9 +634,12 @@ async function equipment(persons: PersonRef[]): Promise<void> {
         if (chance(0.03)) await call('POST', `equipment/items/${item.id}/defects`, { description: pick(['Riss im Gehäuse', 'Dichtung porös', 'Display ohne Anzeige', 'Kupplung schwergängig']) });
       }
     }
-    for (const [typeKey, name, quantity] of [['pressure-hose-b', 'B-Schlauch 20 m', between(6, 12)], ['pressure-hose-c', 'C-Schlauch 15 m', between(8, 16)]] as const) {
-      await call('POST', 'equipment/items', { inventoryNumber: `${prefix}-${typeKey}`, name, typeKey, categoryKey: 'hoses', departmentId: vehicle.departmentId, vehicleId: vehicle.id, loadingPlace: 'Heck', quantity, barcode: barcode('2000'), rfid: rfidChip() });
-      count++;
+    // Hoses as single items (default of the template), each with its own record of pressure tests after washing.
+    for (const [typeKey, name, quantity] of [['pressure-hose-b', 'B-Schlauch 20 m', big ? between(6, 10) : 2], ['pressure-hose-c', 'C-Schlauch 15 m', big ? between(6, 10) : 2]] as const) {
+      for (let n = 1; n <= quantity; n++) {
+        await call('POST', 'equipment/items', { inventoryNumber: `${prefix}-${typeKey}-${n}`, name: `${name} ${n}`, typeKey, categoryKey: 'hoses', departmentId: vehicle.departmentId, vehicleId: vehicle.id, loadingPlace: 'Heck', barcode: barcode('2000'), rfid: rfidChip() });
+        count++;
+      }
     }
   }
   console.log(`  ${count} Geräte für ${vehicles.length} Fahrzeuge`);
@@ -668,7 +687,9 @@ async function clothing(persons: PersonRef[]): Promise<void> {
   for (const article of articles) {
     if (!sizes[article.key] || (article['sizes'] as string[]).length) continue;
     const { id: _id, version: _version, ...input } = article;
-    await call('PUT', `clothing/articles/${article.id}`, { ...input, sizes: sizes[article.key] });
+    // Minimum stock for the common garment sizes.
+    const minimumStock = ['jacket', 'trousers'].includes(article.key) ? { '50': 2, '52': 2, '54': 2 } : {};
+    await call('PUT', `clothing/articles/${article.id}`, { ...input, sizes: sizes[article.key], minimumStock });
   }
 
   // Operational departments as they are in the instance (also when it holds other data than this script's).
@@ -690,6 +711,11 @@ async function clothing(persons: PersonRef[]): Promise<void> {
     return { id: created.id, articleKey, departmentId };
   };
 
+  // Consumables received into the store (counter: received minus handed out).
+  for (const [articleKey, articleSizes] of [['gloves', sizes.gloves], ['cap', ['']], ['t-shirt', sizes['t-shirt']], ['hood', ['']]] as const) {
+    for (const size of articleSizes) await call('POST', 'clothing/consumables/receipts', { articleKey, size, quantity: between(15, 40), date: daysAgo(1600), notes: 'Erstausstattung' });
+  }
+
   const issued: Piece[] = [];
   let consumables = 0;
   let replaced = 0;
@@ -698,18 +724,20 @@ async function clothing(persons: PersonRef[]): Promise<void> {
     const garmentSize = pick(garment.slice(2, 9));
     const kit: [string, string][] = [['jacket', garmentSize], ['trousers', garmentSize], ['boots', pick(sizes.boots.slice(2, 9))], ['helmet', pick(sizes.helmet)]];
     if (person.qualifications.includes('breathing-apparatus')) kit.push(['breathing-apparatus-trousers', pick(sizes['breathing-apparatus-trousers'])]);
+    // Size profile of the person, preselecting the stock at the issue desk.
+    await call('PUT', `clothing/persons/${person.id}/sizes`, { sizes: Object.fromEntries(kit) });
     for (const [articleKey, size] of kit) {
       // Some members had a worn piece replaced: the old one was taken back and retired.
       if (articleKey !== 'helmet' && chance(0.12)) {
         const old = await create(articleKey, departmentId, size, isoDate(new Date(between(2012, 2016), between(0, 11), between(1, 28))));
         const issuedOn = later('2016-01-01');
-        await call('POST', `clothing/items/${old.id}/issue`, { personId: person.id, date: issuedOn });
+        await call('POST', `clothing/items/${old.id}/issue`, { personId: person.id, date: issuedOn, acceptOverdueInspection: true });
         await call('POST', `clothing/items/${old.id}/return`, { date: later(issuedOn), retire: true, notes: pick(['verschlissen', 'Riss im Obermaterial', 'Reflexstreifen beschädigt', 'zu klein']) });
         replaced++;
       }
       const purchasedOn = purchase();
       const piece = await create(articleKey, departmentId, size, purchasedOn);
-      await call('POST', `clothing/items/${piece.id}/issue`, { personId: person.id, date: later(purchasedOn) });
+      await call('POST', `clothing/items/${piece.id}/issue`, { personId: person.id, date: later(purchasedOn), acceptOverdueInspection: true });
       issued.push(piece);
     }
     // Consumables: gloves now and then, a cap and T-shirts, hoods for breathing apparatus wearers.
@@ -773,6 +801,8 @@ async function costRecovery(): Promise<void> {
   const general = (await call<Record<string, unknown> | null>('GET', 'core/settings/cost-recovery.general')) ?? {};
   await call('PUT', 'core/settings/cost-recovery.general', {
     ...general,
+    // State-specific values are a template the brigade takes over explicitly (here: Baden-Württemberg).
+    ...BW_TEMPLATE,
     authority: 'Stadt Musterstadt – Bürgermeisteramt',
     authorityAddress: 'Feuerwehrstraße 1, 12345 Musterstadt',
     bankAccount: 'IBAN DE00 0000 0000 0000 0000 00 (Beispiel)',
@@ -801,10 +831,11 @@ async function costRecovery(): Promise<void> {
     // Costs apply to the whole incident.
     await call('PUT', `incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Fehlalarm der Brandmeldeanlage', notes: 'Betreiber über Kostenpflicht informiert' });
   }
-  const candidates = await call<{ incidentId: string }[]>('GET', `cost-recovery/candidates?from=${year - 1}-01-01&to=${year}-12-31`);
+  // Notices can only be issued for incidents whose reports are released for billing: those first.
+  const candidates = (await call<{ incidentId: string; released: boolean }[]>('GET', `cost-recovery/candidates?from=${year - 1}-01-01&to=${year}-12-31`)).toSorted((a, b) => Number(b.released) - Number(a.released));
   for (const [index, candidate] of candidates.slice(0, 2).entries()) {
     const notice = await call<{ id: string }>('POST', 'cost-recovery/notices', { incidentId: candidate.incidentId });
-    if (index === 0) {
+    if (index === 0 && candidate.released) {
       await call('POST', `cost-recovery/notices/${notice.id}/submit`, {});
       await call('POST', `cost-recovery/notices/${notice.id}/issue`, {});
     }

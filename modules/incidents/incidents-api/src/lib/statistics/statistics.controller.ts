@@ -3,14 +3,16 @@ import { EntityManager } from '@mikro-orm/core';
 import type { Response } from 'express';
 import ExcelJS from 'exceljs';
 import { Audit, type AuthenticatedUser, berlinDayStart, CurrentUser, RequirePermissions, ZodPipe } from '@forga/core-api';
-import { type AnnualStatistics, StatisticsCorrections, type StatisticsValue } from '@forga/incidents-contracts';
+import { type AnnualStatistics, CloseStatistics, type StatisticsCheck, StatisticsCorrections, type StatisticsValue } from '@forga/incidents-contracts';
 import { TRAINING_CASUALTIES, type TrainingCasualties } from '@forga/training-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
-import { ReportEntity, StatisticsYearEntity } from '../incidents.entities.js';
+import { AlarmKeywordEntity, ReportEntity, StatisticsYearEntity } from '../incidents.entities.js';
 import { checkAnnualStatistics, computeAnnualStatistics } from './annual-statistics.js';
 import { STATE_TEMPLATE_BASE64 } from './state-template.js';
 
 const PERMISSION = 'incidents.statistics';
+
+const valueKey = (v: StatisticsValue) => `${v.question}:${v.column}:${v.value}`;
 
 /** Annual statistics for the state portal: preview with plausibility checks, corrections, export into the template. */
 @Controller('incidents/statistics')
@@ -47,16 +49,29 @@ export class StatisticsController {
     return this.build(year);
   }
 
-  /** Closing freezes the corrections; the values stay computed from the data. */
+  /**
+   * Closing stores the values and checks as they are now: the closed year keeps showing (and exporting) them, even
+   * if reports change later (`changedSinceClose`). With open checks closing needs `force`.
+   */
   @Post(':year/close')
   @HttpCode(200)
-  async close(@Param('year', ParseIntPipe) year: number, @CurrentUser() user: AuthenticatedUser): Promise<AnnualStatistics> {
+  async close(
+    @Param('year', ParseIntPipe) year: number,
+    @Body(new ZodPipe(CloseStatistics)) input: ReturnType<typeof CloseStatistics.parse>,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AnnualStatistics> {
     const em = this.em.fork();
     const stored = await this.year(em, year);
+    if (stored.closedAt) throw new ConflictException({ code: 'incidents.statisticsClosed' });
+    const { values, checks } = await this.compute(year, stored.corrections);
+    const failed = checks.filter((c) => !c.ok);
+    if (failed.length && !input.force) throw new ConflictException({ code: 'incidents.statisticsChecksOpen', count: failed.length });
     stored.closedAt = new Date();
     stored.closedBy = user.displayName;
+    stored.frozenValues = values;
+    stored.frozenChecks = checks;
     await em.flush();
-    await this.audit.log('incidents.statistics-closed', { year });
+    await this.audit.log('incidents.statistics-closed', { year, openChecks: failed.map((c) => c.code) });
     return this.build(year);
   }
 
@@ -67,6 +82,8 @@ export class StatisticsController {
     const stored = await this.year(em, year);
     stored.closedAt = null;
     stored.closedBy = null;
+    stored.frozenValues = null;
+    stored.frozenChecks = null;
     await em.flush();
     await this.audit.log('incidents.statistics-reopened', { year });
     return this.build(year);
@@ -98,19 +115,35 @@ export class StatisticsController {
     return (await em.findOne(StatisticsYearEntity, year)) ?? em.create(StatisticsYearEntity, { year, corrections: {} });
   }
 
+  /** The closed year shows the values frozen at closing; otherwise the values computed now. */
   private async build(year: number): Promise<AnnualStatistics> {
+    const stored = await this.em.fork().findOne(StatisticsYearEntity, year);
+    const current = await this.compute(year, stored?.corrections ?? {});
+    const frozen = stored?.closedAt && stored.frozenValues ? { values: stored.frozenValues, checks: stored.frozenChecks ?? [] } : null;
+    const changedSinceClose = frozen !== null && current.values.map(valueKey).join('|') !== frozen.values.map(valueKey).join('|');
+    return {
+      year,
+      referenceDate: `${year}-12-31`,
+      closedAt: stored?.closedAt?.toISOString() ?? null,
+      closedBy: stored?.closedBy ?? null,
+      changedSinceClose,
+      ...(frozen ?? current),
+    };
+  }
+
+  private async compute(year: number, corrections: Record<string, number>): Promise<{ values: StatisticsValue[]; checks: StatisticsCheck[] }> {
     const em = this.em.fork();
     const referenceDate = `${year}-12-31`;
     const start = berlinDayStart(`${year}-01-01`);
     const end = berlinDayStart(`${year + 1}-01-01`);
-    const [departments, stations, vehicles, members, stored] = await Promise.all([
+    const [departments, stations, vehicles, members, keywords] = await Promise.all([
       this.organization.departments(),
       this.organization.stations(),
       this.organization.vehicles({ includeRetired: true }),
       this.directory.membersOn(referenceDate),
-      em.findOne(StatisticsYearEntity, year),
+      em.find(AlarmKeywordEntity, { mainType: { $ne: null } }),
     ]);
-    const reports = await em.find(ReportEntity, { alarmedAt: { $gte: start, $lt: end } }, { populate: ['personnel'] });
+    const reports = await em.find(ReportEntity, { alarmedAt: { $gte: start, $lt: end } }, { populate: ['personnel', 'incident'] });
     const typeOf = new Map(departments.map((d) => [d.id, d.type]));
 
     const computed = computeAnnualStatistics({
@@ -130,7 +163,6 @@ export class StatisticsController {
       trainingCasualties: (await this.training?.injured(year))?.map((c) => ({ departmentType: typeOf.get(c.departmentIds[0] ?? '') ?? 'operational' })) ?? [],
     });
 
-    const corrections = stored?.corrections ?? {};
     const byKey = new Map(computed.map((v) => [`${v.question}:${v.column}`, v]));
     const values: StatisticsValue[] = [];
     for (const key of new Set([...byKey.keys(), ...Object.keys(corrections)])) {
@@ -150,12 +182,15 @@ export class StatisticsController {
     const lookup = new Map(values.map((v) => [`${v.question}:${v.column}`, v.value]));
 
     const primary = reports.filter((r) => r.primary);
+    // Only keywords counted in the statistics need statistics (not e.g. fire watch).
+    const counted = new Set(keywords.map((k) => k.key));
+    const withoutStatistics = primary.filter((r) => !r.statistics && counted.has(r.incident.alarmKeyword));
     const checks = [
       ...checkAnnualStatistics((key) => lookup.get(key) ?? 0),
       {
         code: 'statistics.primaryReportsWithoutStatistics',
-        ok: primary.every((r) => r.statistics),
-        params: { count: primary.filter((r) => !r.statistics).length },
+        ok: withoutStatistics.length === 0,
+        params: { count: withoutStatistics.length },
       },
       {
         code: 'statistics.unreleasedPrimaryReports',
@@ -163,13 +198,6 @@ export class StatisticsController {
         params: { count: primary.filter((r) => !r.status.startsWith('released')).length },
       },
     ];
-    return {
-      year,
-      referenceDate,
-      closedAt: stored?.closedAt?.toISOString() ?? null,
-      closedBy: stored?.closedBy ?? null,
-      values,
-      checks,
-    };
+    return { values, checks };
   }
 }

@@ -7,7 +7,7 @@ import { LanguageSwitch } from '../frame/LanguageSwitch';
 export function SetupPage() {
   const { t } = useTranslation('shell');
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ brigadeName: '', displayName: '', username: '', password: '' });
+  const [form, setForm] = useState({ setupToken: '', brigadeName: '', displayName: '', username: '', email: '', password: '' });
   const setup = useMutation({
     mutationFn: () => send('POST', 'core/setup', { ...form, language: currentLanguage() }),
     onSuccess: () => queryClient.invalidateQueries(),
@@ -33,9 +33,11 @@ export function SetupPage() {
             </Title>
             <Text size="sm">{t('setup.intro')}</Text>
             {setup.error && <Alert color="brand">{(setup.error as ApiError).translated()}</Alert>}
+            <PasswordInput label={t('setup.setupToken')} description={t('setup.setupTokenHint')} autoComplete="off" {...field('setupToken')} />
             <TextInput label={t('setup.brigadeName')} {...field('brigadeName')} />
             <TextInput label={t('setup.displayName')} {...field('displayName')} />
             <TextInput label={t('setup.username')} autoComplete="username" {...field('username')} />
+            <TextInput label={t('setup.email')} description={t('setup.emailHint')} type="email" autoComplete="email" {...field('email')} />
             <PasswordInput label={t('setup.password')} autoComplete="new-password" minLength={10} {...field('password')} />
             <Button type="submit" loading={setup.isPending}>
               {t('setup.submit')}

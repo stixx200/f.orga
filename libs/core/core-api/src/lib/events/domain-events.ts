@@ -66,6 +66,7 @@ export class DomainEvents implements OnModuleInit {
       leadDays: 0,
       departmentIds: [],
       permission: 'core.audit.read',
+      to: '/admin/audit?action=events.',
     }));
   }
 }

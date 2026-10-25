@@ -5,10 +5,12 @@ import { READ, SELF } from './api';
 import { translations } from './i18n';
 import { ArticlesPage } from './pages/ArticlesPage';
 import { CarePage } from './pages/CarePage';
+import { InspectionPage } from './pages/InspectionPage';
 import { IssuePage } from './pages/IssuePage';
 import { ItemPage } from './pages/ItemPage';
 import { ItemsPage } from './pages/ItemsPage';
 import { MyClothing, PersonTab } from './pages/PersonTab';
+import { StockPage } from './pages/StockPage';
 
 function NotFound() {
   const { t } = useTranslation('clothing');
@@ -23,6 +25,8 @@ export default defineWebModule({
     { path: 'items/:id', element: <ItemPage /> },
     { path: 'issue', element: <IssuePage /> },
     { path: 'care', element: <CarePage /> },
+    { path: 'inspections', element: <InspectionPage /> },
+    { path: 'stock', element: <StockPage /> },
     { path: 'articles', element: <ArticlesPage /> },
     { path: '*', element: <NotFound /> },
   ],

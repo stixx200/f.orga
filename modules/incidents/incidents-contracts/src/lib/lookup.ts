@@ -18,8 +18,10 @@ export interface ChargeableIncident {
   object: string;
   mainType: MainType | null;
   falseAlarmType: FalseAlarmType | null;
-  /** All reports released (for billing or compensation). */
+  /** All reports released for billing (ready for cost recovery). A release for compensation only does not count. */
   released: boolean;
+  /** Lowest release level of all reports: `none` while one is not released, `compensation`, or `billing` (= `released`). */
+  releaseLevel: 'none' | 'compensation' | 'billing';
   departmentIds: string[];
   /** Why the incident is chargeable, from the costs of the incident. */
   chargeableReason: string;
@@ -55,6 +57,8 @@ export interface ReportReference {
   reportNumber: string;
   departmentId: string;
   status: string;
+  /** Edited by a releaser: only releasers may change it (also while it is a draft). */
+  locked: boolean;
   incidentId: string;
   dispatchNumber: string;
   alarmKeyword: string;

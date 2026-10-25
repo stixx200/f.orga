@@ -19,6 +19,8 @@ export const ArticleSchema = defineEntity({
     inspectionMonths: p.integer().nullable(),
     active: p.boolean().default(true),
     sortOrder: p.integer().default(0),
+    /** Minimum stock per size (`''` without sizes). */
+    minimumStock: p.json<Record<string, number>>().defaultRaw("'{}'::jsonb"),
     version: p.integer().version(),
   },
 });
@@ -54,6 +56,15 @@ export const ItemSchema = defineEntity({
 export class ClothingItemEntity extends ItemSchema.class {}
 ItemSchema.setClass(ClothingItemEntity);
 
+/** Who recorded an entry and whether it was cancelled (wrong entries are cancelled with a reason, never deleted). */
+const recorded = () => ({
+  recordedBy: p.string(),
+  recordedById: p.string().nullable(),
+  cancelledAt: p.datetime().nullable(),
+  cancelledBy: p.string().nullable(),
+  cancelReason: p.text().default(''),
+});
+
 /** History of a person: consumables handed out, pieces issued and returned. */
 export const IssueSchema = defineEntity({
   name: 'IssueEntity',
@@ -70,7 +81,11 @@ export const IssueSchema = defineEntity({
     quantity: p.integer().default(1),
     date: p.string().length(10),
     notes: p.text().default(''),
-    recordedBy: p.string(),
+    /** Return: retired instead of into stock. */
+    retire: p.boolean().default(false),
+    /** Return: to be washed before the piece is issued again. */
+    laundry: p.boolean().default(false),
+    ...recorded(),
     recordedAt: p.datetime(),
   },
 });
@@ -89,7 +104,7 @@ export const CareSchema = defineEntity({
     date: p.string().length(10),
     place: p.string().default(''),
     notes: p.text().default(''),
-    recordedBy: p.string(),
+    ...recorded(),
   },
 });
 export class CareEntity extends CareSchema.class {}
@@ -107,8 +122,43 @@ export const ClothingInspectionSchema = defineEntity({
     passed: p.boolean(),
     inspector: p.string().default(''),
     notes: p.text().default(''),
-    recordedBy: p.string(),
+    ...recorded(),
   },
 });
 export class ClothingInspectionEntity extends ClothingInspectionSchema.class {}
 ClothingInspectionSchema.setClass(ClothingInspectionEntity);
+
+/** Clothing sizes of a person by article key; preselects the stock when issuing. */
+export const SizeProfileSchema = defineEntity({
+  name: 'SizeProfileEntity',
+  schema: 'clothing',
+  tableName: 'size_profile',
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv7()),
+    /** No foreign key: the person belongs to the master data module. */
+    personId: p.string().unique(),
+    sizes: p.json<Record<string, string>>().defaultRaw("'{}'::jsonb"),
+    version: p.integer().version(),
+  },
+});
+export class SizeProfileEntity extends SizeProfileSchema.class {}
+SizeProfileSchema.setClass(SizeProfileEntity);
+
+/** Consumables received into the store; the stock is the sum of the receipts minus what was handed out. */
+export const ConsumableReceiptSchema = defineEntity({
+  name: 'ConsumableReceiptEntity',
+  schema: 'clothing',
+  tableName: 'consumable_receipt',
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv7()),
+    articleKey: p.string().index(),
+    size: p.string().default(''),
+    quantity: p.integer(),
+    date: p.string().length(10),
+    notes: p.text().default(''),
+    recordedBy: p.string(),
+    recordedAt: p.datetime(),
+  },
+});
+export class ConsumableReceiptEntity extends ConsumableReceiptSchema.class {}
+ConsumableReceiptSchema.setClass(ConsumableReceiptEntity);

@@ -16,7 +16,9 @@ import { EntityManager } from '@mikro-orm/core';
 import { type Permission, type Role as RoleDto, RoleInput } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
 import { ZodPipe } from '../zod.pipe.js';
-import { type AuthenticatedUser, computeGrants, widerThan } from './authenticated-user.js';
+import { assertAdministratorRemains } from './administrators.js';
+import { AuthService } from './auth.service.js';
+import { type AuthenticatedUser, widerThan } from './authenticated-user.js';
 import { CurrentUser, RequirePermissions } from './decorators.js';
 import { PermissionRegistry } from './permission-registry.js';
 import { type MergedRoleTemplate, RoleTemplates } from './role-templates.js';
@@ -43,12 +45,15 @@ export class RolesController {
     private readonly registry: PermissionRegistry,
     private readonly audit: Audit,
     private readonly templates: RoleTemplates,
+    private readonly auth: AuthService,
   ) {}
 
-  /** All permissions of core and installed modules, for the role editor. */
+  /** All permissions of core and installed modules, for the role editor and the scopes of API tokens. */
   @Get('permissions')
-  @RequirePermissions('core.roles.manage')
-  permissions(): readonly Permission[] {
+  permissions(@CurrentUser() user: AuthenticatedUser): readonly Permission[] {
+    if (!user.can('core.roles.manage') && !user.can('core.tokens.manage')) {
+      throw new ForbiddenException({ code: 'auth.forbidden', permissions: ['core.roles.manage', 'core.tokens.manage'] });
+    }
     return this.registry.all;
   }
 
@@ -79,7 +84,7 @@ export class RolesController {
   @RequirePermissions('core.roles.manage')
   async create(@Body(new ZodPipe(RoleInput)) input: ParsedRoleInput, @CurrentUser() current: AuthenticatedUser): Promise<RoleDto> {
     this.validate(input);
-    this.assertNotWider(current, input.permissions, input.permissionsAllDepartments);
+    await this.assertNotWider(current, input.permissions, input.permissionsAllDepartments);
     const em = this.em.fork();
     if (await em.count(Role, { name: input.name })) throw new ConflictException({ code: 'roles.nameTaken' });
     const role = em.create(Role, input);
@@ -92,58 +97,71 @@ export class RolesController {
   @RequirePermissions('core.roles.manage')
   async update(@Param('id') id: string, @Body(new ZodPipe(RoleInput)) input: ParsedRoleInput, @CurrentUser() current: AuthenticatedUser): Promise<RoleDto> {
     this.validate(input);
-    const em = this.em.fork();
-    const role = await em.findOne(Role, id);
-    if (!role) throw new NotFoundException();
-    this.assertNotWider(
-      current,
-      input.permissions.filter((p) => !role.permissions.includes(p)),
-      input.permissionsAllDepartments.filter((p) => !(role.permissionsAllDepartments ?? []).includes(p)),
-    );
-    if (input.name !== role.name && (await em.count(Role, { name: input.name }))) {
-      throw new ConflictException({ code: 'roles.nameTaken' });
-    }
-    em.assign(role, input);
-    await em.flush();
-    await this.audit.log('roles.updated', { roleId: role.id, permissions: role.permissions, permissionsAllDepartments: role.permissionsAllDepartments });
-    return toRoleDto(role);
+    const saved = await this.em.fork().transactional(async (em) => {
+      const role = await em.findOne(Role, id);
+      if (!role) throw new NotFoundException();
+      await this.assertNotWider(
+        current,
+        input.permissions.filter((p) => !role.permissions.includes(p)),
+        input.permissionsAllDepartments.filter((p) => !(role.permissionsAllDepartments ?? []).includes(p)),
+      );
+      if (input.name !== role.name && (await em.count(Role, { name: input.name }))) {
+        throw new ConflictException({ code: 'roles.nameTaken' });
+      }
+      em.assign(role, input);
+      await em.flush();
+      // Taking `*` from the role of the last administrator would leave nobody to manage f.orga.
+      await assertAdministratorRemains(em);
+      return role;
+    });
+    await this.audit.log('roles.updated', { roleId: saved.id, permissions: saved.permissions, permissionsAllDepartments: saved.permissionsAllDepartments });
+    return toRoleDto(saved);
   }
 
   /** Sets the permissions of a standard role back to its template (e.g. after an update brought new defaults). */
   @Post('roles/:id/apply-template')
   @HttpCode(200)
   @RequirePermissions('core.roles.manage')
-  async applyTemplate(@Param('id') id: string): Promise<RoleDto> {
-    const em = this.em.fork();
-    const role = await em.findOne(Role, id);
-    if (!role) throw new NotFoundException();
-    const template = this.templates.all.find((t) => t.key === role.templateKey);
-    if (!template) throw new BadRequestException({ code: 'roles.noTemplate' });
-    role.permissions = template.permissions;
-    role.permissionsAllDepartments = template.permissionsAllDepartments;
-    await em.flush();
-    await this.audit.log('roles.template-applied', { roleId: role.id, templateKey: template.key });
-    return toRoleDto(role);
+  async applyTemplate(@Param('id') id: string, @CurrentUser() current: AuthenticatedUser): Promise<RoleDto> {
+    const applied = await this.em.fork().transactional(async (em) => {
+      const role = await em.findOne(Role, id);
+      if (!role) throw new NotFoundException();
+      const template = this.templates.all.find((t) => t.key === role.templateKey);
+      if (!template) throw new BadRequestException({ code: 'roles.noTemplate' });
+      await this.assertNotWider(
+        current,
+        template.permissions.filter((p) => !role.permissions.includes(p)),
+        template.permissionsAllDepartments.filter((p) => !(role.permissionsAllDepartments ?? []).includes(p)),
+      );
+      role.permissions = template.permissions;
+      role.permissionsAllDepartments = template.permissionsAllDepartments;
+      await em.flush();
+      await assertAdministratorRemains(em);
+      return { role, template };
+    });
+    await this.audit.log('roles.template-applied', { roleId: applied.role.id, templateKey: applied.template.key });
+    return toRoleDto(applied.role);
   }
 
   @Delete('roles/:id')
   @HttpCode(204)
   @RequirePermissions('core.roles.manage')
-  async remove(@Param('id') id: string): Promise<void> {
-    const em = this.em.fork();
-    const role = await em.findOne(Role, id);
-    if (!role) throw new NotFoundException();
-    const others = await em.find(Role, { id: { $ne: id } });
-    if (role.permissions.includes('*') && !others.some((r) => r.permissions.includes('*'))) {
-      throw new BadRequestException({ code: 'roles.lastAdministrator' });
-    }
-    await em.remove(role).flush();
-    await this.audit.log('roles.deleted', { roleId: id, name: role.name });
+  async remove(@Param('id') id: string, @CurrentUser() current: AuthenticatedUser): Promise<void> {
+    const removed = await this.em.fork().transactional(async (em) => {
+      const role = await em.findOne(Role, id);
+      if (!role) throw new NotFoundException();
+      // Deleting a role takes its permissions from its users: only for roles within the own permissions.
+      await this.assertNotWider(current, role.permissions, role.permissionsAllDepartments ?? []);
+      await em.remove(role).flush();
+      await assertAdministratorRemains(em);
+      return role;
+    });
+    await this.audit.log('roles.deleted', { roleId: id, name: removed.name });
   }
 
   /** Permissions added to a role must be held brigade-wide by whoever edits it (no self-promotion via roles). */
-  private assertNotWider(current: AuthenticatedUser, patterns: string[], allDepartments: string[]): void {
-    const grants = computeGrants(this.registry.all, [{ patterns: [...patterns, ...allDepartments], departmentId: null }]);
+  private async assertNotWider(current: AuthenticatedUser, patterns: string[], allDepartments: string[]): Promise<void> {
+    const grants = await this.auth.grantsFor([{ role: { permissions: [...patterns, ...allDepartments], permissionsAllDepartments: [] }, departmentId: null }]);
     const wider = widerThan(current, grants);
     if (wider.length) throw new ForbiddenException({ code: 'users.roleWider', permissions: wider });
   }

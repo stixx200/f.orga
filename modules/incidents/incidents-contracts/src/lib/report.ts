@@ -28,6 +28,32 @@ export const IncidentInput = z.object({
 });
 export type IncidentInput = z.input<typeof IncidentInput>;
 
+/** Changing the incident data needs the version the client loaded. */
+export const IncidentUpdate = IncidentInput.extend({ version: z.number().int() });
+export type IncidentUpdate = z.input<typeof IncidentUpdate>;
+
+/** New incident with a draft report for each department; writers need at least one of their departments. */
+export const CreateIncident = IncidentInput.extend({ departmentIds: z.array(z.uuid()).default([]) });
+export type CreateIncident = z.input<typeof CreateIncident>;
+
+/**
+ * An existing incident that may be the same as one about to be created (same dispatch number, or same keyword
+ * within two hours). Minimal data only, so writers of other departments can join it with their own report.
+ */
+export const IncidentMatch = z.object({
+  id: z.uuid(),
+  dispatchNumber: z.string(),
+  alarmKeyword: z.string(),
+  alarmedAt: z.string(),
+  city: z.string(),
+  street: z.string(),
+  /** Departments that already have a report. */
+  departmentIds: z.array(z.uuid()),
+  /** `true` if the dispatch number is the same. */
+  sameDispatchNumber: z.boolean(),
+});
+export type IncidentMatch = z.infer<typeof IncidentMatch>;
+
 export const ReportStatus = z.enum(['draft', 'review', 'released-compensation', 'released-billing']);
 export type ReportStatus = z.infer<typeof ReportStatus>;
 
@@ -119,6 +145,11 @@ export type Weather = z.infer<typeof Weather>;
 export const ReportInput = z.object({
   /** Version the client loaded; a newer stored version means someone else saved in between. */
   version: z.number().int().optional(),
+  /**
+   * The end (`returnedAt`) was confirmed by the author; a new report starts with alarm + 1 h and unconfirmed.
+   * Left out (e.g. by other systems that send their own times) it counts as confirmed.
+   */
+  endConfirmed: z.boolean().optional(),
   authorPersonId: z.uuid().nullable().default(null),
   times: ReportTimes,
   situation: text,
@@ -160,11 +191,30 @@ export type Submit = z.input<typeof Submit>;
 export const ReturnToAuthor = z.object({ comment: z.string().trim().min(1) });
 export type ReturnToAuthor = z.infer<typeof ReturnToAuthor>;
 
-export const Release = z.object({ level: z.enum(['compensation', 'billing']) });
+export const ReleaseLevel = z.enum(['compensation', 'billing']);
+export type ReleaseLevel = z.infer<typeof ReleaseLevel>;
+
+export const Release = z.object({ level: ReleaseLevel });
 export type Release = z.infer<typeof Release>;
 
+/** Releases several reports at once, e.g. all error-free reports for review or all reports of an incident. */
+export const ReleaseMany = z.object({ reportIds: z.array(z.uuid()).min(1).max(200), level: ReleaseLevel });
+export type ReleaseMany = z.infer<typeof ReleaseMany>;
+
+export const ReleaseManyResult = z.object({
+  released: z.array(z.uuid()),
+  /** Reports that could not be released, with the error code (e.g. `incidents.findingsOpen`). */
+  failed: z.array(z.object({ reportId: z.uuid(), code: z.string() })),
+});
+export type ReleaseManyResult = z.infer<typeof ReleaseManyResult>;
+
+/** Lifts the lock; a locked draft can only go back to `draft`, a released report to `review` or `draft`. */
 export const Unlock = z.object({ reason: z.string().trim().min(1), toStatus: z.enum(['draft', 'review']).default('review') });
 export type Unlock = z.input<typeof Unlock>;
+
+/** Statistics of a primary report, changed by a releaser without a new release (also after the release). */
+export const StatisticsUpdate = z.object({ statistics: IncidentStatistics, version: z.number().int() });
+export type StatisticsUpdate = z.input<typeof StatisticsUpdate>;
 
 /** Pre-filled statistics from keyword, location and personnel; the author confirms or corrects them. */
 export const StatisticsSuggestion = z.object({
@@ -220,6 +270,8 @@ export const Report = z.object({
   lockedAt: z.string().nullable(),
   returnComment: z.string().nullable(),
   authorPersonId: z.uuid().nullable(),
+  /** The author confirmed the end; until then the rule `end-unconfirmed` keeps the times step open. */
+  endConfirmed: z.boolean(),
   times: z.object({
     alarmedAt: z.string(),
     departedAt: z.string().nullable(),
@@ -259,12 +311,14 @@ export type Report = z.infer<typeof Report>;
  * Costs and notes of the whole incident (not per report); entered by the commander or someone else with
  * `incidents.costs`. Cost recovery starts from chargeable incidents.
  */
-export const IncidentCosts = z.object({
-  version: z.number().int().optional(),
-  chargeable: z.boolean().default(false),
-  chargeableReason: text,
-  notes: text,
-});
+export const IncidentCosts = z
+  .object({
+    version: z.number().int().optional(),
+    chargeable: z.boolean().default(false),
+    chargeableReason: text,
+    notes: text,
+  })
+  .refine((c) => !c.chargeable || c.chargeableReason.trim().length > 0, { message: 'Reason required', path: ['chargeableReason'] });
 export type IncidentCosts = z.input<typeof IncidentCosts>;
 
 export const Incident = z.object({
@@ -289,6 +343,8 @@ export const Incident = z.object({
       status: ReportStatus,
       locked: z.boolean(),
       authorPersonId: z.uuid().nullable(),
+      /** Only for the primary report: statistics filled in. */
+      hasStatistics: z.boolean(),
     }),
   ),
   version: z.number(),
@@ -359,3 +415,21 @@ export const RemindResult = z.object({
   missingEmail: z.array(z.string()),
 });
 export type RemindResult = z.infer<typeof RemindResult>;
+
+/** Crew of a vehicle in the latest earlier report of the same department, to take it over into a new report. */
+export const PreviousCrew = z.object({
+  reportId: z.uuid().nullable(),
+  dispatchNumber: z.string().nullable(),
+  alarmedAt: z.string().nullable(),
+  personnel: z.array(z.object({ personId: z.uuid(), function: z.string().nullable() })),
+});
+export type PreviousCrew = z.infer<typeof PreviousCrew>;
+
+/** "My area": own assignments of a year (only the person linked to the user). */
+export const MyIncidents = z.object({
+  year: z.number().int(),
+  incidents: z.number().int(),
+  hours: z.number(),
+  assignments: z.array(PersonAssignment),
+});
+export type MyIncidents = z.infer<typeof MyIncidents>;

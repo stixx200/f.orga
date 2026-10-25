@@ -133,6 +133,7 @@ export interface OrganizationReferences {
  */
 export const PERSON_HOLDINGS = 'masterdata.PersonHoldings';
 
+/** Thrown as `masterdata.personHoldsItems` with `modules` (module IDs) and `count` while a person holds anything. */
 export interface PersonHoldings {
   register(module: string, count: (personId: string) => Promise<number>): void;
 }
@@ -142,6 +143,8 @@ export const MASTERDATA_EVENTS = {
   personLeft: 'masterdata.person.left',
   qualificationChanged: 'masterdata.person.qualification-changed',
   coursePassed: 'masterdata.course.passed',
+  /** A passed course attendance was deleted, e.g. entered by mistake. */
+  courseRevoked: 'masterdata.course.revoked',
 } as const;
 
 export interface PersonLeftEvent {
@@ -162,5 +165,12 @@ export interface CoursePassedEvent {
   courseName: string;
   /** End of the course (or its start), `YYYY-MM-DD`. */
   passedOn: string;
+  attendanceId: string;
+}
+
+/** Withdraws a `masterdata.course.passed`: the attendance was deleted, items based on it are to be removed or reversed. */
+export interface CourseRevokedEvent {
+  personId: string;
+  course: string;
   attendanceId: string;
 }

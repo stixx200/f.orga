@@ -1,11 +1,14 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { timingSafeEqual } from 'node:crypto';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, type OnApplicationBootstrap } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
+import type { Grant, Permission } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
 import { AuthenticatedUser, computeGrants, widerThan } from './authenticated-user.js';
 import { generateSecret, hashSecret, verifyPassword } from './password.js';
 import { ModuleStateService } from '../module/modules.js';
+import { OrganizationDirectory } from './organization-directory.js';
 import { PermissionRegistry } from './permission-registry.js';
-import { ApiToken, Session, User } from './security.entities.js';
+import { ApiToken, type Role, Session, User } from './security.entities.js';
 
 export const SESSION_COOKIE = 'forga_session';
 /** Keeps the administrator's own session while an impersonation session is active. */
@@ -22,20 +25,41 @@ const MAX_TRACKED = 10_000;
 const LOCK_MS = 60 * 1000;
 
 @Injectable()
-export class AuthService {
-  /** Failed logins per username; after too many, the account is locked for a minute. */
-  /** Failed logins per username (insertion order = oldest first). */
+export class AuthService implements OnApplicationBootstrap {
+  /** Failed logins per username (insertion order = oldest first); after too many, the account is locked for a minute. */
   private readonly failures = new Map<string, { count: number; lockedUntil: number }>();
+  private readonly logger = new Logger('Setup');
+  private generatedSetupToken: string | null = null;
 
   constructor(
     private readonly em: EntityManager,
     private readonly registry: PermissionRegistry,
     private readonly audit: Audit,
     private readonly modules: ModuleStateService,
+    private readonly organization: OrganizationDirectory,
   ) {}
 
   async setupRequired(): Promise<boolean> {
     return (await this.em.fork().count(User, { technical: false })) === 0;
+  }
+
+  /**
+   * Until the first user exists, the setup needs a token, so nobody who reaches a fresh installation first
+   * can make himself administrator: `FORGA_SETUP_TOKEN`, or a random token printed to the server log.
+   */
+  async onApplicationBootstrap(): Promise<void> {
+    if (!(await this.setupRequired())) return;
+    if (process.env.FORGA_SETUP_TOKEN) this.logger.log('Initial setup required; the setup token is the value of FORGA_SETUP_TOKEN.');
+    else this.logger.warn(`Initial setup required. Setup token: ${this.setupToken()}`);
+  }
+
+  private setupToken(): string {
+    return process.env.FORGA_SETUP_TOKEN || (this.generatedSetupToken ??= generateSecret());
+  }
+
+  /** Compares in constant time (both sides hashed to the same length). */
+  isSetupToken(token: string): boolean {
+    return timingSafeEqual(Buffer.from(hashSecret(token)), Buffer.from(hashSecret(this.setupToken())));
   }
 
   /** Checks the credentials and opens a session. Returns the cookie value, or `null`. */
@@ -148,23 +172,46 @@ export class AuthService {
     }
     apiToken.lastUsedAt = now;
     await em.flush();
-    // A token can do exactly what its scopes say, brigade-wide.
-    const grants = computeGrants(this.registry.all, [{ patterns: apiToken.scopes, departmentId: null }]);
+    // A token can do exactly what its scopes say, brigade-wide; like sessions, not in deactivated modules.
+    const grants = computeGrants(await this.activePermissions(), [{ patterns: apiToken.scopes, departmentId: null }]);
     const user = apiToken.user;
     return new AuthenticatedUser(user.id, user.username, user.displayName, null, user.language, grants, 'token');
   }
 
-  async load(em: EntityManager, user: User, via: 'session' | 'token'): Promise<AuthenticatedUser> {
-    await em.populate(user, ['roles.role']);
-    // Permissions of deactivated modules do not count: their lists, imports, search hits and deadlines disappear too.
+  /** Permissions of deactivated modules do not count: their lists, imports, search hits and deadlines disappear too. */
+  private async activePermissions(): Promise<Permission[]> {
     const inactive = await this.modules.inactiveIds();
-    const grants = computeGrants(
-      this.registry.all.filter((p) => !inactive.has(p.id.slice(0, p.id.indexOf('.')))),
-      user.roles.getItems().flatMap((a) => [
-        { patterns: a.role.permissions, departmentId: a.departmentId ?? null },
+    return this.registry.all.filter((p) => !inactive.has(p.id.slice(0, p.id.indexOf('.'))));
+  }
+
+  /**
+   * Effective grants of role assignments, as a user holding them would get them:
+   * without deactivated modules, and an assignment to a department covers the departments below it.
+   */
+  async grantsFor(assignments: readonly { role: Pick<Role, 'permissions' | 'permissionsAllDepartments'>; departmentId: string | null }[]): Promise<Map<string, Grant>> {
+    return computeGrants(
+      await this.activePermissions(),
+      assignments.flatMap((a) => [
+        { patterns: a.role.permissions, departmentId: a.departmentId },
         { patterns: a.role.permissionsAllDepartments ?? [], departmentId: null },
       ]),
+      await this.organization.subDepartments(),
     );
+  }
+
+  /**
+   * A user may only be changed (password, e-mail, lock, roles, OIDC link) by someone holding all of his permissions,
+   * so `core.users.manage` cannot take over an administrator account. `user.roles.role` must be populated.
+   */
+  async assertMayManage(actor: AuthenticatedUser, user: User): Promise<void> {
+    const grants = await this.grantsFor(user.roles.getItems().map((a) => ({ role: a.role, departmentId: a.departmentId ?? null })));
+    const wider = widerThan(actor, grants);
+    if (wider.length) throw new ForbiddenException({ code: 'users.targetWider', permissions: wider });
+  }
+
+  async load(em: EntityManager, user: User, via: 'session' | 'token'): Promise<AuthenticatedUser> {
+    await em.populate(user, ['roles.role']);
+    const grants = await this.grantsFor(user.roles.getItems().map((a) => ({ role: a.role, departmentId: a.departmentId ?? null })));
     return new AuthenticatedUser(
       user.id,
       user.username,

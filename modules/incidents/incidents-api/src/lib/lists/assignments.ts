@@ -1,7 +1,7 @@
-import { Controller, Get, Inject, Injectable, Param, Query } from '@nestjs/common';
+import { Controller, Get, Inject, Injectable, NotFoundException, Param, Query } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { type AuthenticatedUser, berlinDayAfter, berlinDayStart, CurrentUser, RequirePermissions } from '@forga/core-api';
-import type { Compensation, PersonAssignment, ReportStatus } from '@forga/incidents-contracts';
+import type { Compensation, MyIncidents, PersonAssignment, ReportStatus } from '@forga/incidents-contracts';
 import {
   ORGANIZATION,
   type Organization,
@@ -11,7 +11,7 @@ import {
 import { computeCompensation } from '../domain/compensation.js';
 import { ReportEntity } from '../incidents.entities.js';
 import { ReportContextLoader } from '../reports/report-context.js';
-import { assignmentTimes, READ, RELEASE } from '../reports/reports.service.js';
+import { assignmentTimes, READ, RELEASE, SELF } from '../reports/reports.service.js';
 
 /** One person in one report, with everything evaluations need. */
 export interface AssignmentLine {
@@ -47,17 +47,22 @@ export class AssignmentLines {
     @Inject(ORGANIZATION) private readonly organization: Organization,
   ) {}
 
+  /**
+   * With `personId`, only the assignments of that person in all departments (for "My area"; the caller makes sure
+   * it is the user's own person), otherwise those of the departments the user may read.
+   */
   async load(
     user: AuthenticatedUser,
     period: { from: string; to: string },
-    options: { releasedOnly?: boolean; departmentId?: string } = {},
+    options: { releasedOnly?: boolean; departmentId?: string; personId?: string } = {},
   ): Promise<AssignmentLine[]> {
-    const grant = user.grant(RELEASE) === 'brigade' ? 'brigade' : user.grant(READ);
+    const grant = options.personId ? 'brigade' : user.grant(RELEASE) === 'brigade' ? 'brigade' : user.grant(READ);
     if (!grant) return [];
     const where: FilterQuery<ReportEntity>[] = [
       { alarmedAt: { $gte: berlinDayStart(period.from), $lt: berlinDayAfter(period.to) } },
     ];
     if (grant !== 'brigade') where.push({ departmentId: { $in: grant } });
+    if (options.personId) where.push({ personnel: { personId: options.personId } });
     if (options.departmentId) where.push({ departmentId: options.departmentId });
     if (options.releasedOnly) where.push({ status: { $in: RELEASED } });
 
@@ -75,7 +80,7 @@ export class AssignmentLines {
     const personById = new Map(persons.map((p) => [p.id, p]));
 
     return reports.flatMap((report) =>
-      report.personnel.getItems().map((p) => {
+      report.personnel.getItems().filter((p) => !options.personId || p.personId === options.personId).map((p) => {
         const times = assignmentTimes(p, report);
         const person = p.personId ? personById.get(p.personId) : undefined;
         return {
@@ -105,6 +110,42 @@ export class AssignmentLines {
   }
 }
 
+const lineHours = (l: AssignmentLine) => (new Date(l.to).getTime() - new Date(l.from).getTime()) / 3_600_000;
+
+const toPersonAssignment = (l: AssignmentLine): PersonAssignment => ({
+  reportId: l.reportId,
+  incidentId: l.incidentId,
+  dispatchNumber: l.dispatchNumber,
+  alarmKeyword: l.alarmKeyword,
+  department: l.reportDepartment,
+  status: l.status,
+  from: l.from,
+  to: l.to,
+  standby: l.standby,
+  hours: l.compensation.hours,
+  amount: l.compensation.amount,
+});
+
+/** "My area": the own assignments of a year, always of the person linked to the user. */
+@Controller('incidents/me')
+export class MyIncidentsController {
+  constructor(private readonly lines: AssignmentLines) {}
+
+  @Get()
+  @RequirePermissions(SELF)
+  async get(@Query('year') year: string | undefined, @CurrentUser() user: AuthenticatedUser): Promise<MyIncidents> {
+    if (!user.personId) throw new NotFoundException({ code: 'incidents.noPerson' });
+    const y = Number(year) || new Date().getFullYear();
+    const lines = await this.lines.load(user, { from: `${y}-01-01`, to: `${y}-12-31` }, { personId: user.personId });
+    return {
+      year: y,
+      incidents: new Set(lines.map((l) => l.incidentId)).size,
+      hours: Math.round(lines.reduce((sum, l) => sum + lineHours(l), 0) * 10) / 10,
+      assignments: lines.toReversed().map(toPersonAssignment),
+    };
+  }
+}
+
 /** Assignments of one person in a year, e.g. for the tab "Einsätze" in the person file. */
 @Controller('incidents/persons')
 export class PersonAssignmentsController {
@@ -122,18 +163,6 @@ export class PersonAssignmentsController {
     return lines
       .filter((l) => l.personId === personId)
       .toReversed()
-      .map((l) => ({
-        reportId: l.reportId,
-        incidentId: l.incidentId,
-        dispatchNumber: l.dispatchNumber,
-        alarmKeyword: l.alarmKeyword,
-        department: l.reportDepartment,
-        status: l.status,
-        from: l.from,
-        to: l.to,
-        standby: l.standby,
-        hours: l.compensation.hours,
-        amount: l.compensation.amount,
-      }));
+      .map(toPersonAssignment);
   }
 }

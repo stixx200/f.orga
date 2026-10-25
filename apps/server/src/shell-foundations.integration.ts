@@ -1,6 +1,6 @@
 import { EntityManager } from '@mikro-orm/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DigestService, MailService } from '@forga/core-api';
+import { DigestService, MailService, PasswordResetService } from '@forga/core-api';
 import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
 
 let test: TestApp;
@@ -189,9 +189,12 @@ describe('password reset, test e-mail and assets', () => {
     expect(mails.length).toBe(before);
     await put('/core/settings/brigade', { name: 'FF Test', publicUrl: 'https://forga.example.org' }).expect(200);
 
-    await test.http.post('/api/core/password-reset').set(UI).send({ login: 'unbekannt' }).expect(200);
+    const resets = test.app.get(PasswordResetService);
+    await test.http.post('/api/core/password-reset').set(UI).send({ login: 'unbekannt' }).expect(200, { ok: true });
+    await resets.pending;
     expect(mails.length).toBe(before);
-    await test.http.post('/api/core/password-reset').set(UI).send({ login: 'vera@example.org' }).expect(200);
+    await test.http.post('/api/core/password-reset').set(UI).send({ login: 'vera@example.org' }).expect(200, { ok: true });
+    await resets.pending;
     const mail = mails.at(-1)!;
     expect(mail.to).toBe('vera@example.org');
     const token = /reset-password\?token=([\w-]+)/.exec(mail.text)![1];
@@ -201,6 +204,40 @@ describe('password reset, test e-mail and assets', () => {
     await test.http.post('/api/core/password-reset/confirm').set(UI).send({ token, password: 'neues-passwort-1' }).expect(200);
     await test.http.post('/api/core/password-reset/confirm').set(UI).send({ token, password: 'neues-passwort-2' }).expect(400);
     await test.login({ username: 'vergesslich', password: 'neues-passwort-1' });
+  });
+
+  it('resets no account for an e-mail address shared by several and limits the links per account', async () => {
+    await post('/core/users', { username: 'zwilling1', displayName: 'Zwilling 1', email: 'familie@example.org', password: 'zwilling-passwort-1' }).expect(201);
+    await post('/core/users', { username: 'zwilling2', displayName: 'Zwilling 2', email: 'Familie@example.org', password: 'zwilling-passwort-2' }).expect(201);
+    const resets = test.app.get(PasswordResetService);
+    const mails = test.app.get(MailService).sent;
+    const before = mails.length;
+    // The same answer as for an unknown account; nothing is sent to a random one of them.
+    await test.http.post('/api/core/password-reset').set(UI).send({ login: 'familie@example.org' }).expect(200, { ok: true });
+    await resets.pending;
+    expect(mails.length).toBe(before);
+    // The username stays unique.
+    await test.http.post('/api/core/password-reset').set(UI).send({ login: 'zwilling1' }).expect(200);
+    await resets.pending;
+    expect(mails.at(-1)!.to).toBe('familie@example.org');
+
+    // At most three links per account within 15 minutes; further requests look the same but send nothing.
+    for (let i = 0; i < 4; i++) {
+      await test.http.post('/api/core/password-reset').set(UI).send({ login: 'zwilling2' }).expect(200, { ok: true });
+      await resets.pending;
+    }
+    expect(mails.filter((m) => m.text.includes('Zwilling 2')).length).toBe(3);
+    const audit = (await get('/core/audit?q=password-reset')).body as { action: string }[];
+    expect(audit.map((e) => e.action)).toEqual(expect.arrayContaining(['auth.password-reset-ambiguous', 'auth.password-reset-limited']));
+  });
+
+  it('limits password reset requests per address', async () => {
+    const statuses: number[] = [];
+    // 20 per 15 minutes and address; the requests above count as well.
+    for (let i = 0; i < 20; i++) statuses.push((await test.http.post('/api/core/password-reset').set(UI).send({ login: `gibt-es-nicht-${i}` })).status);
+    expect(statuses.at(-1)).toBe(429);
+    expect(statuses.filter((status) => status === 200).length).toBeGreaterThan(5);
+    await test.app.get(PasswordResetService).pending;
   });
 
   it('sends a test e-mail to the current user', async () => {
@@ -249,11 +286,19 @@ describe('search, export and retention', () => {
     // Leaving long ago: the retention rule anonymises the person and removes the history.
     await post('/masterdata/catalog/templates/bw', {});
     await post(`/masterdata/persons/${person}/leave`, { leftOn: '2005-12-31', exitReason: 'own-request' }).expect(201);
-    const preview = await post('/core/retention/run', { dryRun: true }).expect(200);
+    // Nobody is anonymised until an administrator chooses a period; a dry run shows what a period would affect.
+    expect((await get('/core/settings/privacy')).body.anonymizeLeftAfterYears).toBeNull();
+    expect((await post('/core/retention/run', { dryRun: true }).expect(200)).body.counts['masterdata.persons']).toBe(0);
+    const preview = await post('/core/retention/run', { dryRun: true, settings: { anonymizeLeftAfterYears: 10 } }).expect(200);
     expect(preview.body.counts['masterdata.persons']).toBeGreaterThanOrEqual(1);
+    // A real run never takes values from the request.
+    expect((await post('/core/retention/run', { dryRun: false, settings: { anonymizeLeftAfterYears: 10 } }).expect(200)).body.counts['masterdata.persons']).toBe(0);
+    await test.http.put('/api/core/settings/privacy').set('Cookie', admin).set(UI).send({ anonymizeLeftAfterYears: 10, auditRetentionMonths: 24 }).expect(200);
     await post('/core/retention/run', { dryRun: false }).expect(200);
     const anonymised = (await get(`/masterdata/persons/${person}`)).body;
-    expect(anonymised).toMatchObject({ firstName: 'Person', lastName: '(ausgeschieden)', email: '' });
+    // A language-neutral name; the UI marks the person as anonymised.
+    expect(anonymised).toMatchObject({ firstName: 'N.', lastName: 'N.', email: '' });
+    expect(anonymised.anonymizedAt).not.toBeNull();
     expect((await get(`/core/history/masterdata.person/${person}`)).body).toEqual([]);
   });
 

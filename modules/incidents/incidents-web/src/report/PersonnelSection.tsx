@@ -1,9 +1,9 @@
-import { Button, Group, Paper, Select, SimpleGrid, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
-import { IconPlus } from '@tabler/icons-react';
+import { Button, Group, MultiSelect, Paper, Select, SimpleGrid, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
+import { IconPlus, IconUsersGroup } from '@tabler/icons-react';
 import { useState } from 'react';
-import type { Finding, Report } from '@forga/incidents-contracts';
-import { formatMoney, useLocalized, useTranslation } from '@forga/web-sdk';
-import { Notice, Panel, StatusBadge } from '@forga/web-ui';
+import type { Finding, PreviousCrew, Report } from '@forga/incidents-contracts';
+import { api, formatDate, formatMoney, useLocalized, useTranslation } from '@forga/web-sdk';
+import { Notice, notifyError, notifySuccess, Panel, StatusBadge } from '@forga/web-ui';
 import { personName, useFunctions, usePersons, useStations, useVehicles } from '../api';
 import type { Content, Personnel } from './editor';
 import { findingText, mergeFindings } from './findings';
@@ -29,7 +29,11 @@ const blank = (place: Pick<Personnel, 'vehicleId' | 'standbyStationId'>): Person
   killed: false,
 });
 
-/** Personnel by vehicle and standby; persons are searched and added to a vehicle or standby in one step. */
+/**
+ * Personnel by vehicle and standby. Several persons are chosen at once and added to a vehicle or standby with
+ * their function (the vehicle is added to the report with them); the crew of the last incident of the vehicle
+ * can be taken over in one step.
+ */
 export function PersonnelSection({ content, report, update, disabled, findings }: {
   content: Content;
   report: Report;
@@ -43,9 +47,11 @@ export function PersonnelSection({ content, report, update, disabled, findings }
   const { data: vehicles = [] } = useVehicles();
   const { data: stations = [] } = useStations();
   const { data: functions = [] } = useFunctions();
-  const [personId, setPersonId] = useState<string | null>(null);
+  const [personIds, setPersonIds] = useState<string[]>([]);
   const [guest, setGuest] = useState('');
-  const [vehicleToAdd, setVehicleToAdd] = useState<string | null>(null);
+  const [target, setTarget] = useState<string | null>(null);
+  const [fn, setFn] = useState<string | null>(null);
+  const [loadingCrew, setLoadingCrew] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
 
   const ownVehicles = vehicles.filter((v) => v.departmentId === report.departmentId);
@@ -56,10 +62,8 @@ export function PersonnelSection({ content, report, update, disabled, findings }
     ...[...new Set([...usedVehicleIds, ...ownVehicles.map((v) => v.id)])].map((id) => ({ value: `v:${id}`, label: vehicles.find((v) => v.id === id)?.designation ?? id })),
     ...[...new Set([...usedStationIds, ...ownStations.map((s) => s.id)])].map((id) => ({ value: `s:${id}`, label: t('personnel.standbyAt', { station: stations.find((s) => s.id === id)?.name ?? '' }) })),
   ];
-  const quickTargets = [
-    ...usedVehicleIds.map((id) => ({ value: `v:${id}`, label: vehicles.find((v) => v.id === id)?.designation ?? id })),
-    ...(ownStations[0] ? [{ value: `s:${ownStations[0].id}`, label: t('personnel.standby') }] : []),
-  ];
+  // The place to add to: the last used vehicle unless one is chosen.
+  const place = target ?? (usedVehicleIds.length ? `v:${usedVehicleIds.at(-1)}` : null);
 
   const inReport = new Set(content.personnel.flatMap((p) => (p.personId ? [p.personId] : [])));
   const candidates = persons
@@ -71,22 +75,44 @@ export function PersonnelSection({ content, report, update, disabled, findings }
     return (entry?.attributes['abbreviation'] as string | undefined) || (entry ? localized(entry.name) : '');
   };
 
-  const add = (target: string) => {
-    if (!personId && !guest.trim()) return;
+  /** Adds persons (and the vehicle, if new) to a vehicle or standby; persons already in the report are skipped. */
+  const addEntries = (to: string, entries: { personId: string | null; guestName: string; function: string | null }[]) =>
     update((c) => {
-      const place = placeOf(target);
-      const used = place.vehicleId && !c.vehicles.some((v) => v.vehicleId === place.vehicleId)
-        ? [...c.vehicles, { vehicleId: place.vehicleId, departedAt: null, returnedAt: null, kilometres: null }]
+      const where = placeOf(to);
+      const used = where.vehicleId && !c.vehicles.some((v) => v.vehicleId === where.vehicleId)
+        ? [...c.vehicles, { vehicleId: where.vehicleId, departedAt: null, returnedAt: null, kilometres: null }]
         : c.vehicles;
-      return { ...c, vehicles: used, personnel: [...c.personnel, { ...blank(place), personId, guestName: personId ? '' : guest.trim() }] };
+      const present = new Set(c.personnel.flatMap((p) => (p.personId ? [p.personId] : [])));
+      const added = entries.filter((entry) => !entry.personId || !present.has(entry.personId)).map((entry) => ({ ...blank(where), ...entry }));
+      return { ...c, vehicles: used, personnel: [...c.personnel, ...added] };
     });
-    setPersonId(null);
+  const add = () => {
+    if (!place) return;
+    addEntries(place, [
+      ...personIds.map((id) => ({ personId: id, guestName: '', function: fn })),
+      ...(guest.trim() ? [{ personId: null, guestName: guest.trim(), function: fn }] : []),
+    ]);
+    setPersonIds([]);
     setGuest('');
+    setFn(null);
   };
-  const addVehicle = () => {
-    if (!vehicleToAdd) return;
-    update((c) => ({ ...c, vehicles: [...c.vehicles, { vehicleId: vehicleToAdd, departedAt: null, returnedAt: null, kilometres: null }] }));
-    setVehicleToAdd(null);
+  const vehicleOfPlace = place?.startsWith('v:') ? place.slice(2) : null;
+  const takeOverCrew = async () => {
+    if (!place || !vehicleOfPlace) return;
+    setLoadingCrew(true);
+    try {
+      const crew = await api<PreviousCrew>(`incidents/reports/${report.id}/previous-crew?vehicleId=${vehicleOfPlace}`);
+      if (!crew.personnel.length) {
+        notifySuccess(t('personnel.noPreviousCrew'));
+        return;
+      }
+      addEntries(place, crew.personnel.map((p) => ({ personId: p.personId, guestName: '', function: p.function })));
+      notifySuccess(t('personnel.crewTaken', { count: crew.personnel.length, number: crew.dispatchNumber ?? '', date: formatDate(crew.alarmedAt, i18n.language) }));
+    } catch (error) {
+      notifyError(error);
+    } finally {
+      setLoadingCrew(false);
+    }
   };
   const compensationOf = (index: number) => {
     const entry = content.personnel[index];
@@ -113,41 +139,49 @@ export function PersonnelSection({ content, report, update, disabled, findings }
       {!disabled && (
         <Panel>
           <Stack gap="sm">
-            <Group align="end" gap="sm">
+            <SimpleGrid cols={{ base: 1, sm: 2 }}>
               <Select
-                label={t('personnel.search')}
-                placeholder={t('personnel.searchPlaceholder')}
-                data={candidates.map((p) => ({ value: p.id, label: `${p.lastName}, ${p.firstName}${p.personnelNumber ? ` (${p.personnelNumber})` : ''}` }))}
-                value={personId}
-                onChange={(value) => {
-                  setPersonId(value);
-                  if (value) setGuest('');
-                }}
+                label={t('personnel.addTo')}
+                placeholder={t('personnel.addVehicleFirst')}
+                data={targets}
+                value={place}
+                onChange={setTarget}
                 searchable
-                clearable
-                style={{ flex: 2, minWidth: 220 }}
+                allowDeselect={false}
+                className={classes.touch}
               />
-              <TextInput label={t('personnel.guest')} placeholder={t('personnel.guestPlaceholder')} value={guest} onChange={(e) => { setGuest(e.currentTarget.value); if (e.currentTarget.value) setPersonId(null); }} style={{ flex: 1, minWidth: 180 }} />
-            </Group>
-            <Group gap="xs">
-              <Text size="sm" c="dimmed">{t('personnel.addTo')}</Text>
-              {quickTargets.map((target) => (
-                <Button key={target.value} size="xs" variant="outline" disabled={!personId && !guest.trim()} onClick={() => add(target.value)} leftSection={<IconPlus size={14} />}>
-                  {target.label}
-                </Button>
-              ))}
-              {!quickTargets.length && <Text size="sm" c="dimmed">{t('personnel.addVehicleFirst')}</Text>}
-            </Group>
-            <Group align="end" gap="sm">
               <Select
-                label={t('personnel.addVehicle')}
-                data={ownVehicles.filter((v) => !usedVehicleIds.includes(v.id)).map((v) => ({ value: v.id, label: `${v.designation}${v.radioCallSign ? ` · ${v.radioCallSign}` : ''}` }))}
-                value={vehicleToAdd}
-                onChange={setVehicleToAdd}
+                label={t('person.function')}
+                data={functions.map((f) => ({ value: f.key, label: localized(f.name) }))}
+                value={fn}
+                onChange={setFn}
                 clearable
-                style={{ flex: 1, minWidth: 220 }}
+                searchable
+                className={classes.touch}
               />
-              <Button variant="default" disabled={!vehicleToAdd} onClick={addVehicle}>{t('personnel.addVehicleButton')}</Button>
+            </SimpleGrid>
+            <MultiSelect
+              label={t('personnel.search')}
+              placeholder={t('personnel.searchPlaceholder')}
+              description={t('personnel.searchHint')}
+              data={candidates.map((p) => ({ value: p.id, label: `${p.lastName}, ${p.firstName}${p.personnelNumber ? ` (${p.personnelNumber})` : ''}` }))}
+              value={personIds}
+              onChange={setPersonIds}
+              searchable
+              clearable
+              hidePickedOptions
+              className={classes.touch}
+            />
+            <TextInput label={t('personnel.guest')} placeholder={t('personnel.guestPlaceholder')} value={guest} onChange={(e) => setGuest(e.currentTarget.value)} className={classes.touch} />
+            <Group gap="sm">
+              <Button size="md" className={classes.touch} disabled={!place || (!personIds.length && !guest.trim())} onClick={add} leftSection={<IconPlus size={16} />}>
+                {t('personnel.add', { count: personIds.length + (guest.trim() ? 1 : 0) })}
+              </Button>
+              {vehicleOfPlace && (
+                <Button size="md" variant="default" className={classes.touch} loading={loadingCrew} onClick={() => void takeOverCrew()} leftSection={<IconUsersGroup size={16} />}>
+                  {t('personnel.takeOverCrew')}
+                </Button>
+              )}
             </Group>
           </Stack>
         </Panel>

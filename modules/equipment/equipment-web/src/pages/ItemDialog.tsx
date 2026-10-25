@@ -1,13 +1,13 @@
-import { Button, Group, NumberInput, Select, SimpleGrid, Stack, Textarea, TextInput } from '@mantine/core';
+import { Button, Group, NumberInput, Select, SimpleGrid, Stack, Table, Text, Textarea, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import type { Item, ItemInput } from '@forga/equipment-contracts';
-import { can, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
+import type { InitialInspection, Item, ItemInput } from '@forga/equipment-contracts';
+import { can, localDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { CodeInput, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { keys, useCategories, useDepartments, useStations, useTypes, useVehicles, WRITE } from '../api';
 
-type Form = Required<Omit<ItemInput, 'inspections' | 'version'>>;
+type Form = Required<Omit<ItemInput, 'inspections' | 'version' | 'initialInspections'>>;
 
 const fromItem = (item?: Item): Form => ({
   inventoryNumber: item?.inventoryNumber ?? '',
@@ -28,10 +28,14 @@ const fromItem = (item?: Item): Form => ({
   loadingPlace: item?.loadingPlace ?? '',
   quantity: item?.quantity ?? 1,
   expiresOn: item?.expiresOn ?? null,
+  intervalOverrides: item?.intervalOverrides ?? {},
   notes: item?.notes ?? '',
 });
 
-/** Create or edit an item; a type fills category, manufacturer and inspections. */
+/**
+ * Create or edit an item; a type fills category, manufacturer and inspections. Per inspection type an own interval
+ * (e.g. a vehicle below 3.5 t) and, when creating, the last inspection done before.
+ */
 export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void }) {
   const { t } = useTranslation('equipment');
   const { t: common } = useTranslation('common');
@@ -49,9 +53,21 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
   const writable = departments.filter((d) => can(session, WRITE, d.id));
   const departmentId = form.departmentId || (writable.length === 1 ? writable[0].id : '');
   const stock = categories.find((c) => c.key === form.categoryKey)?.tracking === 'stock';
+  const [initial, setInitial] = useState<Record<string, { date: string | null; nextDueOn: string | null }>>({});
+  // Inspection types of the item: own ones, else those of the type (with the type's intervals).
+  const inspections = item?.ownInspections ? item.inspections : (type?.inspections ?? []);
+  const typeInterval = (key: string) => (item?.ownInspections ? undefined : type?.inspections.find((x) => x.key === key)?.intervalMonths) ?? null;
+  const initialInspections: InitialInspection[] = Object.entries(initial).flatMap(([inspectionKey, v]) => (v.date ? [{ inspectionKey, date: v.date, nextDueOn: v.nextDueOn }] : []));
+  const overrides = Object.fromEntries(Object.entries(form.intervalOverrides).filter(([key]) => inspections.some((x) => x.key === key)));
   const save = useAction(
     () => {
-      const body = { ...form, departmentId, ...(item ? { version: item.version } : {}), ...(item?.ownInspections ? { inspections: item.inspections } : {}) };
+      const body = {
+        ...form,
+        intervalOverrides: overrides,
+        departmentId,
+        ...(item ? { version: item.version } : { initialInspections }),
+        ...(item?.ownInspections ? { inspections: item.inspections } : {}),
+      };
       return item ? send<Item>('PUT', `equipment/items/${item.id}`, body) : send<Item>('POST', 'equipment/items', body);
     },
     { success: t('item.saved'), invalidate: [keys.all], onSuccess: (saved) => { onClose(); if (!item) navigate(`/equipment/items/${saved.id}`); } },
@@ -102,6 +118,57 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
             <TextInput key={name} label={name} value={form.properties[name] ?? ''} onChange={(e) => set('properties', { ...form.properties, [name]: e.currentTarget.value })} />
           ))}
         </SimpleGrid>
+        {inspections.length > 0 && (
+          <Stack gap={4}>
+            <Text size="sm" fw={700}>{t('item.inspections')}</Text>
+            <Text size="xs" c="dimmed">{item ? t('item.inspectionsHintEdit') : t('item.inspectionsHint')}</Text>
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>{t('inspection.type')}</Table.Th>
+                  <Table.Th>{t('item.ownInterval')}</Table.Th>
+                  {!item && <Table.Th>{t('item.lastInspection')}</Table.Th>}
+                  {!item && <Table.Th>{t('inspection.nextDue')}</Table.Th>}
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {inspections.map((x) => (
+                  <Table.Tr key={x.key}>
+                    <Table.Td><Text size="sm">{localized(x.name)}</Text></Table.Td>
+                    <Table.Td>
+                      {x.intervalMonths !== null || form.intervalOverrides[x.key] ? (
+                        <NumberInput
+                          aria-label={t('item.ownInterval')}
+                          w={110}
+                          min={1}
+                          max={240}
+                          placeholder={typeInterval(x.key) ? t('inspection.months', { count: typeInterval(x.key)! }) : undefined}
+                          value={form.intervalOverrides[x.key] ?? ''}
+                          onChange={(v) => {
+                            const { [x.key]: _old, ...rest } = form.intervalOverrides;
+                            set('intervalOverrides', v === '' ? rest : { ...rest, [x.key]: Number(v) });
+                          }}
+                        />
+                      ) : (
+                        <Text size="sm" c="dimmed">{t(`trigger.${x.trigger}`)}</Text>
+                      )}
+                    </Table.Td>
+                    {!item && (
+                      <Table.Td>
+                        <DateInput aria-label={t('item.lastInspection')} w={140} value={initial[x.key]?.date ?? null} maxDate={localDate()} onChange={(v) => setInitial({ ...initial, [x.key]: { date: v, nextDueOn: initial[x.key]?.nextDueOn ?? null } })} valueFormat="DD.MM.YYYY" clearable />
+                      </Table.Td>
+                    )}
+                    {!item && (
+                      <Table.Td>
+                        <DateInput aria-label={t('inspection.nextDue')} w={140} value={initial[x.key]?.nextDueOn ?? null} disabled={!initial[x.key]?.date} placeholder={t('inspection.nextDueHint')} onChange={(v) => setInitial({ ...initial, [x.key]: { date: initial[x.key]?.date ?? null, nextDueOn: v } })} valueFormat="DD.MM.YYYY" clearable />
+                      </Table.Td>
+                    )}
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Stack>
+        )}
         <Textarea label={t('fields.notes')} value={form.notes} onChange={(e) => set('notes', e.currentTarget.value)} autosize minRows={2} />
       </Stack>
     </ResponsiveDialog>

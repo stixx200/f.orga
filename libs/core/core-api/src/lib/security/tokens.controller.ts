@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   NotFoundException,
@@ -18,8 +19,9 @@ import {
 import { v7 as uuidv7 } from 'uuid';
 import { Audit } from '../audit/audit.js';
 import { ZodPipe } from '../zod.pipe.js';
-import { API_TOKEN_PREFIX } from './auth.service.js';
-import { RequirePermissions } from './decorators.js';
+import { API_TOKEN_PREFIX, AuthService } from './auth.service.js';
+import { type AuthenticatedUser, widerThan } from './authenticated-user.js';
+import { CurrentUser, RequirePermissions } from './decorators.js';
 import { generateSecret, hashSecret } from './password.js';
 import { PermissionRegistry } from './permission-registry.js';
 import { ApiToken, User } from './security.entities.js';
@@ -47,6 +49,7 @@ export class TokensController {
     private readonly em: EntityManager,
     private readonly registry: PermissionRegistry,
     private readonly audit: Audit,
+    private readonly auth: AuthService,
   ) {}
 
   @Get()
@@ -60,9 +63,15 @@ export class TokensController {
    * The plain token is returned exactly once.
    */
   @Post()
-  async create(@Body(new ZodPipe(ApiTokenInput)) input: ParsedTokenInput): Promise<CreatedApiToken> {
+  async create(@Body(new ZodPipe(ApiTokenInput)) input: ParsedTokenInput, @CurrentUser() current: AuthenticatedUser): Promise<CreatedApiToken> {
     const unknown = input.scopes.filter((s) => !this.registry.all.some((p) => p.id === s));
     if (unknown.length) throw new BadRequestException({ code: 'tokens.unknownScopes', scopes: unknown });
+    // Administration (users, roles, settings, tokens) never runs through a token.
+    const administrative = input.scopes.filter((s) => s.startsWith('core.'));
+    if (administrative.length) throw new BadRequestException({ code: 'tokens.coreScopes', scopes: administrative });
+    // A token can do at most what its creator can (brigade-wide), so it cannot be used to widen one's permissions.
+    const wider = widerThan(current, await this.auth.grantsFor([{ role: { permissions: input.scopes, permissionsAllDepartments: [] }, departmentId: null }]));
+    if (wider.length) throw new ForbiddenException({ code: 'tokens.scopesWider', scopes: wider });
 
     const em = this.em.fork();
     const user = em.create(User, {

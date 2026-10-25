@@ -122,3 +122,12 @@
   color: var(--forga-meta);
   white-space: nowrap;
 }
+
+/* Touch targets of at least 44 px on phones (adding personnel at the vehicle). */
+@media (max-width: 48em) {
+  .touch,
+  .touch input,
+  .touch :global(.mantine-PillsInput-input) {
+    min-height: 44px;
+  }
+}

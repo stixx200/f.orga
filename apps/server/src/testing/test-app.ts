@@ -7,6 +7,8 @@ import { resetTestDatabase, TEST_DATABASE_URL } from './test-database';
 /** Header that marks requests from the UI (CSRF protection). */
 export const UI = { 'x-forga': '1' };
 export const ADMIN = { username: 'admin', password: 'sehr-geheim-123' };
+/** Setup token of the test server (`FORGA_SETUP_TOKEN`). */
+export const SETUP_TOKEN = 'test-setup-token';
 
 export interface TestApp {
   app: INestApplication;
@@ -24,6 +26,7 @@ export async function startTestApp(options: Parameters<typeof import('../app/app
   process.env.FORGA_DIGEST_SCHEDULER = 'off';
   process.env.FORGA_RETENTION_SCHEDULER = 'off';
   process.env.FORGA_STATUS_SCHEDULER = 'off';
+  process.env.FORGA_SETUP_TOKEN = SETUP_TOKEN;
   // Imported after DATABASE_URL is set: the ORM configuration is read when the module is evaluated.
   const { AppModule, servePluginFrontends } = await import('../app/app.module.js');
   const moduleRef = await Test.createTestingModule({ imports: [AppModule.register(options)] }).compile();
@@ -47,7 +50,7 @@ export async function startTestApp(options: Parameters<typeof import('../app/app
 export async function setUp(test: TestApp): Promise<string> {
   const response = await test.http
     .post('/api/core/setup')
-    .send({ brigadeName: 'Feuerwehr Musterstadt', displayName: 'Admin', ...ADMIN })
+    .send({ setupToken: SETUP_TOKEN, brigadeName: 'Feuerwehr Musterstadt', displayName: 'Admin', ...ADMIN })
     .expect(201);
   return String(response.headers['set-cookie']).split(';')[0];
 }

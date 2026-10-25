@@ -32,6 +32,9 @@
       "path": "../../modules/equipment/equipment-contracts/tsconfig.lib.json"
     },
     {
+      "path": "../../modules/cost-recovery/cost-recovery-contracts/tsconfig.lib.json"
+    },
+    {
       "path": "../../modules/compensation/compensation-contracts/tsconfig.lib.json"
     },
     {

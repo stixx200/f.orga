@@ -2,10 +2,10 @@ import { Button, Group, Stack, Text } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import type { Run, RunDetail } from '@forga/compensation-contracts';
-import { formatDate, formatMoney, send, useSession, useTranslation } from '@forga/web-sdk';
+import { type Run, type RunDetail, statuteMissing } from '@forga/compensation-contracts';
+import { can, formatDate, formatMoney, send, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, Notice, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
-import { keys, useRuns } from '../api';
+import { keys, RUNS, useCompensationSettings, useRuns } from '../api';
 import { RunStatusBadge } from '../parts';
 
 /** Previous month as default period. */
@@ -77,6 +77,8 @@ export function RunsPage() {
   const { t, i18n } = useTranslation('compensation');
   const navigate = useNavigate();
   const { data = [], isLoading } = useRuns();
+  const session = useSession().data;
+  const { data: settings } = useCompensationSettings();
   const [creating, setCreating] = useState(false);
   const draft = data.find((r) => r.status === 'draft');
   return (
@@ -85,8 +87,11 @@ export function RunsPage() {
         breadcrumbs={[{ label: t('module') }, { label: t('runs.title') }]}
         title={t('runs.title')}
         subtitle={t('runs.subtitle')}
-        actions={draft ? <Button variant="default" onClick={() => navigate(`/compensation/runs/${draft.id}`)}>{t('runs.openDraft')}</Button> : <Button onClick={() => setCreating(true)}>{t('runs.new')}</Button>}
+        actions={
+          draft ? <Button variant="default" onClick={() => navigate(`/compensation/runs/${draft.id}`)}>{t('runs.openDraft')}</Button> : can(session, RUNS) && <Button onClick={() => setCreating(true)}>{t('runs.new')}</Button>
+        }
       />
+      {settings && statuteMissing(settings) && <Notice kind="warning">{t('settings.statuteMissing')}</Notice>}
       <DataTable<Run>
         rows={data}
         rowKey={(r) => r.id}

@@ -226,6 +226,7 @@ export class MpFeuerIncidentsImport {
         em.assign(report, {
           alarmedAt: begin,
           returnedAt: end > begin ? end : new Date(begin.getTime() + 3_600_000),
+          endConfirmed: end > begin && Boolean(time(first['end'])),
           situation: first['situation'] ?? '',
           actions,
           cause: first['cause'] ?? '',

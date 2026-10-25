@@ -3,9 +3,9 @@ import { EntityManager } from '@mikro-orm/core';
 import { z } from 'zod';
 import type { ListColumn } from '@forga/core-contracts';
 import { berlinDate, berlinDayStart, type ListDefinition } from '@forga/core-api';
-import { totalOf } from '@forga/cost-recovery-contracts';
+import { ENDED_STATUSES, OPEN_STATUSES, paidOf, round2, totalOf } from '@forga/cost-recovery-contracts';
 import { NoticeEntity } from '../cost-recovery.entities.js';
-import { NoticesService } from '../notices/notices.service.js';
+import { isOverdue, NoticesService } from '../notices/notices.service.js';
 
 const col = (key: string, de: string, en: string, width?: number, align?: ListColumn['align']): ListColumn => ({ key, label: { de, en }, ...(width ? { width } : {}), ...(align ? { align } : {}) });
 const Period = z.object({ from: z.iso.date().optional(), to: z.iso.date().optional() });
@@ -53,10 +53,20 @@ export class CostRecoveryLists {
       permission: READ,
       parameters: [],
       schema: Period,
-      columns: [col('number', 'Aktenzeichen', 'File no.'), col('debtor', 'Kostenschuldner', 'Debtor', 2), col('amount', 'Betrag €', 'Amount €', 1, 'right'), col('due', 'Fällig', 'Due'), col('status', 'Status', 'Status')],
-      rows: async () => {
-        const notices = await this.em.fork().find(NoticeEntity, { status: { $in: ['issued', 'handed-over', 'objection'] } }, { orderBy: { dueOn: 'asc' } });
-        return { rows: notices.map((n) => ({ number: n.number, debtor: n.debtors.map((d) => d.name).join('; '), amount: totalOf(n.positions), due: n.dueOn ?? null, status: n.status })) };
+      columns: [
+        col('number', 'Aktenzeichen', 'File no.'), col('debtor', 'Kostenschuldner', 'Debtor', 2), col('amount', 'Betrag €', 'Amount €', 1, 'right'), col('open', 'Offen €', 'Open €', 1, 'right'),
+        col('due', 'Fällig', 'Due'), col('overdue', 'Überfällig', 'Overdue'), col('status', 'Status', 'Status'),
+      ],
+      rows: async (_user, _params, language) => {
+        const today = berlinDate();
+        const notices = await this.em.fork().find(NoticeEntity, { status: { $in: [...OPEN_STATUSES] } }, { orderBy: { dueOn: 'asc' } });
+        const yes = language === 'de' ? 'ja' : 'yes';
+        return {
+          rows: notices.map((n) => ({
+            number: n.number, debtor: n.debtors.map((d) => d.name).join('; '), amount: totalOf(n.positions), open: round2(totalOf(n.positions) - paidOf(n.payments ?? [])),
+            due: n.dueOn ?? null, overdue: isOverdue(n, today) ? yes : '', status: n.status,
+          })),
+        };
       },
     };
   }
@@ -73,7 +83,7 @@ export class CostRecoveryLists {
       rows: async (_user, params, language) => {
         const year = params.year ?? Number(berlinDate().slice(0, 4));
         const config = await this.notices.config();
-        const notices = await this.em.fork().find(NoticeEntity, { alarmedAt: { $gte: berlinDayStart(`${year}-01-01`), $lt: berlinDayStart(`${year + 1}-01-01`) }, status: { $nin: ['draft', 'review', 'cancelled', 'amended'] } });
+        const notices = await this.em.fork().find(NoticeEntity, { alarmedAt: { $gte: berlinDayStart(`${year}-01-01`), $lt: berlinDayStart(`${year + 1}-01-01`) }, status: { $nin: ['draft', 'review', ...ENDED_STATUSES] } });
         const keys = [...new Set(notices.map((n) => n.offenseKey))];
         return {
           subtitle: String(year),
@@ -83,7 +93,7 @@ export class CostRecoveryLists {
               offense: config.offenses.find((o) => o.key === key)?.name[language] ?? key,
               count: own.length,
               amount: own.reduce((s, n) => s + totalOf(n.positions), 0),
-              paid: own.filter((n) => n.status === 'paid').reduce((s, n) => s + totalOf(n.positions), 0),
+              paid: round2(own.reduce((s, n) => s + paidOf(n.payments ?? []), 0)),
             };
           }),
         };

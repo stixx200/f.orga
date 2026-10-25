@@ -22,6 +22,8 @@ export function ConditionList({ conditions }: { conditions: Condition[] }) {
           <Text size="sm" c="dimmed">
             {c.key === 'minimum-age' ? (
               t('conditions.from', { date: formatDate(c.dueOn, i18n.language) })
+            ) : c.concerns ? (
+              t('conditions.concerns', { date: formatDate(c.lastDate, i18n.language) })
             ) : (
               <>
                 {c.lastDate ? t('conditions.lastOn', { date: formatDate(c.lastDate, i18n.language) }) : t('conditions.missing')}

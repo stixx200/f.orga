@@ -1,19 +1,22 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, type OnApplicationBootstrap, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, type OnApplicationBootstrap, type OnModuleDestroy, type OnModuleInit, Optional } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { type AuthenticatedUser, berlinDate, DomainEvents, Notifications, SettingsService } from '@forga/core-api';
-import { INCIDENTS_EVENTS, type ReportReleasedEvent, type ReportUnlockedEvent } from '@forga/incidents-contracts';
+import { INCIDENTS_EVENTS, INCIDENTS_LOOKUP, type IncidentsLookup, type ReportReleasedEvent, type ReportUnlockedEvent } from '@forga/incidents-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory, type PersonSnapshot } from '@forga/masterdata-contracts';
 import {
   type BreathingDevice,
   type Evidence,
   EvidenceInput,
   type EvidenceKind,
+  addMonths,
   evaluateFitness,
+  examinationMonths,
   type FitnessEvidence,
   type FitnessLookup,
   type FitnessColor,
   FitnessRule,
   type FitnessStatus,
+  minimumKilojoules,
   type PersonRespiratoryProtection,
   QUALIFICATION_BREATHING_APPARATUS,
   QuickEntryInput,
@@ -22,16 +25,19 @@ import {
 } from '@forga/respiratory-protection-contracts';
 import { type RecordKind, type SessionClosedEvent, type SessionReopenedEvent, TRAINING_EVENTS } from '@forga/training-contracts';
 import { EvidenceEntity, StatusEntity } from '../respiratory-protection.entities.js';
+import { nextRefresh } from './schedule.js';
 
 export const READ = 'respiratory-protection.read';
 export const EVIDENCE = 'respiratory-protection.evidence';
 export const EXAMINATIONS = 'respiratory-protection.examinations';
 export const SELF = 'respiratory-protection.self';
+export const NOTIFY = 'respiratory-protection.notify';
 
 type ParsedEvidence = ReturnType<typeof EvidenceInput.parse>;
 type ParsedQuickEntry = ReturnType<typeof QuickEntryInput.parse>;
 
-const DAY_MS = 86_400_000;
+/** The daily check of the traffic lights runs once shortly after the start, then daily (`nextRefresh`). */
+const STARTUP_DELAY_MS = 60_000;
 
 /** Work and duration of the Atemschutzstrecke from the rule; other kinds have no fixed values. */
 export const trackValues = (kind: EvidenceKind, rule: FitnessRule) =>
@@ -51,6 +57,7 @@ export const toEvidenceDto = (e: EvidenceEntity): Evidence => ({
   kind: e.kind,
   date: e.date,
   validUntil: e.validUntil ?? null,
+  result: e.result ?? null,
   examiner: e.examiner,
   restrictions: e.restrictions,
   examinationGroup: e.examinationGroup ?? null,
@@ -66,13 +73,20 @@ export const toEvidenceDto = (e: EvidenceEntity): Evidence => ({
   version: e.version,
 });
 
+
+/** Without the examinations permission: an examination with concerns only shows as not met. */
+function redact(status: FitnessStatus): FitnessStatus {
+  return { ...status, conditions: status.conditions.map((c) => (c.concerns ? { key: c.key, met: false, lastDate: null, dueOn: null } : c)) };
+}
+
 /**
  * Evidence of breathing apparatus wearers and their fitness. Evidence comes from closed training sessions,
  * released incident reports and manual entries; the traffic light is evaluated on the fly.
  */
 @Injectable()
 export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy, FitnessLookup {
-  private timer?: ReturnType<typeof setInterval>;
+  private readonly logger = new Logger(EvidenceService.name);
+  private timer?: ReturnType<typeof setTimeout>;
 
   constructor(
     private readonly em: EntityManager,
@@ -80,6 +94,7 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     private readonly events: DomainEvents,
     private readonly notifications: Notifications,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
+    @Optional() @Inject(INCIDENTS_LOOKUP) private readonly incidents?: IncidentsLookup,
   ) {}
 
   onModuleInit(): void {
@@ -87,18 +102,28 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     this.events.subscribe<SessionReopenedEvent>(TRAINING_EVENTS.sessionReopened, (e) => this.replace('training', e.sessionId, []));
     this.events.subscribe<ReportReleasedEvent>(INCIDENTS_EVENTS.reportReleased, (e) => this.fromIncident(e));
     this.events.subscribe<ReportUnlockedEvent>(INCIDENTS_EVENTS.reportUnlocked, (e) => this.withdraw('incidents', e.reportId));
-    this.events.subscribe<StatusChangedEvent>(RESPIRATORY_PROTECTION_EVENTS.statusChanged, (e) => this.notifyRed(e));
   }
 
-  /** Evidence expires without any change, so the traffic lights are checked once a day; off with `FORGA_STATUS_SCHEDULER=off`. */
+  /**
+   * Evidence expires without any change, so the traffic lights are checked shortly after the start and then every
+   * day at `REFRESH_HOUR` (Europe/Berlin); off with `FORGA_STATUS_SCHEDULER=off`.
+   */
   onApplicationBootstrap(): void {
     if (process.env.FORGA_STATUS_SCHEDULER === 'off') return;
-    this.timer = setInterval(() => void this.refresh().catch(() => undefined), DAY_MS);
-    this.timer.unref();
+    this.schedule(STARTUP_DELAY_MS);
   }
 
   onModuleDestroy(): void {
-    clearInterval(this.timer);
+    clearTimeout(this.timer);
+  }
+
+  private schedule(delay: number): void {
+    this.timer = setTimeout(() => {
+      this.refresh()
+        .catch((error: unknown) => this.logger.error('Checking the traffic lights failed', error instanceof Error ? error.stack : String(error)))
+        .finally(() => this.schedule(nextRefresh(new Date()).getTime() - Date.now()));
+    }, delay);
+    this.timer.unref();
   }
 
   async rule(): Promise<FitnessRule> {
@@ -134,7 +159,7 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     const evidence = await this.em.fork().find(EvidenceEntity, { personId: { $in: persons.map((p) => p.id) } });
     const byPerson = new Map<string, FitnessEvidence[]>();
     for (const e of evidence) {
-      const item = { kind: e.kind, date: e.date, validUntil: e.validUntil ?? null, kilojoules: e.kilojoules ?? null, passed: e.passed ?? null, withdrawn: e.withdrawn, examinationGroup: e.examinationGroup ?? null };
+      const item = { kind: e.kind, date: e.date, validUntil: e.validUntil ?? null, kilojoules: e.kilojoules ?? null, passed: e.passed ?? null, withdrawn: e.withdrawn, examinationGroup: e.examinationGroup ?? null, result: e.result ?? null };
       byPerson.set(e.personId, [...(byPerson.get(e.personId) ?? []), item]);
     }
     return persons.map((p) => ({
@@ -143,7 +168,17 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
       lastName: p.lastName,
       departmentIds: p.departmentIds,
       ...evaluateFitness(p, byPerson.get(p.id) ?? [], rule, today),
+      minimumKilojoules: minimumKilojoules(rule, p.birthDate, today),
     }));
+  }
+
+  /**
+   * Statuses as the user may see them: without the examinations permission for the person, an examination with
+   * "concerns" only shows as not met (no date, no reason).
+   */
+  async visibleStatuses(user: AuthenticatedUser, persons: PersonSnapshot[]): Promise<FitnessStatus[]> {
+    const examinations = new Set(persons.filter((p) => this.can(user, EXAMINATIONS, p)).map((p) => p.id));
+    return (await this.statuses(persons)).map((s) => (examinations.has(s.personId) ? s : redact(s)));
   }
 
   /** Traffic lights on a date (e.g. the alarm time of an incident). */
@@ -164,7 +199,7 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
   async personView(user: AuthenticatedUser, personId: string): Promise<PersonRespiratoryProtection> {
     const person = await this.person(personId);
     if (!this.can(user, READ, person)) throw new NotFoundException();
-    const [status] = await this.statuses([person]);
+    const [status] = await this.visibleStatuses(user, [person]);
     const rows = await this.em.fork().find(EvidenceEntity, { personId }, { orderBy: { date: 'desc' } });
     const examinations = this.can(user, EXAMINATIONS, person);
     return { status, evidence: rows.filter((e) => e.kind !== 'examination' || examinations).map(toEvidenceDto) };
@@ -175,10 +210,36 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     if (!this.can(user, permission, await this.person(personId))) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [permission] });
   }
 
+  /**
+   * Plausibility of manual evidence: an examination needs a result, "valid until" after the date and at most the interval
+   * of the rule (required for "no concerns for a limited time"); a passed stress exercise needs the minimum work at the
+   * age on its date.
+   */
+  private async check(input: ParsedEvidence, rule: FitnessRule): Promise<void> {
+    const person = await this.person(input.personId);
+    if (input.kind === 'examination') {
+      if (!input.result) throw new BadRequestException({ code: 'respiratory-protection.resultRequired' });
+      if (input.result === 'no-concerns-limited' && !input.validUntil) throw new BadRequestException({ code: 'respiratory-protection.validUntilRequired' });
+      if (input.validUntil) {
+        if (input.validUntil <= input.date) throw new BadRequestException({ code: 'respiratory-protection.validUntilNotAfterDate' });
+        const max = addMonths(input.date, examinationMonths(rule, person.birthDate, input.date, input.examinationGroup));
+        if (input.validUntil > max) throw new BadRequestException({ code: 'respiratory-protection.validUntilTooLate', max });
+      }
+    }
+    if (input.kind === 'stress-exercise') this.checkKilojoules(rule, person, input.date, input.kilojoules, input.passed);
+  }
+
+  private checkKilojoules(rule: FitnessRule, person: PersonSnapshot, date: string, kilojoules: number | null, passed: boolean | null): void {
+    const minimum = minimumKilojoules(rule, person.birthDate, date);
+    if (passed && kilojoules !== null && kilojoules < minimum) throw new BadRequestException({ code: 'respiratory-protection.belowMinimum', minimum, name: `${person.firstName} ${person.lastName}` });
+  }
+
   async create(user: AuthenticatedUser, input: ParsedEvidence): Promise<Evidence> {
     await this.requireWrite(user, input.personId, input.kind);
+    const rule = await this.rule();
+    await this.check(input, rule);
     const em = this.em.fork();
-    const evidence = em.create(EvidenceEntity, { ...this.fields(input, await this.rule()), personId: input.personId, kind: input.kind, source: 'manual', sourceId: null, withdrawn: false });
+    const evidence = em.create(EvidenceEntity, { ...this.fields(input, rule), personId: input.personId, kind: input.kind, source: 'manual', sourceId: null, withdrawn: false });
     await em.flush();
     await this.refresh([input.personId]);
     return toEvidenceDto(evidence);
@@ -186,8 +247,13 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
 
   async quickEntry(user: AuthenticatedUser, input: ParsedQuickEntry): Promise<Evidence[]> {
     for (const entry of input.entries) await this.requireWrite(user, entry.personId, input.kind);
+    const rule = await this.rule();
+    if (input.kind === 'stress-exercise') {
+      const persons = new Map((await this.directory.snapshots(input.entries.map((e) => e.personId))).map((p) => [p.id, p]));
+      for (const entry of input.entries) this.checkKilojoules(rule, persons.get(entry.personId)!, input.date, entry.kilojoules, entry.passed);
+    }
     const em = this.em.fork();
-    const track = trackValues(input.kind, await this.rule());
+    const track = trackValues(input.kind, rule);
     const created = input.entries.map((entry) =>
       em.create(EvidenceEntity, {
         personId: entry.personId,
@@ -219,7 +285,10 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     const em = this.em.fork();
     const evidence = await this.loadManual(em, user, id);
     if (input.personId !== evidence.personId || input.kind !== evidence.kind) throw new BadRequestException({ code: 'respiratory-protection.kindFixed' });
-    Object.assign(evidence, this.fields(input, await this.rule()));
+    const rule = await this.rule();
+    // Imported examinations may lack a result; it is required as soon as they are changed here.
+    await this.check(input, rule);
+    Object.assign(evidence, this.fields(input, rule));
     await em.flush();
     await this.refresh([evidence.personId]);
     return toEvidenceDto(evidence);
@@ -239,6 +308,7 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     return {
       date: input.date,
       validUntil: examination ? input.validUntil : null,
+      result: examination ? input.result : null,
       examiner: examination ? input.examiner : '',
       restrictions: examination ? input.restrictions : '',
       examinationGroup: examination ? input.examinationGroup : null,
@@ -266,18 +336,23 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     );
   }
 
-  /** Real incidents under breathing apparatus of a released report; releasing again replaces them. */
+  /**
+   * Real incidents under breathing apparatus of a released report, with keyword, location and dispatch number for the
+   * record (FwDV 7); releasing again replaces them. The report stays linked as source.
+   */
   async fromIncident(event: ReportReleasedEvent): Promise<void> {
     const date = berlinDate(new Date(event.alarmedAt));
+    const [report] = this.incidents ? await this.incidents.reports([event.reportId]) : [];
+    const note = [event.alarmKeyword, report?.location, event.dispatchNumber ? `Nr. ${event.dispatchNumber}` : ''].filter(Boolean).join(' · ');
     await this.replace(
       'incidents',
       event.reportId,
       event.personnel
         .filter((p) => p.breathingApparatus)
         .flatMap((p) => [
-          { personId: p.personId, kind: 'incident' as const, date, kilojoules: null, passed: null, minutes: p.breathingMinutes, note: '', device: p.breathingDevice },
+          { personId: p.personId, kind: 'incident' as const, date, kilojoules: null, passed: null, minutes: p.breathingMinutes, note, device: p.breathingDevice },
           // A chemical suit operation also counts as the yearly chemical suit evidence.
-          ...(p.chemicalSuit ? [{ personId: p.personId, kind: 'chemical-suit' as const, date, kilojoules: null, passed: null, minutes: p.breathingMinutes, note: '', device: p.breathingDevice }] : []),
+          ...(p.chemicalSuit ? [{ personId: p.personId, kind: 'chemical-suit' as const, date, kilojoules: null, passed: null, minutes: p.breathingMinutes, note, device: p.breathingDevice }] : []),
         ]),
     );
   }
@@ -305,31 +380,37 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
   }
 
   /**
-   * Compares the traffic lights with the last known ones and publishes `respiratory-protection.status.changed`
-   * for every change. Without IDs, all wearers are checked.
+   * E-mail to those of the primary department who are to be told when a wearer turns red. `false` if there are
+   * recipients but no e-mail could be sent (e.g. the mail server is down): it is tried again with the next check.
    */
-  /**
-   * E-mail to those of the primary department who are to be told when a wearer turns red. Not on the first
-   * status of a person, so the first check after the installation sends nothing.
-   */
-  private async notifyRed(event: StatusChangedEvent): Promise<void> {
-    if (event.color !== 'red' || !event.previous || event.previous === 'red') return;
-    const [person] = await this.directory.snapshots([event.personId]);
-    if (!person) return;
+  private async notifyRed(personId: string): Promise<boolean> {
+    const [person] = await this.directory.snapshots([personId]);
+    if (!person) return true;
     const name = `${person.firstName} ${person.lastName}`;
-    await this.notifications.notify({
-      permission: 'respiratory-protection.notify',
+    const recipients = await this.notifications.recipients(NOTIFY, person.primaryDepartmentId);
+    if (!recipients.length) return true;
+    const sent = await this.notifications.notify({
+      permission: NOTIFY,
       departmentId: person.primaryDepartmentId,
       action: 'respiratory-protection.red-notified',
       details: { personId: person.id },
-      path: `/masterdata/persons/${person.id}`,
+      path: `/masterdata/persons/${person.id}?tab=respiratory-protection`,
       compose: (language, recipient) =>
         language === 'de'
           ? { subject: `Atemschutz: ${name} ist nicht mehr einsatzbereit`, text: `Hallo ${recipient},\n\ndie Atemschutztauglichkeit von ${name} ist auf Rot gewechselt. Die fehlenden Nachweise stehen in der Personalakte im Reiter „Atemschutz“.` }
           : { subject: `Respiratory protection: ${name} is no longer fit for duty`, text: `Hello ${recipient},\n\nthe respiratory protection status of ${name} turned red. The missing records are shown in the person file, tab "Respiratory protection".` },
     });
+    return sent > 0;
   }
 
+  /**
+   * Compares the traffic lights with the last known ones and publishes `respiratory-protection.status.changed`
+   * for every change. Without IDs, all wearers are checked.
+   *
+   * A change from green, yellow or grey to red marks the e-mail as pending together with the new color; it is cleared
+   * once the e-mail went out. Pending e-mails of earlier checks (e.g. a restart in between) are sent with the next
+   * check, so no change to red is lost. The first status of a person sends nothing (first check after the installation).
+   */
   async refresh(personIds?: string[]): Promise<StatusChangedEvent[]> {
     const persons = personIds ? await this.directory.snapshots([...new Set(personIds)]) : await this.wearers(null);
     const statuses = await this.statuses(persons);
@@ -342,12 +423,26 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
       if (!previous && status.color === 'grey') continue;
       changes.push({ personId: status.personId, previous: previous?.color ?? null, color: status.color });
       if (previous) {
+        // Pending until sent, as long as the person stays red.
+        previous.notifyPending = status.color === 'red';
         previous.color = status.color;
         previous.changedAt = new Date();
-      } else em.create(StatusEntity, { personId: status.personId, color: status.color, changedAt: new Date() });
+      } else em.create(StatusEntity, { personId: status.personId, color: status.color, changedAt: new Date(), notifyPending: false });
     }
     await em.flush();
     for (const change of changes) await this.events.publish(RESPIRATORY_PROTECTION_EVENTS.statusChanged, change);
+    await this.sendPending(personIds);
     return changes;
+  }
+
+  /** Sends the pending e-mails about wearers who turned red (of the given persons, or all). */
+  private async sendPending(personIds?: string[]): Promise<void> {
+    const em = this.em.fork();
+    const pending = await em.find(StatusEntity, { notifyPending: true, color: 'red', ...(personIds ? { personId: { $in: [...new Set(personIds)] } } : {}) });
+    for (const status of pending) {
+      if (!(await this.notifyRed(status.personId))) continue;
+      status.notifyPending = false;
+      await em.flush();
+    }
   }
 }

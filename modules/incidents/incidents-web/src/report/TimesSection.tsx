@@ -2,7 +2,7 @@ import { Button, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/cor
 import { Link } from 'react-router';
 import type { Incident } from '@forga/incidents-contracts';
 import { formatDateTime, fromLocalInput, toLocalInput, useLocalized, useTranslation } from '@forga/web-sdk';
-import { Panel } from '@forga/web-ui';
+import { Notice, Panel } from '@forga/web-ui';
 import { personName, useKeywords, usePersons } from '../api';
 import { locationLabel } from '../parts';
 import type { Content } from './editor';
@@ -30,7 +30,8 @@ export function TimesSection({ content, incident, departmentId, update, disabled
   const keyword = keywords.find((k) => k.key === incident.alarmKeyword);
   const setTime = (key: keyof Times, value: string, required: boolean) => {
     if (!value && required) return;
-    update((c) => ({ ...c, times: { ...c.times, [key]: value ? fromLocalInput(value) : null } }));
+    // Changing the end confirms it; the default (alarm + 1 h) stays unconfirmed until then.
+    update((c) => ({ ...c, endConfirmed: c.endConfirmed || key === 'returnedAt', times: { ...c.times, [key]: value ? fromLocalInput(value) : null } }));
   };
   const field = (key: keyof Times, required = false, description?: string) => (
     <TextInput
@@ -55,6 +56,13 @@ export function TimesSection({ content, incident, departmentId, update, disabled
           {field('endedAt')}
           {field('returnedAt', true, durationText(content.times, t))}
         </SimpleGrid>
+        {!content.endConfirmed && (
+          <Stack mt="sm">
+            <Notice kind="warning" action={!disabled && <Button size="xs" variant="outline" onClick={() => update((c) => ({ ...c, endConfirmed: true }))}>{t('times.confirmEnd')}</Button>}>
+              {t('times.endUnconfirmed')}
+            </Notice>
+          </Stack>
+        )}
         <Text size="xs" c="dimmed" mt="sm">{t('times.hint')}</Text>
       </Panel>
       <Panel title={t('times.incident')}>

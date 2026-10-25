@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EntityManager } from '@mikro-orm/core';
 import { DomainEvents, ModuleState, ModuleStateService } from '@forga/core-api';
-import { ADMIN, startTestApp, type TestApp, UI } from './testing/test-app';
+import { ADMIN, SETUP_TOKEN, startTestApp, type TestApp, UI } from './testing/test-app';
 
 let test: TestApp;
 let http: TestApp['http'];
@@ -23,7 +23,7 @@ describe('setup and login', () => {
   it('creates the administrator and logs in', async () => {
     const response = await http
       .post('/api/core/setup')
-      .send({ brigadeName: 'Feuerwehr Musterstadt', displayName: 'Admin', language: 'en', ...ADMIN })
+      .send({ setupToken: SETUP_TOKEN, brigadeName: 'Feuerwehr Musterstadt', displayName: 'Admin', language: 'en', ...ADMIN })
       .expect(201);
     const cookie = String(response.headers['set-cookie']);
     expect(cookie).toMatch(/forga_session=.+HttpOnly/);
@@ -41,7 +41,7 @@ describe('setup and login', () => {
       expect.arrayContaining(['masterdata.persons.read', 'incidents.reports.read', 'incidents.reports.write', 'training.read', 'training.attendance']),
     );
 
-    await http.post('/api/core/setup').send({ brigadeName: 'x', displayName: 'x', ...ADMIN }).expect(409);
+    await http.post('/api/core/setup').send({ setupToken: SETUP_TOKEN, brigadeName: 'x', displayName: 'x', ...ADMIN }).expect(409);
     await http.get('/api/core/setup').expect(200, { required: false, brigadeName: 'Feuerwehr Musterstadt', oidc: null });
   });
 

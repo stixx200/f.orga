@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router';
 import { defineWebModule, useTranslation } from '@forga/web-sdk';
 import { EmptyState } from '@forga/web-ui';
-import { INSPECT, READ } from './api';
+import { READ } from './api';
 import { DueTile } from './dashboard';
 import { translations } from './i18n';
 import { DefectsPage } from './pages/DefectsPage';
@@ -30,7 +30,7 @@ export default defineWebModule({
     { path: 'settings', element: <SettingsPage /> },
     { path: '*', element: <NotFound /> },
   ],
-  dashboard: [{ id: 'due', area: 'kpi', permission: INSPECT, order: 60, component: DueTile }],
+  dashboard: [{ id: 'due', area: 'kpi', permission: READ, order: 60, component: DueTile }],
   extensions: {
     'incidents.report.sections': { label: { de: 'Geräte', en: 'Equipment' }, permission: READ, component: ReportSection },
     'training.session.sections': { label: { de: 'Geräte', en: 'Equipment' }, permission: READ, component: SessionSection },

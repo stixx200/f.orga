@@ -2,6 +2,7 @@ import { Button, Group, SimpleGrid, Stack, Text, TextInput } from '@mantine/core
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { Person, SelfContactInput } from '@forga/masterdata-contracts';
+import { ibanError } from '../persons/MasterDataTab';
 import { api, formatDate, send, useTranslation } from '@forga/web-sdk';
 import { Panel, useAction } from '@forga/web-ui';
 import { today as todayDate, useCatalogNames, useDepartments } from '../api';
@@ -36,12 +37,12 @@ function ContactForm({ person }: { person: Person }) {
         {field('phoneMobile', t('person.phoneMobile'))}
         {field('phoneWork', t('person.phoneWork'))}
         {field('email', t('person.email'))}
-        <TextInput label={t('person.iban')} value={form.bank?.iban ?? ''} onChange={(e) => setForm({ ...form, bank: { iban: e.currentTarget.value, accountHolder: form.bank?.accountHolder ?? '' } })} />
+        <TextInput label={t('person.iban')} value={form.bank?.iban ?? ''} onChange={(e) => setForm({ ...form, bank: { iban: e.currentTarget.value, accountHolder: form.bank?.accountHolder ?? '' } })} error={ibanError(form.bank?.iban, t('person.invalidIban'))} />
         <TextInput label={t('person.accountHolder')} value={form.bank?.accountHolder ?? ''} onChange={(e) => setForm({ ...form, bank: { iban: form.bank?.iban ?? '', accountHolder: e.currentTarget.value } })} />
       </SimpleGrid>
       <Group justify="space-between">
         <Text size="xs" c="dimmed">{t('me.contactHint')}</Text>
-        <Button loading={save.isPending} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
+        <Button loading={save.isPending} disabled={Boolean(ibanError(form.bank?.iban, 'invalid'))} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
       </Group>
     </Stack>
   );

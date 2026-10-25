@@ -22,42 +22,56 @@ Alle Pfade liegen unter `/api`.
 
 | Methode | Pfad | Recht | Zweck |
 | --- | --- | --- | --- |
-| `GET` | `/core/setup` | offen | `{ required, brigadeName }`: Ist die Ersteinrichtung nötig? |
-| `POST` | `/core/setup` | offen, nur vor der Einrichtung | Feuerwehrname, Standardrollen aus den Rollenvorlagen und ersten Benutzer (Administrator) anlegen, anmelden (`Setup`) |
+| `GET` | `/core/setup` | offen | `{ required, brigadeName, oidc }`: Ist die Ersteinrichtung nötig? `oidc: { label }` nur, wenn die Anmeldung mit dem Konto der Gemeinde eingerichtet und die Adresse von f.orga bekannt ist |
+| `POST` | `/core/setup` | offen, nur vor der Einrichtung, mit Einrichtungsschlüssel | Feuerwehrname, Standardrollen aus den Rollenvorlagen und ersten Benutzer (Administrator, mit `email`) anlegen, anmelden (`Setup` mit `setupToken`). Fehler: `setup.invalidToken` (`403`), `setup.done` (`409`) |
+| `POST` | `/core/password-reset` | offen | Link zum Zurücksetzen anfordern (`{ login }`), Antwort immer `{ ok: true }`. Fehler: `auth.resetNotConfigured` (`503`), `auth.resetRateLimited` (`429`) |
+| `POST` | `/core/password-reset/confirm` | offen | Passwort mit Link aus Zurücksetzen oder Einladung setzen (`{ token, password }`). Fehler: `auth.resetInvalid` |
+| `GET` | `/core/oidc/start`, `/core/oidc/callback` | offen | Anmeldung mit dem Konto der Gemeinde (Weiterleitungen) |
+| `POST` | `/core/oidc/link` | angemeldet (Sitzung) | Eigenes Konto beim Anbieter verknüpfen; Antwort `{ url }` zum Anbieter |
 | `POST` | `/core/login` | offen | Anmelden (`Login`), setzt das Cookie. Fehler: `auth.invalidCredentials` (`401`), `auth.locked` (`429`) |
 | `POST` | `/core/logout` | offen | Sitzung beenden, Cookie löschen (`204`) |
 | `GET` | `/core/session` | angemeldet | Benutzer (mit `language`, `email`, `receiveDigest`) und wirksame Berechtigungen (`brigade` oder Liste von Abteilungs-IDs) |
-| `PUT` | `/core/profile` | angemeldet | Eigene Sprache und Sammel-E-Mail ändern (`UpdateProfile`: `language`, `receiveDigest`) |
+| `PUT` | `/core/profile` | angemeldet | Eigene Sprache, Sammel-E-Mail und E-Mail-Adresse ändern (`UpdateProfile`: `language`, `receiveDigest`, optional `email`) |
 | `PUT` | `/core/password` | angemeldet | Eigenes Passwort ändern (`ChangePassword`) |
 | `GET` | `/core/users` | `core.users.manage` | Benutzer ohne technische Benutzer |
 | `GET` | `/core/users/:id` | `core.users.manage` | Ein Benutzer |
-| `POST` | `/core/users` | `core.users.manage` | Benutzer anlegen (`UserInput`, Passwort nötig) |
-| `PUT` | `/core/users/:id` | `core.users.manage` | Benutzer ändern, Rollen setzen, Passwort optional zurücksetzen. Man kann sich nicht selbst deaktivieren. |
+| `POST` | `/core/users` | `core.users.manage` | Benutzer anlegen (`UserInput`, Passwort nötig). Fehler: `users.roleWider`, `users.unknownDepartment`, `users.unknownPerson`, `users.personTaken`, `users.usernameTaken` |
+| `PUT` | `/core/users/:id` | `core.users.manage` | Benutzer ändern, Rollen setzen, Passwort optional zurücksetzen. Nur für Benutzer ohne Rechte, die dem Verwalter fehlen (`users.targetWider`). Man kann sich nicht selbst deaktivieren; ein aktiver Administrator muss bleiben (`users.lastAdministrator`). |
+| `POST` | `/core/users/invitations` | `core.users.manage` | Person einladen (`UserInvitation`: `personId`, optional `username`, `language`, `roles`); Antwort der neue Benutzer. Fehler: `users.personWithoutEmail`, `users.personTaken`, `auth.resetNotConfigured`, `mail.*` |
+| `POST` | `/core/users/invitations/bulk` | `core.users.manage` | Mehrere Personen einladen (`BulkUserInvitation`); Antwort `{ invited, skipped }` |
+| `POST` | `/core/users/:id/invitation` | `core.users.manage` | Einladung erneut senden, solange kein Passwort gesetzt ist (`users.alreadyActivated`) |
+| `DELETE` | `/core/users/:id/oidc` | `core.users.manage` | Verknüpfung mit dem Konto der Gemeinde lösen (`users.targetWider` wie beim Ändern) |
 | `POST` | `/core/users/:id/impersonate` | `core.users.impersonate` | Als dieser Benutzer anmelden (`{ reason }`), höchstens 60 Minuten. Fehler: `auth.impersonationSelf`, `auth.impersonationWider`, `auth.impersonationNested`, `auth.impersonationUnknownUser` |
 | `POST` | `/core/impersonation/end` | angemeldet | Impersonation beenden, eigene Sitzung wiederherstellen |
-| `GET` | `/core/permissions` | `core.roles.manage` | Alle Berechtigungen von Core und Modulen (`name` als `{ de, en }`) |
+| `GET` | `/core/permissions` | `core.roles.manage` oder `core.tokens.manage` | Alle Berechtigungen von Core und Modulen (`name` als `{ de, en }`) |
 | `GET` | `/core/roles` | angemeldet | Rollen (mit `templateKey`, falls aus einer Vorlage) |
 | `GET` | `/core/roles/templates` | `core.roles.manage` | Zusammengeführte Rollenvorlagen von Core und Modulen (`key`, `name`, `description`, `permissions`) |
 | `POST` | `/core/roles/templates` | `core.roles.manage` | Fehlende Standardrollen in der Sprache des Benutzers anlegen. Antwort `{ created, skipped }` (Schlüssel) |
 | `POST` | `/core/roles` | `core.roles.manage` | Rolle anlegen (`RoleInput`). Unbekannte Muster ergeben `roles.unknownPermissions`. |
-| `PUT` | `/core/roles/:id` | `core.roles.manage` | Rolle ändern |
-| `DELETE` | `/core/roles/:id` | `core.roles.manage` | Rolle löschen. Die letzte Rolle mit `*` bleibt erhalten (`roles.lastAdministrator`). |
+| `PUT` | `/core/roles/:id` | `core.roles.manage` | Rolle ändern. Hinzugefügte Rechte muss der Verwalter selbst haben (`users.roleWider`); ein aktiver Administrator muss bleiben (`users.lastAdministrator`) |
+| `POST` | `/core/roles/:id/apply-template` | `core.roles.manage` | Standardrolle auf ihre Vorlage zurücksetzen; gleiche Prüfungen wie beim Ändern |
+| `DELETE` | `/core/roles/:id` | `core.roles.manage` | Rolle löschen, nur innerhalb der eigenen Rechte. Ein aktiver Administrator muss bleiben (`users.lastAdministrator`). |
 | `GET` | `/core/tokens` | `core.tokens.manage` | API-Tokens ohne Klartext |
-| `POST` | `/core/tokens` | `core.tokens.manage` | Token anlegen (`ApiTokenInput`). Die Antwort enthält den Klartext genau einmal. |
+| `POST` | `/core/tokens` | `core.tokens.manage` | Token anlegen (`ApiTokenInput`). Die Antwort enthält den Klartext genau einmal. Fehler: `tokens.unknownScopes`, `tokens.coreScopes` (keine `core.*`-Bereiche), `tokens.scopesWider` (`403`, Bereich fehlt dem Ersteller) |
 | `DELETE` | `/core/tokens/:id` | `core.tokens.manage` | Token widerrufen (`204`) |
-| `GET` | `/core/settings/:section` | angemeldet | Einstellungsabschnitt ohne geheime Felder, `null` wenn unvollständig |
-| `PUT` | `/core/settings/:section` | `core.settings.manage` | Einstellungsabschnitt speichern |
+| `GET` | `/core/settings/:section` | angemeldet; `smtp`, `oidc`, `privacy`, `reminders` nur Verwalter | Einstellungsabschnitt ohne geheime Felder und ohne Felder nur für Verwalter (z. B. `training.general.feedToken`), `null` wenn unvollständig |
+| `PUT` | `/core/settings/:section` | `core.settings.manage` bzw. `<modul>.settings.manage` | Einstellungsabschnitt speichern |
+| `POST` | `/core/settings/oidc/test` | `core.settings.manage` | Konfiguration des OIDC-Anbieters laden; Antwort `{ issuer, redirectUri }`. Fehler: `auth.oidcDiscoveryFailed` (`502`), `auth.oidcIncomplete`, `auth.oidcNoPublicUrl` |
+| `GET` | `/core/onboarding` | `core.settings.manage` oder `core.users.manage` | Einrichtungsliste (`OnboardingItem[]`: `key`, `done`, `to`, bei Modulen `label`) |
 | `GET` | `/core/modules` | angemeldet | Aktive Module mit Name, Navigation und `frontend.entry` (`/modules/<id>/remoteEntry.js`) |
 | `GET` | `/core/modules/status` | `core.modules.manage` | Alle installierten Module mit Name, Version, `active`, `requires` und `optional` |
 | `PUT` | `/core/modules/:id` | `core.modules.manage` | Aktivieren/Deaktivieren (`ModuleActivation`). Fehler: `modules.requirementsInactive`, `modules.requiredByActive` |
 | `GET` | `/core/history/:entity/:id` | Prüfung des Moduls (`HistoryAccessRegistry`), sonst eine Berechtigung des Moduls von `:entity` | Historieneinträge des Datensatzes und seiner Kinddatensätze (`parentEntity`/`parentId`), neueste zuerst. Maskierte Felder haben `hidden: true`. Ohne Leserecht `404`. `:entity` z. B. `masterdata.person` |
 | `GET` | `/core/codes?code=` | angemeldet; Treffer je nach Rechten im Modul | Gegenstände mit genau diesem Code (`SearchHit[]`): Barcode, RFID-Chip (Trennzeichen und Schreibweise egal), Inventar-, Seriennummer oder URL eines QR-Etiketts |
 | `GET` | `/core/codes/modules` | angemeldet | Module, in denen der Benutzer Codes suchen kann (`string[]`) |
-| `GET` | `/core/audit?limit=` | `core.audit.read` | Audit-Einträge, neueste zuerst (höchstens 1000) |
-| `GET` | `/core/lists` | angemeldet | Listenvorlagen, für die der Benutzer das Recht hat (`ListInfo`) |
+| `GET` | `/core/audit?from=&to=&userId=&action=&q=&limit=` | `core.audit.read` | Audit-Einträge, neueste zuerst (höchstens 1000), mit `userName` und `impersonatorName`. `action` mit `.` am Ende filtert nach Präfix |
+| `GET` | `/core/audit/filters` | `core.audit.read` | `{ actions, users }` für die Filter |
+| `GET` | `/core/export` | `core.data.export` | Module mit Vollexport, einschließlich `core` |
+| `POST` | `/core/retention/run` | `core.settings.manage` | Aufbewahrungsregeln anwenden (`RetentionRun`: `dryRun`, nur im Probelauf `settings` mit anderen Werten). Antwort `{ dryRun, counts }` |
+| `GET` | `/core/lists` | angemeldet | Listenvorlagen, für die der Benutzer das Recht hat (`ListInfo` mit `departments`: `brigade` oder die erlaubten Abteilungen) |
 | `GET` | `/core/lists/:id?<parameter>&lang=` | Recht der Liste | Listeninhalt für die Vorschau (`ListData`: Titel, Untertitel, Spalten, Zeilen). Ungültige Parameter `400`, unbekannte oder nicht erlaubte Liste `404` |
 | `GET` | `/core/lists/:id/export/:format?<parameter>&lang=` | Recht der Liste | Datei als `pdf`, `xlsx` oder `csv` (Download). Unbekanntes Format: `lists.unknownFormat` |
-| `GET` | `/core/tasks?asOf=` | angemeldet | Fristen, für die der Benutzer zuständig ist (`Deadline[]`), früheste zuerst. `asOf` (`JJJJ-MM-TT`) für eine Vorschau, sonst heute |
+| `GET` | `/core/tasks?asOf=` | angemeldet | Fristen, für die der Benutzer zuständig ist (`Deadline[]`, optional mit Link `to`), früheste zuerst. `asOf` (`JJJJ-MM-TT`) für eine Vorschau, sonst heute |
 | `POST` | `/core/tasks/digest` | `core.settings.manage` | Sammel-E-Mail sofort verschicken, Antwort `{ sent }`. Ohne SMTP: `mail.notConfigured` |
 | `GET` | `/core/imports/profiles` | angemeldet | Importprofile, für die der Benutzer das Recht hat (`ImportProfileInfo`, `transfer` = Profil liest auch MP-Feuer-Transferdateien) |
 | `POST` | `/core/imports` | Recht eines Importprofils | Datei hochladen (`multipart/form-data`, Feld `file`, `.xlsx`/`.csv`/`.txt`/`.ics`, höchstens 10 MB). Antwort `ImportUpload` mit Überschriften, Beispielzeilen und vorgeschlagener Zuordnung je Profil. Fehler: `imports.fileMissing`, `imports.unsupportedFormat`, `imports.empty` |
@@ -68,7 +82,7 @@ Alle Pfade liegen unter `/api`.
 | `POST` | `/core/imports/transfers/:id/apply` | Recht des Profils | Übernahme eines Profils; die Übernahme bleibt für die nächsten Profile erhalten. Fehler: `imports.uploadNotFound`, `imports.unknownProfile` |
 | `DELETE` | `/core/imports/transfers/:id` | Hochladender | Datenübernahme verwerfen (204) |
 
-**Einstellungsabschnitte des Core:** `brigade`, `smtp` (Passwort nur schreibbar), `reminders` (`enabled`, `weekday` 1–7 mit 1 = Montag, `hour` 0–23, Europe/Berlin).
+**Einstellungsabschnitte des Core:** `brigade` (`publicUrl` nur `https://`, `http://` für `localhost`; `email` als E-Mail-Adresse), `smtp` (Passwort nur schreibbar), `reminders` (`enabled`, `weekday` 1–7 mit 1 = Montag, `hour` 0–23, Europe/Berlin), `privacy` (`anonymizeLeftAfterYears`, Standard `null` = nie; `auditRetentionMonths`), `oidc` (Client-Secret nur schreibbar).
 
 **Importprofil `masterdata.persons`**, Meldungscodes je Zeile: `imports.requiredValueMissing`, `imports.invalidDate`, `masterdata.import.unknownDepartment`, `masterdata.import.departmentRequired`, `masterdata.import.ambiguous`, `masterdata.import.departmentCreated`, `masterdata.import.departmentDiffers`, `masterdata.import.unknownStatus`, `masterdata.import.sensitiveIgnored`, `masterdata.import.unknownExitReason`, `masterdata.import.leftIgnored`, `auth.forbidden`.
 
@@ -94,7 +108,10 @@ Schemas aus `@forga/masterdata-contracts`. „Abteilungsbezogen“ heißt: Das R
 | --- | --- | --- | --- |
 | `GET` | `/masterdata/departments` | angemeldet | Abteilungen |
 | `POST` | `/masterdata/departments` | `masterdata.organization.manage` für die Gesamtwehr | Abteilung anlegen (`DepartmentInput`) |
-| `PUT` | `/masterdata/departments/:id` | `masterdata.organization.manage`, abteilungsbezogen | Abteilung ändern. Fehler: `masterdata.unknownDepartment`, `masterdata.departmentOwnParent`, `masterdata.unknownPerson` |
+| `PUT` | `/masterdata/departments/:id` | `masterdata.organization.manage`, abteilungsbezogen | Abteilung ändern. Typ, übergeordnete Abteilung, Sonderaufgaben, Statistik und Einwohner nur mit dem Recht für die Gesamtwehr (`masterdata.departmentFieldsBrigadeOnly`, `403`). Fehler: `masterdata.unknownDepartment`, `masterdata.departmentOwnParent`, `masterdata.unknownPerson`, `masterdata.shortNameTaken` (`409`, auch beim Anlegen) |
+| `GET` | `/masterdata/groups?departmentId=` | angemeldet | Gruppen (`DepartmentGroup`) der Abteilungen mit `masterdata.persons.read`, dazu die selbst geführten |
+| `GET` | `/masterdata/groups/mine` | angemeldet | Gruppen, deren Gruppenführer die verknüpfte Person ist („Meine Gruppe“) |
+| `POST`, `PUT`, `DELETE` | `/masterdata/groups`, `/masterdata/groups/:id` | `masterdata.organization.manage`, abteilungsbezogen | Gruppe anlegen/ändern (`DepartmentGroupInput`: `departmentId`, `name`, `leaderId`, `memberIds`) bzw. löschen. Fehler: `masterdata.groupMemberNotInDepartment`, `masterdata.groupNameTaken` (`409`), `masterdata.groupDepartmentImmutable` |
 | `DELETE` | `/masterdata/departments/:id` | `masterdata.organization.manage` (Gesamtwehr) | Unbenutzte Abteilung löschen (`204`). Fehler (`409`): `masterdata.departmentHasChildren`, `masterdata.departmentHasMembers` (auch frühere), `masterdata.departmentHasStations`, `masterdata.departmentHasVehicles`, `masterdata.inUse` (Berichte, Rollenzuweisungen) |
 | `GET` | `/masterdata/stations?departmentId=` | angemeldet | Wachen |
 | `POST`, `PUT` | `/masterdata/stations`, `/masterdata/stations/:id` | `masterdata.organization.manage`, abteilungsbezogen (alte und neue Abteilung) | Wache anlegen/ändern (`StationInput`) |
@@ -108,18 +125,20 @@ Schemas aus `@forga/masterdata-contracts`. „Abteilungsbezogen“ heißt: Das R
 | Methode | Pfad | Zweck |
 | --- | --- | --- |
 | `GET` | `/masterdata/persons?q=&departmentId=&status=&qualification=&includeLeft=` | Sichtbare Personen als `PersonSummary`, Ausgeschiedene nur mit `includeLeft=true` oder `status=left`. Personen, die nur über `masterdata.persons.directory` sichtbar sind, kommen mit Name, Status und Abteilungen und `restricted: true` |
-| `GET` | `/masterdata/persons/:id` | Person mit Mitgliedschaften, Qualifikationen, Dienstgraden, Ehrungen. Sensible Felder nur mit `masterdata.persons.sensitive`, sonst `sensitiveHidden: true` |
-| `POST` | `/masterdata/persons` | Anlegen (`CreatePersonInput`, mindestens eine Mitgliedschaft). Status Standard `probation`, Probezeitende aus `masterdata.membership`. Fehler: `masterdata.personnelNumberTaken` (`409`), `masterdata.primaryMembershipRequired`, `masterdata.unknownDepartment` |
-| `PUT` | `/masterdata/persons/:id` | Stammdaten ändern (`PersonInput`). Sensible Felder ohne Recht werden ignoriert. |
-| `PUT` | `/masterdata/persons/:id/memberships` | Alle Mitgliedschaften ersetzen (Liste von `MembershipInput`). Recht für alte und neue Abteilungen nötig. Fehler: `masterdata.membershipPeriodInvalid`, `masterdata.primaryMembershipRequired` |
+| `GET` | `/masterdata/persons/:id` | Person mit Mitgliedschaften, Qualifikationen, Dienstgraden, Ehrungen. Sensible Felder nur mit `masterdata.persons.sensitive`, sonst `sensitiveHidden: true`, `notes` leer, `restPeriods` leer und `exitReason` `null` |
+| `POST` | `/masterdata/persons` | Anlegen (`CreatePersonInput`, mindestens eine Mitgliedschaft). Status Standard `probation`, Probezeitende aus `masterdata.membership`. Fehler: `masterdata.personnelNumberTaken` (`409`), `masterdata.primaryMembershipRequired`, `masterdata.unknownDepartment`, `masterdata.birthDateInFuture`, `masterdata.belowMinimumAge` (laufende Mitgliedschaft in einer Einsatzabteilung unter `minimumAgeOperational`), `validation.failed` mit `bank.iban` bzw. `employer.iban` (Prüfziffer) |
+| `PUT` | `/masterdata/persons/:id` | Stammdaten ändern (`PersonInput`). Sensible Felder (auch `notes`) ohne Recht werden ignoriert. Fehler: `masterdata.birthDateInFuture` |
+| `PUT` | `/masterdata/persons/:id/memberships` | Alle Mitgliedschaften ersetzen (Liste von `MembershipInput`). Recht für alte und neue Abteilungen nötig. Fehler: `masterdata.membershipPeriodInvalid`, `masterdata.primaryMembershipRequired`, `masterdata.belowMinimumAge` (neue laufende Mitgliedschaft in einer Einsatzabteilung) |
+| `POST`, `PUT`, `DELETE` | `/masterdata/persons/:id/rest-periods`, `…/rest-periods/:entryId` | Ruhezeiten; zusätzlich `masterdata.persons.sensitive` |
 | `POST`, `DELETE` | `/masterdata/persons/:id/qualifications`, `…/qualifications/:entryId` | Qualifikation eintragen (`PersonQualificationInput`) bzw. entfernen. Löst `masterdata.person.qualification-changed` aus. |
 | `POST`, `DELETE` | `/masterdata/persons/:id/ranks`, `…/ranks/:entryId` | Dienstgrad eintragen (`RankAssignmentInput`) bzw. entfernen |
 | `POST`, `DELETE` | `/masterdata/persons/:id/honors`, `…/honors/:entryId` | Ehrung eintragen (`HonorAwardInput`) bzw. entfernen |
 | `PUT` | `/masterdata/persons/:id/probation` | Probezeitende ändern (`ProbationChange`). Fehler: `masterdata.notInProbation` |
-| `POST` | `/masterdata/persons/:id/admission` | Endgültige Aufnahme (`Admission`). Fehler: `masterdata.notInProbation` |
+| `POST` | `/masterdata/persons/:id/admission` | Endgültige Aufnahme (`Admission`: `decidedOn`, `reason`). Vor dem Ende der Probezeit oder ohne die Qualifikationen der Probezeit nur mit Begründung (kommt in die Bemerkung). Fehler: `masterdata.notInProbation`, `masterdata.admissionReasonRequired` (mit `probationEndsOn`, `missing`), `masterdata.admissionBeforeJoining` |
+| `GET` | `/masterdata/persons/honors/certificates?from&to&honor&ids` | Anzahl der Urkunden (`{ count }`) für dieselben Parameter wie das PDF |
 | `POST` | `/masterdata/persons/:id/status` | Statuswechsel (`StatusChange`), nicht aus `probation` oder `left` (`masterdata.statusChangeNotAllowed`); aus `youth` heraus und nach `veterans` nur über die Übernahmen (`masterdata.useTransfer`) |
 | `POST` | `/masterdata/persons/:id/transfer-to-operational` | Übernahme aus der Jugendfeuerwehr (`TransferToOperational`: `departmentId`, `on`, `probationEndsOn` oder `null` = Verzicht, `reason`, `decidedOn`). Fehler: `masterdata.transferNotAllowed`, `masterdata.wrongDepartmentType`, `masterdata.belowMinimumAge`, `masterdata.probationReasonRequired`, `masterdata.transferBeforeMembership` |
-| `POST` | `/masterdata/persons/:id/transfer-to-veterans` | Übernahme in die Altersabteilung (`TransferToVeterans`: `departmentId`, `on`, `decidedOn`), nur aus `active` oder `passive`. Fehler: `masterdata.personHoldsItems` (409, noch Schutzausrüstung zugeordnet), `masterdata.transferNotAllowed`, `masterdata.wrongDepartmentType`, `masterdata.transferBeforeMembership` |
+| `POST` | `/masterdata/persons/:id/transfer-to-veterans` | Übernahme in die Altersabteilung (`TransferToVeterans`: `departmentId`, `on`, `decidedOn`), nur aus `active` oder `passive`. Fehler: `masterdata.personHoldsItems` (409, mit `modules` (Modul-IDs) und `count`), `masterdata.transferNotAllowed`, `masterdata.wrongDepartmentType`, `masterdata.transferBeforeMembership` |
 | `POST` | `/masterdata/persons/:id/leave` | Austritt (`Leave`), beendet offene Mitgliedschaften, löst `masterdata.person.left` aus. Fehler: `masterdata.alreadyLeft`, `masterdata.personHoldsItems` (409) |
 
 Unbekannte Katalogschlüssel ergeben `400` mit `catalog.unknownKey`.
@@ -129,16 +148,21 @@ Unbekannte Katalogschlüssel ergeben `400` mit `catalog.unknownKey`.
 | Methode | Pfad | Recht | Zweck |
 | --- | --- | --- | --- |
 | `GET` | `/masterdata/courses` | angemeldet | Lehrgangskatalog |
-| `POST`, `PUT` | `/masterdata/courses`, `/masterdata/courses/:id` | `masterdata.catalogs.manage` | Lehrgang anlegen/ändern (`CourseInput`). Fehler: `catalog.keyTaken`, `catalog.keyImmutable`, `catalog.unknownKey`, `masterdata.courseOwnPrerequisite` |
+| `POST`, `PUT` | `/masterdata/courses`, `/masterdata/courses/:id` | `masterdata.catalogs.manage` | Lehrgang anlegen/ändern (`CourseInput`, auch `requiredQualifications`, `minimumAge`, `allowedStatuses`, `targets`). Fehler: `catalog.keyTaken`, `catalog.keyImmutable`, `catalog.unknownKey`, `masterdata.courseOwnPrerequisite`, `masterdata.unknownDepartment` |
 | `POST` | `/masterdata/courses/templates/bw` | `masterdata.catalogs.manage` | BW-Lehrgänge anlegen (Qualifikationen der BW-Katalogvorlage müssen existieren), Antwort `{ added }` |
 | `GET` | `/masterdata/persons/:id/course-attendances` | `masterdata.persons.read`, abteilungsbezogen | Teilnahmen der Person |
-| `POST` | `/masterdata/persons/:id/course-attendances` | `masterdata.persons.write` oder `masterdata.courses.plan`, abteilungsbezogen | Teilnahme eintragen (`CourseAttendanceInput`). Bei `passed`: Qualifikationen anlegen, offene Vormerkungen `completed`, Ereignisse `masterdata.course.passed` und `masterdata.person.qualification-changed` |
-| `DELETE` | `/masterdata/persons/:id/course-attendances/:attendanceId` | `masterdata.persons.write` oder `masterdata.courses.plan`, abteilungsbezogen | Teilnahme und die daraus entstandenen Qualifikationen entfernen (`204`) |
+| `POST` | `/masterdata/persons/:id/course-attendances` | `masterdata.persons.write` oder `masterdata.courses.plan`, abteilungsbezogen | Teilnahme eintragen (`CourseAttendanceInput`, Ende nicht vor Beginn). Bei `passed`: Qualifikationen anlegen, offene Vormerkungen `completed`, Ereignisse `masterdata.course.passed` und `masterdata.person.qualification-changed`. Fehler: `masterdata.courseNotFinished` (bestanden mit Ende nach heute), `masterdata.coursePassedAlready` (`409`) |
+| `DELETE` | `/masterdata/persons/:id/course-attendances/:attendanceId` | `masterdata.persons.write` oder `masterdata.courses.plan`, abteilungsbezogen | Teilnahme und die daraus entstandenen Qualifikationen entfernen (`204`); die damit erledigte Vormerkung wird wieder `confirmed`. Bei bestandener Teilnahme `masterdata.course.revoked` und `masterdata.person.qualification-changed` |
+| `POST` | `/masterdata/course-results` | `masterdata.persons.write` oder `masterdata.courses.plan` je Person | Ergebnisse mehrerer Personen auf einmal (`CourseResultsInput`: `course`, `runId` oder Datum und Ort, `results`); Antwort `{ recorded, skipped: [{ personId, code }] }` |
+| `GET` | `/masterdata/course-runs?course=&year=` | `masterdata.courses.plan` | Lehrgangstermine (`CourseRun`) mit Zahl der zugeordneten Vormerkungen und erfassten Teilnahmen |
+| `POST`, `PUT`, `DELETE` | `/masterdata/course-runs`, `/masterdata/course-runs/:id` | `masterdata.courses.plan` | Termin anlegen/ändern (`CourseRunInput`) bzw. löschen; mit erfassten Ergebnissen `masterdata.courseRunHasResults` (`409`) |
+| `GET` | `/masterdata/course-needs` | `masterdata.courses.plan` | Lehrgangsbedarf (`CourseNeed[]`): je aktivem Lehrgang und Abteilung `have`, `target`, `nominated` |
 | `GET` | `/masterdata/course-nominations?course=` | `masterdata.courses.plan` | Vormerkungen der Personen, für die der Benutzer planen darf |
-| `POST` | `/masterdata/course-nominations` | `masterdata.courses.plan`, abteilungsbezogen | Vormerken (`CourseNominationInput`). Fehler: `masterdata.alreadyNominated` (`409`) |
-| `PUT` | `/masterdata/course-nominations/:id` | `masterdata.courses.plan`, abteilungsbezogen | Priorität, Zeitraum, Status, Bemerkung ändern. Person und Lehrgang sind fest (`masterdata.nominationTargetImmutable`). |
+| `POST` | `/masterdata/course-nominations` | `masterdata.courses.plan`, abteilungsbezogen | Vormerken (`CourseNominationInput`, optional `runId`). Fehler: `masterdata.alreadyNominated` (`409`), `masterdata.unknownCourseRun` |
+| `POST` | `/masterdata/course-nominations/bulk` | `masterdata.courses.plan`, abteilungsbezogen je Person | Mehrere Personen vormerken (`BulkNominationInput`); bereits vorgemerkte oder nicht sichtbare werden übersprungen. Antwort `{ created, skipped: [{ personId, code }] }` |
+| `PUT` | `/masterdata/course-nominations/:id` | `masterdata.courses.plan`, abteilungsbezogen | Priorität, Zeitraum, Status, Bemerkung und Termin ändern. Person und Lehrgang sind fest (`masterdata.nominationTargetImmutable`). |
 | `DELETE` | `/masterdata/course-nominations/:id` | `masterdata.courses.plan`, abteilungsbezogen | Vormerkung löschen (`204`) |
-| `GET` | `/masterdata/course-planning/:course` | `masterdata.courses.plan` | `CoursePlanning`: offene Vormerkungen mit `prerequisitesMet` und Kandidaten |
+| `GET` | `/masterdata/course-planning/:course` | `masterdata.courses.plan` | `CoursePlanning`: offene Vormerkungen mit `prerequisitesMet` (alle Bedingungen), Kandidaten und Termine |
 
 **Ungültige Eingaben** ergeben `400`:
 
@@ -155,22 +179,28 @@ Abteilungsbezogene Rechte gelten für die Abteilung des Berichts. Wer `incidents
 | `GET` | `/incidents/keywords` | angemeldet | Stichwort-Katalog (`AlarmKeyword[]`) |
 | `POST`, `PUT` | `/incidents/keywords`, `/incidents/keywords/:id` | `incidents.settings.manage` | Stichwort anlegen/ändern (`AlarmKeywordInput`); der Schlüssel bleibt fest. Fehler: `catalog.keyTaken` |
 | `POST` | `/incidents/keywords/templates/bw` | `incidents.settings.manage` | Fehlende Stichworte der BW-Vorlage anlegen, Antwort `{ added }` |
-| `GET` | `/incidents/incidents?from&to&departmentId&status&mine` | `incidents.reports.read` | Einsätze mit mindestens einem lesbaren Bericht, neueste zuerst (höchstens 500) |
-| `POST` | `/incidents/incidents` | `incidents.reports.write` für jede genannte Abteilung | Einsatz (`IncidentInput` und `departmentIds`) mit je einem Berichtsentwurf anlegen. Fehler: `incidents.dispatchNumberTaken` (`409`), `incidents.unknownKeyword` |
-| `GET` | `/incidents/incidents/:id` | `incidents.reports.read` | Einsatz mit Berichtsübersicht |
-| `PUT` | `/incidents/incidents/:id` | Schreibrecht für einen Bericht des Einsatzes | Einsatzdaten ändern; nicht, solange ein Bericht gesperrt ist (außer Freigeber) |
-| `PUT` | `/incidents/incidents/:id/costs` | `incidents.costs` | Kosten und Bemerkungen des ganzen Einsatzes (`IncidentCosts`: `chargeable`, `chargeableReason`, `notes`, `version`); auch nach der Freigabe der Berichte |
-| `POST` | `/incidents/incidents/:id/reports` | `incidents.reports.write` für die Abteilung | Bericht für eine weitere Abteilung anlegen (`NewReportInput`). Fehler: `incidents.reportExists` (`409`) |
+| `GET` | `/incidents/incidents?from&to&departmentId&status&mine&withoutStatistics` | `incidents.reports.read` | Einsätze mit mindestens einem lesbaren Bericht, neueste zuerst (höchstens 500); `withoutStatistics=true`: Hauptbericht eines gezählten Stichworts ohne Statistik |
+| `POST` | `/incidents/incidents` | `incidents.reports.write` für jede genannte Abteilung | Einsatz (`CreateIncident`: `IncidentInput` und `departmentIds`) mit je einem Berichtsentwurf anlegen; ohne Abteilung nur für Freigeber. Fehler: `incidents.departmentRequired`, `incidents.dispatchNumberTaken` (`409`), `incidents.unknownKeyword` |
+| `GET` | `/incidents/incidents/matches?dispatchNumber&alarmKeyword&alarmedAt` | `incidents.reports.write` | Vorhandene Einsätze mit derselben Nummer oder demselben Stichwort ±2 h, auch nicht lesbare, nur Mindestdaten (`IncidentMatch[]`) |
+| `GET` | `/incidents/incidents/:id` | `incidents.reports.read` | Einsatz mit Berichtsübersicht (je Bericht auch `hasStatistics`) |
+| `PUT` | `/incidents/incidents/:id` | Schreibrecht für den Hauptbericht | Einsatzdaten ändern (`IncidentUpdate` mit `version`); nicht, solange ein Bericht gesperrt ist (außer Freigeber). Fehler: `conflict.stale`, `incidents.incidentReleased` (`409`, ein Bericht ist freigegeben) |
+| `PUT` | `/incidents/incidents/:id/costs` | `incidents.costs` | Kosten und Bemerkungen des ganzen Einsatzes (`IncidentCosts`: `chargeable`, `chargeableReason` – Pflicht, wenn kostenpflichtig –, `notes`, `version`); auch nach der Freigabe der Berichte |
+| `POST` | `/incidents/incidents/:id/reports` | `incidents.reports.write` für die Abteilung | Bericht für eine weitere Abteilung anlegen (`NewReportInput`), auch bei einem Einsatz, den der Benutzer noch nicht lesen darf. Fehler: `incidents.reportExists` (`409`) |
 | `GET` | `/incidents/reports/:id` | `incidents.reports.read` | Bericht (`Report`) mit Entschädigung je Person, `compensationTotal`, `findings`, `statisticsSuggestion`. Ohne Leserecht `404` |
 | `PUT` | `/incidents/reports/:id` | Schreibrecht | Inhalt speichern (`ReportInput`). Fehler: `incidents.reportLocked` (`403`), `incidents.unknownPerson`, `incidents.unknownVehicle`, `incidents.personTwiceInReport` |
+| `GET` | `/incidents/reports/:id/pdf?lang` | `incidents.reports.read` | Bericht als PDF |
+| `GET` | `/incidents/reports/:id/previous-crew?vehicleId` | `incidents.reports.read` | Besatzung des Fahrzeugs im letzten früheren Bericht der Abteilung (`PreviousCrew`) |
+| `PUT` | `/incidents/reports/:id/statistics` | `incidents.reports.release` (Gesamtwehr) | Statistik eines Hauptberichts ohne neue Freigabe ändern (`StatisticsUpdate` mit `version`). Fehler: `incidents.notPrimary`, `conflict.stale` |
+| `GET` | `/incidents/me?year` | `incidents.self` | Eigene Einsätze des Jahres (`MyIncidents`) der verknüpften Person |
 | `GET` | `/incidents/reports/:id/revisions` | `incidents.reports.read` | Versionen des Berichts, neueste zuerst (`ReportRevision[]`: `id`, `savedAt`, `userName`, `personnelCount`) |
 | `POST` | `/incidents/reports/:id/revisions/:revisionId/restore` | Schreibrecht | Version wiederherstellen; wie Speichern (neue Version, Sperre durch Freigeber). Fehler wie `PUT` |
 | `POST` | `/incidents/reports/:id/primary` | Schreibrecht | Zum Hauptbericht machen |
 | `POST` | `/incidents/reports/:id/submit` | Schreibrecht | Fertig melden (`Submit` mit `acknowledgements`). Fehler: `incidents.findingsOpen`, `incidents.warningsNotAcknowledged` (`400`), `incidents.invalidTransition` (`409`) |
-| `POST` | `/incidents/reports/:id/return` | `incidents.reports.release` | Zurückgeben (`ReturnToAuthor`) |
-| `POST` | `/incidents/reports/:id/release` | `incidents.reports.release` | Freigeben (`Release`: `compensation` oder `billing`). Fehler: `incidents.findingsOpen`, `incidents.invalidTransition`, `incidents.compensationReleaseDisabled` (`400`, wenn `compensationRelease` aus ist) |
-| `POST` | `/incidents/reports/:id/unlock` | `incidents.reports.unlock` | Sperre aufheben (`Unlock`: `reason`, `toStatus`). Fehler: `incidents.notLocked` |
-| `DELETE` | `/incidents/reports/:id` | Schreibrecht | Entwurf löschen (`204`). Fehler: `incidents.invalidTransition`, `incidents.primaryHasSiblings` |
+| `POST` | `/incidents/reports/:id/return` | `incidents.reports.release` (Gesamtwehr) oder `incidents.reports.review` für die Abteilung | Zurückgeben (`ReturnToAuthor`) |
+| `POST` | `/incidents/reports/:id/release` | `incidents.reports.release` | Freigeben (`Release`: `compensation` nur aus `review`, `billing` aus `review` oder `released-compensation`). Fehler: `incidents.findingsOpen`, `incidents.invalidTransition`, `incidents.compensationReleaseDisabled` (`400`, wenn `compensationRelease` aus ist) |
+| `POST` | `/incidents/reports/release` | `incidents.reports.release` | Mehrere Berichte freigeben (`ReleaseMany`), Antwort `ReleaseManyResult` (`released`, `failed` mit Fehlercode) |
+| `POST` | `/incidents/reports/:id/unlock` | `incidents.reports.unlock` | Sperre aufheben (`Unlock`: `reason`, `toStatus`; ein gesperrter Entwurf nur nach `draft`). Fehler: `incidents.notLocked`, `incidents.invalidTransition` |
+| `DELETE` | `/incidents/reports/:id` | Schreibrecht | Entwurf löschen (`204`); der letzte Bericht löscht den Einsatz mit. Fehler: `incidents.invalidTransition`, `incidents.primaryHasSiblings` |
 | `POST` | `/incidents/v1/incidents` | `incidents.api.create` | Externe API (`ExternalIncidentInput`), idempotent über die Leitstellennummer. Antwort `ExternalIncidentResult` mit `warnings` |
 | `GET` | `/incidents/compensation/check?from&to` | `incidents.compensation.export` | Prüfung vor der Auszahlung (`CompensationCheck`: nicht freigegebene Berichte und Personalprobleme) |
 | `GET` | `/incidents/compensation/export?from&to&includeUnreleased&lang` | `incidents.compensation.export` | Abrechnungsexport als Excel; Blatt „Hinweise“ mit dem Ergebnis der Prüfung |
@@ -178,7 +208,7 @@ Abteilungsbezogene Rechte gelten für die Abteilung des Berichts. Wer `incidents
 | `POST`, `PUT`, `DELETE` | `/incidents/duty`, `/incidents/duty/:id` | `incidents.duty.manage` | Sonderdienst pflegen (`DutyAssignmentInput`). Fehler: `incidents.duty.unknownKind`, `incidents.unknownPerson` |
 | `GET` | `/incidents/statistics/:year` | `incidents.statistics` | Jahresstatistik (`AnnualStatistics`: Werte mit berechnet/korrigiert/gültig, Prüfungen, Abschluss) |
 | `PUT` | `/incidents/statistics/:year/corrections` | `incidents.statistics` | Korrekturen (`StatisticsCorrections`, Schlüssel `F121:D`, `null` entfernt). Fehler: `incidents.statisticsClosed` (`409`) |
-| `POST` | `/incidents/statistics/:year/close`, `/incidents/statistics/:year/reopen` | `incidents.statistics` | Abschließen bzw. wieder öffnen |
+| `POST` | `/incidents/statistics/:year/close`, `/incidents/statistics/:year/reopen` | `incidents.statistics` | Abschließen (`CloseStatistics`: `force` bei offenen Prüfungen, sonst `incidents.statisticsChecksOpen`; speichert die Werte) bzw. wieder öffnen |
 | `GET` | `/incidents/statistics/:year/export` | `incidents.statistics` | Ausgefüllte Import-Vorlage des Landesportals (`Jahresstatistik_<Jahr>.xlsx`) |
 
 **Listen** über `/core/lists`: `incidents.open-reports`, `incidents.incidents`, `incidents.per-department`, `incidents.hours-per-person`.
@@ -193,19 +223,26 @@ Abteilungsbezogene Rechte gelten für die Abteilung des Berichts. Wer `incidents
 
 | Methode | Pfad | Recht | Zweck |
 | --- | --- | --- | --- |
-| `GET` | `/clothing/articles` | angemeldet | Artikel (`Article[]`) |
-| `POST`, `PUT` | `/clothing/articles`, `/clothing/articles/:id` | `clothing.manage` für die Gesamtwehr | Artikel anlegen/ändern (`ArticleInput`). Fehler: `clothing.articleKeyTaken`, `clothing.articleKeyFixed`, `clothing.articleKindFixed` |
+| `GET` | `/clothing/articles` | angemeldet | Artikel (`Article[]`, mit `minimumStock`) |
+| `POST`, `PUT` | `/clothing/articles`, `/clothing/articles/:id` | `clothing.manage` für die Gesamtwehr | Artikel anlegen/ändern (`ArticleInput`, Mindestbestand je Größe). Fehler: `clothing.articleKeyTaken`, `clothing.articleKeyFixed`, `clothing.articleKindFixed` |
 | `POST` | `/clothing/articles/template` | `clothing.manage` für die Gesamtwehr | Fehlende Artikel der Vorlage anlegen, Antwort `{ added }` |
-| `GET` | `/clothing/items?status&articleKey&holderId&q` | `clothing.read`, abteilungsbezogen | Stücke mit letzter Wäsche, Imprägnierung, Prüfung und Fälligkeiten (`Item[]`); ohne `status` alle nicht ausgesonderten |
-| `POST`, `PUT` | `/clothing/items`, `/clothing/items/:id` | `clothing.manage`, abteilungsbezogen | Stück anlegen/ändern (`ItemInput`, mit `barcode` und `rfid`). Fehler: `clothing.notInventoried`, `clothing.inventoryNumberTaken` (409), `codes.taken` (409), `clothing.articleFixed` |
-| `GET` | `/clothing/items/:id` | `clothing.read` | Stück mit Wäsche, Prüfungen und Verlauf (`ItemDetail`) |
-| `POST` | `/clothing/items/:id/issue` | `clothing.issue` für Stück und Person | Ausgeben (`ItemIssueInput`: `personId`, `date`, `notes`). Fehler: `clothing.notInStock`, `clothing.personLeft` |
-| `POST` | `/clothing/items/:id/return` | `clothing.issue` | Zurücknehmen (`ItemReturnInput`, `retire` sondert aus). Fehler: `clothing.notIssued`, `clothing.returnBeforeIssue` |
+| `GET` | `/clothing/items?status&articleKey&holderId&q` | `clothing.read`, abteilungsbezogen | Stücke mit letzter Wäsche, Imprägnierung, Prüfung (`lastInspectionPassed`), Fälligkeiten und Sperren (`blockedBy`) (`Item[]`); ohne `status` alle nicht ausgesonderten |
+| `POST`, `PUT` | `/clothing/items`, `/clothing/items/:id` | `clothing.manage`, abteilungsbezogen | Stück anlegen/ändern (`ItemInput`, mit `barcode` und `rfid`). Fehler: `clothing.notInventoried`, `clothing.articleInactive`, `clothing.unknownSize`, `clothing.dateInFuture`, `clothing.inventoryNumberTaken` (409), `codes.taken` (409), `clothing.articleFixed` |
+| `GET` | `/clothing/items/:id` | `clothing.read` | Stück mit Wäsche, Prüfungen und Verlauf, auch stornierte Einträge (`ItemDetail`) |
+| `POST` | `/clothing/items/:id/issue` | `clothing.issue` für Stück und Person | Ausgeben (`ItemIssueInput`: `personId`, `date`, `notes`, `acceptOverdueInspection`). Fehler: `clothing.notInStock`, `clothing.articleInactive`, `clothing.failedInspection`, `clothing.awaitingLaundry`, `clothing.inspectionOverdue` (409), `clothing.issueBeforePurchase`, `clothing.issueBeforeReturn`, `clothing.dateInFuture`, `clothing.personLeft`, `clothing.personVeteran` |
+| `POST` | `/clothing/issue` | wie oben | Mehrere Stücke an eine Person (`IssueManyInput`: zusätzlich `itemIds`), alle oder keines; Antwort `Item[]` |
+| `POST` | `/clothing/items/:id/return` | `clothing.issue` | Zurücknehmen (`ItemReturnInput`, `retire` sondert aus, `laundry` sperrt bis zur Wäsche). Fehler: `clothing.notIssued`, `clothing.returnBeforeIssue`, `clothing.dateInFuture`, `clothing.notTextile` |
+| `POST` | `/clothing/return` | `clothing.issue` | Mehrere Stücke zurücknehmen (`ReturnManyInput`: `date`, `notes`, `items` mit `itemId`, `retire`, `laundry`), alle oder keines |
 | `POST` | `/clothing/items/:id/retire` | `clothing.manage` | Stück im Lager aussondern |
-| `POST` | `/clothing/items/:id/inspections` | `clothing.issue` | Prüfung erfassen (`InspectionInput`) |
-| `POST` | `/clothing/care` | `clothing.issue` | Waschen oder Imprägnieren mehrerer Stücke (`CareInput`: `itemIds`, `kind`, `date`, `place`). Fehler: `clothing.notTextile`, `clothing.retired` |
-| `POST` | `/clothing/consumables` | `clothing.issue` für eine Abteilung der Person | Verbrauchsartikel abgeben (`ConsumableIssueInput`); nur Eintrag im Verlauf. Fehler: `clothing.inventoried`, `clothing.personLeft` |
-| `GET` | `/clothing/persons/:personId` | `clothing.read` für eine Abteilung der Person, sonst `404` | Zugeordnete Stücke und Verlauf (`PersonClothing`) |
+| `POST` | `/clothing/items/:id/inspections` | `clothing.issue` | Prüfung erfassen (`InspectionInput`). Fehler: `clothing.dateInFuture`, `clothing.retired` |
+| `POST` | `/clothing/inspections` | `clothing.issue` | Prüfungen mehrerer Stücke (`InspectionsInput`: `date`, `inspector`, `results` mit `itemId`, `passed`, `notes`) |
+| `POST` | `/clothing/care` | `clothing.issue` | Waschen oder Imprägnieren mehrerer Stücke (`CareInput`: `itemIds`, `kind`, `date`, `place`). Fehler: `clothing.notTextile`, `clothing.retired`, `clothing.dateInFuture` |
+| `POST` | `/clothing/care/:id/cancel`, `/clothing/inspections/:id/cancel`, `/clothing/issues/:id/cancel` | `clothing.issue` als Erfasser oder `clothing.manage` der Abteilung | Eintrag mit Grund stornieren (`CancelInput`: `reason`). Fehler: `clothing.notOwnEntry` (403), `clothing.alreadyCancelled` (409), `clothing.notLastEntry` (409, nur letzte Ausgabe oder Rücknahme eines Stücks) |
+| `POST` | `/clothing/consumables` | `clothing.issue` für eine Abteilung der Person | Verbrauchsartikel abgeben (`ConsumableIssueInput`); nur Eintrag im Verlauf. Fehler: `clothing.inventoried`, `clothing.articleInactive`, `clothing.unknownSize`, `clothing.dateInFuture`, `clothing.personLeft`, `clothing.personVeteran` |
+| `POST` | `/clothing/consumables/receipts` | `clothing.manage` in einer Abteilung | Zugang an Verbrauchsartikeln (`ConsumableReceiptInput`, negative Anzahl als Korrektur); Antwort der neue Bestand (`StockRow[]`) |
+| `GET` | `/clothing/stock?departmentId` | `clothing.read` | Bestand je Artikel und Größe mit Mindestbestand und `reorder` (`StockRow[]`) |
+| `GET` | `/clothing/persons/:personId` | `clothing.read` für eine Abteilung der Person, sonst `404` | Zugeordnete Stücke, Verlauf und Größen (`PersonClothing`) |
+| `PUT` | `/clothing/persons/:personId/sizes` | `clothing.issue` für eine Abteilung der Person | Größen der Person je Artikel (`SizeProfileInput`); leere und unbekannte Artikel entfallen |
 | `GET` | `/clothing/me` | `clothing.self` | Eigene Schutzausrüstung |
 
 ## Inaktive Module

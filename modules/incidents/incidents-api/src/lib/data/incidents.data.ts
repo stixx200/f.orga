@@ -15,6 +15,8 @@ import {
 } from '../incidents.entities.js';
 import { READ, RELEASE } from '../reports/reports.service.js';
 
+const LOCATION_FIELDS = ['street', 'object', 'city', 'district'] as const;
+
 const plain = async <T extends object>(em: EntityManager, entity: EntityClass<T>, where: object = {}) =>
   (await em.find(entity, where as never)).map((e) => wrap(e).toObject());
 
@@ -24,7 +26,10 @@ export class IncidentsData {
   constructor(private readonly em: EntityManager) {}
 
   async search(user: AuthenticatedUser, query: string): Promise<SearchHit[]> {
-    const words = wordsWhere(query, ['dispatchNumber', 'alarmKeyword', 'alarmMessage']);
+    // The location is JSON: street, object, city and district are searched as JSON properties.
+    const words = wordsWhere(query, ['dispatchNumber', 'alarmKeyword', 'alarmMessage'], (like) =>
+      LOCATION_FIELDS.map((field) => ({ location: { [field]: { $ilike: like } } })),
+    );
     if (!words) return [];
     const where: FilterQuery<IncidentEntity>[] = [words as FilterQuery<IncidentEntity>];
     const grant = user.grant(RELEASE) === 'brigade' ? 'brigade' : user.grant(READ);
@@ -35,7 +40,7 @@ export class IncidentsData {
       id: i.id,
       group: { de: 'Einsätze', en: 'Incidents' },
       title: `${i.alarmKeyword} · ${i.dispatchNumber}`,
-      description: [i.alarmMessage, i.location.city, i.location.street].filter(Boolean).join(', '),
+      description: [i.alarmMessage, i.location.object, i.location.city, [i.location.street, i.location.houseNumber].filter(Boolean).join(' ')].filter(Boolean).join(', '),
       to: `/incidents/incidents/${i.id}`,
     }));
   }

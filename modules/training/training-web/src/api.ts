@@ -21,8 +21,9 @@ export function useSessions(filter: { from?: string; to?: string; departmentId?:
   return useQuery({ queryKey: [...keys.sessions, filter], queryFn: () => api<Session[]>(withQuery('training/sessions', filter)) });
 }
 
-export function useSession(id: string) {
-  return useQuery({ queryKey: keys.session(id), queryFn: () => api<Session>(`training/sessions/${id}`) });
+/** One session; `refetchInterval` (ms) keeps it current, e.g. for the QR check-ins coming in. */
+export function useSession(id: string, refetchInterval?: number) {
+  return useQuery({ queryKey: keys.session(id), queryFn: () => api<Session>(`training/sessions/${id}`), refetchInterval });
 }
 
 export function useTypes() {

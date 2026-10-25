@@ -7,6 +7,7 @@ import { IncidentRatesNotice } from './parts';
 import { translations } from './i18n';
 import { FunctionsPage } from './pages/FunctionsPage';
 import { ItemsPage } from './pages/ItemsPage';
+import { MyCompensation } from './pages/MyCompensation';
 import { PersonTab } from './pages/PersonTab';
 import { RunPage } from './pages/RunPage';
 import { RunsPage } from './pages/RunsPage';
@@ -32,5 +33,6 @@ export default defineWebModule({
   extensions: {
     'masterdata.person.tab': { label: { de: 'Entschädigung', en: 'Compensation' }, permission: READ, component: PersonTab },
     'incidents.settings.rates': { label: { de: 'Stundensätze', en: 'Hourly rates' }, component: IncidentRatesNotice },
+    'core.me.sections': { label: { de: 'Meine Entschädigung', en: 'My compensation' }, order: 25, permission: 'compensation.self', component: MyCompensation },
   },
 });

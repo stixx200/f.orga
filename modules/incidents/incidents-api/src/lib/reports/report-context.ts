@@ -5,6 +5,7 @@ import { ModuleStateService, SettingsService } from '@forga/core-api';
 import type { IncidentSettings } from '@forga/incidents-contracts';
 import {
   type Department,
+  MembershipSettings,
   ORGANIZATION,
   type Organization,
   PERSON_DIRECTORY,
@@ -23,6 +24,8 @@ export interface ReportContext {
   vehicles: Map<string, Vehicle>;
   /** Snapshots of the persons involved, as of the incident date. */
   persons: Map<string, PersonSnapshot>;
+  /** Minimum age for incidents from the brigade statute (master data settings). */
+  minimumAge: number;
 }
 
 @Injectable()
@@ -45,15 +48,17 @@ export class ReportContextLoader {
   }
 
   async load(personIds: readonly string[], date: string): Promise<ReportContext> {
-    const [settings, keywords, departments, vehicles, persons] = await Promise.all([
+    const [settings, keywords, departments, vehicles, persons, membership] = await Promise.all([
       this.settingsOnly(),
       this.em.fork().find(AlarmKeywordEntity, {}),
       this.organization.departments(),
       this.organization.vehicles({ includeRetired: true }),
       this.directory.snapshots([...new Set(personIds)], localDate(date)),
+      this.settings.get<MembershipSettings>('masterdata.membership'),
     ]);
     return {
       settings,
+      minimumAge: MembershipSettings.parse(membership ?? {}).minimumAgeIncidents,
       keywords: new Map(keywords.map((k) => [k.key, k])),
       departments: new Map(departments.map((d) => [d.id, d])),
       vehicles: new Map(vehicles.map((v) => [v.id, v])),

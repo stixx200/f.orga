@@ -10,6 +10,8 @@ import type {
   MainType,
   PartyRole,
   ReportStatus,
+  StatisticsCheck,
+  StatisticsValue,
   TechnicalCategory,
   Weather,
 } from '@forga/incidents-contracts';
@@ -97,6 +99,8 @@ export const ReportSchema = defineEntity({
     arrivedAt: p.datetime().nullable(),
     endedAt: p.datetime().nullable(),
     returnedAt: p.datetime(),
+    /** The author confirmed the end; new reports start with alarm + 1 h, unconfirmed (rule `end-unconfirmed`). */
+    endConfirmed: p.boolean().default(true),
     situation: p.text().default(''),
     actions: p.text().default(''),
     cause: p.text().default(''),
@@ -210,6 +214,9 @@ export const StatisticsYearSchema = defineEntity({
     corrections: p.json<Record<string, number>>(),
     closedAt: p.datetime().nullable(),
     closedBy: p.string().nullable(),
+    /** Values and checks as they were when closing; a closed year shows these, not the values computed now. */
+    frozenValues: p.json<StatisticsValue[]>().nullable(),
+    frozenChecks: p.json<StatisticsCheck[]>().nullable(),
     version: p.integer().version(),
   },
 });

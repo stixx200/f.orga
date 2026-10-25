@@ -21,6 +21,19 @@ export const RetentionResult = z.object({
 });
 export type RetentionResult = z.infer<typeof RetentionResult>;
 
+/** Runs the retention rules; a dry run may try other values than the stored ones, e.g. before saving them. */
+export const RetentionRun = z.object({
+  dryRun: z.boolean().default(true),
+  /** Only for dry runs: overrides of the stored privacy settings. */
+  settings: z
+    .object({
+      anonymizeLeftAfterYears: z.number().int().min(1).max(50).nullable().optional(),
+      auditRetentionMonths: z.number().int().min(6).max(240).optional(),
+    })
+    .optional(),
+});
+export type RetentionRun = z.input<typeof RetentionRun>;
+
 /**
  * Barcode or RFID chip of a physical item (equipment, hose, breathing apparatus, clothing). Empty input means none;
  * stored codes are unique per module.

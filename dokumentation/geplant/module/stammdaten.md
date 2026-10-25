@@ -8,10 +8,11 @@ Release 1. Grundlage aller anderen Fachmodule. Modul-ID `masterdata`. Alle Oberf
 - Personen mit Mitgliedschaften, Qualifikationen, Dienstgraden, Ehrungen, Führerschein, Beschäftigungsart
 - sensible Felder mit eigenem Recht
 - Probezeit, Aufnahme, Statuswechsel, Austritt
-- Lehrgangskatalog mit BW-Vorlage, Teilnahmen, Vormerkungen, Lehrgangsplanung
+- Lehrgangskatalog mit BW-Vorlage und Bedingungen, Teilnahmen, Vormerkungen, Lehrgangstermine, Lehrgangsplanung und Lehrgangsbedarf
+- Gruppen innerhalb der Abteilungen
 - Historie inklusive Kinddatensätze
 - Schnittstellen `PERSON_DIRECTORY` und `ORGANIZATION`, Ereignisse
-- 12 Listenvorlagen (Mitglieder, Unterschriften, Telefon, Komplettdaten, Geburtstage, Jubiläen, Qualifikationsübersicht, Atemschutzgeräteträger, Probezeit, Altersgrenzen, Personalstärke, Fahrzeuge), siehe [implementiert/architektur.md](../../implementiert/architektur.md#modul-stammdaten-masterdata)
+- 14 Listenvorlagen (Mitglieder, Unterschriften, Telefon, Komplettdaten, Geburtstage, Jubiläen, Qualifikationsübersicht, Atemschutzgeräteträger, Probezeit, Altersgrenzen, Personalstärke, Fahrzeuge, Lehrgangsvormerkungen, Lehrgänge im Jahr), siehe [implementiert/architektur.md](../../implementiert/architektur.md#modul-stammdaten-masterdata)
 - Fristen zu Probezeit, Grundausbildung, Mindestalter, Altersgrenze, Ende der Jugendfeuerwehr, Führerschein und ablaufenden Qualifikationen
 - Importprofil `masterdata.persons` für Personen, auch aus dem MP-Feuer-Export `Personal.xlsx`
 
@@ -150,7 +151,7 @@ Die Werte für das Landesportal liefert die modulübergreifende [Jahresstatistik
 
 - `PERSON_DIRECTORY`: Personen suchen (`search`), Personen mit Abteilungen, gültigen Qualifikationen und Dienstgrad zu einem Stichtag liefern (`snapshots`), Suche über Personalnummer (`findByPersonnelNumber`).
 - `ORGANIZATION`: Abteilungen, Wachen, Fahrzeuge (`departments`, `stations`, `vehicles`).
-- Ereignisse: `masterdata.person.left`, `masterdata.person.qualification-changed`, `masterdata.course.passed`.
+- Ereignisse: `masterdata.person.left`, `masterdata.person.qualification-changed`, `masterdata.course.passed`, `masterdata.course.revoked`.
 
 ## Import
 

@@ -4,7 +4,7 @@ import { berlinDate, type DeadlineInput, type DeadlineProvider } from '@forga/co
 import type { LocalizedText } from '@forga/core-contracts';
 import type { ConditionKey } from '@forga/respiratory-protection-contracts';
 import { EvidenceEntity, StatusEntity } from '../respiratory-protection.entities.js';
-import { EVIDENCE, EvidenceService, EXAMINATIONS, SELF } from '../evidence/evidence.service.js';
+import { EVIDENCE, EvidenceService, SELF } from '../evidence/evidence.service.js';
 
 const TITLES: Partial<Record<ConditionKey, LocalizedText>> = {
   examination: { de: 'Eignungsuntersuchung fällig', en: 'Medical examination due' },
@@ -14,11 +14,11 @@ const TITLES: Partial<Record<ConditionKey, LocalizedText>> = {
   'chemical-suit': { de: 'CSA-Übung fällig', en: 'Chemical suit exercise due' },
 };
 const OWN_TITLES: Partial<Record<ConditionKey, LocalizedText>> = {
-  examination: { de: 'Deine Eignungsuntersuchung ist fällig', en: 'Your medical examination is due' },
-  briefing: { de: 'Deine Atemschutz-Unterweisung ist fällig', en: 'Your BA briefing is due' },
-  'stress-exercise': { de: 'Deine Belastungsübung ist fällig', en: 'Your stress exercise is due' },
-  exercise: { de: 'Deine Einsatzübung unter Atemschutz ist fällig', en: 'Your exercise under BA is due' },
-  'chemical-suit': { de: 'Deine CSA-Übung ist fällig', en: 'Your chemical suit exercise is due' },
+  examination: { de: 'Ihre Eignungsuntersuchung ist fällig', en: 'Your medical examination is due' },
+  briefing: { de: 'Ihre Atemschutz-Unterweisung ist fällig', en: 'Your BA briefing is due' },
+  'stress-exercise': { de: 'Ihre Belastungsübung ist fällig', en: 'Your stress exercise is due' },
+  exercise: { de: 'Ihre Einsatzübung unter Atemschutz ist fällig', en: 'Your exercise under BA is due' },
+  'chemical-suit': { de: 'Ihre CSA-Übung ist fällig', en: 'Your chemical suit exercise is due' },
 };
 
 /** Export and deadlines of the respiratory protection module. */
@@ -32,8 +32,10 @@ export class RespiratoryProtectionData implements DeadlineProvider {
   ) {}
 
   /**
-   * One deadline per condition of each wearer that expires (or is missing), for those responsible (examinations only
-   * for those who may see them), and the same for the wearer, who sees it in "My area" and the weekly e-mail.
+   * One deadline per condition of each wearer that expires (or is missing), for those who record evidence in the
+   * wearer's department (`evidence`), and the same for the wearer, who sees it in "My area" and the weekly e-mail.
+   * The examination deadline only names the due date, like the status those responsible see; results and findings
+   * stay with the examinations permission.
    */
   async deadlines(asOf: string): Promise<DeadlineInput[]> {
     const rule = await this.evidence.rule();
@@ -45,7 +47,7 @@ export class RespiratoryProtectionData implements DeadlineProvider {
           id: `own:${c.key}:${s.personId}`,
           kind: `breathing-apparatus-own-${c.key}`,
           title: OWN_TITLES[c.key]!,
-          subject: { type: 'core.me', id: s.personId, label: `${s.firstName} ${s.lastName}` },
+          subject: { type: 'core.me', id: s.personId, label: `${s.lastName}, ${s.firstName}` },
           dueOn: c.dueOn ?? berlinDate(),
           leadDays: rule.leadDays,
           departmentIds: s.departmentIds,
@@ -60,11 +62,11 @@ export class RespiratoryProtectionData implements DeadlineProvider {
           id: `${c.key}:${s.personId}`,
           kind: `breathing-apparatus-${c.key}`,
           title: TITLES[c.key]!,
-          subject: { type: 'masterdata.person', id: s.personId, label: `${s.firstName} ${s.lastName}` },
+          subject: { type: 'masterdata.person', id: s.personId, label: `${s.lastName}, ${s.firstName}` },
           dueOn: c.dueOn ?? berlinDate(),
           leadDays: rule.leadDays,
           departmentIds: s.departmentIds,
-          permission: c.key === 'examination' ? EXAMINATIONS : EVIDENCE,
+          permission: EVIDENCE,
         })),
     )];
   }

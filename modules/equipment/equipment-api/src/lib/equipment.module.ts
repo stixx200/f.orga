@@ -1,7 +1,7 @@
 import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { Attachments, CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
-import { EQUIPMENT_MANIFEST, EQUIPMENT_USAGE } from '@forga/equipment-contracts';
+import { EQUIPMENT_MANIFEST, EQUIPMENT_SETTINGS, EQUIPMENT_USAGE } from '@forga/equipment-contracts';
 import { ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
 import { EQUIPMENT_MIGRATIONS } from '../migrations/index.js';
 import { CatalogController } from './catalog/catalog.controller.js';
@@ -9,7 +9,7 @@ import { EquipmentData } from './data/equipment.data.js';
 import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, UsageEntity } from './equipment.entities.js';
 import { InventoryImport } from './imports/inventory.import.js';
 import { ItemsController } from './items/items.controller.js';
-import { INSPECT, ItemsService, READ, WRITE } from './items/items.service.js';
+import { ItemsService, READ } from './items/items.service.js';
 import { EquipmentLists } from './lists/equipment.lists.js';
 
 /** Global, so other modules can inject `EQUIPMENT_USAGE` (consumables of an incident report). */
@@ -33,6 +33,7 @@ export class EquipmentModule implements OnModuleInit {
     private readonly data: EquipmentData,
     private readonly inventory: InventoryImport,
     private readonly attachments: Attachments,
+    private readonly items: ItemsService,
     @Inject(ORGANIZATION_REFERENCES) private readonly references: OrganizationReferences,
   ) {}
 
@@ -50,6 +51,7 @@ export class EquipmentModule implements OnModuleInit {
     this.historyAccess.registerPermission('equipment.category', 'equipment.settings.manage');
     // Protocols and photos of inspections: like the inspection itself.
     const inspection = (id: string) => this.em.fork().findOne(InspectionEntity, id, { populate: ['item'] });
+    const breathing = async (categoryKey: string) => (await this.items.breathingCategories()).has(categoryKey);
     this.attachments.register('equipment.inspection', {
       read: async (user, id) => {
         const i = await inspection(id);
@@ -57,7 +59,7 @@ export class EquipmentModule implements OnModuleInit {
       },
       write: async (user, id) => {
         const i = await inspection(id);
-        return Boolean(i) && user.can(INSPECT, i!.item.departmentId);
+        return Boolean(i) && this.items.may(user, 'inspect', i!.item, await breathing(i!.item.categoryKey));
       },
     });
     // Photos of defects: the reporter adds them while the defect is open, the equipment officer always.
@@ -69,7 +71,7 @@ export class EquipmentModule implements OnModuleInit {
       },
       write: async (user, id) => {
         const d = await defect(id);
-        return Boolean(d) && (user.can(WRITE, d!.item.departmentId) || (d!.reportedByUserId === user.id && d!.status === 'reported'));
+        return Boolean(d) && (this.items.may(user, 'write', d!.item, await breathing(d!.item.categoryKey)) || (d!.reportedByUserId === user.id && d!.status === 'reported'));
       },
     });
     this.historyAccess.registerPermission('equipment.equipment_type', 'equipment.settings.manage');
@@ -87,4 +89,5 @@ export const equipmentModule = defineModule({
   entities: [CategoryEntity, EquipmentTypeEntity, EquipmentItemEntity, InspectionEntity, DefectEntity, UsageEntity],
   historized: [CategoryEntity, EquipmentTypeEntity, EquipmentItemEntity, { entity: InspectionEntity, parent: 'item' }, { entity: DefectEntity, parent: 'item' }],
   migrations: EQUIPMENT_MIGRATIONS,
+  settings: EQUIPMENT_SETTINGS,
 });

@@ -3,8 +3,16 @@ import type { Finding } from '@forga/incidents-contracts';
 type T = (key: string, options?: Record<string, unknown>) => string;
 
 /** Text of a finding in the UI language, e.g. "Jonas Keller steht auch im Bericht Ahornfeld." */
-export const findingText = (finding: Finding, t: T): string =>
-  t(`rules.${finding.rule}${finding.rule === 'times-invalid' && finding.params['person'] ? '-person' : ''}`, finding.params);
+export function findingText(finding: Finding, t: T): string {
+  const params: Record<string, unknown> = { ...finding.params };
+  // Names of report times and person statuses come as keys.
+  if (finding.rule === 'times-order') {
+    params['first'] = t(`times.${String(params['first'])}`);
+    params['second'] = t(`times.${String(params['second'])}`);
+  }
+  if (finding.rule === 'person-not-operational') params['status'] = t(`personStatus.${String(params['status'])}`);
+  return t(`rules.${finding.rule}${finding.rule === 'times-invalid' && finding.params['person'] ? '-person' : ''}`, params);
+}
 
 /** Errors other than a missing primary report block submitting; that one is fixed on the incident. */
 export const blocking = (findings: Finding[]) => findings.filter((f) => f.level === 'error' && f.rule !== 'primary-missing');

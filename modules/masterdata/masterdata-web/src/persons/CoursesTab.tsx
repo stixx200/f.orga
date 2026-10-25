@@ -22,7 +22,7 @@ export function CoursesTab({ person, disabled, onChanged }: { person: Person; di
   const localized = useLocalized();
   const queryClient = useQueryClient();
   const session = useSession().data;
-  const planner = can(session, PLAN, person.memberships[0]?.departmentId);
+  const planner = person.memberships.some((m) => can(session, PLAN, m.departmentId)) || session?.permissions[PLAN] === 'brigade';
   const { data: courses = [] } = useCourses();
   const attendancesKey = [...keys.persons, person.id, 'attendances'];
   const { data: attendances = [] } = useQuery({ queryKey: attendancesKey, queryFn: () => api<CourseAttendance[]>(`masterdata/persons/${person.id}/course-attendances`) });
@@ -57,10 +57,13 @@ export function CoursesTab({ person, disabled, onChanged }: { person: Person; di
     setForm({ course: null, startsOn: today(), endsOn: null, result: 'passed', location: '', priority: 2, desiredPeriod: '' });
     setDialog(d);
   };
-  const actions = (submit: () => void, loading: boolean) => (
+  // An attendance ends after it starts; a passed course must have ended.
+  const endError = form.endsOn && form.startsOn && form.endsOn < form.startsOn ? t('courses.endBeforeStart') : undefined;
+  const futureError = dialog === 'attendance' && form.result === 'passed' && (form.endsOn ?? form.startsOn ?? '') > today() ? t('courses.notFinished') : undefined;
+  const actions = (submit: () => void, loading: boolean, ok = true) => (
     <Group justify="flex-end">
       <Button variant="default" onClick={() => setDialog(null)}>{common('actions.cancel')}</Button>
-      <Button onClick={submit} loading={loading} disabled={!form.course}>{common('actions.save')}</Button>
+      <Button onClick={submit} loading={loading} disabled={!form.course || !ok}>{common('actions.save')}</Button>
     </Group>
   );
   const own = nominations.filter((n) => n.personId === person.id && n.status !== 'completed');
@@ -106,12 +109,12 @@ export function CoursesTab({ person, disabled, onChanged }: { person: Person; di
         </Panel>
       )}
       {dialog === 'attendance' && (
-        <ResponsiveDialog opened onClose={() => setDialog(null)} title={t('courses.addAttendance')} actions={actions(() => addAttendance.mutate(undefined), addAttendance.isPending)}>
+        <ResponsiveDialog opened onClose={() => setDialog(null)} title={t('courses.addAttendance')} actions={actions(() => addAttendance.mutate(undefined), addAttendance.isPending, !endError && !futureError && Boolean(form.startsOn))}>
           <Stack gap="sm">
             <Select label={t('courses.course')} data={courses.filter((c) => c.active).map((c) => ({ value: c.key, label: localized(c.name) }))} value={form.course} onChange={(v) => setForm({ ...form, course: v })} searchable required />
             <SimpleGrid cols={2}>
               <DateInput label={t('courses.startsOn')} value={form.startsOn} onChange={(v) => setForm({ ...form, startsOn: v })} valueFormat="DD.MM.YYYY" required />
-              <DateInput label={t('courses.endsOn')} value={form.endsOn} onChange={(v) => setForm({ ...form, endsOn: v })} valueFormat="DD.MM.YYYY" clearable />
+              <DateInput label={t('courses.endsOn')} value={form.endsOn} onChange={(v) => setForm({ ...form, endsOn: v })} valueFormat="DD.MM.YYYY" clearable error={endError ?? futureError} />
             </SimpleGrid>
             <Radio.Group label={t('courses.result')} value={form.result} onChange={(v) => setForm({ ...form, result: v })}>
               <Group mt={4}>

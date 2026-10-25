@@ -9,7 +9,8 @@ import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PaymentDetails,
 import { ItemEntity, RunEntity } from '../compensation.entities.js';
 import { durationHours, toItemDto } from '../items/items.service.js';
 
-type ParsedRun = ReturnType<typeof RunInput.parse>;
+type Payee = { key: string; name: string; iban: string; amount: number; purpose: string };
+type ParsedRun =ReturnType<typeof RunInput.parse>;
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 const name = (p: Pick<PaymentDetails, 'firstName' | 'lastName'> | undefined) => (p ? `${p.lastName}, ${p.firstName}` : '–');
 const amountOf = (i: ItemEntity) => Number(i.amount ?? 0);
@@ -58,6 +59,9 @@ export class RunsService {
       itemCount: items.length,
       closedAt: iso(run.closedAt),
       closedBy: run.closedBy ?? null,
+      withoutIban: run.withoutIban ?? [],
+      approvedAt: iso(run.approvedAt),
+      approvedBy: run.approvedBy ?? null,
       handedOverAt: iso(run.handedOverAt),
       paidAt: iso(run.paidAt),
       version: run.version,
@@ -75,10 +79,32 @@ export class RunsService {
     return run;
   }
 
-  /** Open items up to the end of the period that are in no run yet (also older ones). */
+  /** Open items up to the end of the period that are in no run yet (also older ones), except those deferred from this run. */
   private async collect(em: EntityManager, run: RunEntity): Promise<void> {
-    const open = await em.find(ItemEntity, { run: null, date: { $lte: run.to } });
-    for (const item of open) item.run = run;
+    const open = await em.find(ItemEntity, { run: null, date: { $lte: run.to }, $or: [{ deferredFrom: null }, { deferredFrom: { $ne: run.id } }] });
+    for (const item of open) Object.assign(item, { run, deferredFrom: null });
+  }
+
+  /** "In nächsten Lauf verschieben": items leave the draft and are not taken over again by it; the next run takes them. */
+  async defer(id: string, itemIds: string[]): Promise<RunDetail> {
+    const em = this.em.fork();
+    const run = await this.load(em, id);
+    if (run.status !== 'draft') throw new ConflictException({ code: 'compensation.runClosed' });
+    const items = await em.find(ItemEntity, { id: { $in: itemIds }, run: run.id });
+    if (items.length !== itemIds.length) throw new BadRequestException({ code: 'compensation.notInRun' });
+    for (const item of items) Object.assign(item, { run: null, deferredFrom: run.id });
+    await em.flush();
+    return this.detail(id);
+  }
+
+  /** Takes deferred items back into the draft. */
+  async undefer(id: string, itemIds: string[]): Promise<RunDetail> {
+    const em = this.em.fork();
+    const run = await this.load(em, id);
+    if (run.status !== 'draft') throw new ConflictException({ code: 'compensation.runClosed' });
+    for (const item of await em.find(ItemEntity, { id: { $in: itemIds }, run: null, deferredFrom: run.id })) Object.assign(item, { run, deferredFrom: null });
+    await em.flush();
+    return this.detail(id);
   }
 
   async create(input: ParsedRun): Promise<RunDetail> {
@@ -137,9 +163,11 @@ export class RunsService {
       d.amount = round2(d.amount + amountOf(item));
       departments.set(d.departmentId, d);
     }
+    const deferred = run.status === 'draft' ? await em.find(ItemEntity, { run: null, deferredFrom: run.id }, { orderBy: { date: 'asc' } }) : [];
     return {
       ...this.toDto(run, items),
       items: items.map(toItemDto),
+      deferred: deferred.map(toItemDto),
       persons: [...persons.values()]
         .map(({ reports, trainings, ...p }) => ({ ...p, incidents: reports.size, sessions: trainings.size }))
         .toSorted((a, b) => a.name.localeCompare(b.name)),
@@ -212,19 +240,32 @@ export class RunsService {
         }
       }
       const total = list.reduce((s, i) => s + amountOf(i), 0);
-      if (total > 0 && !people.get(personId)?.iban) add('no-iban', list);
+      if (total > 0 && !validIban(people.get(personId)?.iban ?? '')) add('no-iban', list);
       if (total < 0) add('negative-total', list, String(round2(total)));
     }
     return problems;
   }
 
-  async close(user: AuthenticatedUser, id: string): Promise<RunDetail> {
+  /** Payees (persons, employers) of a run without valid IBAN. */
+  private async withoutValidIban(detail: RunDetail): Promise<string[]> {
+    const people = new Map((await this.directory.paymentDetails(detail.persons.map((p) => p.personId))).map((p) => [p.id, p]));
+    return this.payees(detail, people, '').filter((p) => !validIban(p.iban)).map((p) => p.name);
+  }
+
+  /**
+   * Closes the run. Persons (or employers) without valid IBAN block it unless confirmed (`acceptMissingIban`); the
+   * confirmed names are kept and left out of the transfer files, so they are paid another way.
+   */
+  async close(user: AuthenticatedUser, id: string, acceptMissingIban = false): Promise<RunDetail> {
     const detail = await this.detail(id);
     if (detail.status !== 'draft') throw new ConflictException({ code: 'compensation.runClosed' });
     const blocking = detail.problems.filter((p) => p.blocking);
     if (blocking.length) throw new ConflictException({ code: 'compensation.problemsOpen', count: blocking.length });
+    const withoutIban = await this.withoutValidIban(detail);
+    if (withoutIban.length && !acceptMissingIban) throw new ConflictException({ code: 'compensation.ibanMissing', names: withoutIban });
     const em = this.em.fork();
     const run = await this.load(em, id);
+    run.withoutIban = withoutIban;
     // A negative total (corrections after a payout) cannot be transferred: those items stay open
     // and are offset against the person's next amounts.
     const totals = new Map<string, number>();
@@ -239,11 +280,23 @@ export class RunsService {
     return closed;
   }
 
+  /** Factual approval ("sachlich richtig") of a closed run before it is handed over for payout. */
+  async approve(user: AuthenticatedUser, id: string): Promise<RunDetail> {
+    const em = this.em.fork();
+    const run = await this.load(em, id);
+    if (run.status !== 'closed') throw new ConflictException({ code: 'compensation.invalidTransition', from: run.status });
+    if (run.approvedAt) throw new ConflictException({ code: 'compensation.alreadyApproved' });
+    Object.assign(run, { approvedAt: new Date(), approvedBy: user.displayName });
+    await em.flush();
+    return this.detail(id);
+  }
+
   async advance(id: string, status: 'handed-over' | 'paid'): Promise<RunDetail> {
     const em = this.em.fork();
     const run = await this.load(em, id);
     const from = status === 'handed-over' ? 'closed' : 'handed-over';
     if (run.status !== from) throw new ConflictException({ code: 'compensation.invalidTransition', from: run.status });
+    if (status === 'handed-over' && (await this.config()).factualApproval && !run.approvedAt) throw new ConflictException({ code: 'compensation.approvalMissing' });
     run.status = status;
     if (status === 'handed-over') run.handedOverAt = new Date();
     else run.paidAt = new Date();
@@ -297,7 +350,7 @@ export class RunsService {
    * Transfers of a run: one per person with a positive total, minus the loss of earnings assigned to the employer
    * (items from the assignment date), which is paid to the employer, one transfer per employer account.
    */
-  private payees(detail: RunDetail, people: Map<string, PaymentDetails>, purpose: string): { key: string; name: string; iban: string; amount: number; purpose: string }[] {
+  private payees(detail: RunDetail, people: Map<string, PaymentDetails>, purpose: string): Payee[] {
     const assigned = (personId: string) => {
       const from = people.get(personId)?.lossOfEarningsAssignedFrom;
       if (!from) return 0;
@@ -326,13 +379,7 @@ export class RunsService {
    */
   async transferXml(id: string, config: CompensationSettings, executionDate: string): Promise<{ number: string; xml: string }> {
     if (!config.payer.name.trim() || !validIban(config.payer.iban)) throw new BadRequestException({ code: 'compensation.payerMissing' });
-    const detail = await this.detail(id);
-    if (detail.status === 'draft') throw new ConflictException({ code: 'compensation.runNotClosed' });
-    const people = new Map((await this.directory.paymentDetails(detail.persons.map((p) => p.personId))).map((p) => [p.id, p]));
-    const purpose = config.transferPurpose.replace('{period}', `${germanDate(detail.from)}–${germanDate(detail.to)}`);
-    const payees = this.payees(detail, people, purpose);
-    const invalid = payees.filter((p) => !validIban(p.iban)).map((p) => p.name);
-    if (invalid.length) throw new ConflictException({ code: 'compensation.invalidIban', names: invalid.join(', ') });
+    const { detail, payees } = await this.transfers(id, config.transferPurpose);
     const transfers = payees.map((p) => ({ endToEndId: `${detail.number}-${p.key.slice(-8)}`, name: p.name, iban: p.iban, amount: p.amount, purpose: p.purpose }));
     return { number: detail.number, xml: sepaCreditTransfer(config.payer, transfers, { messageId: `FORGA-${detail.number}-${Date.now().toString(36)}`, executionDate, createdAt: new Date() }) };
   }
@@ -386,11 +433,24 @@ export class RunsService {
     return { number: detail.number, pdf };
   }
 
-  async transferCsv(id: string, purposeTemplate: string): Promise<{ number: string; csv: string }> {
+  /**
+   * Transfers of a closed run (CSV and SEPA alike): payees without valid IBAN confirmed when closing are left out;
+   * any other payee without valid IBAN (e.g. an account removed later) refuses the file with the names.
+   */
+  private async transfers(id: string, purposeTemplate: string): Promise<{ detail: RunDetail; payees: Payee[] }> {
     const detail = await this.detail(id);
+    if (detail.status === 'draft') throw new ConflictException({ code: 'compensation.runNotClosed' });
     const people = new Map((await this.directory.paymentDetails(detail.persons.map((p) => p.personId))).map((p) => [p.id, p]));
     const purpose = purposeTemplate.replace('{period}', `${germanDate(detail.from)}–${germanDate(detail.to)}`);
-    const lines = this.payees(detail, people, purpose).map((p) => [p.name, p.iban, p.amount.toFixed(2).replace('.', ','), p.purpose].map(escape).join(';'));
+    const payees = this.payees(detail, people, purpose).filter((p) => validIban(p.iban) || !detail.withoutIban.includes(p.name));
+    const invalid = payees.filter((p) => !validIban(p.iban)).map((p) => p.name);
+    if (invalid.length) throw new ConflictException({ code: 'compensation.invalidIban', names: invalid.join(', ') });
+    return { detail, payees };
+  }
+
+  async transferCsv(id: string, purposeTemplate: string): Promise<{ number: string; csv: string }> {
+    const { detail, payees } = await this.transfers(id, purposeTemplate);
+    const lines = payees.map((p) => [p.name, p.iban, p.amount.toFixed(2).replace('.', ','), p.purpose].map(escape).join(';'));
     return { number: detail.number, csv: `﻿Name;IBAN;Betrag;Verwendungszweck\r\n${lines.join('\r\n')}\r\n` };
   }
 }

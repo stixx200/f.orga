@@ -1,6 +1,6 @@
 import { defineEntity, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import type { Debtor, NoticeStatus, Position } from '@forga/cost-recovery-contracts';
+import type { Debtor, NoticeStatus, Payment, Position, Reminder } from '@forga/cost-recovery-contracts';
 
 export const NoticeSchema = defineEntity({
   name: 'NoticeEntity',
@@ -22,14 +22,27 @@ export const NoticeSchema = defineEntity({
     remedy: p.text().default(''),
     cashReference: p.string().default(''),
     status: p.string().$type<NoticeStatus>().default('draft'),
+    /** Submitted for review by (four-eyes principle: the user ID). */
+    submittedAt: p.datetime().nullable(),
+    submittedBy: p.string().nullable(),
+    submittedById: p.string().nullable(),
     issuedAt: p.datetime().nullable(),
     issuedBy: p.string().nullable(),
     dueOn: p.string().length(10).nullable(),
+    /** Handed over to the treasury (Sollstellung); kept when the notice is paid, cancelled or amended later. */
+    handedOverAt: p.datetime().nullable(),
+    /** A cancellation after the handover has been reported to the treasury with an export. */
+    changeReportedAt: p.datetime().nullable(),
     /** The PDF as issued; never changed afterwards. */
     pdf: p.blob().nullable().lazy(),
     objection: p.json<{ date: string; result: 'pending' | 'upheld' | 'rejected'; note: string }>().nullable(),
     cancellation: p.json<{ date: string; reason: string }>().nullable(),
+    /** Day of the payment that settled the notice. */
     paidOn: p.string().length(10).nullable(),
+    payments: p.json<Payment[]>().defaultRaw("'[]'::jsonb"),
+    reminders: p.json<Reminder[]>().defaultRaw("'[]'::jsonb"),
+    /** Guests of the reports not charged (setting `guests`), shown as a hint on the notice. */
+    guestsNotCharged: p.integer().default(0),
     /** Amendment notice: the notice it changes (`amendsNumber` for documents). */
     amendsId: p.string().nullable(),
     amendsNumber: p.string().nullable(),

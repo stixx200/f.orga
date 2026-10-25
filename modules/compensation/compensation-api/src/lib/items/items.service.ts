@@ -1,9 +1,9 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { type AuthenticatedUser, berlinDate, DomainEvents, SettingsService } from '@forga/core-api';
-import { billableHours, CompensationSettings, incidentPayout, type CompensationStatute, type IncidentRate, type Item, ItemAmountInput, type ItemKind, type ItemSource, ManualItemInput, round2, type Rounding, trainingRateOn } from '@forga/compensation-contracts';
-import { type DutyChangedEvent, INCIDENTS_EVENTS, type ReportReleasedEvent } from '@forga/incidents-contracts';
-import { type CoursePassedEvent, MASTERDATA_EVENTS, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
+import { billableHours, CompensationSettings, incidentPayout, type CompensationStatute, type IncidentRate, type Item, ItemAmountInput, type ItemKind, type ItemSource, ManualItemInput, type MyCompensation, round2, type Rounding, trainingRateOn } from '@forga/compensation-contracts';
+import { type DutyChangedEvent, INCIDENTS_EVENTS, IncidentSettings, type ReportReleasedEvent } from '@forga/incidents-contracts';
+import { type CoursePassedEvent, type CourseRevokedEvent, MASTERDATA_EVENTS, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { type SessionClosedEvent, type SessionReopenedEvent, TRAINING_EVENTS } from '@forga/training-contracts';
 import { ItemEntity } from '../compensation.entities.js';
 
@@ -52,8 +52,11 @@ export const toItemDto = (i: ItemEntity): Item => ({
   correction: i.correction,
   reason: i.reason,
   runId: i.run?.id ?? null,
+  deferredFrom: i.deferredFrom ?? null,
   version: i.version,
 });
+
+const sum = (list: ItemEntity[]) => round2(list.reduce((s, i) => s + Number(i.amount ?? 0), 0));
 
 /** An item is open until it is part of a closed run. */
 export const isLocked = (i: ItemEntity) => Boolean(i.run && i.run.status !== 'draft');
@@ -74,16 +77,45 @@ export class ItemsService implements OnModuleInit, CompensationStatute {
     this.events.subscribe<SessionReopenedEvent>(TRAINING_EVENTS.sessionReopened, (e) => this.apply('training', e.sessionId, []));
     this.events.subscribe<DutyChangedEvent>(INCIDENTS_EVENTS.dutyChanged, (e) => this.fromDuty(e));
     this.events.subscribe<CoursePassedEvent>(MASTERDATA_EVENTS.coursePassed, (e) => this.fromCourse(e));
+    // A deleted course attendance: an open allowance disappears, one already paid out is reversed by a correction item.
+    this.events.subscribe<CourseRevokedEvent>(MASTERDATA_EVENTS.courseRevoked, (e) => this.apply('course', e.attendanceId, []));
   }
 
   async config(): Promise<CompensationSettings> {
     return CompensationSettings.parse((await this.settings.get('compensation.general')) ?? {});
   }
 
-  /** Statute parameters for incident reports (`COMPENSATION_STATUTE`). */
+  /**
+   * Statute parameters for incident reports (`COMPENSATION_STATUTE`). While no incident rates are maintained here,
+   * the incident reports keep computing with their own settings, as without this module.
+   */
   async incidentRates(): Promise<{ rates: IncidentRate[]; rounding: Rounding; minimumHours: number | null }> {
     const config = await this.config();
+    if (!config.incidentRates.length) {
+      const own = IncidentSettings.parse((await this.settings.get('incidents.general')) ?? {});
+      return { rates: own.rates, rounding: own.rounding, minimumHours: own.minimumHours };
+    }
     return { rates: config.incidentRates, rounding: config.incidentRounding, minimumHours: config.incidentMinimumHours };
+  }
+
+  /** "Meine Entschädigung": the items of the person linked to the user in a year, open and paid out. */
+  async mine(user: AuthenticatedUser, year: number): Promise<MyCompensation> {
+    if (!user.personId) throw new NotFoundException({ code: 'compensation.noPerson' });
+    const items = await this.em.fork().find(ItemEntity, { personId: user.personId, date: { $gte: `${year}-01-01`, $lte: `${year}-12-31` } }, { populate: ['run'], orderBy: { date: 'desc', createdAt: 'desc' } });
+    return { year, items: items.map((i) => ({ ...toItemDto(i), paidOut: isLocked(i) })), open: sum(items.filter((i) => !isLocked(i))), paid: sum(items.filter((i) => isLocked(i))) };
+  }
+
+  /** Several amounts at once, e.g. the loss of earnings of a run in a list; all or none. */
+  async setAmounts(user: AuthenticatedUser, input: { id: string; amount: number; reason: string }[]): Promise<Item[]> {
+    const em = this.em.fork();
+    const items: ItemEntity[] = [];
+    for (const row of input) {
+      const item = await this.loadOpen(em, row.id);
+      this.assignAmount(user, item, row);
+      items.push(item);
+    }
+    await em.flush();
+    return items.map(toItemDto);
   }
 
   /** Items of persons in departments where the user has the permission; brigade-wide all. */
@@ -240,12 +272,16 @@ export class ItemsService implements OnModuleInit, CompensationStatute {
   async setAmount(user: AuthenticatedUser, id: string, input: ParsedAmount): Promise<Item> {
     const em = this.em.fork();
     const item = await this.loadOpen(em, id);
+    this.assignAmount(user, item, input);
+    await em.flush();
+    return toItemDto(item);
+  }
+
+  private assignAmount(user: AuthenticatedUser, item: ItemEntity, input: { amount: number; reason: string }): void {
     const rateMissing = item.kind === 'compensation' && (item.rate === null || item.rate === undefined) && !item.correction;
     if (item.kind !== 'loss-of-earnings' && item.source !== 'manual' && !rateMissing) throw new BadRequestException({ code: 'compensation.amountFixed' });
     item.amount = input.amount;
     if (input.reason) item.reason = `${input.reason} (${user.displayName})`;
-    await em.flush();
-    return toItemDto(item);
   }
 
   async removeManual(user: AuthenticatedUser, id: string): Promise<void> {

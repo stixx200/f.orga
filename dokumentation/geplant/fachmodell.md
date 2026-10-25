@@ -82,7 +82,7 @@ Ziel ist eine Software für jede Feuerwehr: Was eine örtliche Satzung regelt, g
 
 - Personendaten sind sensibel (Gesundheit: Eignungsuntersuchung). Untersuchungsergebnisse werden nur als „geeignet bis“ gespeichert, keine Befunde.
 - Leserechte auf Personen sind abteilungsbezogen. Felder mit Gesundheitsbezug brauchen ein eigenes Recht.
-- Ausgeschiedene Mitglieder werden nach einer konfigurierbaren Frist anonymisiert. Einsatzberichte behalten dann „Person (ausgeschieden)“ statt des Namens, die Statistik bleibt korrekt.
+- Ausgeschiedene Mitglieder werden nach einer konfigurierbaren Frist anonymisiert (Standard: nie, bis ein Administrator eine Frist wählt). Einsatzberichte behalten dann den neutralen Namen „N. N.“, die Statistik bleibt korrekt.
 - Auskunft nach Art. 15 DSGVO: Export aller Daten zu einer Person als PDF/JSON.
 
 ## Rollen
@@ -122,6 +122,9 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Lehrgang | `Course` |
 | Lehrgangsteilnahme | `CourseAttendance` |
 | Lehrgangsvormerkung | `CourseNomination` |
+| Lehrgangstermin | `CourseRun` |
+| Lehrgangsbedarf (Haben, Soll, Vorgemerkt je Lehrgang und Abteilung) | `CourseNeed`, Soll `targets` am Lehrgang |
+| Gruppe (als Einheit einer Abteilung), Gruppenführer | `DepartmentGroup`, `leader` |
 | Qualifikation | `Qualification` |
 | Dienstgrad | `Rank` |
 | Beförderung | `Promotion` |
@@ -144,7 +147,9 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Beteiligte | involved parties |
 | Sonstige Kräfte | other agencies |
 | Freigabe | release |
+| Vorprüfung (Abteilungskommandant) | review, Recht `incidents.reports.review` |
 | Sperre | lock |
+| Ende bestätigt | `endConfirmed` |
 
 ### Nachweise und Fristen
 

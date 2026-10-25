@@ -14,7 +14,7 @@ export class EvidenceController {
   @Get('status')
   @RequirePermissions(READ)
   async status(@CurrentUser() user: AuthenticatedUser, @Query('departmentId') departmentId?: string, @Query('color') color?: string): Promise<FitnessStatus[]> {
-    const statuses = await this.evidence.statuses(await this.evidence.wearers(user, departmentId));
+    const statuses = await this.evidence.visibleStatuses(user, await this.evidence.wearers(user, departmentId));
     return statuses.filter((s) => !color || s.color === color).toSorted((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`));
   }
 

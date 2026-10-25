@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { CatalogEntry, Department, MembershipSettings, Person, PersonSummary, Station, Vehicle } from '@forga/masterdata-contracts';
+import type { CatalogEntry, Department, DepartmentGroup, MembershipSettings, Person, PersonSummary, Station, Vehicle } from '@forga/masterdata-contracts';
 import { api, withQuery } from '@forga/web-sdk';
 
 export const MANAGE = 'masterdata.organization.manage';
@@ -69,3 +69,20 @@ export const personName = (p: Pick<PersonSummary, 'firstName' | 'lastName'>) => 
 
 /** Today in Europe/Berlin as `YYYY-MM-DD`. */
 export const today = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
+
+/** Full years between birth date and reference date (`YYYY-MM-DD`). */
+export function ageOn(birthDate: string, date: string): number {
+  const [by, bm, bd] = birthDate.split('-').map(Number);
+  const [y, m, d] = date.split('-').map(Number);
+  return y - by - (m < bm || (m === bm && d < bd) ? 1 : 0);
+}
+
+/** Groups of the departments the user may see (`DepartmentGroup`). */
+export function useGroups() {
+  return useQuery({ queryKey: ['masterdata', 'groups'], queryFn: () => api<DepartmentGroup[]>('masterdata/groups') });
+}
+
+/** Groups the user leads ("Meine Gruppe"). */
+export function useMyGroups() {
+  return useQuery({ queryKey: ['masterdata', 'groups', 'mine'], queryFn: () => api<DepartmentGroup[]>('masterdata/groups/mine') });
+}

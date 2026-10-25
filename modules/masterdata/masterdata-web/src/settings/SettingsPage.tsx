@@ -1,6 +1,6 @@
 import { Button, Group, MultiSelect, NumberInput, SimpleGrid, Stack, TagsInput, Text, TextInput } from '@mantine/core';
 import { useState } from 'react';
-import { MembershipSettings } from '@forga/masterdata-contracts';
+import { MEMBERSHIP_AGE_BOUNDS, MembershipSettings } from '@forga/masterdata-contracts';
 import { send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { PageHeader, Panel, useAction } from '@forga/web-ui';
 import { useCatalog, useMembershipRules } from '../api';
@@ -19,14 +19,28 @@ function RulesForm({ value }: { value: Rules }) {
     success: t('settings.saved'),
     invalidate: [['core', 'settings', 'masterdata.membership']],
   });
-  const number = (key: (typeof AGES)[number] | 'probationMonths' | 'maxDeputies', max: number) => (
-    <NumberInput key={key} label={t(`settings.${key}`)} value={form[key]} onChange={(v) => set(key, Number(v) || 0)} min={0} max={max} />
+  const bounds = (key: (typeof AGES)[number] | 'probationMonths' | 'maxDeputies'): readonly [number, number] =>
+    key === 'probationMonths' ? [0, 60] : key === 'maxDeputies' ? [0, 10] : MEMBERSHIP_AGE_BOUNDS[key];
+  const outOfRange = (key: (typeof AGES)[number] | 'probationMonths' | 'maxDeputies') => form[key] < bounds(key)[0] || form[key] > bounds(key)[1];
+  const number = (key: (typeof AGES)[number] | 'probationMonths' | 'maxDeputies') => (
+    <NumberInput
+      key={key}
+      label={t(`settings.${key}`)}
+      value={form[key]}
+      onChange={(v) => set(key, Number(v) || 0)}
+      min={bounds(key)[0]}
+      max={bounds(key)[1]}
+      allowNegative={false}
+      allowDecimal={false}
+      error={outOfRange(key) ? t('settings.range', { min: bounds(key)[0], max: bounds(key)[1] }) : undefined}
+    />
   );
+  const invalid = [...AGES, 'probationMonths', 'maxDeputies'].some((key) => outOfRange(key as (typeof AGES)[number]));
   return (
     <Stack gap="md">
       <Panel title={t('settings.admission')}>
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          {number('probationMonths', 60)}
+          {number('probationMonths')}
           <TextInput label={t('settings.admissionDecidedBy')} description={t('settings.admissionDecidedByHint')} value={form.admissionDecidedBy} onChange={(e) => set('admissionDecidedBy', e.currentTarget.value)} />
           <MultiSelect
             label={t('settings.probationQualifications')}
@@ -40,11 +54,11 @@ function RulesForm({ value }: { value: Rules }) {
         </SimpleGrid>
       </Panel>
       <Panel title={t('settings.ages')}>
-        <SimpleGrid cols={{ base: 1, sm: 2 }}>{AGES.map((key) => number(key, 99))}</SimpleGrid>
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>{AGES.map((key) => number(key))}</SimpleGrid>
       </Panel>
       <Panel title={t('settings.organization')}>
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          {number('maxDeputies', 10)}
+          {number('maxDeputies')}
           <TagsInput
             label={t('settings.jubileeYears')}
             description={t('settings.jubileeYearsHint')}
@@ -55,7 +69,7 @@ function RulesForm({ value }: { value: Rules }) {
       </Panel>
       <Group justify="space-between">
         <Button variant="default" onClick={() => setForm(MembershipSettings.parse({}))}>{t('settings.reset')}</Button>
-        <Button loading={save.isPending} onClick={() => save.mutate(form)}>{common('actions.save')}</Button>
+        <Button loading={save.isPending} disabled={invalid} onClick={() => save.mutate(form)}>{common('actions.save')}</Button>
       </Group>
     </Stack>
   );

@@ -32,6 +32,8 @@ export const ListInfo = z.object({
   /** Adds an empty, wide column for signatures (attendance and signature lists). */
   signatureColumn: z.boolean(),
   orientation: z.enum(['portrait', 'landscape']),
+  /** Where the user may run the list: brigade-wide or the listed departments (offered for department parameters). */
+  departments: z.union([z.literal('brigade'), z.array(z.string())]),
 });
 export type ListInfo = z.infer<typeof ListInfo>;
 

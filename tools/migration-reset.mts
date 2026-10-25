@@ -14,7 +14,8 @@ import { MikroORM } from '@mikro-orm/postgresql';
 import { INSTALLED_MODULES } from '../apps/server/src/app/installed-modules.ts';
 
 const SERVER = (process.env.DATABASE_URL ?? 'postgresql://forga:forga@localhost:5433/forga').replace(/\/[^/]*$/, '');
-const TEMPORARY = 'forga_migration_reset';
+/** Own name per checkout (`FORGA_RESET_DATABASE`), so parallel worktrees do not share the temporary database. */
+const TEMPORARY = process.env.FORGA_RESET_DATABASE ?? 'forga_migration_reset';
 
 const directory = (id: string) => (id === 'core' ? 'libs/core/core-api' : `modules/${id}/${id}-api`);
 
@@ -63,4 +64,7 @@ try {
 } finally {
   await onServer([`drop database if exists "${TEMPORARY}" with (force)`]);
 }
+// A watch build may have compiled the briefly emptied migration lists; without its incremental state the next build
+// compiles the new migrations again instead of keeping the empty lists in `dist`.
+for (const id of modules) rmSync(join(directory(id), 'dist/tsconfig.lib.tsbuildinfo'), { force: true });
 console.log('Done. Recreate the development database; the server applies the new migrations on its next start.');

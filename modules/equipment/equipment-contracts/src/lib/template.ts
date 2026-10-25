@@ -10,8 +10,9 @@ const VISUAL = ['Sichtprüfung äußerer Zustand', 'Funktion', 'Kennzeichnung le
 
 /** Category tree of a volunteer brigade. */
 export const DGUV_CATEGORIES: CategoryInput[] = [
-  c('breathing', 'Atemschutz', 'Breathing apparatus', { breathingApparatus: true }),
-  c('hoses', 'Schläuche und Armaturen', 'Hoses and fittings', { tracking: 'stock' }),
+  c('breathing', 'Atemschutz', 'Breathing apparatus', { breathingApparatus: true, lockWhenOverdue: true }),
+  // Hoses as single items by default, so each hose has its own inspection record (template option `hoseTracking`).
+  c('hoses', 'Schläuche und Armaturen', 'Hoses and fittings'),
   c('ladders', 'Leitern', 'Ladders'),
   c('rescue', 'Rettungsgeräte', 'Rescue equipment'),
   c('electrical', 'Elektro', 'Electrical'),
@@ -48,10 +49,18 @@ export const DGUV_TYPES: EquipmentTypeInput[] = [
   t('gas-detector', 'Gasmessgerät', 'Gas detector', 'radio', [i('calibration', 'Kalibrierung nach Hersteller', 'Calibration per manufacturer', 12, 'expert')]),
   t('fuel-can', 'Kraftstoffkanister PE', 'Fuel can PE', 'consumables', [i('can-check', 'Sichtprüfung', 'Visual check', 6)]),
   t('oil-binder', 'Ölbindemittel (Sack)', 'Oil binder (bag)', 'consumables', []),
-  t('fire-vehicle', 'Feuerwehrfahrzeug', 'Fire vehicle', 'vehicles', [
-    i('vehicle-annual', 'Jährliche Prüfung DGUV 305-002', 'Annual inspection DGUV 305-002', 12),
+  // Vehicles by weight class. The intervals of the roadworthiness test and the safety inspection are template values:
+  // check them against the registration of each vehicle and override them per item where they differ.
+  t('fire-vehicle', 'Feuerwehrfahrzeug über 3,5 t', 'Fire vehicle over 3.5 t', 'vehicles', [
+    i('vehicle-annual', 'Jährliche Prüfung (DGUV Vorschrift 70, Grundsatz 305-002)', 'Annual inspection (DGUV regulation 70, principle 305-002)', 12),
     i('vehicle-hu', 'Hauptuntersuchung (HU)', 'Roadworthiness test', 12, 'expert'),
     i('vehicle-safety', 'Sicherheitsprüfung', 'Safety inspection', 6, 'expert'),
-    i('vehicle-dguv70', 'Prüfung nach DGUV Vorschrift 70', 'Inspection per DGUV regulation 70', 12),
+  ]),
+  t('fire-vehicle-light', 'Feuerwehrfahrzeug bis 3,5 t (z. B. KdoW, MTW)', 'Fire vehicle up to 3.5 t (e.g. command car, crew van)', 'vehicles', [
+    i('vehicle-annual', 'Jährliche Prüfung (DGUV Vorschrift 70, Grundsatz 305-002)', 'Annual inspection (DGUV regulation 70, principle 305-002)', 12),
+    i('vehicle-hu', 'Hauptuntersuchung (HU)', 'Roadworthiness test', 24, 'expert'),
   ]),
 ];
+
+/** Vehicle types of the master data catalog that get the template type for vehicles up to 3.5 t. */
+export const LIGHT_VEHICLE_TYPES = ['kdow', 'mtw'];

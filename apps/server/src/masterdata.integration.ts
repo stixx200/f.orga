@@ -137,8 +137,12 @@ describe('persons', () => {
 
   it('handles probation changes, admission and status rules', async () => {
     await put(`persons/${ids.jonas}/probation`, { probationEndsOn: '2026-09-15', reason: 'Jugendfeuerwehr', decidedOn: '2026-04-10' }).expect(200);
-    const admitted = await post(`persons/${ids.jonas}/admission`, { decidedOn: '2026-09-20' }).expect(201);
+    // Truppmann Teil 1 is missing: the admission needs a reason; a decision before joining is refused.
+    expect((await post(`persons/${ids.jonas}/admission`, { decidedOn: '2026-09-20' }).expect(400)).body).toMatchObject({ code: 'masterdata.admissionReasonRequired', missing: ['truppmann-1'] });
+    expect((await post(`persons/${ids.jonas}/admission`, { decidedOn: '2026-03-01', reason: 'x' }).expect(400)).body.code).toBe('masterdata.admissionBeforeJoining');
+    const admitted = await post(`persons/${ids.jonas}/admission`, { decidedOn: '2026-09-20', reason: 'Truppmann Teil 1 im Herbst' }).expect(201);
     expect(admitted.body).toMatchObject({ status: 'active', admittedOn: '2026-09-20', probationEndsOn: '2026-09-15' });
+    expect(admitted.body.notes).toContain('Truppmann Teil 1 im Herbst');
     await post(`persons/${ids.jonas}/admission`, { decidedOn: '2026-09-21' }).expect(400);
   });
 });
@@ -399,5 +403,187 @@ describe('transfers between youth, operational and veterans departments', () => 
         expect.objectContaining({ departmentId: veterans, from: '2026-10-01', to: null, primary: true }),
       ]),
     );
+  });
+});
+
+const del = (path: string, cookie = admin) => test.http.delete(`/api/masterdata/${path}`).set('Cookie', cookie).set(UI);
+const core = (path: string, body: unknown) => test.http.post(`/api/core/${path}`).set('Cookie', admin).set(UI).send(body as object);
+const roleId = async (templateKey: string) => ((await test.http.get('/api/core/roles').set('Cookie', admin)).body as { id: string; templateKey: string }[]).find((x) => x.templateKey === templateKey)!.id;
+const login = (username: string) => test.login({ username, password: 'auch-sehr-geheim' });
+
+describe('review fixes', () => {
+  const r: Record<string, string> = {};
+
+  beforeAll(async () => {
+    r.review = (await post('departments', { name: 'Abteilung Prüfung', shortName: 'Prüfung', type: 'operational' }).expect(201)).body.id;
+    r.youth = (await post('departments', { name: 'Jugendfeuerwehr Prüfung', shortName: 'JF Prüfung', type: 'youth', parentId: r.review }).expect(201)).body.id;
+    const person = (firstName: string, body: object = {}) =>
+      post('persons', { firstName, lastName: 'Prüfung', status: 'active', birthDate: '1990-01-01', memberships: [{ departmentId: r.review, from: '2020-01-01', primary: true }], ...body }).expect(201);
+    r.anna = (await person('Anna')).body.id;
+    r.paul = (await person('Paul')).body.id;
+    r.yuna = (await person('Yuna', { status: 'youth', birthDate: '2010-01-01', memberships: [{ departmentId: r.youth, from: '2022-01-01', primary: true }] })).body.id;
+    await core('users', { username: 'kdt.pruefung', displayName: 'Kdt. Prüfung', password: 'auch-sehr-geheim', roles: [{ roleId: await roleId('department-commander'), departmentId: r.review }] }).expect(201);
+  });
+
+  it('validates course attendances and withdraws deleted ones', async () => {
+    const events: { name: string; body: unknown }[] = [];
+    const bus = test.app.get(DomainEvents);
+    for (const name of [MASTERDATA_EVENTS.coursePassed, MASTERDATA_EVENTS.courseRevoked, MASTERDATA_EVENTS.qualificationChanged]) {
+      bus.subscribe(name, (body) => {
+        events.push({ name, body });
+      });
+    }
+    const attend = (body: object) => post(`persons/${r.paul}/course-attendances`, { course: 'truppmann-1', startsOn: '2026-04-01', result: 'passed', ...body });
+    expect((await attend({ endsOn: '2026-03-01' }).expect(400)).body.issues[0].path).toBe('endsOn');
+    expect((await attend({ endsOn: '2099-01-10' }).expect(400)).body.code).toBe('masterdata.courseNotFinished');
+
+    const nomination = (await post('course-nominations', { personId: r.paul, course: 'truppmann-1' }).expect(201)).body;
+    await put(`course-nominations/${nomination.id}`, { ...nomination, status: 'confirmed' }).expect(200);
+    const attendance = (await attend({ endsOn: '2026-04-20' }).expect(201)).body;
+    const status = async () => ((await get('course-nominations?course=truppmann-1')).body as { id: string; status: string }[]).find((n) => n.id === nomination.id)?.status;
+    expect(await status()).toBe('completed');
+    expect((await attend({ endsOn: '2026-05-20' }).expect(409)).body.code).toBe('masterdata.coursePassedAlready');
+    // A failed attempt next to the passed one is still possible.
+    await attend({ startsOn: '2025-04-01', result: 'failed' }).expect(201);
+
+    events.length = 0;
+    await del(`persons/${r.paul}/course-attendances/${attendance.id}`).expect(204);
+    expect(events).toEqual([
+      { name: MASTERDATA_EVENTS.courseRevoked, body: { personId: r.paul, course: 'truppmann-1', attendanceId: attendance.id } },
+      { name: MASTERDATA_EVENTS.qualificationChanged, body: { personId: r.paul, qualification: 'truppmann-1' } },
+    ]);
+    expect((await get(`persons/${r.paul}`)).body.qualifications).toEqual([]);
+    // The nomination the attendance completed is open again.
+    expect(await status()).toBe('confirmed');
+  });
+
+  it('plans courses with conditions, nominates in bulk and records the results of a course run', async () => {
+    // Youth members are candidates for courses open to them (Truppmann Teil 1 in the BW template), not for others.
+    const truppmann = (await get('course-planning/truppmann-1')).body;
+    expect(truppmann.candidates.map((p: { id: string }) => p.id)).toEqual(expect.arrayContaining([r.anna, r.yuna]));
+    expect(truppmann.course.allowedStatuses).toEqual(['probation', 'active', 'youth']);
+
+    // Further conditions of a course: a valid qualification and a minimum age.
+    await post('courses', { key: 'review-course', name: { de: 'Prüflehrgang', en: 'Review course' }, level: 'district', requiredQualifications: ['breathing-apparatus'], minimumAge: 18, targets: { [r.review]: 3 } }).expect(201);
+    const candidates = async () => ((await get('course-planning/review-course')).body.candidates as { id: string }[]).map((p) => p.id).filter((id) => [r.anna, r.paul, r.yuna].includes(id));
+    expect(await candidates()).toEqual([]);
+    await post(`persons/${r.anna}/qualifications`, { qualification: 'breathing-apparatus', acquiredOn: '2026-01-01' }).expect(201);
+    await post(`persons/${r.yuna}/qualifications`, { qualification: 'breathing-apparatus', acquiredOn: '2026-01-01' }).expect(201);
+    // Yuna is too young and, as a youth member, not admitted to the course.
+    expect(await candidates()).toEqual([r.anna]);
+    await post('courses', { key: 'bad-course', name: { de: 'X', en: 'X' }, level: 'district', targets: { '01a16846-0000-7000-8000-000000000000': 1 } }).expect(400);
+
+    // Bulk nomination skips persons already nominated instead of failing.
+    await post('course-nominations', { personId: r.anna, course: 'truppmann-1' }).expect(201);
+    const bulk = (await post('course-nominations/bulk', { course: 'truppmann-1', personIds: [r.anna, r.yuna], priority: 1, desiredPeriod: '2026' }).expect(201)).body;
+    expect(bulk).toEqual({ created: 1, skipped: [{ personId: r.anna, code: 'masterdata.alreadyNominated' }] });
+
+    // A municipal run with dates; the nominations are assigned to it and the results recorded at once.
+    expect((await post('course-runs', { course: 'truppmann-1', startsOn: '2026-10-10', endsOn: '2026-10-01' }).expect(400)).body.code).toBe('validation.failed');
+    const run = (await post('course-runs', { course: 'truppmann-1', startsOn: '2026-10-01', endsOn: '2026-10-10', location: 'Gerätehaus Prüfung' }).expect(201)).body;
+    const open = ((await get('course-nominations?course=truppmann-1')).body as { id: string; personId: string; status: string }[]).filter((n) => [r.anna, r.yuna, r.paul].includes(n.personId) && n.status !== 'completed');
+    for (const n of open) await put(`course-nominations/${n.id}`, { ...n, status: 'confirmed', runId: run.id }).expect(200);
+    expect((await get('course-planning/truppmann-1')).body.runs[0]).toMatchObject({ id: run.id, nominated: 3, recorded: 0 });
+
+    const results = (await post('course-results', { course: 'truppmann-1', runId: run.id, results: [{ personId: r.anna, result: 'passed' }, { personId: r.yuna, result: 'failed' }, { personId: ids.lena, result: 'passed' }] }).expect(201)).body;
+    expect(results.recorded).toBe(2);
+    // Lena passed Truppmann Teil 1 before.
+    expect(results.skipped).toEqual([{ personId: ids.lena, code: 'masterdata.coursePassedAlready' }]);
+    const anna = (await get(`persons/${r.anna}/course-attendances`)).body;
+    expect(anna).toEqual([expect.objectContaining({ course: 'truppmann-1', runId: run.id, startsOn: '2026-10-01', endsOn: '2026-10-10', location: 'Gerätehaus Prüfung', result: 'passed' })]);
+    expect((await del(`course-runs/${run.id}`).expect(409)).body.code).toBe('masterdata.courseRunHasResults');
+
+    // Course needs: per course and department those with the course, the target and the nominations.
+    const needs = (await get('course-needs').expect(200)).body as { course: string; departmentId: string; have: number; target: number | null; nominated: number }[];
+    expect(needs.find((n) => n.course === 'review-course' && n.departmentId === r.review)).toEqual({ course: 'review-course', departmentId: r.review, have: 0, target: 3, nominated: 0 });
+    expect(needs.find((n) => n.course === 'truppmann-1' && n.departmentId === r.review)).toMatchObject({ have: 1, nominated: 1 });
+
+    const year = (await test.http.get('/api/core/lists/masterdata.course-year?year=2026').set('Cookie', admin).expect(200)).body;
+    expect(year.rows).toEqual(expect.arrayContaining([expect.objectContaining({ course: 'Truppmann Teil 1', name: 'Prüfung, Anna', result: 'bestanden', location: 'Gerätehaus Prüfung' })]));
+    const nominations = (await test.http.get('/api/core/lists/masterdata.course-nominations').set('Cookie', admin).expect(200)).body;
+    expect(nominations.rows).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Prüfung, Paul', course: 'Truppmann Teil 1', run: '2026-10-01 – 2026-10-10' })]));
+  });
+
+  it('lets department commanders change only name, short name and leadership, with unique short names', async () => {
+    const kdt = await login('kdt.pruefung');
+    const department = (await get('departments')).body.find((d: { id: string }) => d.id === r.review);
+    const { id: _id, version: _v, ...fields } = department;
+    await put(`departments/${r.review}`, { ...fields, name: 'Abteilung Prüfstadt', commanderId: r.anna }, kdt).expect(200);
+    for (const change of [{ type: 'veterans' }, { population: 1200 }, { statisticsRelevant: false }, { parentId: ids.musterstadt }]) {
+      expect((await put(`departments/${r.review}`, { ...fields, ...change }, kdt).expect(403)).body.code).toBe('masterdata.departmentFieldsBrigadeOnly');
+    }
+    await put(`departments/${r.review}`, { ...fields, population: 1200 }).expect(200);
+
+    expect((await post('departments', { name: 'Altersabteilung Prüfung', shortName: 'prüfung', type: 'veterans' }).expect(409)).body).toMatchObject({ code: 'masterdata.shortNameTaken' });
+    expect((await put(`departments/${r.youth}`, { name: 'Jugendfeuerwehr Prüfung', shortName: 'Prüfung', type: 'youth', parentId: r.review }).expect(409)).body.code).toBe('masterdata.shortNameTaken');
+  });
+
+  it('manages groups of a department and shows a group leader the own group', async () => {
+    await core('users', { username: 'gf.pruefung', displayName: 'GF Prüfung', password: 'auch-sehr-geheim', personId: r.anna, roles: [{ roleId: await roleId('group-leader'), departmentId: r.review }] }).expect(201);
+    const leader = await login('gf.pruefung');
+    const kdt = await login('kdt.pruefung');
+
+    expect((await post('groups', { departmentId: r.review, name: '1. Gruppe', leaderId: r.anna, memberIds: [r.paul, r.yuna] }, kdt).expect(400)).body.code).toBe('masterdata.groupMemberNotInDepartment');
+    const group = (await post('groups', { departmentId: r.review, name: '1. Gruppe', leaderId: r.anna, memberIds: [r.paul] }, kdt).expect(201)).body;
+    expect((await post('groups', { departmentId: r.review, name: '1. gruppe' }, kdt).expect(409)).body.code).toBe('masterdata.groupNameTaken');
+    await post('groups', { departmentId: ids.musterstadt, name: 'Fremd' }, kdt).expect(403);
+    await post('groups', { departmentId: r.review, name: 'Nein' }, leader).expect(403);
+
+    expect((await get('groups/mine', leader).expect(200)).body).toEqual([group]);
+    expect((await get(`groups?departmentId=${r.review}`, leader).expect(200)).body).toEqual([group]);
+    expect((await get('groups', kdt).expect(200)).body.map((g: { id: string }) => g.id)).toEqual([group.id]);
+
+    const history = (await test.http.get(`/api/core/history/masterdata.department/${r.review}`).set('Cookie', admin).expect(200)).body as { entity: string }[];
+    expect(history.map((e) => e.entity)).toContain('masterdata.department_group');
+  });
+
+  it('validates persons and keeps notes, rest periods and the exit reason sensitive', async () => {
+    const create = (body: object) => post('persons', { firstName: 'Neu', lastName: 'Prüfung', status: 'active', memberships: [{ departmentId: r.review, from: '2026-01-01', primary: true }], ...body });
+    expect((await create({ birthDate: '2099-01-01' }).expect(400)).body.code).toBe('masterdata.birthDateInFuture');
+    expect((await create({ birthDate: '2015-01-01' }).expect(400)).body).toMatchObject({ code: 'masterdata.belowMinimumAge', age: 17 });
+    // The youth department is fine, moving a minor into the operational department is not.
+    const minor = (await create({ status: 'youth', birthDate: '2015-01-01', memberships: [{ departmentId: r.youth, from: '2026-01-01', primary: true }] }).expect(201)).body.id;
+    await put(`persons/${minor}/memberships`, [{ departmentId: r.youth, from: '2026-01-01', primary: true }, { departmentId: r.review, from: '2026-02-01' }]).expect(400);
+    const iban = (await create({ bank: { iban: 'DE89 3704 0044 0532 0130 01', accountHolder: 'x' } }).expect(400)).body;
+    expect(iban).toMatchObject({ code: 'validation.failed', issues: [expect.objectContaining({ path: 'bank.iban' })] });
+
+    await post(`persons/${r.paul}/rest-periods`, { reason: 'dormant', from: '2024-01-01', to: '2024-06-30', notes: 'Elternzeit' }).expect(201);
+    const paul = (await get(`persons/${r.paul}`)).body;
+    const { id: _i, version, rank: _rk, memberships: _ms, qualifications: _qs, ranks: _rs, honors: _hs, offices: _o, restPeriods: _rp, sensitiveHidden: _sh, status: _st, probationEndsOn: _pe, probationDecidedOn: _pd, admittedOn: _a, leftOn: _l, exitReason: _e, anonymizedAt: _an, ...fields } = paul;
+    await put(`persons/${r.paul}`, { ...fields, version, notes: 'Vertraulich: Gespräch geführt' }).expect(200);
+
+    const role = (await core('roles', { name: 'Lesen Prüfung', permissions: ['masterdata.persons.read', 'masterdata.persons.write'] }).expect(201)).body.id;
+    await core('users', { username: 'leser.pruefung', displayName: 'Leser', password: 'auch-sehr-geheim', roles: [{ roleId: role, departmentId: r.review }] }).expect(201);
+    const reader = await login('leser.pruefung');
+    const seen = (await get(`persons/${r.paul}`, reader).expect(200)).body;
+    expect(seen).toMatchObject({ notes: '', restPeriods: [], exitReason: null, sensitiveHidden: true });
+    await post(`persons/${r.paul}/rest-periods`, { reason: 'dormant', from: '2025-01-01' }, reader).expect(403);
+    // Saving without the permission keeps the notes.
+    const { birthDate: _b, birthPlace: _bp, employer: _em, bank: _bk, ...plain } = fields;
+    await put(`persons/${r.paul}`, { ...plain, version: seen.version, notes: '' }, reader).expect(200);
+    expect((await get(`persons/${r.paul}`)).body.notes).toBe('Vertraulich: Gespräch geführt');
+    const history = JSON.stringify((await test.http.get(`/api/core/history/masterdata.person/${r.paul}`).set('Cookie', reader).expect(200)).body);
+    expect(history).not.toContain('Elternzeit');
+    expect(history).not.toContain('Vertraulich');
+  });
+
+  it('counts honor certificates, orders the search and rejects invalid statute ages', async () => {
+    expect((await get('persons/honors/certificates?from=2000-01-01&to=2000-12-31').expect(200)).body).toEqual({ count: 0 });
+    expect((await get('persons/honors/certificates?from=2026-01-01&to=2026-12-31').expect(200)).body.count).toBeGreaterThan(0);
+
+    // A department commander finds the own persons first; directory entries name the department and do not link the file.
+    const kdt = await login('kdt.pruefung');
+    await post('persons', { firstName: 'Anton', lastName: 'Prüfung', status: 'active', memberships: [{ departmentId: ids.musterstadt, from: '2020-01-01', primary: true }] }).expect(201);
+    const hits = (await test.http.get('/api/core/search?q=Prüfung').set('Cookie', kdt).expect(200)).body as { title: string; description?: string; to: string }[];
+    const persons = hits.filter((h) => h.title.startsWith('Prüfung,'));
+    const restricted = persons.findIndex((h) => h.to.startsWith('/masterdata/persons?'));
+    // Own department and its sub-departments (here also the youth fire brigade) come first.
+    expect(restricted).toBeGreaterThan(0);
+    expect(persons.slice(0, restricted).map((h) => h.title)).toEqual(expect.arrayContaining(['Prüfung, Anna', 'Prüfung, Paul']));
+    expect(persons.slice(0, restricted).every((h) => h.to.startsWith('/masterdata/persons/'))).toBe(true);
+    expect(persons.slice(restricted)).toEqual(expect.arrayContaining([expect.objectContaining({ title: 'Prüfung, Anton', description: 'Abteilung Musterstadt', to: '/masterdata/persons?q=Anton%20Pr%C3%BCfung' })]));
+
+    const settings = test.http.put('/api/core/settings/masterdata.membership').set('Cookie', admin).set(UI);
+    expect((await settings.send({ minimumAgeOperational: -1 }).expect(400)).body.code).toBe('validation.failed');
   });
 });

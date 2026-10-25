@@ -15,6 +15,7 @@ import { DeadlineRegistry } from './tasks/deadline-registry.js';
 import { DigestService } from './tasks/digest.service.js';
 import { MailService } from './tasks/mail.service.js';
 import { Notifications } from './tasks/notifications.js';
+import { CoreExport } from './data/core-export.js';
 import { CodeRegistry, DataController, ExportRegistry, RetentionRegistry, RetentionService, SearchRegistry } from './data/data.js';
 import { PasswordReset, PasswordResetController, PasswordResetService } from './security/password-reset.js';
 import { AttachmentEntity, Attachments, AttachmentsController } from './attachments/attachments.js';
@@ -30,12 +31,14 @@ import { OidcController, OidcService } from './security/oidc.js';
 import { PluginsController } from './plugins/plugins.controller.js';
 import { AuthGuard } from './security/auth.guard.js';
 import { AuthService } from './security/auth.service.js';
+import { OrganizationDirectory } from './security/organization-directory.js';
 import { PermissionRegistry } from './security/permission-registry.js';
 import { RoleTemplates } from './security/role-templates.js';
 import { RolesController } from './security/roles.controller.js';
 import { ApiToken, Role, RoleAssignment, Session, User } from './security/security.entities.js';
 import { TokensController } from './security/tokens.controller.js';
 import { UsersController } from './security/users.controller.js';
+import { OnboardingController } from './settings/onboarding.js';
 import { Setting, SettingsController, SettingsService } from './settings/settings.js';
 import { userContextMiddleware } from './user-context.js';
 
@@ -87,9 +90,14 @@ export function ormParts(modules: ForgaModule[]) {
 
 @Module({})
 export class ForgaCoreModule implements NestModule, OnModuleInit {
-  constructor(private readonly historyAccess: HistoryAccessRegistry) {}
+  constructor(
+    private readonly historyAccess: HistoryAccessRegistry,
+    private readonly exports: ExportRegistry,
+    private readonly coreExport: CoreExport,
+  ) {}
 
   onModuleInit(): void {
+    this.exports.register('core', { all: () => this.coreExport.all(), person: (id) => this.coreExport.person(id) });
     this.historyAccess.registerPermission('core.user', 'core.users.manage');
     this.historyAccess.registerPermission('core.role', 'core.roles.manage');
     // Settings of a module: also for the managers of that module's settings.
@@ -124,12 +132,14 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         DataController,
         OidcController,
         PluginsController,
+        OnboardingController,
       ],
       providers: [
         { provide: FORGA_CORE_OPTIONS, useValue: { ...options, modules } },
         { provide: APP_GUARD, useClass: AuthGuard },
         AuthService,
         OidcService,
+        OrganizationDirectory,
         PermissionRegistry,
         RoleTemplates,
         SettingsService,
@@ -153,6 +163,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         ExportRegistry,
         RetentionRegistry,
         RetentionService,
+        CoreExport,
       ],
       exports: [
         FORGA_CORE_OPTIONS,
@@ -160,6 +171,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         Audit,
         SettingsService,
         PermissionRegistry,
+        OrganizationDirectory,
         DomainEvents,
         HistoryAccessRegistry,
         ListRegistry,

@@ -1,6 +1,6 @@
 import { defineEntity, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import type { BreathingDevice, EvidenceKind, EvidenceSource, ExaminationGroup, FitnessColor } from '@forga/respiratory-protection-contracts';
+import type { BreathingDevice, EvidenceKind, EvidenceSource, ExaminationGroup, ExaminationResult, FitnessColor } from '@forga/respiratory-protection-contracts';
 
 export const EvidenceSchema = defineEntity({
   name: 'EvidenceEntity',
@@ -13,6 +13,7 @@ export const EvidenceSchema = defineEntity({
     kind: p.string().$type<EvidenceKind>(),
     date: p.string().length(10),
     validUntil: p.string().length(10).nullable(),
+    result: p.string().$type<ExaminationResult>().nullable(),
     examiner: p.string().default(''),
     restrictions: p.string().default(''),
     examinationGroup: p.string().$type<ExaminationGroup>().nullable(),
@@ -41,6 +42,8 @@ export const StatusSchema = defineEntity({
     personId: p.string().primary(),
     color: p.string().$type<FitnessColor>(),
     changedAt: p.datetime(),
+    /** Changed to red, the e-mail is not sent yet; set in the same transaction as the color, so no change is lost. */
+    notifyPending: p.boolean().default(false),
   },
 });
 export class StatusEntity extends StatusSchema.class {}

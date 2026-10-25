@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import type { z } from 'zod';
 import { type AuthenticatedUser, CurrentUser, RequirePermissions, ZodPipe } from '@forga/core-api';
-import { type Item, ItemAmountInput, ManualItemInput, type YearTotal } from '@forga/compensation-contracts';
+import { AmountsInput, type Item, ItemAmountInput, ManualItemInput, type MyCompensation, type YearTotal } from '@forga/compensation-contracts';
 import { ItemsService, MANUAL, READ, RUNS } from './items.service.js';
 import { YearTotals } from '../lists/year-totals.js';
 
@@ -31,6 +31,20 @@ export class ItemsController {
   @RequirePermissions(MANUAL)
   create(@Body(new ZodPipe(ManualItemInput)) input: Parsed<typeof ManualItemInput>, @CurrentUser() user: AuthenticatedUser): Promise<Item> {
     return this.items.createManual(user, input);
+  }
+
+  /** Several amounts at once (list of the loss of earnings in a run). */
+  @Put('items/amounts')
+  @RequirePermissions(RUNS)
+  amounts(@Body(new ZodPipe(AmountsInput)) input: Parsed<typeof AmountsInput>, @CurrentUser() user: AuthenticatedUser): Promise<Item[]> {
+    return this.items.setAmounts(user, input);
+  }
+
+  /** "Meine Entschädigung": own items of a year (always the person linked to the user). */
+  @Get('me')
+  @RequirePermissions('compensation.self')
+  mine(@Query('year') year: string | undefined, @CurrentUser() user: AuthenticatedUser): Promise<MyCompensation> {
+    return this.items.mine(user, Number(year) || new Date().getFullYear());
   }
 
   @Put('items/:id/amount')

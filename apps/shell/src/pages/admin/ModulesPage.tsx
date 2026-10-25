@@ -101,7 +101,7 @@ export function ModulesPage() {
               title={<>{localized(module.name)} <Text span size="sm" c="dimmed" fw={400}>{module.version}</Text></>}
               aside={<StatusBadge tone={module.active ? 'done' : 'neutral'}>{t(module.active ? 'modules.active' : 'modules.inactive')}</StatusBadge>}
             >
-              <Text size="sm" mb="md">{t(`modules.descriptions.${module.id}`, { defaultValue: '' })}</Text>
+              <Text size="sm" mb="md">{t(`modules.descriptions.${module.id}`, { defaultValue: t('modules.noDescription') })}</Text>
               <Group justify="space-between" align="end" wrap="nowrap">
                 <Text size="xs" c="dimmed">
                   {[

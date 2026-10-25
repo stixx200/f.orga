@@ -22,7 +22,9 @@
     "@tanstack/react-query": "^5.104.5",
     "react-router": "^8.5.0",
     "@mantine/notifications": "^9.7.3",
-    "fflate": "^0.8.3"
+    "fflate": "^0.8.3",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0"
   },
   "nx": {
     "tags": [

@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261025134314_initial extends Migration {
+export class Migration20261025154236_initial extends Migration {
 
-  override name = 'Migration20261025134314_initial';
+  override name = 'Migration20261025154236_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"core\";");
@@ -23,6 +23,7 @@ export class Migration20261025134314_initial extends Migration {
     this.addSql("create table \"core\".\"setting\" (\"section\" varchar(255) not null, \"value\" jsonb not null, \"version\" int not null default 1, primary key (\"section\"));");
     this.addSql("create table \"core\".\"user\" (\"id\" uuid not null, \"username\" varchar(255) not null, \"display_name\" varchar(255) not null, \"email\" varchar(255) null, \"password_hash\" varchar(255) null, \"person_id\" varchar(255) null, \"language\" varchar(255) not null default 'de', \"receive_digest\" boolean not null default true, \"active\" boolean not null default true, \"technical\" boolean not null default false, \"last_login\" timestamptz null, \"oidc_subject\" varchar(255) null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"user\" add constraint \"user_username_unique\" unique (\"username\");");
+    this.addSql("alter table \"core\".\"user\" add constraint \"user_person_id_unique\" unique (\"person_id\");");
     this.addSql("alter table \"core\".\"user\" add constraint \"user_oidc_subject_unique\" unique (\"oidc_subject\");");
     this.addSql("create table \"core\".\"session\" (\"id\" varchar(255) not null, \"user_id\" uuid not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz not null, \"impersonator_id\" uuid null, \"impersonation_reason\" text null, primary key (\"id\"));");
     this.addSql("create index \"session_expires_at_index\" on \"core\".\"session\" (\"expires_at\");");

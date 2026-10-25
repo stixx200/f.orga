@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidIban, normalizeIban } from './iban.js';
 
 export const Gender = z.enum(['female', 'male', 'diverse', 'unspecified']);
 export type Gender = z.infer<typeof Gender>;
@@ -20,6 +21,13 @@ export type PersonStatus = z.infer<typeof PersonStatus>;
 const date = z.iso.date();
 const text = z.string().trim().default('');
 
+/** An IBAN (spaces allowed) with valid check digits, stored without spaces; empty = none. */
+export const Iban = z
+  .string()
+  .trim()
+  .transform(normalizeIban)
+  .refine((iban) => iban === '' || isValidIban(iban), { message: 'Invalid IBAN', params: { code: 'masterdata.invalidIban' } });
+
 export const Employer = z.object({
   name: text,
   street: text,
@@ -28,23 +36,14 @@ export const Employer = z.object({
   phone: text,
   contact: text,
   /** Account of the employer, for an assigned loss of earnings. */
-  iban: z
-    .string()
-    .trim()
-    .default('')
-    .transform((iban) => iban.replaceAll(' ', '').toUpperCase())
-    .refine((iban) => iban === '' || /^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(iban), 'Invalid IBAN'),
+  iban: Iban.default(''),
   /** From this date the loss of earnings is assigned to the employer and paid to the employer (statute). */
   lossOfEarningsAssignedFrom: z.iso.date().nullable().default(null),
 });
 export type Employer = z.infer<typeof Employer>;
 
 export const BankAccount = z.object({
-  iban: z
-    .string()
-    .trim()
-    .transform((iban) => iban.replaceAll(' ', '').toUpperCase())
-    .refine((iban) => iban === '' || /^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(iban), 'Invalid IBAN'),
+  iban: Iban,
   accountHolder: text,
 });
 export type BankAccount = z.infer<typeof BankAccount>;
@@ -56,8 +55,11 @@ export const DriverLicense = z.object({
 });
 export type DriverLicense = z.infer<typeof DriverLicense>;
 
-/** Fields that need the permission `masterdata.persons.sensitive`. */
-export const SENSITIVE_PERSON_FIELDS = ['birthDate', 'birthPlace', 'employer', 'bank'] as const;
+/**
+ * Fields that need the permission `masterdata.persons.sensitive`: birth data, employer and bank account, and the
+ * internal notes, the exit reason and the rest periods (e.g. dormant membership), which may reveal personal circumstances.
+ */
+export const SENSITIVE_PERSON_FIELDS = ['birthDate', 'birthPlace', 'employer', 'bank', 'notes', 'exitReason', 'restPeriods'] as const;
 
 /** Master data of a person that is edited as a whole. */
 export const PersonInput = z.object({
@@ -173,9 +175,12 @@ export const ProbationChange = z.object({
 });
 export type ProbationChange = z.input<typeof ProbationChange>;
 
-/** Final admission after the probation. */
-export const Admission = z.object({ decidedOn: date });
-export type Admission = z.infer<typeof Admission>;
+/**
+ * Final admission after the probation. Before the end of the probation or while qualifications of the probation
+ * (settings) are missing, the admission needs a reason (`masterdata.admissionReasonRequired`), like a shortened probation.
+ */
+export const Admission = z.object({ decidedOn: date, reason: z.string().trim().max(500).default('') });
+export type Admission = z.input<typeof Admission>;
 
 /** Status change other than admission and leaving, e.g. active → veterans. */
 export const StatusChange = z.object({ status: z.enum(['active', 'passive', 'youth', 'veterans']), effectiveOn: date });
@@ -244,12 +249,14 @@ export const Person = z.object({
   joinedOn: z.string().nullable(),
   musician: z.boolean(),
   driverLicense: DriverLicense,
+  /** Sensitive: empty without `masterdata.persons.sensitive`. */
   notes: z.string(),
   status: PersonStatus,
   probationEndsOn: z.string().nullable(),
   probationDecidedOn: z.string().nullable(),
   admittedOn: z.string().nullable(),
   leftOn: z.string().nullable(),
+  /** Sensitive: `null` without `masterdata.persons.sensitive`. */
   exitReason: z.string().nullable(),
   rank: z.string().nullable(),
   memberships: z.array(Membership),
@@ -257,6 +264,7 @@ export const Person = z.object({
   ranks: z.array(RankAssignment),
   honors: z.array(HonorAward),
   offices: z.array(OfficeAssignment),
+  /** Sensitive: empty without `masterdata.persons.sensitive`. */
   restPeriods: z.array(RestPeriod),
   /** `true` if sensitive fields were left out because the permission is missing. */
   sensitiveHidden: z.boolean(),

@@ -44,12 +44,13 @@ export class HistoryController {
       parentEntity: e.parentEntity ?? null,
       parentId: e.parentId ?? null,
       action: e.action,
+      // Hidden are fields of the record itself and whole child records named by their history name (e.g. `masterdata.rest_period`).
       changes:
-        e.entity === entity && hidden.size
+        (e.entity === entity || hidden.has(e.entity)) && hidden.size
           ? Object.fromEntries(
               Object.entries(e.changes).map(([field, change]) => [
                 field,
-                hidden.has(field) ? { old: null, new: null, hidden: true } : change,
+                hidden.has(field) || hidden.has(e.entity) ? { old: null, new: null, hidden: true } : change,
               ]),
             )
           : e.changes,

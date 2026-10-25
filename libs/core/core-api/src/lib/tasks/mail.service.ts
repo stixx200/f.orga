@@ -1,7 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { createTransport } from 'nodemailer';
 import type { SmtpSettings } from '@forga/core-contracts';
 import { SettingsService } from '../settings/settings.js';
+import { mailErrorCode } from './mail-errors.js';
+
+export { mailErrorCode } from './mail-errors.js';
 
 export interface Mail {
   to: string;
@@ -16,9 +19,11 @@ export interface Mail {
 @Injectable()
 export class MailService {
   readonly sent: Mail[] = [];
+  private readonly logger = new Logger('Mail');
 
   constructor(private readonly settings: SettingsService) {}
 
+  /** Throws `mail.notConfigured`, or a `mail.*` code with status 502 if the SMTP server refuses or cannot be reached. */
   async send(mail: Mail): Promise<void> {
     if (process.env.FORGA_MAIL_TRANSPORT === 'memory') {
       this.sent.push(mail);
@@ -32,7 +37,14 @@ export class MailService {
       secure: smtp.port === 465,
       requireTLS: smtp.starttls && smtp.port !== 465,
       auth: smtp.username ? { user: smtp.username, pass: smtp.password ?? '' } : undefined,
+      connectionTimeout: 15_000,
     });
-    await transport.sendMail({ from: smtp.sender, to: mail.to, subject: mail.subject, text: mail.text });
+    try {
+      await transport.sendMail({ from: smtp.sender, to: mail.to, subject: mail.subject, text: mail.text });
+    } catch (error) {
+      const code = mailErrorCode(error);
+      this.logger.warn(`Sending e-mail failed (${code}): ${error instanceof Error ? error.message : String(error)}`);
+      throw new HttpException({ code }, HttpStatus.BAD_GATEWAY);
+    }
   }
 }

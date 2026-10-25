@@ -2,6 +2,16 @@ import { z } from 'zod';
 import { LocalizedText } from './i18n.js';
 import { ReminderSettings } from './tasks.js';
 
+function isPublicUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    return (url.protocol === 'https:' || (url.protocol === 'http:' && local)) && !url.search && !url.hash && !url.username;
+  } catch {
+    return false;
+  }
+}
+
 /** Brigade details used in page headers, footers and printouts. */
 export const BrigadeSettings = z.object({
   name: z.string().trim().min(1),
@@ -11,13 +21,20 @@ export const BrigadeSettings = z.object({
   phone: z.string().trim().default(''),
   fax: z.string().trim().default(''),
   website: z.string().trim().default(''),
-  email: z.string().trim().default(''),
+  email: z.union([z.literal(''), z.email()]).default(''),
   /** Municipality the brigade belongs to, e.g. "Stadt Musterstadt". */
   municipality: z.string().trim().default(''),
   /** Inhabitants of the municipality (annual statistics, rank limits). */
   population: z.number().int().min(0).nullable().default(null),
-  /** Address of f.orga as users open it, e.g. `https://forga.feuerwehr-musterstadt.example`; used in e-mail links. */
-  publicUrl: z.string().trim().default(''),
+  /**
+   * Address of f.orga as users open it, e.g. `https://forga.feuerwehr-musterstadt.example`; used in e-mail links and as
+   * OIDC redirect. HTTPS, plain HTTP only on the local machine (development).
+   */
+  publicUrl: z
+    .string()
+    .trim()
+    .default('')
+    .refine((value) => value === '' || isPublicUrl(value), { message: 'publicUrl must be an https URL' }),
 });
 export type BrigadeSettings = z.infer<typeof BrigadeSettings>;
 
@@ -35,7 +52,7 @@ export type SmtpSettings = z.infer<typeof SmtpSettings>;
 /** Data protection: anonymising former members and keeping the audit log. */
 export const PrivacySettings = z.object({
   /** Persons who left are anonymised this many years after leaving; `null` = never. */
-  anonymizeLeftAfterYears: z.number().int().min(1).max(50).nullable().default(10),
+  anonymizeLeftAfterYears: z.number().int().min(1).max(50).nullable().default(null),
   /** Audit entries older than this are deleted. */
   auditRetentionMonths: z.number().int().min(6).max(240).default(24),
 });
@@ -71,3 +88,34 @@ export const CORE_SETTINGS = {
 
 /** Fields that are write-only and never leave the server. */
 export const SECRET_SETTING_FIELDS: Record<string, string[]> = { smtp: ['password'], oidc: ['clientSecret'] };
+
+/**
+ * Who may read a settings section. By default every logged-in user may (module UIs need e.g. the incident settings);
+ * the managers of a section are the holders of `core.settings.manage` or `<module>.settings.manage`.
+ */
+export interface SettingsAccess {
+  /** Only the managers may read the section, e.g. server addresses and accounts. */
+  managersOnly?: boolean;
+  /** Fields only the managers see, e.g. the secret part of a calendar feed address. */
+  managerFields?: string[];
+}
+
+/**
+ * One step of the setup checklist on the start page of administrators, e.g. `smtp` or `module:compensation`.
+ * Module steps carry the label of the module's settings page.
+ */
+export const OnboardingItem = z.object({
+  key: z.string(),
+  done: z.boolean(),
+  /** Page where the step is done. */
+  to: z.string(),
+  label: LocalizedText.optional(),
+});
+export type OnboardingItem = z.infer<typeof OnboardingItem>;
+
+export const CORE_SETTINGS_ACCESS: Record<string, SettingsAccess> = {
+  smtp: { managersOnly: true },
+  oidc: { managersOnly: true },
+  privacy: { managersOnly: true },
+  reminders: { managersOnly: true },
+};

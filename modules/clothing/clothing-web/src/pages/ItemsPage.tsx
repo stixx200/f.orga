@@ -5,7 +5,7 @@ import type { Item } from '@forga/clothing-contracts';
 import { can, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, PageHeader } from '@forga/web-ui';
 import { MANAGE, useArticleName, useArticles, useItems, usePersonName } from '../api';
-import { Due, ItemStatusBadge } from '../parts';
+import { BlockBadges, Due, ItemStatusBadge } from '../parts';
 import { ItemDialog } from './ItemDialog';
 
 type View = 'stock' | 'issued' | 'retired' | 'all';
@@ -74,7 +74,7 @@ export function ItemsPage() {
           { key: 'number', header: t('items.inventoryNumber'), render: (i) => <Text fw={700} size="sm" c="brand">{i.inventoryNumber}</Text> },
           { key: 'article', header: t('items.article'), render: (i) => articleName(i.articleKey) },
           { key: 'size', header: t('items.size'), render: (i) => i.size },
-          { key: 'status', header: t('items.status'), render: (i) => <ItemStatusBadge status={i.status} /> },
+          { key: 'status', header: t('items.status'), render: (i) => <Group gap={4}><ItemStatusBadge status={i.status} /><BlockBadges item={i} /></Group> },
           { key: 'holder', header: t('items.holder'), render: (i) => personName(i.holderId) },
           { key: 'impregnation', header: t('items.impregnationDue'), render: (i) => <Due date={i.impregnationDueOn} /> },
           { key: 'inspection', header: t('items.inspectionDue'), render: (i) => <Due date={i.inspectionDueOn} /> },
