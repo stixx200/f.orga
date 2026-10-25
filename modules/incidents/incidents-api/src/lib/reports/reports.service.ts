@@ -32,6 +32,8 @@ export const READ = 'incidents.reports.read';
 export const WRITE = 'incidents.reports.write';
 export const RELEASE = 'incidents.reports.release';
 export const UNLOCK = 'incidents.reports.unlock';
+/** Costs and notes of the whole incident (commander). */
+export const COSTS = 'incidents.costs';
 
 const iso = (date: Date | null | undefined) => (date ? date.toISOString() : null);
 
@@ -55,10 +57,7 @@ export function reportToInput(report: ReportEntity): ParsedReportInput {
     incidentCommander: report.incidentCommander,
     statistics: report.statistics ?? null,
     weather: report.weather,
-    chargeable: report.chargeable,
-    chargeableReason: report.chargeableReason,
     equipment: report.equipment,
-    notes: report.notes,
     personnel: report.personnel.getItems().map((p) => ({
       personId: p.personId ?? null,
       guestName: p.guestName,
@@ -262,10 +261,7 @@ export class ReportsService {
       incidentCommander: input.incidentCommander,
       statistics: input.statistics,
       weather: input.weather,
-      chargeable: input.chargeable,
-      chargeableReason: input.chargeableReason,
       equipment: input.equipment,
-      notes: input.notes,
     });
     report.personnel.removeAll();
     for (const p of input.personnel) {
@@ -463,10 +459,7 @@ export class ReportsService {
       statistics: report.statistics ?? null,
       statisticsSuggestion: report.primary && !report.statistics ? suggestStatistics(report.incident, ctx) : null,
       weather: report.weather,
-      chargeable: report.chargeable,
-      chargeableReason: report.chargeableReason,
       equipment: report.equipment,
-      notes: report.notes,
       personnel,
       vehicles: report.vehicles.getItems().map((v) => ({
         id: v.id,

@@ -231,13 +231,14 @@ export class MpFeuerIncidentsImport {
           cause: first['cause'] ?? '',
           incidentCommander: first['commander'] ?? '',
           statistics: statistics ?? report.statistics ?? null,
-          chargeable: yes(first['chargeable']) || report.chargeable,
           status,
           locked: status !== 'draft',
           lockedBy: status !== 'draft' ? 'MP-Feuer' : null,
           lockedAt: status !== 'draft' ? new Date() : null,
           externallyManaged: true,
         });
+        // Chargeable applies to the whole incident; one department's report marking it is enough.
+        if (yes(first['chargeable'])) current.chargeable = true;
         if (group.some((r) => yes(r.values['primary']))) await this.reports.setPrimary(em, report);
         else if (current.reports.count() > 1) report.primary = false;
 

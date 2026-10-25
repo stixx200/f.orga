@@ -5,8 +5,8 @@ import { Panel, useAction } from '@forga/web-ui';
 import { useCostSettings } from '../api';
 
 /**
- * Card "Kostenersatz" in the incident report (extension point `incidents.report.sections`): for a chargeable incident the
- * author chooses the legal ground; the notice later starts with it instead of the suggestion.
+ * Card "Kostenersatz" on the incident (extension point `incidents.incident.sections`): for a chargeable incident the
+ * commander chooses the legal ground once for the whole incident; the notice later starts with it instead of the suggestion.
  */
 export function OffenseSection({ incidentId, chargeable, disabled }: { incidentId?: unknown; chargeable?: unknown; disabled?: unknown }) {
   const { t } = useTranslation('cost-recovery');

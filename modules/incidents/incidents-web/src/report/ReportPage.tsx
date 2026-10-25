@@ -2,7 +2,7 @@ import { Button, Group, Stack, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import type { IncidentStatisticsInput, Report } from '@forga/incidents-contracts';
 import { can, extensionsOf, formatDateTime, formatMoney, formatTime, send, useSession, useTranslation } from '@forga/web-sdk';
 import { ActionBar, Attachments, ConfirmDialog, DataTable, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
@@ -157,6 +157,11 @@ function Editor({ report }: { report: Report }) {
       )}
       {step === 'other' && <OtherSection content={content} update={update} disabled={!editable} />}
       {step === 'other' && (
+        <Notice kind="info" action={<Button component={Link} to={`/incidents/incidents/${report.incidentId}`} variant="subtle" size="xs">{t('other.toIncident')}</Button>}>
+          {t('other.costsHint')}
+        </Notice>
+      )}
+      {step === 'other' && (
         <Panel title={t('editor.attachments')}>
           <Attachments type="incidents.report" id={report.id} editable={editable} />
         </Panel>
@@ -169,7 +174,6 @@ function Editor({ report }: { report: Report }) {
               key={module}
               reportId={report.id}
               incidentId={report.incidentId}
-              chargeable={content.chargeable}
               departmentId={report.departmentId}
               vehicleIds={content.vehicles.map((v) => v.vehicleId)}
               breathingVehicleIds={content.personnel.filter((p) => p.breathingApparatus && p.vehicleId).map((p) => p.vehicleId)}

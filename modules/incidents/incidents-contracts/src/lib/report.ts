@@ -128,10 +128,7 @@ export const ReportInput = z.object({
   /** Only on the primary report; `null` until filled in. */
   statistics: IncidentStatistics.nullable().default(null),
   weather: Weather.default({ influence: false, conditions: [] }),
-  chargeable: z.boolean().default(false),
-  chargeableReason: text,
   equipment: text,
-  notes: text,
   personnel: z.array(PersonnelEntryInput).default([]),
   vehicles: z.array(VehicleEntryInput).default([]),
   involvedParties: z.array(InvolvedPartyInput).default([]),
@@ -238,10 +235,7 @@ export const Report = z.object({
   /** Only for the primary report while `statistics` is empty. */
   statisticsSuggestion: StatisticsSuggestion.nullable(),
   weather: Weather,
-  chargeable: z.boolean(),
-  chargeableReason: z.string(),
   equipment: z.string(),
-  notes: z.string(),
   personnel: z.array(PersonnelEntry),
   vehicles: z.array(
     z.object({
@@ -261,6 +255,18 @@ export const Report = z.object({
 });
 export type Report = z.infer<typeof Report>;
 
+/**
+ * Costs and notes of the whole incident (not per report); entered by the commander or someone else with
+ * `incidents.costs`. Cost recovery starts from chargeable incidents.
+ */
+export const IncidentCosts = z.object({
+  version: z.number().int().optional(),
+  chargeable: z.boolean().default(false),
+  chargeableReason: text,
+  notes: text,
+});
+export type IncidentCosts = z.input<typeof IncidentCosts>;
+
 export const Incident = z.object({
   id: z.uuid(),
   dispatchNumber: z.string(),
@@ -271,6 +277,9 @@ export const Incident = z.object({
   alarmedAt: z.string(),
   location: Location,
   createdVia: z.enum(['ui', 'api', 'import']),
+  chargeable: z.boolean(),
+  chargeableReason: z.string(),
+  notes: z.string(),
   reports: z.array(
     z.object({
       id: z.uuid(),

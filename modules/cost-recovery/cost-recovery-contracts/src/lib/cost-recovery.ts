@@ -194,6 +194,8 @@ export const Candidate = z.object({
   alarmedAt: z.string(),
   location: z.string(),
   object: z.string(),
+  /** Reason from the costs of the incident. */
+  chargeableReason: z.string(),
   released: z.boolean(),
   suggestedOffense: z.string().nullable(),
   noticeId: z.uuid().nullable(),

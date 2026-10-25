@@ -24,6 +24,7 @@ Feuerwehr (Gesamtwehr, genau eine je Installation)
 | --- | --- |
 | Einsatz | Ein Ereignis der Leitstelle mit einer Leitstellennummer. Mehrere Abteilungen können beteiligt sein. |
 | Einsatzbericht | Der Bericht **einer** Abteilung zu einem Einsatz. Genau einer je Einsatz ist der Hauptbericht. |
+| Kosten und Bemerkungen | Gelten für den ganzen Einsatz, nicht je Bericht: kostenpflichtig mit Begründung, Bemerkungen und der Tatbestand für den Kostenersatz. Der Kommandant (oder wer das Recht hat) trägt sie ein. |
 | Funktion | Rolle einer Person im Einsatz: Einsatzleiter, Gruppenführer, Maschinist, Angriffstrupp, … (konfigurierbarer Katalog) |
 | Qualifikation | Was eine Person kann oder darf, mit optionalem Ablaufdatum: Atemschutzgeräteträger, Maschinist, Führerschein C, … Sie entsteht aus einem bestandenen Lehrgang oder wird direkt eingetragen. |
 | Lehrgang | Eintrag im Lehrgangskatalog (vom Administrator gepflegt). Eine **Lehrgangsteilnahme** hat Datum, Ergebnis (bestanden/nicht bestanden) und verweist auf den Katalogeintrag. |
@@ -136,6 +137,7 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Hauptbericht / Nebenbericht | primary report / secondary report (`isPrimary`) |
 | Leitstellennummer | `dispatchNumber` |
 | Einsatzstichwort | `alarmKeyword` |
+| Kosten und Bemerkungen des Einsatzes | `IncidentCosts` (`chargeable`, `chargeableReason`, `notes`), Recht `incidents.costs` |
 | Bereitschaft (auf der Wache) | standby |
 | Entschädigung | `Compensation` |
 | Verdienstausfall | `lossOfEarnings` |

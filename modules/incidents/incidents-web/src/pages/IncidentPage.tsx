@@ -1,11 +1,11 @@
-import { Button, Group, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Group, Select, SimpleGrid, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core';
 import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { Incident, Report } from '@forga/incidents-contracts';
-import { api, can, formatDateTime, formatMoney, fromLocalInput, send, toLocalInput, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
+import { api, can, extensionsOf, formatDateTime, formatMoney, fromLocalInput, send, toLocalInput, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
-import { keys, RELEASE, useDepartments, useIncident, useKeywords, useNames, WRITE } from '../api';
+import { COSTS, keys, RELEASE, useDepartments, useIncident, useKeywords, useNames, WRITE } from '../api';
 import { DepartmentBadge, keywordLabel, locationLabel, ReportStatusBadge } from '../parts';
 
 function EditIncidentDialog({ incident, onClose }: { incident: Incident; onClose: () => void }) {
@@ -66,6 +66,41 @@ function EditIncidentDialog({ incident, onClose }: { incident: Incident; onClose
         <TextInput label={t('fields.object')} value={form.object} onChange={(e) => set('object', e.currentTarget.value)} />
       </SimpleGrid>
     </ResponsiveDialog>
+  );
+}
+
+/** Costs and notes of the whole incident; the commander (`incidents.costs`) enters them, everyone else reads them. */
+function CostsPanel({ incident, editable }: { incident: Incident; editable: boolean }) {
+  const { t } = useTranslation('incidents');
+  const { t: common } = useTranslation('common');
+  const [form, setForm] = useState(() => ({ chargeable: incident.chargeable, chargeableReason: incident.chargeableReason, notes: incident.notes }));
+  const changed = form.chargeable !== incident.chargeable || form.chargeableReason !== incident.chargeableReason || form.notes !== incident.notes;
+  const save = useAction(() => send<Incident>('PUT', `incidents/incidents/${incident.id}/costs`, { ...form, version: incident.version }), {
+    success: t('incident.costsSaved'),
+    invalidate: [keys.incidents],
+  });
+  if (!editable) {
+    return (
+      <Panel title={t('incident.costs')}>
+        <Stack gap={4}>
+          <Text size="sm">{incident.chargeable ? `${t('incident.chargeable')}${incident.chargeableReason ? ` – ${incident.chargeableReason}` : ''}` : '–'}</Text>
+          {incident.notes && <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}><Text span c="dimmed">{t('incident.notes')}: </Text>{incident.notes}</Text>}
+        </Stack>
+      </Panel>
+    );
+  }
+  return (
+    <Panel title={t('incident.costs')}>
+      <Stack gap="sm">
+        <Text size="xs" c="dimmed">{t('incident.costsHint')}</Text>
+        <Switch label={t('incident.chargeable')} checked={form.chargeable} onChange={(e) => { const checked = e.currentTarget.checked; setForm((f) => ({ ...f, chargeable: checked })); }} />
+        {form.chargeable && <TextInput label={t('incident.chargeableReason')} value={form.chargeableReason} onChange={(e) => { const value = e.currentTarget.value; setForm((f) => ({ ...f, chargeableReason: value })); }} />}
+        <Textarea label={t('incident.notes')} value={form.notes} onChange={(e) => { const value = e.currentTarget.value; setForm((f) => ({ ...f, notes: value })); }} autosize minRows={2} />
+        <Group justify="flex-end">
+          <Button loading={save.isPending} disabled={!changed} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
+        </Group>
+      </Stack>
+    </Panel>
   );
 }
 
@@ -168,6 +203,15 @@ export function IncidentPage() {
             onMakePrimary={!summary.primary && canWrite(summary.departmentId) && !summary.locked ? () => setPrimaryFor(summary.id) : undefined}
           />
         ))}
+      </SimpleGrid>
+      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
+        {/* Re-mounted with each saved version, so the form starts from the stored values. */}
+        <CostsPanel key={incident.version} incident={incident} editable={can(session, COSTS)} />
+        {extensionsOf('incidents.incident.sections')
+          .filter((e) => !e.permission || can(session, e.permission))
+          .map(({ module, component: Section }) => (
+            <Section key={module} incidentId={incident.id} chargeable={incident.chargeable} disabled={!can(session, COSTS)} />
+          ))}
       </SimpleGrid>
       {missing.length > 0 && (
         <Panel title={t('incident.addReport')}>

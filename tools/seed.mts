@@ -788,7 +788,7 @@ async function costRecovery(): Promise<void> {
     console.log('  Bescheide vorhanden');
     return;
   }
-  const incidents = await call<{ id: string; alarmKeyword: string; reports: { id: string; primary: boolean }[] }[]>('GET', `incidents/incidents?from=${year - 1}-01-01&to=${year}-12-31`);
+  const incidents = await call<{ id: string; alarmKeyword: string; version: number; reports: { id: string; primary: boolean }[] }[]>('GET', `incidents/incidents?from=${year - 1}-01-01&to=${year}-12-31`);
   const alarms = incidents.filter((i) => /BMA/i.test(i.alarmKeyword)).slice(0, 3);
   for (const incident of alarms) {
     const primary = incident.reports.find((r) => r.primary) ?? incident.reports[0];
@@ -797,9 +797,9 @@ async function costRecovery(): Promise<void> {
     await call('PUT', `incidents/reports/${primary.id}`, {
       ...report,
       involvedParties: [{ role: 'owner', name: 'Muster Logistik GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
-      chargeable: true,
-      chargeableReason: 'Fehlalarm der Brandmeldeanlage',
     });
+    // Costs apply to the whole incident.
+    await call('PUT', `incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Fehlalarm der Brandmeldeanlage', notes: 'Betreiber über Kostenpflicht informiert' });
   }
   const candidates = await call<{ incidentId: string }[]>('GET', `cost-recovery/candidates?from=${year - 1}-01-01&to=${year}-12-31`);
   for (const [index, candidate] of candidates.slice(0, 2).entries()) {

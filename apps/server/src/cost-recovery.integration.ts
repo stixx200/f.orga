@@ -37,8 +37,9 @@ beforeAll(async () => {
     vehicles: [{ vehicleId: ids.lf, departedAt: T('10:04'), returnedAt: T('10:50') }, { vehicleId: ids.mtw }],
     involvedParties: [{ role: 'owner', name: 'Muster GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
     statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
-    chargeable: true,
   }).expect(200);
+  // Chargeable is a matter of the whole incident, not of a report.
+  await put(`/incidents/incidents/${ids.incident}/costs`, { chargeable: true, chargeableReason: 'Täuschungsalarm BMA' }).expect(200);
 });
 
 afterAll(() => test?.app.close());
@@ -46,7 +47,7 @@ afterAll(() => test?.app.close());
 describe('cost recovery', () => {
   it('lists chargeable incidents with the suggested legal ground', async () => {
     const candidates = (await get('/cost-recovery/candidates?from=2026-01-01&to=2026-12-31').expect(200)).body;
-    expect(candidates).toEqual([expect.objectContaining({ incidentId: ids.incident, object: 'Muster GmbH', suggestedOffense: 'fire-alarm-system', noticeId: null })]);
+    expect(candidates).toEqual([expect.objectContaining({ incidentId: ids.incident, object: 'Muster GmbH', chargeableReason: 'Täuschungsalarm BMA', suggestedOffense: 'fire-alarm-system', noticeId: null })]);
   });
 
   it('calculates a notice from the incident with VOKeFw and statute rates', async () => {
@@ -129,8 +130,8 @@ describe('cost recovery', () => {
       vehicles: [{ vehicleId: ids.lf }],
       involvedParties: [{ role: 'owner', name: 'Muster GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
       statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
-      chargeable: true,
     }).expect(200);
+    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true }).expect(200);
     const settings = (await get('/core/settings/cost-recovery.general').expect(200)).body ?? {};
     const personnelRates = [...(settings.personnelRates ?? []), { kind: 'career-intermediate', validFrom: '2026-01-01', amount: 70 }];
     await put('/core/settings/cost-recovery.general', { ...settings, personnelRates }).expect(200);

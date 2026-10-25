@@ -17,11 +17,12 @@ import {
 } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { z } from 'zod';
-import { Audit, type AuthenticatedUser, berlinDayAfter, berlinDayStart, CurrentUser, MailService, Notifications, RequirePermissions, ZodPipe } from '@forga/core-api';
+import { assertVersion, Audit, type AuthenticatedUser, berlinDayAfter, berlinDayStart, CurrentUser, MailService, Notifications, RequirePermissions, ZodPipe } from '@forga/core-api';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import {
   AssignAuthor,
   type Incident as IncidentDto,
+  IncidentCosts,
   IncidentInput,
   NewReportInput,
   Release,
@@ -36,7 +37,7 @@ import {
 } from '@forga/incidents-contracts';
 import { IncidentEntity, ReportEntity, ReportRevisionEntity } from '../incidents.entities.js';
 import { DutyEvents } from '../duty/duty.js';
-import { READ, RELEASE, REPORT_POPULATE, ReportsService, UNLOCK, WRITE } from './reports.service.js';
+import { COSTS, READ, RELEASE, REPORT_POPULATE, ReportsService, UNLOCK, WRITE } from './reports.service.js';
 
 const Period = z.object({ from: z.iso.date(), to: z.iso.date() });
 
@@ -54,6 +55,9 @@ export function toIncidentDto(incident: IncidentEntity): IncidentDto {
     alarmedAt: incident.alarmedAt.toISOString(),
     location: incident.location,
     createdVia: incident.createdVia,
+    chargeable: incident.chargeable,
+    chargeableReason: incident.chargeableReason,
+    notes: incident.notes,
     reports: incident.reports
       .getItems()
       .toSorted((a, b) => Number(b.primary) - Number(a.primary) || a.number.localeCompare(b.number))
@@ -175,6 +179,23 @@ export class IncidentsController {
       alarmedAt: new Date(input.alarmedAt),
       location: input.location,
     });
+    await em.flush();
+    return toIncidentDto(incident);
+  }
+
+  /** Costs and notes apply to the whole incident, not to one report; also after the reports are released. */
+  @Put('incidents/:id/costs')
+  @RequirePermissions(COSTS)
+  async costs(
+    @Param('id') id: string,
+    @Body(new ZodPipe(IncidentCosts)) input: ReturnType<typeof IncidentCosts.parse>,
+  ): Promise<IncidentDto> {
+    const em = this.em.fork();
+    // `incidents.costs` applies to the whole brigade, like releasing.
+    const incident = await em.findOne(IncidentEntity, id, { populate: ['reports'] });
+    if (!incident) throw new NotFoundException();
+    assertVersion(incident, input.version);
+    em.assign(incident, { chargeable: input.chargeable, chargeableReason: input.chargeable ? input.chargeableReason : '', notes: input.notes });
     await em.flush();
     return toIncidentDto(incident);
   }

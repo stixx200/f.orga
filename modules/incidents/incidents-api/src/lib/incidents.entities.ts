@@ -47,6 +47,10 @@ export const IncidentSchema = defineEntity({
     alarmedAt: p.datetime().index(),
     location: p.json<Location>(),
     createdVia: p.string().$type<'ui' | 'api' | 'import'>().default('ui'),
+    /** Costs and notes apply to the whole incident, entered by the commander (`incidents.costs`), not per report. */
+    chargeable: p.boolean().default(false),
+    chargeableReason: p.text().default(''),
+    notes: p.text().default(''),
     reports: () => p.oneToMany(ReportEntity).mappedBy('incident'),
     version: p.integer().version(),
   },
@@ -99,10 +103,7 @@ export const ReportSchema = defineEntity({
     incidentCommander: p.string().default(''),
     statistics: p.json<IncidentStatistics>().nullable(),
     weather: p.json<Weather>(),
-    chargeable: p.boolean().default(false),
-    chargeableReason: p.text().default(''),
     equipment: p.text().default(''),
-    notes: p.text().default(''),
     acknowledgements: p.json<StoredAcknowledgement[]>(),
     /** Created by an external system and not edited by a person yet; only then the API may change it. */
     externallyManaged: p.boolean().default(false),

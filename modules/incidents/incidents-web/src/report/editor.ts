@@ -23,10 +23,7 @@ export function toContent(report: Report): Content {
     incidentCommander: report.incidentCommander,
     statistics: report.statistics,
     weather: report.weather,
-    chargeable: report.chargeable,
-    chargeableReason: report.chargeableReason,
     equipment: report.equipment,
-    notes: report.notes,
     personnel: report.personnel.map(({ id: _id, compensation: _c, from, to, ...p }) => ({
       ...p,
       from: from === times.alarmedAt ? null : from,

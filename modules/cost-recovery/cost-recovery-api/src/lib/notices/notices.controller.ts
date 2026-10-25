@@ -173,7 +173,7 @@ export class NoticesController {
 
   // ----- Legal ground from the incident report -----
 
-  /** Readable for everyone who writes or reads reports; the card in the report shows it. */
+  /** Readable for everyone who reads the incident; the card on the incident shows it. */
   @Get('incidents/:incidentId/offense')
   async offense(@Param('incidentId') incidentId: string): Promise<{ offenseKey: string | null }> {
     return { offenseKey: (await this.notices.chosenOffenses([incidentId])).get(incidentId) ?? null };
@@ -181,7 +181,8 @@ export class NoticesController {
 
   @Put('incidents/:incidentId/offense')
   async setOffense(@Param('incidentId') incidentId: string, @Body(new ZodPipe(OffenseChoice)) input: Parsed<typeof OffenseChoice>, @CurrentUser() user: AuthenticatedUser): Promise<{ offenseKey: string | null }> {
-    if (!['incidents.reports.write', 'incidents.reports.release', 'cost-recovery.write'].some((p) => user.can(p))) throw new ForbiddenException({ code: 'auth.forbidden', permissions: ['incidents.reports.write'] });
+    // Like the costs of the incident: the commander, or whoever edits cost notices.
+    if (!['incidents.costs', 'cost-recovery.write'].some((p) => user.can(p))) throw new ForbiddenException({ code: 'auth.forbidden', permissions: ['incidents.costs'] });
     return { offenseKey: await this.notices.setOffense(user, incidentId, input.offenseKey) };
   }
 

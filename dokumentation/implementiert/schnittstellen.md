@@ -159,6 +159,7 @@ Abteilungsbezogene Rechte gelten für die Abteilung des Berichts. Wer `incidents
 | `POST` | `/incidents/incidents` | `incidents.reports.write` für jede genannte Abteilung | Einsatz (`IncidentInput` und `departmentIds`) mit je einem Berichtsentwurf anlegen. Fehler: `incidents.dispatchNumberTaken` (`409`), `incidents.unknownKeyword` |
 | `GET` | `/incidents/incidents/:id` | `incidents.reports.read` | Einsatz mit Berichtsübersicht |
 | `PUT` | `/incidents/incidents/:id` | Schreibrecht für einen Bericht des Einsatzes | Einsatzdaten ändern; nicht, solange ein Bericht gesperrt ist (außer Freigeber) |
+| `PUT` | `/incidents/incidents/:id/costs` | `incidents.costs` | Kosten und Bemerkungen des ganzen Einsatzes (`IncidentCosts`: `chargeable`, `chargeableReason`, `notes`, `version`); auch nach der Freigabe der Berichte |
 | `POST` | `/incidents/incidents/:id/reports` | `incidents.reports.write` für die Abteilung | Bericht für eine weitere Abteilung anlegen (`NewReportInput`). Fehler: `incidents.reportExists` (`409`) |
 | `GET` | `/incidents/reports/:id` | `incidents.reports.read` | Bericht (`Report`) mit Entschädigung je Person, `compensationTotal`, `findings`, `statisticsSuggestion`. Ohne Leserecht `404` |
 | `PUT` | `/incidents/reports/:id` | Schreibrecht | Inhalt speichern (`ReportInput`). Fehler: `incidents.reportLocked` (`403`), `incidents.unknownPerson`, `incidents.unknownVehicle`, `incidents.personTwiceInReport` |

@@ -32,7 +32,7 @@ export function CandidatesPage() {
         empty={isLoading ? t('loading') : t('candidates.empty')}
         columns={[
           { key: 'date', header: t('fields.alarmedAt'), render: (c) => formatDateTime(c.alarmedAt, i18n.language) },
-          { key: 'incident', header: t('fields.incident'), render: (c) => <><Text size="sm" fw={700}>{c.alarmKeyword} · {c.dispatchNumber}</Text><Text size="xs" c="dimmed">{[c.object, c.location].filter(Boolean).join(' · ')}</Text></> },
+          { key: 'incident', header: t('fields.incident'), render: (c) => <><Text size="sm" fw={700}>{c.alarmKeyword} · {c.dispatchNumber}</Text><Text size="xs" c="dimmed">{[c.object, c.location].filter(Boolean).join(' · ')}</Text>{c.chargeableReason && <Text size="xs">{c.chargeableReason}</Text>}</> },
           { key: 'offense', header: t('fields.offense'), render: (c) => offense(c.suggestedOffense) },
           { key: 'released', header: t('candidates.report'), render: (c) => <StatusBadge tone={c.released ? 'done' : 'warning'}>{c.released ? t('candidates.released') : t('candidates.notReleased')}</StatusBadge> },
           {
