@@ -10,6 +10,7 @@ export const de = {
     overview: 'Übersicht',
     start: 'Startseite',
     lists: 'Listen',
+    scan: 'Code suchen',
     import: 'Import',
     administration: 'Verwaltung',
     users: 'Benutzer',
@@ -19,6 +20,15 @@ export const de = {
     settings: 'Einstellungen',
     audit: 'Audit-Log',
     menu: 'Menü',
+  },
+  scan: {
+    title: 'Code suchen',
+    subtitle: 'Gerät, Schlauch, Atemschutzgerät oder Kleidungsstück über Barcode, RFID-Chip, QR-Etikett oder Inventarnummer finden.',
+    code: 'Barcode, RFID oder Inventarnummer',
+    placeholder: 'Scannen oder eingeben und Enter drücken',
+    hint: 'Handscanner und RFID-Lesegeräte schreiben direkt in das Feld. Auf dem Handy geht es auch mit der Kamera (Barcodes, QR-Codes) oder per NFC (RFID-Chips).',
+    notFound: 'Zum Code „{{code}}“ wurde nichts gefunden. Der Code lässt sich beim Gegenstand unter „Bearbeiten“ hinterlegen.',
+    several: 'Mehrere Treffer für „{{code}}“',
   },
   header: {
     search: 'Personen, Fahrzeuge, Einsätze suchen',

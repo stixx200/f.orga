@@ -21,6 +21,7 @@ import { ImportPage } from './pages/ImportPage';
 import { ListsPage } from './pages/ListsPage';
 import { MyAreaPage } from './pages/MyAreaPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { ScanPage } from './pages/ScanPage';
 import { StartPage } from './pages/StartPage';
 
 function NotFound() {
@@ -46,6 +47,7 @@ function Router({ modules, session }: { modules: LoadedModule[]; session: Sessio
             { path: 'profile', element: <ProfilePage session={session} /> },
             { path: 'me', element: <MyAreaPage session={session} /> },
             { path: 'lists', element: <ListsPage modules={modules} /> },
+            { path: 'scan', element: <ScanPage /> },
             { path: 'import', element: <ImportPage /> },
             { path: 'admin/users', element: <Guard session={session} permission="core.users.manage"><UsersPage /></Guard> },
             { path: 'admin/roles', element: <Guard session={session} permission="core.roles.manage"><RolesPage modules={modules} /></Guard> },

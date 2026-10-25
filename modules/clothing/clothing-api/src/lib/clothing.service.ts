@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { assertVersion, type AuthenticatedUser, berlinDate } from '@forga/core-api';
+import { normalizeRfid } from '@forga/core-contracts';
 import {
   type Article,
   ARTICLE_TEMPLATE,
@@ -164,6 +165,7 @@ export class ClothingService {
         : { impregnationDueOn: null, inspectionDueOn: null };
       return {
         id: item.id, articleKey: item.articleKey, inventoryNumber: item.inventoryNumber, size: item.size, serialNumber: item.serialNumber,
+        barcode: item.barcode ?? null, rfid: item.rfid ?? null,
         manufacturer: item.manufacturer, purchasedOn: item.purchasedOn ?? null, departmentId: item.departmentId, notes: item.notes, status: item.status,
         holderId: item.holderId ?? null, issuedOn: item.issuedOn ?? null, lastWashedOn, lastImpregnatedOn, lastInspectedOn, ...due, version: item.version,
       };
@@ -178,7 +180,7 @@ export class ClothingService {
     else where.push({ status: { $ne: 'retired' } });
     if (filter.articleKey) where.push({ articleKey: filter.articleKey });
     if (filter.holderId) where.push({ holderId: filter.holderId });
-    if (filter.query) where.push({ $or: [{ inventoryNumber: { $ilike: `%${filter.query}%` } }, { serialNumber: { $ilike: `%${filter.query}%` } }] });
+    if (filter.query) where.push({ $or: [{ inventoryNumber: { $ilike: `%${filter.query}%` } }, { serialNumber: { $ilike: `%${filter.query}%` } }, { barcode: { $ilike: `%${filter.query}%` } }, { rfid: { $ilike: `%${normalizeRfid(filter.query) || filter.query}%` } }] });
     const em = this.em.fork();
     return this.toDtos(em, await em.find(ClothingItemEntity, { $and: where }, { orderBy: { inventoryNumber: 'asc' } }));
   }
@@ -208,6 +210,7 @@ export class ClothingService {
     const article = await this.article(em, input.articleKey);
     if (article.kind !== 'inventory') throw new BadRequestException({ code: 'clothing.notInventoried' });
     if (await em.count(ClothingItemEntity, { inventoryNumber: input.inventoryNumber })) throw new ConflictException({ code: 'clothing.inventoryNumberTaken', number: input.inventoryNumber });
+    await this.assertCodesFree(em, input);
     const { version: _version, ...fields } = input;
     const item = em.create(ClothingItemEntity, { ...fields, status: 'stock', holderId: null, issuedOn: null, createdOn: berlinDate() });
     await em.flush();
@@ -223,10 +226,21 @@ export class ClothingService {
     if (input.inventoryNumber !== item.inventoryNumber && (await em.count(ClothingItemEntity, { inventoryNumber: input.inventoryNumber }))) {
       throw new ConflictException({ code: 'clothing.inventoryNumberTaken', number: input.inventoryNumber });
     }
+    await this.assertCodesFree(em, input, id);
     const { version: _version, articleKey: _article, ...fields } = input;
     em.assign(item, fields);
     await em.flush();
     return (await this.toDtos(em, [item]))[0];
+  }
+
+  /** Barcode and RFID chip belong to one piece only. */
+  private async assertCodesFree(em: EntityManager, input: Parsed<typeof ItemInput>, id?: string): Promise<void> {
+    for (const field of ['barcode', 'rfid'] as const) {
+      const value = input[field];
+      if (value && (await em.count(ClothingItemEntity, { [field]: value, ...(id ? { id: { $ne: id } } : {}) }))) {
+        throw new ConflictException({ code: 'codes.taken', field, value });
+      }
+    }
   }
 
   // ----- issue and return -----

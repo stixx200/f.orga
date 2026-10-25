@@ -605,6 +605,7 @@ async function equipment(persons: PersonRef[]): Promise<void> {
         const item = await call<{ id: string; inspections: { key: string; intervalMonths: number | null }[] }>('POST', 'equipment/items', {
           inventoryNumber: `${prefix}-${typeKey}-${n}`, name: `${name} ${n}`, typeKey, categoryKey, departmentId: vehicle.departmentId, vehicleId: vehicle.id, loadingPlace: place,
           manufacturer: pick(['Dräger', 'MSA', 'Vetter', 'Holmatro', 'Weber', 'Motorola']), yearBuilt: between(2008, 2024),
+          barcode: chance(0.8) ? barcode('2000') : null, rfid: categoryKey === 'breathing' || chance(0.3) ? rfidChip() : null,
         });
         count++;
         for (const inspection of item.inspections.filter((i) => i.intervalMonths)) {
@@ -618,12 +619,21 @@ async function equipment(persons: PersonRef[]): Promise<void> {
       }
     }
     for (const [typeKey, name, quantity] of [['pressure-hose-b', 'B-Schlauch 20 m', between(6, 12)], ['pressure-hose-c', 'C-Schlauch 15 m', between(8, 16)]] as const) {
-      await call('POST', 'equipment/items', { inventoryNumber: `${prefix}-${typeKey}`, name, typeKey, categoryKey: 'hoses', departmentId: vehicle.departmentId, vehicleId: vehicle.id, loadingPlace: 'Heck', quantity });
+      await call('POST', 'equipment/items', { inventoryNumber: `${prefix}-${typeKey}`, name, typeKey, categoryKey: 'hoses', departmentId: vehicle.departmentId, vehicleId: vehicle.id, loadingPlace: 'Heck', quantity, barcode: barcode('2000'), rfid: rfidChip() });
       count++;
     }
   }
   console.log(`  ${count} Geräte für ${vehicles.length} Fahrzeuge`);
 }
+
+/** Barcodes run through per module; prefixes 20/21 are in-store numbers (no real GTIN), so modules never share one. */
+const barcodes = new Map<string, number>();
+const barcode = (prefix: '2000' | '2100') => {
+  barcodes.set(prefix, (barcodes.get(prefix) ?? 0) + 1);
+  return `${prefix}${String(barcodes.get(prefix)).padStart(9, '0')}`;
+};
+/** 7-byte chip ID as an RFID reader writes it (with separators; stored normalized). */
+const rfidChip = () => Array.from({ length: 7 }, () => between(0, 255).toString(16).padStart(2, '0')).join(':');
 
 /** A purchase date between 2016 and 2025. */
 const purchase = () => isoDate(new Date(between(2016, 2025), between(0, 11), between(1, 28)));
@@ -674,6 +684,8 @@ async function clothing(persons: PersonRef[]): Promise<void> {
     const created = await call<{ id: string }>('POST', 'clothing/items', {
       articleKey, inventoryNumber: `${prefixes[articleKey]}-${String(n).padStart(4, '0')}`, size, departmentId, purchasedOn,
       manufacturer: pick(manufacturers[articleKey] ?? ['']), serialNumber: chance(0.7) ? String(between(100000, 999999)) : '',
+      // Washable RFID tags in jackets and trousers, barcodes on most labels.
+      barcode: chance(0.9) ? barcode('2100') : null, rfid: ['jacket', 'trousers', 'breathing-apparatus-trousers'].includes(articleKey) ? rfidChip() : null,
     });
     return { id: created.id, articleKey, departmentId };
   };

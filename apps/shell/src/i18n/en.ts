@@ -12,6 +12,7 @@ export const en: typeof de = {
     overview: 'Overview',
     start: 'Start page',
     lists: 'Lists',
+    scan: 'Find by code',
     import: 'Import',
     administration: 'Administration',
     users: 'Users',
@@ -21,6 +22,15 @@ export const en: typeof de = {
     settings: 'Settings',
     audit: 'Audit log',
     menu: 'Menu',
+  },
+  scan: {
+    title: 'Find by code',
+    subtitle: 'Find equipment, hoses, breathing apparatus or clothing by barcode, RFID chip, QR label or inventory number.',
+    code: 'Barcode, RFID or inventory number',
+    placeholder: 'Scan or type and press Enter',
+    hint: 'Hand scanners and RFID readers type straight into the field. On phones, the camera (barcodes, QR codes) or NFC (RFID chips) work as well.',
+    notFound: 'Nothing found for the code "{{code}}". Store the code with the item under "Edit".',
+    several: 'Several hits for "{{code}}"',
   },
   header: {
     search: 'Search persons, vehicles, incidents',

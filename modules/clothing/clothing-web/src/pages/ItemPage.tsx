@@ -87,6 +87,8 @@ export function ItemPage() {
             <Row label={t('items.size')}>{item.size}</Row>
             <Row label={t('items.manufacturer')}>{item.manufacturer}</Row>
             <Row label={t('items.serialNumber')}>{item.serialNumber}</Row>
+            <Row label={common('codes.barcode')}>{item.barcode}</Row>
+            <Row label={common('codes.rfid')}>{item.rfid}</Row>
             <Row label={t('items.purchasedOn')}>{formatDate(item.purchasedOn, i18n.language)}</Row>
             <Row label={t('items.notes')}>{item.notes}</Row>
           </Stack>

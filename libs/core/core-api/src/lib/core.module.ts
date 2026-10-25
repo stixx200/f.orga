@@ -15,7 +15,7 @@ import { DeadlineRegistry } from './tasks/deadline-registry.js';
 import { DigestService } from './tasks/digest.service.js';
 import { MailService } from './tasks/mail.service.js';
 import { Notifications } from './tasks/notifications.js';
-import { DataController, ExportRegistry, RetentionRegistry, RetentionService, SearchRegistry } from './data/data.js';
+import { CodeRegistry, DataController, ExportRegistry, RetentionRegistry, RetentionService, SearchRegistry } from './data/data.js';
 import { PasswordReset, PasswordResetController, PasswordResetService } from './security/password-reset.js';
 import { AttachmentEntity, Attachments, AttachmentsController } from './attachments/attachments.js';
 import { BrigadeAsset, BrigadeAssetsController } from './settings/assets.js';
@@ -149,6 +149,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         TransferService,
         PasswordResetService,
         SearchRegistry,
+        CodeRegistry,
         ExportRegistry,
         RetentionRegistry,
         RetentionService,
@@ -169,6 +170,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         DigestService,
         ImportRegistry,
         SearchRegistry,
+        CodeRegistry,
         ExportRegistry,
         RetentionRegistry,
       ],

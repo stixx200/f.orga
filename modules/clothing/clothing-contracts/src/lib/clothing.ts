@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LocalizedText } from '@forga/core-contracts';
+import { ItemCode, LocalizedText, RfidCode } from '@forga/core-contracts';
 
 const date = z.iso.date();
 const text = z.string().trim().max(500).default('');
@@ -40,6 +40,10 @@ export const ItemInput = z.object({
   inventoryNumber: z.string().trim().min(1).max(50),
   size: text,
   serialNumber: text,
+  /** Barcode sewn in or on the label. */
+  barcode: ItemCode,
+  /** RFID chip (e.g. washable textile tag). */
+  rfid: RfidCode,
   manufacturer: text,
   purchasedOn: date.nullable().default(null),
   /** Department whose clothing store keeps the piece. */
@@ -55,6 +59,8 @@ export const Item = z.object({
   inventoryNumber: z.string(),
   size: z.string(),
   serialNumber: z.string(),
+  barcode: z.string().nullable(),
+  rfid: z.string().nullable(),
   manufacturer: z.string(),
   purchasedOn: z.string().nullable(),
   departmentId: z.uuid(),

@@ -779,7 +779,7 @@ Benötigt `masterdata`, nutzt optional `incidents`. Fahrzeuge, Wachen und Abteil
 | --- | --- | --- |
 | `CategoryEntity` | `category` | Kategorie mit Schlüssel, Name, übergeordneter Kategorie, Erfassung als Einzelstück oder Bestand (`tracking`), Kennzeichen Atemschutz |
 | `EquipmentTypeEntity` | `equipment_type` | Gerätetyp mit Hersteller, Modell, Eigenschaften (z. B. Länge) und Prüfarten |
-| `EquipmentItemEntity` | `item` | Gerät: Inventarnummer (eindeutig), Typ, Kategorie, Seriennummer, Hersteller, Baujahr, Beschaffung, Eigenschaften, Abteilung, Fahrzeug mit Beladeplatz oder Wache, Menge (Bestand), Ablaufdatum, eigene Prüfarten, Status, fällig gesetzte Prüfungen (`triggered`), Aussonderung, `forVehicleId` |
+| `EquipmentItemEntity` | `item` | Gerät: Inventarnummer (eindeutig), Typ, Kategorie, Seriennummer, Barcode und RFID-Chip (je eindeutig, wenn gesetzt), Hersteller, Baujahr, Beschaffung, Eigenschaften, Abteilung, Fahrzeug mit Beladeplatz oder Wache, Menge (Bestand), Ablaufdatum, eigene Prüfarten, Status, fällig gesetzte Prüfungen (`triggered`), Aussonderung, `forVehicleId` |
 | `InspectionEntity` | `inspection` | Prüfung: Prüfart, Datum, Prüfer (Person oder Firma), Ergebnis, Checkliste, Messwerte, nächste Fälligkeit, Hinweis auf fehlende Qualifikation |
 | `DefectEntity` | `defect` | Mangel mit Beschreibung, Status (`reported`, `in-progress`, `fixed`, `retired`), Erledigung |
 | `UsageEntity` | `usage` | im Einsatzbericht verwendete Geräte und Verbrauchsmaterial mit Menge und „nach Einsatz prüfen“ |
@@ -802,7 +802,7 @@ Benötigt `masterdata`, nutzt optional `incidents`. Fahrzeuge, Wachen und Abteil
 
 **Rechte:** `equipment.read`, `equipment.write`, `equipment.inspect`, `equipment.defects.report`, `equipment.defects.notify` (E-Mail bei neuen Mängeln) je Abteilung, `equipment.settings.manage` für Kategorien und Typen. Der Gerätewart hat alles in allen Abteilungen, der Atemschutzgerätewart liest und prüft in allen Abteilungen.
 
-**Listen:** fällige Prüfungen (mit Unterschriftsspalte), Inventarliste, Beladeliste je Fahrzeug, Prüfhistorie, Prüfprotokoll (`equipment.inspection-report`: eine Prüfung über `inspectionId` oder alle Prüfungen eines Tages, mit Checkliste, Messwerten, Prüfer und Unterschriftsspalte), offene Mängel, ausgesonderte Geräte, Bestand. **Fristen:** jede Prüfart eines Geräts (Vorlauf 30 Tage, für `equipment.inspect`), Ablaufdatum (60 Tage, `equipment.write`), gemeldete Mängel; Prüfungen und Ablauf in der wöchentlichen E-Mail gruppiert nach Kategorie und Fahrzeug. **Import** `equipment.inventory`: Inventar mit Abteilung, Fahrzeug, Beladeplatz, Menge und letzter Prüfung. **Suche** nach Inventar-, Seriennummer und Bezeichnung; Vollexport.
+**Listen:** fällige Prüfungen (mit Unterschriftsspalte), Inventarliste, Beladeliste je Fahrzeug, Prüfhistorie, Prüfprotokoll (`equipment.inspection-report`: eine Prüfung über `inspectionId` oder alle Prüfungen eines Tages, mit Checkliste, Messwerten, Prüfer und Unterschriftsspalte), offene Mängel, ausgesonderte Geräte, Bestand. **Fristen:** jede Prüfart eines Geräts (Vorlauf 30 Tage, für `equipment.inspect`), Ablaufdatum (60 Tage, `equipment.write`), gemeldete Mängel; Prüfungen und Ablauf in der wöchentlichen E-Mail gruppiert nach Kategorie und Fahrzeug. **Import** `equipment.inventory`: Inventar mit Abteilung, Fahrzeug, Beladeplatz, Menge, Barcode, RFID-Chip und letzter Prüfung (fehlen die Spalten für die Codes, bleiben die gespeicherten; ein Code eines anderen Geräts ergibt `codes.taken`). **Suche** nach Inventar-, Seriennummer, Bezeichnung, Barcode und RFID-Chip; **Code-Suche** (siehe unten) zusätzlich über die URL des QR-Etiketts; Vollexport.
 
 ## Modul Kostenersatz (`cost-recovery`)
 
@@ -871,7 +871,7 @@ Verwaltet die persönliche Schutzausrüstung (PSA). Backend `modules/clothing/cl
 - Inventarisierte Artikel können Textil sein (`textile`: Wäsche wird erfasst) mit Imprägnier-Intervall (`impregnationMonths`) und ein Prüfintervall haben (`inspectionMonths`).
 - Vorlage `ARTICLE_TEMPLATE` (Einsatzjacke und -hose 12 Monate Imprägnieren und Prüfen, Atemschutz-Überhose, Stiefel, Helm, Flammschutzhaube, Handschuhe, Mütze, T-Shirt), ergänzt nur fehlende Schlüssel.
 
-**Stücke** (`ClothingItemEntity`, `item`, historisiert): Artikel, Inventarnummer (eindeutig), Größe, Hersteller, Seriennummer, Anschaffung, Kleiderkammer der Abteilung, Status `stock`/`issued`/`retired`, Träger und Ausgabedatum.
+**Stücke** (`ClothingItemEntity`, `item`, historisiert): Artikel, Inventarnummer (eindeutig), Größe, Hersteller, Seriennummer, Barcode und RFID-Chip (z. B. waschbarer Textil-Chip; je eindeutig, wenn gesetzt), Anschaffung, Kleiderkammer der Abteilung, Status `stock`/`issued`/`retired`, Träger und Ausgabedatum.
 
 **Ausgabe und Rücknahme** (`IssueEntity`, `issue`): Jede Ausgabe (Stück oder Verbrauchsartikel mit Größe und Anzahl) und jede Rücknahme ist ein Eintrag im Verlauf der Person mit Datum, Bemerkung und Erfasser. Ausgeben darf, wer `clothing.issue` für die Kleiderkammer des Stücks und für eine Abteilung der Person hat; an Ausgeschiedene wird nichts ausgegeben. Bei der Rücknahme kann das Stück direkt ausgesondert werden.
 
@@ -883,7 +883,7 @@ Verwaltet die persönliche Schutzausrüstung (PSA). Backend `modules/clothing/cl
 
 **Oberfläche:** Schutzausrüstung (Bestand, beim Öffnen „Im Lager“, mit Suche und Filtern nach Status, Artikel und Größe, je Mehrfachauswahl; die Größen kommen aus den vorhandenen Stücken der gewählten Artikel; Fristen farbig), Stück (Stammdaten, Ausgabe, Rücknahme, Wäsche, Prüfung, Verlauf), Ausgabe (Person wählen: Stück aus dem Lager ausgeben, Verbrauchsartikel abgeben, zurücknehmen, Verlauf), Wäsche (mehrere Stücke, „Fällige auswählen“), Verwaltung → Kleiderkammer (Artikel, Vorlage). Reiter „Kleiderkammer“ in der Personalakte und „Meine Schutzausrüstung“ in „Mein Bereich“.
 
-**Fristen:** Imprägnieren und Prüfung je Stück (30 Tage Vorlauf, zuständig `clothing.issue` der Kleiderkammer). **Listen:** ausgegebene Schutzausrüstung, fällige Wäsche und Prüfungen. **Daten:** Suche nach Inventar- und Seriennummer, Vollexport. Abteilungen mit Stücken lassen sich nicht löschen.
+**Fristen:** Imprägnieren und Prüfung je Stück (30 Tage Vorlauf, zuständig `clothing.issue` der Kleiderkammer). **Listen:** ausgegebene Schutzausrüstung, fällige Wäsche und Prüfungen. **Daten:** Suche nach Inventar-, Seriennummer, Barcode und RFID-Chip, Code-Suche, Vollexport. Abteilungen mit Stücken lassen sich nicht löschen.
 
 ## Mehrsprachigkeit
 
@@ -918,11 +918,13 @@ Verwaltet die persönliche Schutzausrüstung (PSA). Backend `modules/clothing/cl
 - **Seitenleiste:** Abschnitte „Übersicht“ (Startseite, Listen, Import), je aktivem Modul einer mit den Einträgen aus dem Manifest (Symbol über `icon`, Zähler über `useNavigationBadges` des Moduls) und „Verwaltung“ (nur Einträge, für die der Benutzer das Recht hat). Navigationseinträge mit `section: 'administration'` stehen unter „Verwaltung“, weil sie für die ganze Anwendung gelten (Kataloge, Einstellungen der Einsatzberichte). Auf dem Handy ein Menü mit Suche und Sprachumschalter.
 - **Fußzeile:** Anschrift und Kontakt aus den Einstellungen `brigade`.
 - **Globale Suche:** `GET /api/core/search`, Treffer nach Gruppe (Personen, Fahrzeuge, Einsätze).
+- **Code suchen** (`/scan`, Eintrag unter „Übersicht“, wenn `GET /api/core/codes/modules` ein Modul liefert): großes Eingabefeld mit Fokus, in das Handscanner und RFID-Lesegeräte wie eine Tastatur schreiben (Enter sucht). Auf dem Handy „Mit Kamera scannen“ (Barcode-Erkennung des Browsers: QR, Code 128/39/93, EAN-13/8, UPC-A, Data Matrix, ITF) und „RFID/NFC lesen“ (Web NFC, Kennung des Chips). Genau ein Treffer öffnet den Gegenstand, mehrere erscheinen als Liste nach Modul, keiner als Hinweis. `/scan?code=…` sucht sofort (z. B. als Link auf einem NFC-Tag).
 
 ### Daten: Suche, Vollexport, Auskunft, Aufbewahrung
 
 `libs/core/core-api/src/lib/data/data.ts`. Module melden sich in `onModuleInit` an:
 - **Suche** (`SearchRegistry`): `GET /api/core/search?q=` (ab 2 Zeichen) fragt die Quellen der Module, für die der Benutzer überhaupt Rechte hat; jede Quelle prüft die Rechte selbst. Stammdaten: Personen (sichtbare), Fahrzeuge; Einsatzberichte: Einsätze (Leitstellennummer, Stichwort, Meldebild).
+- **Code-Suche** (`CodeRegistry`): `GET /api/core/codes?code=` fragt die Quellen der Module mit gekennzeichneten Gegenständen (Geräte, Kleiderkammer) nach dem exakten Code: Barcode, RFID-Chip, Inventar- oder Seriennummer (ohne Groß-/Kleinschreibung) oder die URL eines QR-Etiketts von f.orga. Jede Quelle prüft die Rechte selbst. Codes sind `ItemCode`/`RfidCode` aus `core-contracts`: leer bedeutet keiner; RFID-Kennungen werden ohne Trennzeichen in Großbuchstaben gespeichert und verglichen (`normalizeRfid`), weil Lesegeräte sie unterschiedlich ausgeben. Eingabefelder für Codes (`CodeInput` in `web-ui`) füllen sich per Handscanner, Kamera (Barcode) oder NFC (RFID).
 - **Vollexport** (`ExportRegistry`, Recht `core.data.export`): `GET /api/core/export/:modul` liefert alle Daten des Moduls mit IDs als JSON (`{ format: 'forga.export', version: 1, module, exportedAt, data }`), `GET /api/core/export/person/:personId` alles zu einer Person über alle Module (Auskunft nach Art. 15 DSGVO). Beides steht im Audit-Log (`data.exported`, `data.person-exported`).
 - **Aufbewahrung** (`RetentionRegistry`, `RetentionService`, Einstellung `privacy`): eine Minute nach dem Start und dann täglich (abschaltbar mit `FORGA_RETENTION_SCHEDULER=off`) und auf Knopfdruck (`POST /api/core/retention/run` mit `dryRun`). Der Core löscht Audit-Einträge älter als `auditRetentionMonths` und nicht übernommene Import-Uploads und Datenübernahmen älter als 24 Stunden (`core.imports`). Die Stammdaten anonymisieren Personen, die vor mehr als `anonymizeLeftAfterYears` Jahren ausgeschieden sind: Name „Person (ausgeschieden)“, Kontakt- und sensible Daten, Qualifikationen, Ehrungen, Lehrgänge und ihre Historie werden entfernt, `anonymizedAt` gesetzt; Mitgliedschaften, Dienstgrade und Verweise in Einsatzberichten bleiben für die Statistik.
 
@@ -943,6 +945,7 @@ Verwaltet die persönliche Schutzausrüstung (PSA). Backend `modules/clothing/cl
 | --- | --- | --- |
 | `/` | Startseite: Begrüßung, Kennzahlen und Karten der Module (`dashboard` mit `area` `kpi`, `main`, `side`), Fristen und Aufgaben | angemeldet |
 | `/profile` | Sprache, wöchentliche E-Mail, Passwort ändern | angemeldet |
+| `/scan` | Code suchen: Barcode, RFID-Chip, QR-Etikett oder Inventarnummer per Handscanner, Lesegerät, Kamera oder NFC | Lesen in einem Modul mit Code-Suche |
 | `/lists` | Listen nach Modul, Parameter, Vorschau, Download als PDF, Excel, CSV | je Liste |
 | `/import` | Import-Assistent: Datei, Inhalt (passendstes Profil vorgewählt), Spaltenzuordnung mit Beispielwerten, Prüfung (Probelauf), Übernahme | je Importprofil |
 | `/admin/users` | Benutzer mit Filter, Bearbeiten daneben: Person verknüpfen, Sprache, Passwort setzen, Rollen je Bereich zuweisen, sperren | `core.users.manage` |
@@ -1034,7 +1037,7 @@ Personen und Abteilungen für die Benutzerverwaltung kommen aus der Stammdaten-A
 | --- | --- |
 | `/equipment/items` | Geräte mit Suche und Filtern (Kategorie, Abteilung, Status, fällig), nächste Prüfung mit Ampel, offene Mängel; „+ Gerät“ |
 | `/equipment/items/:id` | Geräteakte: Stammdaten mit QR-Code, Prüfungen (Fälligkeiten, „Prüfen“, „Fällig setzen“, Historie), Mängel, Einsätze (Klick öffnet den Bericht), Historie; „Protokoll“ je Prüfung als PDF; „Anhänge“ je Prüfung (z. B. Protokoll des Prüfstands) und je Mangel (Fotos); beim Melden eines Mangels optional ein Foto; Mangel melden, Status ändern, aussondern. Wer nur Mängel melden darf, sieht nur „Mangel melden“. |
-| `/equipment/inspections` | fällige Prüfungen; mit gewählter Prüfart Sammelprüfung, Auswahl auch nacheinander per QR-Code („Per QR-Code auswählen“: Kamera über die Barcode-Erkennung des Browsers, sonst Eingabe von Code oder Inventarnummer, z. B. mit einem Handscanner); „Tagesprotokoll (PDF)“ aller Prüfungen von heute (gewählte Abteilung) |
+| `/equipment/inspections` | fällige Prüfungen; mit gewählter Prüfart Sammelprüfung, Auswahl auch nacheinander per QR-Code („Per QR-Code auswählen“: Kamera über die Barcode-Erkennung des Browsers, sonst Eingabe von Code, Inventarnummer, Barcode oder RFID-Chip, z. B. mit einem Handscanner); „Tagesprotokoll (PDF)“ aller Prüfungen von heute (gewählte Abteilung) |
 | `/equipment/defects` | Mängel mit Bearbeitung |
 | `/equipment/labels` | QR-Etiketten zum Drucken |
 | `/equipment/settings` | Gerätetypen mit Prüfarten, Kategorien als Baum (eingerückt unter der übergeordneten, „+ Unterkategorie“ je Zeile), Vorlage DGUV 305-002, Fahrzeuge übernehmen (im Menü unter „Verwaltung → Geräte“) |
