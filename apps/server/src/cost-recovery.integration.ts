@@ -56,7 +56,7 @@ describe('cost recovery', () => {
     expect(notice).toMatchObject({ number: 'KE-2026-001', status: 'draft', offenseKey: 'fire-alarm-system', debtors: [{ name: 'Muster GmbH', role: 'owner' }] });
     // Personnel 10:00–11:10 = 70 min → 2 h each (half an hour up to 30 min, beyond started hours) × 21,30 €.
     expect(notice.positions[0]).toMatchObject({ kind: 'personnel', quantity: 4, rate: 21.3, amount: 85.2 });
-    // LF 20 10:04–10:50 = 46 min → 1 h × 205 €; MTW without own times 10:00–11:10 → 2 h × 34 €.
+    // LF 20 10:04–10:50 = 46 min → 1 h × 205 €; MTW without own times from the report's departure: 10:04–11:10 → 2 h × 34 €.
     expect(notice.positions[1]).toMatchObject({ kind: 'vehicle', category: 'lf-20', quantity: 1, rate: 205, amount: 205 });
     expect(notice.positions[2]).toMatchObject({ kind: 'vehicle', category: 'mtw', quantity: 2, rate: 34, amount: 68 });
     expect(notice.total).toBe(358.2);
@@ -172,5 +172,37 @@ describe('cost recovery', () => {
   it('keeps an address book of frequent debtors', async () => {
     const entry = (await post('/cost-recovery/debtors', { name: 'Versicherung AG', street: 'Hauptstraße 1', postalCode: '89073', city: 'Kreisstadt' }).expect(201)).body;
     expect((await get('/cost-recovery/debtors').expect(200)).body).toEqual([expect.objectContaining({ id: entry.id, name: 'Versicherung AG' })]);
+  });
+
+  it('bills every vehicle with crew once, also when only the crew names it or two reports list it', async () => {
+    const ahornfeld = (await post('/masterdata/departments', { name: 'Abteilung Ahornfeld', shortName: 'Ahornfeld', type: 'operational' }).expect(201)).body.id;
+    const incident = (await post('/incidents/incidents', { dispatchNumber: '2026-779', alarmKeyword: 'B-BMA', alarmedAt: T('14:00'), departmentIds: [ids.musterstadt, ahornfeld] }).expect(201)).body;
+    const [own, support] = incident.reports;
+    // The crew sits on the LF, but the report lists no vehicles (as imports and the API used to leave it).
+    const saved = await put(`/incidents/reports/${own.id}`, {
+      times: { alarmedAt: T('14:00'), departedAt: T('14:10'), returnedAt: T('14:40') },
+      situation: 'BMA', actions: 'Erkundung',
+      personnel: [{ personId: ids.jonas, vehicleId: ids.lf }],
+      statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
+    }).expect(200);
+    expect(saved.body.vehicles).toEqual([expect.objectContaining({ vehicleId: ids.lf, departedAt: null, returnedAt: null })]);
+    // The other department's report lists the same LF with own, longer times.
+    await put(`/incidents/reports/${support.id}`, {
+      times: { alarmedAt: T('14:00'), departedAt: T('14:05'), returnedAt: T('15:20') },
+      situation: 'Unterstützung', actions: 'Bereitstellung',
+      vehicles: [{ vehicleId: ids.lf, departedAt: T('14:05'), returnedAt: T('15:20') }],
+    }).expect(200);
+    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true }).expect(200);
+
+    const notice = (await post('/cost-recovery/notices', { incidentId: incident.id }).expect(201)).body;
+    const vehicles = (notice.positions as { kind: string; vehicleId: string; quantity: number; amount: number }[]).filter((p) => p.kind === 'vehicle');
+    // Once, 14:05–15:20 = 75 min → 2 h × 205 €.
+    expect(vehicles).toEqual([expect.objectContaining({ vehicleId: ids.lf, quantity: 2, amount: 410 })]);
+
+    // The incident beside the notice, with names.
+    const view = (await get(`/cost-recovery/notices/${notice.id}/incident`).expect(200)).body;
+    expect(view).toMatchObject({ dispatchNumber: '2026-779' });
+    expect(view.reports[0]).toMatchObject({ department: 'Abteilung Musterstadt', departedAt: new Date(T('14:10')).toISOString(), vehicles: [expect.objectContaining({ name: 'Florian Musterstadt 1/44', crew: 1 })] });
+    expect(view.reports[0].personnel).toEqual([expect.objectContaining({ vehicle: 'Florian Musterstadt 1/44', standby: false })]);
   });
 });

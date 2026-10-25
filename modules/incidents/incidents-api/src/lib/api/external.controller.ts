@@ -11,7 +11,7 @@ import {
   type Vehicle,
 } from '@forga/masterdata-contracts';
 import { IncidentEntity, ReportEntity, ReportPersonnelEntity } from '../incidents.entities.js';
-import { ReportsService } from '../reports/reports.service.js';
+import { addCrewVehicles, ReportsService } from '../reports/reports.service.js';
 
 type ParsedExternal = ReturnType<typeof ExternalIncidentInput.parse>;
 
@@ -101,7 +101,7 @@ export class ExternalController {
         continue;
       }
       if (!target.report.externallyManaged) continue;
-      await em.populate(target.report, ['personnel']);
+      await em.populate(target.report, ['personnel', 'vehicles']);
       if (target.report.personnel.getItems().some((p) => p.personId === person.id)) continue;
       const vehicle = entry.vehicle ? findVehicle(vehicles, entry.vehicle) : undefined;
       if (entry.vehicle && !vehicle) warnings.push({ code: 'incidents.api.unknownVehicle', value: entry.vehicle });
@@ -118,6 +118,7 @@ export class ExternalController {
       if (entry.function === 'group-leader' && !target.report.personnel.getItems().some((p) => p.function === 'group-leader' && p.personId !== person.id)) {
         target.report.authorPersonId = person.id;
       }
+      addCrewVehicles(em, target.report);
       target.updated = !target.created;
     }
 

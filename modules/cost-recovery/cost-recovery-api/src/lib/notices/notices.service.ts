@@ -10,6 +10,7 @@ import {
   type Debtor,
   missingReasons,
   type Notice,
+  type NoticeIncident,
   NoticeInput,
   type NoticeIssuedEvent,
   type NoticeStatus,
@@ -156,6 +157,18 @@ export class NoticesService {
       if (e === 'career-intermediate' || e === 'career-elevated' || e === 'career-higher') return config.personnelRates.some((r) => r.kind === e) ? e : 'career';
       return e === 'fire-service-employee' ? 'career' : 'volunteer';
     };
+    // Each vehicle from its departure (else the report's, else the alarm) to its return (else the report's). A vehicle
+    // listed in several reports of the incident is billed once, from the earliest departure to the latest return.
+    const usage = new Map<string, { from: string; to: string }>();
+    for (const report of incident.reports) {
+      for (const v of report.vehicles) {
+        const from = v.departedAt ?? report.departedAt ?? report.alarmedAt;
+        const to = v.returnedAt ?? report.returnedAt;
+        const known = usage.get(v.vehicleId);
+        usage.set(v.vehicleId, known ? { from: from < known.from ? from : known.from, to: to > known.to ? to : known.to } : { from, to });
+      }
+    }
+    const billed = new Set<string>();
     const positions: Position[] = [];
     for (const report of incident.reports) {
       const present = report.personnel.filter((p) => p.personId && (config.chargeStandby || !p.standby));
@@ -172,10 +185,13 @@ export class NoticesService {
         });
       }
       for (const v of report.vehicles) {
+        if (billed.has(v.vehicleId)) continue;
+        billed.add(v.vehicleId);
         const vehicle = vehicles.get(v.vehicleId);
-        const category = vehicle?.costRecoveryCategory ?? vehicle?.vehicleType ?? '';
+        const category = vehicle?.costRecoveryCategory || vehicle?.vehicleType || '';
         const rate = vehicleRateOn(config.vehicleRates, category, date);
-        const hours = billableHours(v.departedAt ?? report.alarmedAt, v.returnedAt ?? report.returnedAt, config.vehicleRounding ?? config.rounding);
+        const { from, to } = usage.get(v.vehicleId)!;
+        const hours = billableHours(from, to, config.vehicleRounding ?? config.rounding);
         const amount = round2(hours * (rate ?? 0));
         positions.push({
           kind: 'vehicle',
@@ -198,6 +214,41 @@ export class NoticesService {
       .replaceAll('{date}', germanDate(berlinDate(new Date(incident.alarmedAt))))
       .replaceAll('{location}', incident.location || '–')
       .replaceAll('{basis}', basis);
+  }
+
+  /** The incident of a notice with names, for reading it beside the notice. */
+  async incidentOf(noticeId: string): Promise<NoticeIncident> {
+    const notice = await this.load(this.em.fork(), noticeId);
+    const incident = await this.incidents.forCostRecovery(notice.incidentId);
+    if (!incident) throw new NotFoundException({ code: 'cost-recovery.unknownIncident' });
+    const departments = new Map((await this.organization.departments()).map((d) => [d.id, d.name]));
+    const vehicles = new Map((await this.organization.vehicles({ includeRetired: true })).map((v) => [v.id, v.radioCallSign || v.designation]));
+    return {
+      incidentId: incident.incidentId,
+      dispatchNumber: incident.dispatchNumber,
+      alarmKeyword: incident.alarmKeyword,
+      alarmMessage: incident.alarmMessage,
+      alarmedAt: incident.alarmedAt,
+      location: incident.location,
+      chargeableReason: incident.chargeableReason,
+      notes: incident.notes,
+      reports: incident.reports.map((r) => ({
+        reportId: r.reportId,
+        department: departments.get(r.departmentId) ?? '',
+        number: r.number,
+        status: r.status,
+        alarmedAt: r.alarmedAt,
+        departedAt: r.departedAt,
+        returnedAt: r.returnedAt,
+        incidentCommander: r.incidentCommander,
+        situation: r.situation,
+        actions: r.actions,
+        cause: r.cause,
+        vehicles: r.vehicles.map((v) => ({ ...v, name: vehicles.get(v.vehicleId) ?? '', crew: r.personnel.filter((p) => p.vehicleId === v.vehicleId).length })),
+        personnel: r.personnel.map((p) => ({ name: p.name, vehicle: p.vehicleId ? (vehicles.get(p.vehicleId) ?? '') : '', from: p.from, to: p.to, standby: p.standby })),
+        parties: r.parties,
+      })),
+    };
   }
 
   async create(incidentId: string): Promise<Notice> {

@@ -49,6 +49,12 @@ const de = {
   personnelKind: { volunteer: 'Feuerwehrangehörige (Ehrenamt)', 'fire-watch': 'Brandsicherheitswache', career: 'Hauptamt (allgemein)', 'career-intermediate': 'Hauptamt mittlerer Dienst', 'career-elevated': 'Hauptamt gehobener Dienst', 'career-higher': 'Hauptamt höherer Dienst' },
   rounding: { 'half-then-hour': 'bis 30 Minuten halbe Stunde, darüber angefangene Stunde', 'started-half-hour': 'angefangene halbe Stunde', 'started-hour': 'angefangene Stunde' },
   dashboard: { withoutNotice: 'Kostenpflichtig ohne Bescheid', hint: 'Einsätze dieses und des Vorjahres' },
+  incident: {
+    show: 'Einsatz anzeigen', title: 'Einsatz {{number}}', open: 'Einsatz öffnen', hint: 'Bleibt beim Bearbeiten des Bescheids geöffnet.',
+    chargeableReason: 'Kostenpflichtig, weil', notes: 'Bemerkungen zu den Kosten', report: 'Bericht {{number}}', times: 'Alarm {{alarm}} · Ausrücken {{departed}} · Rückkehr {{returned}}',
+    commander: 'Einsatzleiter', situation: 'Lage', actions: 'Maßnahmen', cause: 'Ursache', vehicles: 'Fahrzeuge', crew: '{{count}} Personen', ownTimes: 'eigene Zeiten', reportTimes: 'Zeiten des Berichts',
+    personnel: 'Personal', standby: 'Bereitschaft', parties: 'Beteiligte', none: 'keine', loading: 'Einsatz wird geladen …', notAvailable: 'Der Einsatz ist nicht verfügbar.',
+  },
   offense: { title: 'Kostenersatz', label: 'Tatbestand', hint: 'Grundlage des späteren Kostenbescheids; leer = Vorschlag aus Stichwort und Statistik.', saved: 'Tatbestand gespeichert', none: 'Im Modul Kostenersatz sind keine Tatbestände hinterlegt.' },
   errors: {
     'cost-recovery.unknownIncident': 'Einsatz nicht gefunden.',
@@ -118,6 +124,12 @@ const en: typeof de = {
   personnelKind: { volunteer: 'Volunteers', 'fire-watch': 'Fire watch', career: 'Career staff (general)', 'career-intermediate': 'Career staff, intermediate service', 'career-elevated': 'Career staff, elevated service', 'career-higher': 'Career staff, higher service' },
   rounding: { 'half-then-hour': 'up to 30 minutes half an hour, beyond started hours', 'started-half-hour': 'started half hour', 'started-hour': 'started hour' },
   dashboard: { withoutNotice: 'Chargeable without notice', hint: 'Incidents of this and last year' },
+  incident: {
+    show: 'Show incident', title: 'Incident {{number}}', open: 'Open incident', hint: 'Stays open while you edit the notice.',
+    chargeableReason: 'Chargeable because', notes: 'Notes on the costs', report: 'Report {{number}}', times: 'Alarm {{alarm}} · Departure {{departed}} · Return {{returned}}',
+    commander: 'Incident commander', situation: 'Situation', actions: 'Actions', cause: 'Cause', vehicles: 'Vehicles', crew: '{{count}} persons', ownTimes: 'own times', reportTimes: 'times of the report',
+    personnel: 'Personnel', standby: 'Standby', parties: 'Parties involved', none: 'none', loading: 'Loading incident …', notAvailable: 'The incident is not available.',
+  },
   offense: { title: 'Cost recovery', label: 'Legal ground', hint: 'Basis of the later cost notice; empty = suggestion from keyword and statistics.', saved: 'Legal ground saved', none: 'No legal grounds are configured in the cost recovery module.' },
   errors: {
     'cost-recovery.notAmendable': 'Only issued notices can be amended.',

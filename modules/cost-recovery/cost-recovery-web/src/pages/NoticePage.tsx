@@ -8,6 +8,7 @@ import { apiUrl, can, formatDate, formatDateTime, formatMoney, localDate, send, 
 import { ActionBar, ConfirmDialog, EmptyState, Notice as Hint, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { ISSUE, keys, useAddressBook, useCostSettings, useNotice, WRITE } from '../api';
 import { NoticeStatusBadge } from '../parts';
+import { IncidentDrawer } from './IncidentDrawer';
 
 type Form = Pick<Notice, 'offenseKey' | 'debtors' | 'positions' | 'reasoning' | 'remedy' | 'cashReference'>;
 const emptyDebtor = (): Debtor => ({ name: '', street: '', postalCode: '', city: '', role: '' });
@@ -152,6 +153,7 @@ export function NoticePage() {
   const { data: notice, isLoading } = useNotice(id);
   const [confirm, setConfirm] = useState<Action | null>(null);
   const [dialog, setDialog] = useState<'objection' | 'cancel' | 'paid' | null>(null);
+  const [showIncident, setShowIncident] = useState(false);
   const [paidOn, setPaidOn] = useState<string | null>(() => localDate());
   const step = useAction((action: Action) => send('POST', `cost-recovery/notices/${id}/${action}`), { invalidate: [keys.all], onSuccess: () => setConfirm(null) });
   const cancel = useAction((reason: string) => send('POST', `cost-recovery/notices/${id}/cancel`, { reason }), { invalidate: [keys.all], onSuccess: () => setDialog(null) });
@@ -171,6 +173,7 @@ export function NoticePage() {
         subtitle={`${notice.alarmKeyword} · ${notice.dispatchNumber} · ${formatDateTime(notice.alarmedAt, i18n.language)}${notice.location ? ` · ${notice.location}` : ''}`}
         actions={
           <Group gap="sm">
+            <Button variant="default" onClick={() => setShowIncident((s) => !s)}>{t('incident.show')}</Button>
             <Button component="a" href={apiUrl(`cost-recovery/notices/${id}/pdf`)} target="_blank" variant="default">{notice.hasPdf ? t('notice.pdf') : t('notice.preview')}</Button>
             {notice.status === 'draft' && can(session, WRITE) && <Button variant="default" onClick={() => setConfirm('recalculate')}>{t('notice.recalculate')}</Button>}
             {notice.status === 'draft' && can(session, WRITE) && <Button onClick={() => setConfirm('submit')}>{t('notice.submit')}</Button>}
@@ -198,6 +201,7 @@ export function NoticePage() {
       {notice.amendedBy && <Hint kind="info">{t('notice.amendedBy')} <Link to={`/cost-recovery/notices/${notice.amendedBy.id}`}>{notice.amendedBy.number}</Link></Hint>}
       {notice.paidOn && <Hint kind="done">{t('notice.paidOn', { date: formatDate(notice.paidOn, i18n.language) })}</Hint>}
       <Editor key={`${notice.id}:${notice.version}`} notice={notice} editable={editable} />
+      <IncidentDrawer noticeId={notice.id} opened={showIncident} onClose={() => setShowIncident(false)} />
       {confirm && (
         <ConfirmDialog opened onClose={() => setConfirm(null)} title={t(`confirm.${confirm}.title`)} description={t(`confirm.${confirm}.text`)} confirmLabel={t(`confirm.${confirm}.button`)} loading={step.isPending} onConfirm={() => step.mutate(confirm)} />
       )}

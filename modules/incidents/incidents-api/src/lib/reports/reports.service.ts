@@ -40,6 +40,20 @@ const iso = (date: Date | null | undefined) => (date ? date.toISOString() : null
 const REVISION_WINDOW_MS = 10 * 60_000;
 const MAX_REVISIONS = 50;
 
+/**
+ * Every vehicle with crew belongs to the report's vehicles (times empty = those of the report), whether the report
+ * comes from the editor, an import or the API; cost recovery bills these vehicles. Needs `personnel` and `vehicles`
+ * loaded.
+ */
+export function addCrewVehicles(em: EntityManager, report: ReportEntity): void {
+  const listed = new Set(report.vehicles.getItems().map((v) => v.vehicleId));
+  for (const p of report.personnel.getItems()) {
+    if (!p.vehicleId || listed.has(p.vehicleId)) continue;
+    listed.add(p.vehicleId);
+    report.vehicles.add(em.create(ReportVehicleEntity, { report, vehicleId: p.vehicleId, departedAt: null, returnedAt: null, kilometres: null }));
+  }
+}
+
 /** The editable content of a stored report, in the form of `ReportInput`. */
 export function reportToInput(report: ReportEntity): ParsedReportInput {
   return ReportInput.parse({
@@ -300,6 +314,7 @@ export class ReportsService {
         }),
       );
     }
+    addCrewVehicles(em, report);
     report.involvedParties.removeAll();
     for (const party of input.involvedParties) report.involvedParties.add(em.create(InvolvedPartyEntity, { report, ...party }));
     report.otherAgencies.removeAll();
