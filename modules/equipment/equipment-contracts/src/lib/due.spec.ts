@@ -1,14 +1,37 @@
-import { addMonths, computeDues } from './due.js';
+import { addMonths, computeDues, isBlocked, withIntervals } from './due.js';
 import type { InspectionType } from './equipment.js';
 
 const type = (key: string, intervalMonths: number | null, trigger: InspectionType['trigger'] = 'periodic'): InspectionType => ({ key, name: { de: key, en: key }, intervalMonths, trigger, inspector: 'competent-person', checklist: [] });
 
 describe('computeDues', () => {
   const today = '2026-10-24';
-  it('adds the interval to the last inspection and is due today without inspection', () => {
+  it('adds the interval to the last inspection', () => {
     const dues = computeDues([type('check', 6), type('overhaul', 72)], new Map([['check', { date: '2026-06-01', nextDueOn: null }]]), {}, today);
     expect(dues[0]).toMatchObject({ dueOn: '2026-12-01', overdue: false, lastDate: '2026-06-01' });
-    expect(dues[1]).toMatchObject({ dueOn: today, overdue: true, lastDate: null });
+  });
+
+  it('measures items never inspected from the purchase date, else from the day they were recorded', () => {
+    const types = [type('check', 12)];
+    expect(computeDues(types, new Map(), {}, today, { purchasedOn: '2026-03-15', createdOn: '2026-10-01' })[0]).toMatchObject({ dueOn: '2027-03-15', overdue: false, lastDate: null });
+    // Without purchase date the item is due from the day it was recorded; the date does not move with today.
+    const recorded = computeDues(types, new Map(), {}, '2026-11-30', { purchasedOn: null, createdOn: '2026-10-01' })[0];
+    expect(recorded).toMatchObject({ dueOn: '2026-10-01', overdue: true });
+  });
+
+  it('keeps a failed inspection due instead of advancing the due date', () => {
+    const failed = computeDues([type('check', 6)], new Map([['check', { date: '2026-10-20', nextDueOn: null, result: 'failed' as const }]]), {}, today)[0];
+    expect(failed).toMatchObject({ dueOn: '2026-10-20', overdue: true });
+  });
+
+  it('applies the interval overrides of an item and blocks items of locking categories when overdue', () => {
+    const types = withIntervals([type('hu', 12), type('annual', 12)], { hu: 24 });
+    expect(types.map((t) => t.intervalMonths)).toEqual([24, 12]);
+    const dues = computeDues(types, new Map([['hu', { date: '2025-06-01', nextDueOn: null }], ['annual', { date: '2025-06-01', nextDueOn: null }]]), {}, today);
+    expect(dues.map((d) => d.dueOn)).toEqual(['2027-06-01', '2026-06-01']);
+    expect(isBlocked(dues, true, today)).toBe(true);
+    expect(isBlocked(dues, false, today)).toBe(false);
+    // Due today is still valid today.
+    expect(isBlocked([{ ...dues[0], dueOn: today }], true, today)).toBe(false);
   });
 
   it('respects a due date set on the inspection', () => {

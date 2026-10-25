@@ -1,9 +1,26 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { type AuthenticatedUser, CurrentUser, RequirePermissions, ZodPipe } from '@forga/core-api';
-import { BulkInspectionInput, type Defect, DefectInput, DefectUpdate, type Inspection, InspectionInput, type Item, type ItemIncident, ItemInput, ItemStatus, type ReportUsage, ReportUsageInput, RetireInput } from '@forga/equipment-contracts';
-import { EntityManager } from '@mikro-orm/core';
-import { INSPECT, ItemsService, READ, REPORT_DEFECTS as REPORT, WRITE } from './items.service.js';
+import {
+  BulkInspectionInput,
+  type Defect,
+  DefectInput,
+  DefectUpdate,
+  type Inspection,
+  InspectionCancellation,
+  InspectionCorrection,
+  InspectionInput,
+  type Item,
+  type ItemIncident,
+  ItemInput,
+  ItemStatus,
+  type ItemSummary,
+  LabelsPrintedInput,
+  type ReportUsage,
+  ReportUsageInput,
+  RetireInput,
+} from '@forga/equipment-contracts';
+import { ItemsService, READ, REPORT_DEFECTS as REPORT, WRITE } from './items.service.js';
 
 type Parsed<T extends z.ZodType> = z.infer<T>;
 const StatusInput = z.object({ status: ItemStatus.exclude(['retired']) });
@@ -11,10 +28,7 @@ const TriggerInput = z.object({ inspectionKey: z.string().min(1) });
 
 @Controller('equipment')
 export class ItemsController {
-  constructor(
-    private readonly items: ItemsService,
-    private readonly em: EntityManager,
-  ) {}
+  constructor(private readonly items: ItemsService) {}
 
   @Get('items')
   @RequirePermissions(READ)
@@ -27,8 +41,16 @@ export class ItemsController {
     @Query('q') q?: string,
     @Query('includeRetired') includeRetired?: string,
     @Query('dueBefore') dueBefore?: string,
+    @Query('withoutLabel') withoutLabel?: string,
   ): Promise<Item[]> {
-    return this.items.list(user, { categoryKey, departmentId, vehicleId, status, q, includeRetired: includeRetired === 'true', dueBefore });
+    return this.items.list(user, { categoryKey, departmentId, vehicleId, status, q, includeRetired: includeRetired === 'true', dueBefore, withoutLabel: withoutLabel === 'true' });
+  }
+
+  /** Labels of these items printed; write permission for each item (breathing apparatus: also `equipment.breathing.write`). */
+  @Post('items/labels/printed')
+  @HttpCode(200)
+  labelsPrinted(@Body(new ZodPipe(LabelsPrintedInput)) input: Parsed<typeof LabelsPrintedInput>, @CurrentUser() user: AuthenticatedUser): Promise<{ marked: number }> {
+    return this.items.labelsPrinted(user, input.itemIds);
   }
 
   @Post('items')
@@ -37,10 +59,10 @@ export class ItemsController {
     return this.items.create(user, input);
   }
 
-  /** Also for members who only report defects (QR code). */
+  /** Also for members who only report defects (QR code): they get the summary of the item. */
   @Get('items/:id')
-  async get(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Item> {
-    return (await this.items.toDtos([await this.items.load(this.em.fork(), id, user)]))[0];
+  get(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Item | ItemSummary> {
+    return this.items.view(user, id);
   }
 
   @Get('items/:id/incidents')
@@ -55,8 +77,8 @@ export class ItemsController {
     return this.items.update(user, id, input);
   }
 
+  /** `equipment.write`, for breathing apparatus also `equipment.breathing.write` (checked per item). */
   @Put('items/:id/status')
-  @RequirePermissions(WRITE)
   status(@Param('id') id: string, @Body(new ZodPipe(StatusInput)) input: Parsed<typeof StatusInput>, @CurrentUser() user: AuthenticatedUser): Promise<Item> {
     return this.items.changeStatus(user, id, input.status);
   }
@@ -74,24 +96,35 @@ export class ItemsController {
     return this.items.inspections(user, id);
   }
 
+  /** `equipment.inspect`, for breathing apparatus also `equipment.breathing.inspect` (checked per item); likewise below. */
   @Post('items/:id/inspections')
-  @RequirePermissions(INSPECT)
   inspect(@Param('id') id: string, @Body(new ZodPipe(InspectionInput)) input: Parsed<typeof InspectionInput>, @CurrentUser() user: AuthenticatedUser): Promise<Inspection> {
     return this.items.inspect(user, id, input);
   }
 
   @Post('items/:id/trigger')
   @HttpCode(200)
-  @RequirePermissions(INSPECT)
   trigger(@Param('id') id: string, @Body(new ZodPipe(TriggerInput)) input: Parsed<typeof TriggerInput>, @CurrentUser() user: AuthenticatedUser): Promise<Item> {
     return this.items.trigger(user, id, input.inspectionKey);
   }
 
   @Post('inspections/bulk')
   @HttpCode(200)
-  @RequirePermissions(INSPECT)
   bulk(@Body(new ZodPipe(BulkInspectionInput)) input: Parsed<typeof BulkInspectionInput>, @CurrentUser() user: AuthenticatedUser) {
     return this.items.bulkInspect(user, input);
+  }
+
+  /** Corrects an inspection with a reason. */
+  @Put('inspections/:id')
+  correctInspection(@Param('id') id: string, @Body(new ZodPipe(InspectionCorrection)) input: Parsed<typeof InspectionCorrection>, @CurrentUser() user: AuthenticatedUser): Promise<Inspection> {
+    return this.items.correctInspection(user, id, input);
+  }
+
+  /** Cancels an inspection with a reason; it stays in the history. */
+  @Post('inspections/:id/cancel')
+  @HttpCode(200)
+  cancelInspection(@Param('id') id: string, @Body(new ZodPipe(InspectionCancellation)) input: Parsed<typeof InspectionCancellation>, @CurrentUser() user: AuthenticatedUser): Promise<Inspection> {
+    return this.items.cancelInspection(user, id, input);
   }
 
   @Get('defects')
@@ -117,16 +150,16 @@ export class ItemsController {
     return this.items.reportDefect(user, id, input);
   }
 
+  /** `equipment.write`, for breathing apparatus also `equipment.breathing.write`. */
   @Put('defects/:id')
-  @RequirePermissions(WRITE)
   updateDefect(@Param('id') id: string, @Body(new ZodPipe(DefectUpdate)) input: Parsed<typeof DefectUpdate>, @CurrentUser() user: AuthenticatedUser): Promise<Defect> {
     return this.items.updateDefect(user, id, input);
   }
 
-  /** Equipment used in an incident report (section "Geräte" of the report). */
+  /** Equipment used in an incident report (section "Geräte" of the report); access like the report. */
   @Get('reports/:reportId/usage')
-  usage(@Param('reportId') reportId: string): Promise<ReportUsage[]> {
-    return this.items.forReport(reportId);
+  usage(@Param('reportId') reportId: string, @CurrentUser() user: AuthenticatedUser): Promise<ReportUsage[]> {
+    return this.items.usage(user, reportId, 'incidents');
   }
 
   @Put('reports/:reportId/usage')
@@ -134,10 +167,10 @@ export class ItemsController {
     return this.items.setUsage(user, reportId, input);
   }
 
-  /** Equipment used in a training session (tab "Geräte" of the session). */
+  /** Equipment used in a training session (tab "Geräte" of the session); access like the session. */
   @Get('sessions/:sessionId/usage')
-  sessionUsage(@Param('sessionId') sessionId: string): Promise<ReportUsage[]> {
-    return this.items.forReport(sessionId, 'training');
+  sessionUsage(@Param('sessionId') sessionId: string, @CurrentUser() user: AuthenticatedUser): Promise<ReportUsage[]> {
+    return this.items.usage(user, sessionId, 'training');
   }
 
   @Put('sessions/:sessionId/usage')

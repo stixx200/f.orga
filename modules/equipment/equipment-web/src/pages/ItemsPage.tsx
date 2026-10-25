@@ -3,9 +3,9 @@ import { IconSearch } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { Item } from '@forga/equipment-contracts';
-import { can, localDate, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
+import { can, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, PageHeader, StatusBadge } from '@forga/web-ui';
-import { useCategories, useCategoryName, useDepartments, useItems, usePlace, WRITE } from '../api';
+import { useCategories, useCategoryName, useDepartments, useDueSoon, useItems, usePlace, WRITE } from '../api';
 import { DueDate, ItemStatusBadge } from '../parts';
 import { ItemDialog } from './ItemDialog';
 
@@ -25,7 +25,7 @@ export function ItemsPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [due, setDue] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [{ soon, today }] = useState(() => ({ soon: localDate(new Date(Date.now() + 30 * 86_400_000)), today: localDate() }));
+  const { soon, today, days } = useDueSoon();
   const { data = [], isLoading } = useItems({
     q: q.trim() || undefined,
     categoryKey: categoryKey ?? undefined,
@@ -51,7 +51,7 @@ export function ItemsPage() {
         <Select label={t('fields.category')} placeholder={t('items.all')} data={categories.map((c) => ({ value: c.key, label: localized(c.name) }))} value={categoryKey} onChange={setCategoryKey} clearable />
         <Select label={t('fields.department')} placeholder={t('items.all')} data={departments.map((d) => ({ value: d.id, label: d.name }))} value={departmentId} onChange={setDepartmentId} clearable />
         <Select label={t('fields.status')} placeholder={t('items.active')} data={(['ready', 'in-inspection', 'defective', 'in-repair', 'retired'] as const).map((s) => ({ value: s, label: t(`status.${s}`) }))} value={status} onChange={setStatus} clearable />
-        <Select label={t('items.due')} placeholder={t('items.all')} data={[{ value: 'overdue', label: t('items.overdue') }, { value: 'soon', label: t('items.dueSoon') }]} value={due} onChange={setDue} clearable />
+        <Select label={t('items.due')} placeholder={t('items.all')} data={[{ value: 'overdue', label: t('items.overdue') }, { value: 'soon', label: t('items.dueSoon', { count: days }) }]} value={due} onChange={setDue} clearable />
       </Group>
       <DataTable<Item>
         rows={data}
@@ -62,7 +62,7 @@ export function ItemsPage() {
           { key: 'number', header: t('fields.inventoryNumber'), render: (i) => <Text fw={700} size="sm" c="brand">{i.inventoryNumber}</Text> },
           { key: 'name', header: t('fields.name'), render: (i) => <><Text size="sm" fw={700}>{i.name}{i.quantity > 1 ? ` × ${i.quantity}` : ''}</Text><Text size="xs" c="dimmed">{category(i.categoryKey)}</Text></> },
           { key: 'place', header: t('fields.place'), render: (i) => place(i) },
-          { key: 'status', header: t('fields.status'), render: (i) => <Group gap={4}><ItemStatusBadge status={i.status} />{i.openDefects > 0 && <StatusBadge tone="error">{t('items.defects', { count: i.openDefects })}</StatusBadge>}</Group> },
+          { key: 'status', header: t('fields.status'), render: (i) => <Group gap={4}><ItemStatusBadge status={i.status} blocked={i.blocked} />{i.openDefects > 0 && <StatusBadge tone="error">{t('items.defects', { count: i.openDefects })}</StatusBadge>}</Group> },
           { key: 'next', header: t('items.nextInspection'), render: (i) => <DueDate dueOn={i.nextDue} /> },
         ]}
       />

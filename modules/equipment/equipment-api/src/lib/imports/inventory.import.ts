@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { type ImportContext, type ImportProfile, type ImportRow, normalizeHeading, parseDate } from '@forga/core-api';
+import { berlinDate, type ImportContext, type ImportProfile, type ImportRow, normalizeHeading, parseDate } from '@forga/core-api';
 import { type ImportResult, type ImportRowResult, normalizeRfid } from '@forga/core-contracts';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
 import { CategoryEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity } from '../equipment.entities.js';
@@ -26,7 +26,9 @@ const FIELDS = [
   field('vehicle', 'Fahrzeug', 'Vehicle', ['Fahrzeug', 'Funkrufname']),
   field('loadingPlace', 'Beladeplatz', 'Loading place', ['Beladeplatz', 'Lagerort', 'G-Raum']),
   field('quantity', 'Menge', 'Quantity', ['Menge', 'Anzahl', 'Bestand']),
+  field('inspectionType', 'Prüfart', 'Inspection type', ['Prüfart', 'Prüfung', 'Prüfungsart']),
   field('lastInspection', 'Letzte Prüfung', 'Last inspection', ['letzte Prüfung', 'geprüft am', 'Prüfdatum']),
+  field('nextInspection', 'Nächste Prüfung', 'Next inspection', ['nächste Prüfung', 'fällig am', 'nächste Fälligkeit']),
 ];
 
 /** Inventory with the last inspection, e.g. from the MP-Feuer equipment export. */
@@ -42,8 +44,8 @@ export class InventoryImport {
       id: 'equipment.inventory',
       name: { de: 'Inventar', en: 'Inventory' },
       description: {
-        de: 'Eine Zeile je Gerät. Vorhandene Inventarnummern werden aktualisiert. Eine „letzte Prüfung“ gilt für die erste regelmäßige Prüfart des Gerätetyps.',
-        en: 'One row per item. Existing inventory numbers are updated. A "last inspection" applies to the first periodic inspection type of the equipment type.',
+        de: 'Eine Zeile je Gerät und Prüfart. Vorhandene Inventarnummern werden aktualisiert. Eine „letzte Prüfung“ gilt für die Prüfart der Zeile (Schlüssel oder Name), ohne Prüfart für die erste regelmäßige Prüfart des Gerätetyps. Mehrere Zeilen derselben Inventarnummer übernehmen die letzten Prüfungen mehrerer Prüfarten.',
+        en: 'One row per item and inspection type. Existing inventory numbers are updated. A "last inspection" applies to the inspection type of the row (key or name), without one to the first periodic inspection type of the equipment type. Several rows of the same inventory number take over the last inspections of several inspection types.',
       },
       permission: WRITE,
       fields: FIELDS,
@@ -58,8 +60,10 @@ export class InventoryImport {
     const categories = await em.find(CategoryEntity, {});
     const types = await em.find(EquipmentTypeEntity, {});
     const results: ImportRowResult[] = [];
-    // Codes claimed by earlier rows of the same file.
+    // Codes claimed by earlier rows of the same file; items created by earlier rows (not flushed yet).
     const claimed = new Map<string, string>();
+    const created = new Map<string, EquipmentItemEntity>();
+    const seen = new Set<string>();
     for (const { row, values } of rows) {
       const label = `${values['inventoryNumber'] ?? ''} ${values['name'] ?? ''}`.trim();
       const error = (code: string, params?: Record<string, string>) => results.push({ row, action: 'error', label, messages: [{ code, params }] });
@@ -71,6 +75,14 @@ export class InventoryImport {
       if (!category) { error('equipment.unknownCategory', { key: values['category'] ?? '' }); continue; }
       const vehicle = match(vehicles, values['vehicle'], (v) => [v.radioCallSign, v.designation]);
       const lastInspection = values['lastInspection'] ? parseDate(values['lastInspection']) : null;
+      const nextInspection = values['nextInspection'] ? parseDate(values['nextInspection']) : null;
+      const inspections = type?.inspections ?? [];
+      const inspectionType = values['inspectionType']
+        ? match(inspections, values['inspectionType'], (t) => [t.key, t.name.de, t.name.en])
+        : inspections.find((t) => t.trigger === 'periodic' && t.intervalMonths);
+      if (values['inspectionType'] && !inspectionType) { error('equipment.unknownInspection', { key: values['inspectionType'] }); continue; }
+      if (lastInspection && lastInspection > berlinDate()) { error('equipment.inspectionInFuture', { date: lastInspection }); continue; }
+      if (lastInspection && nextInspection && nextInspection <= lastInspection) { error('equipment.nextDueNotAfterDate', { date: lastInspection, nextDueOn: nextInspection }); continue; }
       const fields = {
         name: values['name']!,
         typeKey: type?.key ?? null,
@@ -87,16 +99,23 @@ export class InventoryImport {
         ...(values['barcode'] ? { barcode: values['barcode'].trim() } : {}),
         ...(values['rfid'] ? { rfid: normalizeRfid(values['rfid']) } : {}),
       };
-      let item = await em.findOne(EquipmentItemEntity, { inventoryNumber: values['inventoryNumber']! });
-      const taken = await this.codeTaken(em, codes, values['inventoryNumber']!, claimed);
+      const inventoryNumber = values['inventoryNumber']!;
+      const fresh = created.get(inventoryNumber);
+      let item = fresh ?? (await em.findOne(EquipmentItemEntity, { inventoryNumber }));
+      const taken = await this.codeTaken(em, codes, inventoryNumber, claimed);
       if (taken) { error('codes.taken', { value: taken }); continue; }
-      const action = item ? 'update' : 'create';
+      const action = item || seen.has(inventoryNumber) ? 'update' : 'create';
+      seen.add(inventoryNumber);
       if (!dryRun) {
         if (item) Object.assign(item, fields, codes);
-        else item = em.create(EquipmentItemEntity, { ...fields, ...codes, inventoryNumber: values['inventoryNumber']!, status: 'ready', triggered: {}, forVehicleId: null });
-        const periodic = type?.inspections.find((t) => t.trigger === 'periodic' && t.intervalMonths);
-        if (lastInspection && periodic && !(await em.count(InspectionEntity, { item, inspectionKey: periodic.key, date: lastInspection }))) {
-          em.create(InspectionEntity, { item, inspectionKey: periodic.key, date: lastInspection, result: 'passed', recordedBy: `Import (${user.displayName})`, inspectorCompany: '', checklist: [], measurements: '', notes: '', qualificationWarning: false, nextDueOn: null });
+        else {
+          item = em.create(EquipmentItemEntity, { ...fields, ...codes, inventoryNumber, status: 'ready', triggered: {}, forVehicleId: null });
+          created.set(inventoryNumber, item);
+        }
+        // The same inspection is not taken over twice (stored items only; new ones have none yet).
+        const known = lastInspection && inspectionType && !fresh && created.get(inventoryNumber) !== item ? await em.count(InspectionEntity, { item, inspectionKey: inspectionType.key, date: lastInspection }) : 0;
+        if (lastInspection && inspectionType && !known) {
+          em.create(InspectionEntity, { item, inspectionKey: inspectionType.key, date: lastInspection, result: 'passed', recordedBy: `Import (${user.displayName})`, inspectorCompany: '', checklist: [], measurements: '', notes: '', qualificationWarning: false, nextDueOn: nextInspection });
         }
       }
       results.push({ row, action, label, messages: [] });

@@ -2,11 +2,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { z } from 'zod';
 import type { ListColumn } from '@forga/core-contracts';
-import { type AuthenticatedUser, berlinDate, type ListDefinition } from '@forga/core-api';
-import type { Item } from '@forga/equipment-contracts';
+import { type AuthenticatedUser, berlinDate, type ListDefinition, SettingsService } from '@forga/core-api';
+import { EquipmentSettings, type Item } from '@forga/equipment-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { CategoryEntity, InspectionEntity } from '../equipment.entities.js';
-import { INSPECT, ItemsService, READ } from '../items/items.service.js';
+import { ItemsService, READ } from '../items/items.service.js';
 
 const col = (key: string, de: string, en: string, width?: number, align?: ListColumn['align']): ListColumn => ({ key, label: { de, en }, ...(width ? { width } : {}), ...(align ? { align } : {}) });
 const department = { key: 'departmentId', label: { de: 'Abteilung', en: 'Department' }, type: 'department' as const };
@@ -14,6 +14,7 @@ const Filter = z.object({ departmentId: z.uuid().optional(), categoryKey: z.stri
 type Filter = z.infer<typeof Filter>;
 const STATUS = { ready: { de: 'einsatzbereit', en: 'ready' }, 'in-inspection': { de: 'in Prüfung', en: 'in inspection' }, defective: { de: 'defekt', en: 'defective' }, 'in-repair': { de: 'in Reparatur', en: 'in repair' }, retired: { de: 'ausgesondert', en: 'retired' } } as const;
 const ReportParams = z.object({ inspectionId: z.uuid().optional(), date: z.iso.date().optional(), departmentId: z.uuid().optional() });
+const BLOCKED = { de: 'gesperrt (Prüfung überfällig)', en: 'blocked (inspection overdue)' } as const;
 const RESULT = { passed: { de: 'bestanden', en: 'passed' }, 'passed-with-defects': { de: 'mit Mängeln', en: 'with defects' }, failed: { de: 'nicht bestanden', en: 'failed' } } as const;
 
 /** List templates of the equipment module. */
@@ -22,6 +23,7 @@ export class EquipmentLists {
   constructor(
     private readonly em: EntityManager,
     private readonly items: ItemsService,
+    private readonly settings: SettingsService,
     @Inject(ORGANIZATION) private readonly organization: Organization,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
   ) {}
@@ -44,14 +46,15 @@ export class EquipmentLists {
     return {
       id: 'equipment.due',
       name: { de: 'Fällige Prüfungen', en: 'Inspections due' },
-      permission: INSPECT,
+      permission: READ,
       parameters: [{ key: 'until', label: { de: 'Fällig bis', en: 'Due until' }, type: 'date' }, department],
       schema: Filter,
       orientation: 'landscape',
       signatureColumn: true,
       columns: [col('due', 'Fällig', 'Due'), col('inspection', 'Prüfung', 'Inspection', 2), col('number', 'Inventar-Nr.', 'Inventory no.'), col('name', 'Gerät', 'Item', 2), col('place', 'Standort', 'Location', 1.5), col('last', 'Zuletzt', 'Last')],
       rows: async (user, params, language) => {
-        const until = params.until ?? berlinDate(new Date(Date.now() + 30 * 86_400_000));
+        const { dueSoonDays } = EquipmentSettings.parse((await this.settings.get('equipment.settings')) ?? {});
+        const until = params.until ?? berlinDate(new Date(Date.now() + dueSoonDays * 86_400_000));
         const place = await this.places();
         const items = await this.items.list(user, { departmentId: params.departmentId });
         return {
@@ -77,7 +80,7 @@ export class EquipmentLists {
         const place = await this.places();
         const categories = await this.categoryNames(language);
         const items = await this.items.list(user, { departmentId: params.departmentId });
-        return { rows: items.map((i) => ({ number: i.inventoryNumber, name: i.name, category: categories.get(i.categoryKey) ?? i.categoryKey, serial: i.serialNumber, place: place(i), quantity: i.quantity, status: STATUS[i.status][language], next: i.nextDue })) };
+        return { rows: items.map((i) => ({ number: i.inventoryNumber, name: i.name, category: categories.get(i.categoryKey) ?? i.categoryKey, serial: i.serialNumber, place: place(i), quantity: i.quantity, status: (i.blocked ? BLOCKED : STATUS[i.status])[language], next: i.nextDue })) };
       },
     };
   }
@@ -121,7 +124,7 @@ export class EquipmentLists {
         const to = params.to ?? `${year}-12-31`;
         const rows = await this.em.fork().find(
           InspectionEntity,
-          { date: { $gte: from, $lte: to }, item: { ...(visible as object), ...(params.departmentId ? { departmentId: params.departmentId } : {}) } },
+          { date: { $gte: from, $lte: to }, cancelled: false, item: { ...(visible as object), ...(params.departmentId ? { departmentId: params.departmentId } : {}) } },
           { populate: ['item'], orderBy: { date: 'asc' } },
         );
         const items = await this.items.toDtos([...new Map(rows.map((r) => [r.item.id, r.item])).values()]);
@@ -158,7 +161,7 @@ export class EquipmentLists {
         const visible = this.items.visible(user);
         if (!visible) return { rows: [] };
         const date = params.date ?? berlinDate();
-        const where = params.inspectionId ? { id: params.inspectionId } : { date, ...(params.departmentId ? { item: { departmentId: params.departmentId } } : {}) };
+        const where = params.inspectionId ? { id: params.inspectionId } : { date, cancelled: false, ...(params.departmentId ? { item: { departmentId: params.departmentId } } : {}) };
         const rows = await this.em.fork().find(InspectionEntity, { $and: [where, { item: visible as object }] }, { populate: ['item'], orderBy: { date: 'asc', item: { inventoryNumber: 'asc' } } });
         const items = await this.items.toDtos([...new Map(rows.map((r) => [r.item.id, r.item])).values()]);
         const name = (itemId: string, key: string) => items.find((i) => i.id === itemId)?.inspections.find((t) => t.key === key)?.name[language] ?? key;
