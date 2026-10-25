@@ -1,0 +1,12 @@
+import type { ForgaModule } from '@forga/core-api';
+import { promotionsModule } from '@forga/promotions-api';
+import { costRecoveryModule } from '@forga/cost-recovery-api';
+import { equipmentModule } from '@forga/equipment-api';
+import { compensationModule } from '@forga/compensation-api';
+import { respiratoryProtectionModule } from '@forga/respiratory-protection-api';
+import { trainingModule } from '@forga/training-api';
+import { incidentsModule } from '@forga/incidents-api';
+import { masterdataModule } from '@forga/masterdata-api';
+
+/** Feature modules built into this server image. */
+export const INSTALLED_MODULES: ForgaModule[] = [masterdataModule, incidentsModule, trainingModule, respiratoryProtectionModule, compensationModule, equipmentModule, costRecoveryModule, promotionsModule];

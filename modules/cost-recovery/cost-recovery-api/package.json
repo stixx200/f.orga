@@ -1,0 +1,39 @@
+{
+  "name": "@forga/cost-recovery-api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "@forga/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "tslib": "^2.3.0",
+    "@forga/core-api": "*",
+    "@forga/core-contracts": "*",
+    "@forga/cost-recovery-contracts": "*",
+    "@forga/equipment-contracts": "*",
+    "@forga/incidents-contracts": "*",
+    "@forga/masterdata-contracts": "*",
+    "@mikro-orm/core": "^7.2.5",
+    "@mikro-orm/migrations": "^7.2.5",
+    "@nestjs/common": "^11.0.0",
+    "exceljs": "^4.4.0",
+    "uuid": "^14.0.3",
+    "zod": "^4.6.7"
+  },
+  "nx": {
+    "tags": [
+      "scope:module-cost-recovery",
+      "type:api"
+    ]
+  }
+}

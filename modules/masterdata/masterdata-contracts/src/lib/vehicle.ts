@@ -1,0 +1,50 @@
+import { z } from 'zod';
+import { VEHICLE_STATISTICS_CATEGORY_IDS } from './vehicle-statistics-categories.js';
+
+export const VehicleStatus = z.enum(['in-service', 'out-of-service', 'retired']);
+export type VehicleStatus = z.infer<typeof VehicleStatus>;
+
+export const VehicleInput = z.object({
+  designation: z.string().trim().min(1),
+  radioCallSign: z.string().trim().default(''),
+  licensePlate: z.string().trim().default(''),
+  /** Key of a `vehicle-type` catalog entry. */
+  vehicleType: z.string().min(1),
+  departmentId: z.uuid(),
+  stationId: z.uuid().nullable().default(null),
+  /** `null` = seats of the vehicle type. */
+  seats: z.number().int().min(0).nullable().default(null),
+  yearBuilt: z.number().int().min(1900).max(2200).nullable().default(null),
+  commissionedOn: z.iso.date().nullable().default(null),
+  decommissionedOn: z.iso.date().nullable().default(null),
+  costRecoveryCategory: z.string().nullable().default(null),
+  /** Position of the annual statistics (F63–F120). `null` = default of the vehicle type. */
+  statisticsCategory: z
+    .string()
+    .refine((id) => VEHICLE_STATISTICS_CATEGORY_IDS.includes(id), 'Unknown statistics category')
+    .nullable()
+    .default(null),
+  status: VehicleStatus.default('in-service'),
+  notes: z.string().default(''),
+});
+export type VehicleInput = z.input<typeof VehicleInput>;
+
+export const Vehicle = z.object({
+  id: z.uuid(),
+  designation: z.string(),
+  radioCallSign: z.string(),
+  licensePlate: z.string(),
+  vehicleType: z.string(),
+  departmentId: z.uuid(),
+  stationId: z.uuid().nullable(),
+  seats: z.number().int(),
+  yearBuilt: z.number().int().nullable(),
+  commissionedOn: z.string().nullable(),
+  decommissionedOn: z.string().nullable(),
+  costRecoveryCategory: z.string().nullable(),
+  statisticsCategory: z.string(),
+  status: VehicleStatus,
+  notes: z.string(),
+  version: z.number().int(),
+});
+export type Vehicle = z.infer<typeof Vehicle>;

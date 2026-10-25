@@ -1,0 +1,207 @@
+/* Shared component styles; values follow Stil.md and the mockups. */
+
+.breadcrumbs {
+  font-size: 13px;
+  color: var(--forga-meta);
+  margin-bottom: 4px;
+}
+
+.title {
+  color: var(--forga-service);
+  font-size: 28px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.panelTitle {
+  color: var(--forga-service);
+  font-size: 18px;
+  margin: 0;
+}
+
+.tableWrap {
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th {
+  background: var(--forga-service);
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 12px;
+  text-align: left;
+  padding: 12px;
+  vertical-align: bottom;
+}
+
+.table td {
+  padding: 12px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--forga-grid);
+}
+
+.table tbody tr:nth-child(even) td {
+  background: var(--forga-alternate);
+}
+
+.table tbody tr.clickable {
+  cursor: pointer;
+}
+
+.table tbody tr.clickable:hover td {
+  background: #f6eceb;
+}
+
+.table tbody tr.selected td {
+  box-shadow: inset 0 2px 0 var(--forga-service), inset 0 -2px 0 var(--forga-service);
+}
+
+.table tbody tr.selected td:first-child {
+  box-shadow: inset 4px 0 0 var(--forga-service), inset 0 2px 0 var(--forga-service), inset 0 -2px 0 var(--forga-service);
+}
+
+.table tbody tr.primary td {
+  background: var(--forga-primary-report);
+}
+
+.right {
+  text-align: right !important;
+}
+
+.center {
+  text-align: center !important;
+}
+
+/* Phones: rows become cards with a label per field. */
+@media (max-width: 48em) {
+  .stack thead {
+    display: none;
+  }
+  .stack tr {
+    display: block;
+    border-bottom: 1px solid var(--forga-grid);
+    padding: 8px 0;
+  }
+  .stack td {
+    display: grid;
+    grid-template-columns: 40% 1fr;
+    gap: 8px;
+    border: 0;
+    padding: 4px 12px;
+  }
+  .stack td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--forga-meta);
+  }
+}
+
+.badge {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.tone-neutral { background: #f0eeed; color: #444; border-color: #ddd5d3; }
+.tone-error { background: var(--forga-warning); color: var(--forga-service); border-color: #ecc9c6; }
+.tone-warning { background: var(--forga-notice); color: var(--forga-notice-text); border-color: #ead293; }
+.tone-done { background: var(--forga-done); color: var(--forga-done-text); border-color: #cfe5d6; }
+.tone-primary { background: var(--forga-service); color: #fff; }
+.tone-highlight { background: var(--forga-primary-report); color: var(--forga-service); border-color: #ecc9c6; }
+
+.notice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 4px solid;
+}
+
+.notice-error { background: var(--forga-warning); border-color: var(--forga-service); }
+.notice-warning { background: var(--forga-notice); border-color: #c99a1f; color: #3d2c00; }
+.notice-info { background: #fff; border-color: var(--forga-grid); }
+.notice-done { background: var(--forga-done); border-color: var(--forga-done-text); }
+
+.kpi {
+  display: block;
+  background: #fff;
+  border-radius: 4px;
+  padding: 16px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+  color: inherit;
+  text-decoration: none;
+  border-left: 4px solid transparent;
+}
+
+.kpi.attention {
+  border-left-color: var(--forga-service);
+}
+
+.kpiButton {
+  width: 100%;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kpiButton[aria-pressed='true'] {
+  outline: 2px solid var(--forga-service);
+}
+
+a.kpi:hover,
+.kpiButton:hover {
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.2), 0 4px 5px 0 rgba(0, 0, 0, 0.14), 0 1px 10px 0 rgba(0, 0, 0, 0.12);
+}
+
+.kpiValue {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--forga-service);
+  line-height: 1.1;
+}
+
+.actionBar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: #fff;
+  box-shadow: 0 -2px 4px -1px rgba(0, 0, 0, 0.12), 0 -4px 5px 0 rgba(0, 0, 0, 0.08);
+  padding: 12px 24px;
+  margin: 24px -16px -16px;
+}
+
+.historyItem {
+  border-left: 2px solid var(--forga-grid);
+  padding: 0 0 16px 16px;
+  position: relative;
+}
+
+.historyItem::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--forga-service);
+}

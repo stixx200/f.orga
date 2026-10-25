@@ -1,0 +1,74 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "types": ["node"],
+    "rootDir": "src",
+    "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "target": "es2023"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "out-tsc",
+    "dist",
+    "jest.config.ts",
+    "jest.config.cts",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts"
+  ],
+  "references": [
+    {
+      "path": "../../modules/training/training-contracts/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/respiratory-protection/respiratory-protection-contracts/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/promotions/promotions-contracts/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/equipment/equipment-contracts/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/compensation/compensation-contracts/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/promotions/promotions-api/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/cost-recovery/cost-recovery-api/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/equipment/equipment-api/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/compensation/compensation-api/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/respiratory-protection/respiratory-protection-api/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/training/training-api/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/core/core-contracts/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/masterdata/masterdata-contracts/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/incidents/incidents-contracts/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/incidents/incidents-api/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/masterdata/masterdata-api/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/core/core-api/tsconfig.lib.json"
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Organisation · f.orga</title>
+<link rel="stylesheet" href="../assets/mockup.css">
+<script src="../assets/i18n.js" defer></script>
+<script src="../assets/mockup.js" defer></script>
+</head>
+<body>
+<a class="sprung" href="#inhalt">Zum Inhalt springen</a>
+<div class="mockup-hinweis">Mockup · nicht funktionsfähig · <a href="../index.html">Übersicht aller Mockups</a></div>
+<header class="kopf">
+  <button type="button" class="symbol-knopf menue-knopf" aria-label="Menü" aria-controls="hauptmenue" aria-expanded="false"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <a class="marke" href="../shell/start.html">
+    <img src="../assets/logo.svg" alt="Wappen">
+    <span><span class="kicker">Freiwillige Feuerwehr Musterstadt</span><span class="produkt">f.orga</span></span>
+  </a>
+  <form class="suche" role="search" action="#"><label class="unsichtbar" for="globale-suche">Suchen</label><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="globale-suche" type="search" placeholder="Personen, Fahrzeuge, Einsätze suchen"></form>
+  <div class="werkzeuge">
+    <button type="button" class="symbol-knopf such-knopf" aria-label="Suchen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></button>
+    <a class="symbol-knopf" href="../shell/start.html#aufgaben" aria-label="Aufgaben (5)" title="Aufgaben"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg><span class="zahl" aria-hidden="true">5</span></a>
+    <div class="nicht-mobil"><div class="sprache" role="group" aria-label="Sprache">
+  <button type="button" data-sprache="de" aria-pressed="true" lang="de" title="Deutsch">DE</button><button type="button" data-sprache="en" aria-pressed="false" lang="en" title="English">EN</button>
+</div></div>
+    <details class="benutzermenue nicht-mobil">
+      <summary><span class="avatar">MV</span><span class="name">M. Vogt<small>Kommandant</small></span></summary>
+      <div class="menue-liste">
+        <a href="../shell/benutzer.html">Mein Profil</a>
+        <a href="../shell/benutzer.html">Passwort ändern</a>
+        <a href="../shell/anmeldung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Abmelden</a>
+      </div>
+    </details>
+  </div>
+</header>
+<div class="rahmen">
+<nav class="seitenleiste" id="hauptmenue" aria-label="Hauptnavigation">
+<div class="nur-mobil menue-kopf">
+  <div class="benutzer-zeile"><span class="avatar">MV</span><span><strong>Markus Vogt</strong><br><span class="meta">Kommandant</span></span></div>
+  <div class="menue-sprache"><span class="meta">Sprache</span><div class="sprache" role="group" aria-label="Sprache">
+  <button type="button" data-sprache="de" aria-pressed="true" lang="de" title="Deutsch">DE</button><button type="button" data-sprache="en" aria-pressed="false" lang="en" title="English">EN</button>
+</div></div>
+  <a href="../shell/anmeldung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Abmelden</a>
+</div>
+<div class="gruppe">Übersicht</div>
+<a href="../shell/start.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Startseite</span></a>
+<div class="gruppe">Einsatzberichte</div>
+<a href="../einsatzberichte/einsaetze.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 17V7h11v10"/><path d="M13 10h5l3 4v3h-2"/><circle cx="6.5" cy="17.5" r="2"/><circle cx="16.5" cy="17.5" r="2"/></svg><span>Einsätze</span></a>
+<a href="../einsatzberichte/pruefung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 12l5 5L20 6"/></svg><span>Zur Prüfung</span><span class="zahl">4</span></a>
+<a href="../einsatzberichte/offene-berichte.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg><span>Offene Berichte</span><span class="zahl">7</span></a>
+<a href="../einsatzberichte/jahresstatistik.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V11M10 20V5M16 20v-7M2 20h20"/></svg><span>Jahresstatistik</span></a>
+<a href="../einsatzberichte/einstellungen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg><span>Einstellungen</span></a>
+<div class="gruppe">Stammdaten</div>
+<a href="../stammdaten/personen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span>Personen</span></a>
+<a href="../stammdaten/organisation.html" class="aktiv" aria-current="page"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="5"/><rect x="3" y="16" width="6" height="5"/><rect x="15" y="16" width="6" height="5"/><path d="M12 8v4M6 16v-4h12v4"/></svg><span>Organisation</span></a>
+<a href="../stammdaten/fahrzeug.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><span>Fahrzeuge</span></a>
+<a href="../stammdaten/lehrgangsplanung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/></svg><span>Lehrgangsplanung</span></a>
+<a href="../stammdaten/listen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6h1M4 12h1M4 18h1"/></svg><span>Listen</span></a>
+<a href="../stammdaten/import.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 15v5h16v-5"/></svg><span>Import</span></a>
+<div class="gruppe">Verwaltung</div>
+<a href="../shell/benutzer.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5c2.5.5 4 2.5 4 5.5"/></svg><span>Benutzer</span></a>
+<a href="../shell/rollen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></svg><span>Rollen</span></a>
+<a href="../shell/module.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>Module</span></a>
+<a href="../shell/api-tokens.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 8l-5 4 5 4M16 8l5 4-5 4"/></svg><span>API-Tokens</span></a>
+<a href="../shell/einstellungen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg><span>Einstellungen</span></a>
+</nav>
+<main class="inhalt" id="inhalt">
+<div class="seitenkopf"><div><nav class="brotkrumen" aria-label="Pfad"><span>Stammdaten</span> <span aria-hidden="true">›</span> <span>Organisation</span></nav><h1>Organisation</h1></div><div class="aktionen"><a class="knopf primaer" href="#">+ Abteilung anlegen</a></div></div>
+
+<div class="raster seite">
+<section class="karte">
+  <ul class="baum">
+  <li><details open><summary><strong style="color:var(--dienst)">Freiwillige Feuerwehr Musterstadt</strong><span class="meta">Kommandant Markus Vogt</span></summary>
+  <ul>
+  <li><details open><summary class="gewaehlt"><strong>Abteilung Musterstadt</strong> <span class="plakette">Einsatzabteilung</span><span class="meta">Abt.-Kdt. Ralf Kunz · 64 Mitglieder</span></summary>
+<ul><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Feuerwehrhaus Musterstadt, Feuerwehrstraße 1</span></li><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><a href="fahrzeug.html">LF 20/16 · Florian Musterstadt 1/44</a></li><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><a href="fahrzeug.html">DLA(K) 23-12 · Florian Musterstadt 1/33</a></li><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><a href="fahrzeug.html">ELW 1 · Florian Musterstadt 1/11</a></li><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><a href="fahrzeug.html">MLF 10/6 · Florian Musterstadt 1/42</a></li><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><a href="fahrzeug.html">MTW · Florian Musterstadt 1/19</a></li><li><details><summary>Jugendfeuerwehr Musterstadt <span class="plakette">Jugend</span><span class="meta">22 Mitglieder</span></summary></details></li><li><details><summary>Altersabteilung Musterstadt <span class="plakette">Alter</span><span class="meta">18 Mitglieder</span></summary></details></li></ul></details></li><li><details><summary><strong>Abteilung Birkenhain</strong> <span class="plakette">Einsatzabteilung</span><span class="meta">Abt.-Kdt. Stefan Eberle · 31 Mitglieder</span></summary>
+<ul><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Gerätehaus Birkenhain</span></li><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><a href="fahrzeug.html">LF 8/6 · Florian Musterstadt 2/43</a></li><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><a href="fahrzeug.html">MTW · Florian Musterstadt 2/19</a></li></ul></details></li><li><details><summary><strong>Abteilung Weidenhain</strong> <span class="plakette">Einsatzabteilung</span><span class="meta">Abt.-Kdt. Sabine Hagel · 28 Mitglieder</span></summary>
+<ul><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Gerätehaus Weidenhain</span></li><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><a href="fahrzeug.html">MLF 10/6 · Florian Musterstadt 3/42</a></li></ul></details></li><li><details><summary><strong>Abteilung Pappelhain</strong> <span class="plakette">Einsatzabteilung</span><span class="meta">Abt.-Kdt. Holger Frank · 24 Mitglieder</span></summary>
+<ul><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Gerätehaus Pappelhain</span></li><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><a href="fahrzeug.html">TSF · Florian Musterstadt 4/47</a></li></ul></details></li><li><details><summary><strong>Abteilung Ahornfeld</strong> <span class="plakette">Einsatzabteilung</span><span class="meta">Abt.-Kdt. Andreas Schmid · 19 Mitglieder</span></summary>
+<ul><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Gerätehaus Ahornfeld</span></li><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><a href="fahrzeug.html">TSF · Florian Musterstadt 5/47</a></li></ul></details></li><li><details><summary><strong>Abteilung Eschenbrunn</strong> <span class="plakette">Einsatzabteilung</span><span class="meta">Abt.-Kdt. Carina Wagner · 17 Mitglieder</span></summary>
+<ul><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Gerätehaus Eschenbrunn</span></li><li class="blatt"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><a href="fahrzeug.html">TSF · Florian Musterstadt 6/47</a></li></ul></details></li><li><details><summary><strong>Führungsgruppe Musterstadt</strong> <span class="plakette">Führungseinheit</span><span class="meta">Leitung Tobias Rief · 12 Mitglieder</span></summary>
+<ul></ul></details></li><li><details><summary><strong>Sonderdienste</strong> <span class="plakette">Sonderdienst</span><span class="meta">Leitung N. N. · 9 Mitglieder</span></summary>
+<ul></ul></details></li>
+  </ul></details></li>
+  </ul>
+</section>
+<section class="karte">
+  <div class="karte-kopf"><h2>Abteilung Musterstadt</h2><a class="knopf klein" href="#">Bearbeiten</a></div>
+  <dl class="daten">
+    <dt>Typ</dt><dd>Einsatzabteilung</dd>
+    <dt>Kurzname</dt><dd>Abt. Musterstadt</dd>
+    <dt>Kommandant</dt><dd>Ralf Kunz</dd>
+    <dt>Stellvertreter</dt><dd>Tobias Rief</dd>
+    <dt>Statistik</dt><dd>zählt in der Gesamtstatistik</dd>
+    <dt>Sonderaufgaben</dt><dd><div class="plaketten"><span class="plakette">Gefahrstoff</span><span class="plakette">Höhenrettung</span></div></dd>
+    <dt>Wache</dt><dd>Feuerwehrhaus Musterstadt · ständig besetzt: nein</dd>
+  </dl>
+  <hr class="trenner">
+  <div class="raster zwei">
+    <div class="kachel"><div class="wert">64</div><div class="unter">Aktive</div></div>
+    <div class="kachel"><div class="wert">5</div><div class="unter">Fahrzeuge</div></div>
+  </div>
+  <div class="formular-fuss" style="justify-content:flex-start"><a class="knopf klein" href="#">+ Wache</a><a class="knopf klein" href="fahrzeug.html">+ Fahrzeug</a><a class="knopf klein" href="#">+ Unterabteilung</a></div>
+</section>
+</div>
+</main>
+<footer class="fuss">
+  <p>Freiwillige Feuerwehr Musterstadt · Feuerwehrstraße 1 · 12345 Musterstadt</p>
+  <p>Telefon 01234/5678-0 · Fax 01234/5678-99 · www.feuerwehr-musterstadt.example</p>
+</footer>
+</div>
+<div class="menue-schleier" aria-hidden="true"></div>
+
+</body>
+</html>

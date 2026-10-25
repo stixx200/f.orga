@@ -1,0 +1,352 @@
+import { z } from 'zod';
+import { FalseAlarmType, IncidentStatistics, MainType, TechnicalCategory } from './statistics.js';
+import { RuleLevel } from './settings.js';
+
+const datetime = z.iso.datetime({ offset: true });
+const text = z.string().default('');
+
+export const Location = z.object({
+  street: text,
+  houseNumber: text,
+  postalCode: text,
+  city: text,
+  district: text,
+  object: text,
+  addition: text,
+  latitude: z.number().min(-90).max(90).nullable().default(null),
+  longitude: z.number().min(-180).max(180).nullable().default(null),
+});
+export type Location = z.infer<typeof Location>;
+
+export const IncidentInput = z.object({
+  /** Number of the dispatch centre; `null` = an internal number is assigned. */
+  dispatchNumber: z.string().trim().min(1).nullable().default(null),
+  alarmKeyword: z.string().min(1),
+  alarmMessage: text,
+  alarmedAt: datetime,
+  location: Location.default(Location.parse({})),
+});
+export type IncidentInput = z.input<typeof IncidentInput>;
+
+export const ReportStatus = z.enum(['draft', 'review', 'released-compensation', 'released-billing']);
+export type ReportStatus = z.infer<typeof ReportStatus>;
+
+export const ReportTimes = z.object({
+  alarmedAt: datetime,
+  departedAt: datetime.nullable().default(null),
+  arrivedAt: datetime.nullable().default(null),
+  endedAt: datetime.nullable().default(null),
+  /** Back at the station and ready again; end of the assignment for personnel and compensation. */
+  returnedAt: datetime,
+});
+export type ReportTimes = z.infer<typeof ReportTimes>;
+
+/** Kind of breathing apparatus used. */
+export const BreathingDevice = z.enum(['compressed-air', 'rebreather', 'filter']);
+export type BreathingDevice = z.infer<typeof BreathingDevice>;
+
+export const PersonnelEntryInput = z
+  .object({
+    /** `null` for guests from other brigades (entered by name, never compensated). */
+    personId: z.uuid().nullable().default(null),
+    guestName: text,
+    vehicleId: z.uuid().nullable().default(null),
+    /** Standby at a station instead of a vehicle. */
+    standbyStationId: z.uuid().nullable().default(null),
+    /** Key of a `function` catalog entry. */
+    function: z.string().nullable().default(null),
+    breathingApparatus: z.boolean().default(false),
+    breathingMinutes: z.number().int().min(0).nullable().default(null),
+    /** Under breathing apparatus in a chemical protective suit (CSA). */
+    chemicalSuit: z.boolean().default(false),
+    /** Kind of breathing apparatus for the Atemschutznachweis. */
+    breathingDevice: BreathingDevice.nullable().default(null),
+    /** `null` = times of the report. */
+    from: datetime.nullable().default(null),
+    to: datetime.nullable().default(null),
+    lossOfEarnings: z.boolean().default(false),
+    /** Assignment during working hours with the municipality as employer: no compensation. */
+    duringWorkingHours: z.boolean().default(false),
+    allowances: z.array(z.string()).default([]),
+    /** Manual amount instead of the computed one, with a reason. */
+    compensationOverride: z.object({ amount: z.number().min(0), reason: z.string().trim().min(1) }).nullable().default(null),
+    injured: z.boolean().default(false),
+    killed: z.boolean().default(false),
+  })
+  .refine((p) => p.personId || p.guestName.trim(), { message: 'Person or guest name required', path: ['personId'] })
+  .refine((p) => !(p.vehicleId && p.standbyStationId), { message: 'Vehicle or standby, not both', path: ['standbyStationId'] });
+export type PersonnelEntryInput = z.input<typeof PersonnelEntryInput>;
+
+export const VehicleEntryInput = z.object({
+  vehicleId: z.uuid(),
+  departedAt: datetime.nullable().default(null),
+  returnedAt: datetime.nullable().default(null),
+  kilometres: z.number().int().min(0).nullable().default(null),
+});
+export type VehicleEntryInput = z.input<typeof VehicleEntryInput>;
+
+export const PartyRole = z.enum(['injured-party', 'causer', 'witness', 'owner', 'vehicle-keeper', 'caller', 'other']);
+export type PartyRole = z.infer<typeof PartyRole>;
+
+export const InvolvedPartyInput = z.object({
+  role: PartyRole,
+  name: z.string().trim().min(1),
+  street: text,
+  postalCode: text,
+  city: text,
+  phone: text,
+  licensePlate: text,
+  notes: text,
+});
+export type InvolvedPartyInput = z.input<typeof InvolvedPartyInput>;
+
+export const OtherAgencyInput = z.object({
+  /** E.g. `police`, `ambulance`, `thw`, `emergency-doctor`, `neighbouring-brigade`, `utility`, or free text. */
+  organization: z.string().trim().min(1),
+  forces: z.number().int().min(0).nullable().default(null),
+  vehicles: z.number().int().min(0).nullable().default(null),
+  notes: text,
+});
+export type OtherAgencyInput = z.input<typeof OtherAgencyInput>;
+
+export const Weather = z.object({
+  influence: z.boolean().default(false),
+  conditions: z.array(z.enum(['rain', 'snow', 'ice', 'storm', 'heat', 'thunderstorm', 'fog'])).default([]),
+});
+export type Weather = z.infer<typeof Weather>;
+
+/** The editable content of a report (everything except status and workflow fields). */
+export const ReportInput = z.object({
+  /** Version the client loaded; a newer stored version means someone else saved in between. */
+  version: z.number().int().optional(),
+  authorPersonId: z.uuid().nullable().default(null),
+  times: ReportTimes,
+  situation: text,
+  actions: text,
+  cause: text,
+  incidentCommander: text,
+  /** Only on the primary report; `null` until filled in. */
+  statistics: IncidentStatistics.nullable().default(null),
+  weather: Weather.default({ influence: false, conditions: [] }),
+  chargeable: z.boolean().default(false),
+  chargeableReason: text,
+  equipment: text,
+  notes: text,
+  personnel: z.array(PersonnelEntryInput).default([]),
+  vehicles: z.array(VehicleEntryInput).default([]),
+  involvedParties: z.array(InvolvedPartyInput).default([]),
+  otherAgencies: z.array(OtherAgencyInput).default([]),
+});
+export type ReportInput = z.input<typeof ReportInput>;
+
+export const NewReportInput = ReportInput.partial({ times: true }).extend({ departmentId: z.uuid() });
+export type NewReportInput = z.input<typeof NewReportInput>;
+
+/** A finding of the report rules. `subject` identifies what it refers to (e.g. a person) for acknowledgements. */
+export const Finding = z.object({
+  rule: z.string(),
+  level: RuleLevel,
+  subject: z.string().nullable(),
+  params: z.record(z.string(), z.union([z.string(), z.number()])).default({}),
+  acknowledged: z.boolean(),
+  /** Reason given when acknowledging a warning; `released` if the releaser acknowledged it by releasing. */
+  reason: z.string().nullable(),
+});
+export type Finding = z.infer<typeof Finding>;
+
+export const Acknowledgement = z.object({ rule: z.string(), subject: z.string().nullable().default(null), reason: z.string().trim().min(1) });
+export type Acknowledgement = z.input<typeof Acknowledgement>;
+
+export const Submit = z.object({ acknowledgements: z.array(Acknowledgement).default([]) });
+export type Submit = z.input<typeof Submit>;
+
+export const ReturnToAuthor = z.object({ comment: z.string().trim().min(1) });
+export type ReturnToAuthor = z.infer<typeof ReturnToAuthor>;
+
+export const Release = z.object({ level: z.enum(['compensation', 'billing']) });
+export type Release = z.infer<typeof Release>;
+
+export const Unlock = z.object({ reason: z.string().trim().min(1), toStatus: z.enum(['draft', 'review']).default('review') });
+export type Unlock = z.input<typeof Unlock>;
+
+/** Pre-filled statistics from keyword, location and personnel; the author confirms or corrects them. */
+export const StatisticsSuggestion = z.object({
+  ownMunicipality: z.boolean(),
+  mainType: MainType.nullable(),
+  technicalCategory: TechnicalCategory.nullable(),
+  falseAlarmType: FalseAlarmType.nullable(),
+});
+export type StatisticsSuggestion = z.infer<typeof StatisticsSuggestion>;
+
+export const Compensation = z.object({
+  hours: z.number(),
+  rate: z.number().nullable(),
+  allowances: z.number(),
+  amount: z.number(),
+  overridden: z.boolean(),
+});
+export type Compensation = z.infer<typeof Compensation>;
+
+export const PersonnelEntry = z.object({
+  id: z.uuid(),
+  personId: z.uuid().nullable(),
+  guestName: z.string(),
+  vehicleId: z.uuid().nullable(),
+  standbyStationId: z.uuid().nullable(),
+  function: z.string().nullable(),
+  breathingApparatus: z.boolean(),
+  breathingMinutes: z.number().nullable(),
+  chemicalSuit: z.boolean(),
+  breathingDevice: BreathingDevice.nullable(),
+  from: z.string(),
+  to: z.string(),
+  lossOfEarnings: z.boolean(),
+  duringWorkingHours: z.boolean(),
+  allowances: z.array(z.string()),
+  compensationOverride: z.object({ amount: z.number(), reason: z.string() }).nullable(),
+  injured: z.boolean(),
+  killed: z.boolean(),
+  compensation: Compensation,
+});
+export type PersonnelEntry = z.infer<typeof PersonnelEntry>;
+
+export const Report = z.object({
+  id: z.uuid(),
+  incidentId: z.uuid(),
+  departmentId: z.uuid(),
+  /** Sequential number per department and year, e.g. `2026-017`. */
+  number: z.string(),
+  primary: z.boolean(),
+  status: ReportStatus,
+  locked: z.boolean(),
+  lockedBy: z.string().nullable(),
+  lockedAt: z.string().nullable(),
+  returnComment: z.string().nullable(),
+  authorPersonId: z.uuid().nullable(),
+  times: z.object({
+    alarmedAt: z.string(),
+    departedAt: z.string().nullable(),
+    arrivedAt: z.string().nullable(),
+    endedAt: z.string().nullable(),
+    returnedAt: z.string(),
+  }),
+  situation: z.string(),
+  actions: z.string(),
+  cause: z.string(),
+  incidentCommander: z.string(),
+  statistics: IncidentStatistics.nullable(),
+  /** Only for the primary report while `statistics` is empty. */
+  statisticsSuggestion: StatisticsSuggestion.nullable(),
+  weather: Weather,
+  chargeable: z.boolean(),
+  chargeableReason: z.string(),
+  equipment: z.string(),
+  notes: z.string(),
+  personnel: z.array(PersonnelEntry),
+  vehicles: z.array(
+    z.object({
+      id: z.uuid(),
+      vehicleId: z.uuid(),
+      departedAt: z.string().nullable(),
+      returnedAt: z.string().nullable(),
+      kilometres: z.number().nullable(),
+    }),
+  ),
+  involvedParties: z.array(InvolvedPartyInput.extend({ id: z.uuid() })),
+  otherAgencies: z.array(OtherAgencyInput.extend({ id: z.uuid() })),
+  findings: z.array(Finding),
+  /** Sum of the compensation of all personnel. */
+  compensationTotal: z.number(),
+  version: z.number(),
+});
+export type Report = z.infer<typeof Report>;
+
+export const Incident = z.object({
+  id: z.uuid(),
+  dispatchNumber: z.string(),
+  /** `true` if the number was assigned internally because the dispatch centre gave none. */
+  internalNumber: z.boolean(),
+  alarmKeyword: z.string(),
+  alarmMessage: z.string(),
+  alarmedAt: z.string(),
+  location: Location,
+  createdVia: z.enum(['ui', 'api', 'import']),
+  reports: z.array(
+    z.object({
+      id: z.uuid(),
+      departmentId: z.uuid(),
+      number: z.string(),
+      primary: z.boolean(),
+      status: ReportStatus,
+      locked: z.boolean(),
+      authorPersonId: z.uuid().nullable(),
+    }),
+  ),
+  version: z.number(),
+});
+export type Incident = z.infer<typeof Incident>;
+
+/** A saved state of a report for undo; `content` can be sent back unchanged to restore it. */
+export const ReportRevision = z.object({
+  id: z.uuid(),
+  savedAt: z.string(),
+  userName: z.string(),
+  personnelCount: z.number(),
+});
+export type ReportRevision = z.infer<typeof ReportRevision>;
+
+/** A problem that blocks or distorts the compensation payout of a period. */
+export const CompensationProblem = z.object({
+  reportId: z.uuid(),
+  dispatchNumber: z.string(),
+  alarmedAt: z.string(),
+  department: z.string(),
+  reportNumber: z.string(),
+  status: ReportStatus,
+  /** `not-released`, `zero-amount` or a personnel rule such as `no-personnel`, `times-invalid`, `vehicle-missing`. */
+  code: z.string(),
+  person: z.string().nullable(),
+});
+export type CompensationProblem = z.infer<typeof CompensationProblem>;
+
+export const CompensationCheck = z.object({
+  from: z.string(),
+  to: z.string(),
+  reportsChecked: z.number(),
+  reportsReleased: z.number(),
+  problems: z.array(CompensationProblem),
+});
+export type CompensationCheck = z.infer<typeof CompensationCheck>;
+
+/** An assignment of a person in a report, for the person file. */
+export const PersonAssignment = z.object({
+  reportId: z.uuid(),
+  incidentId: z.uuid(),
+  dispatchNumber: z.string(),
+  alarmKeyword: z.string(),
+  department: z.string(),
+  status: ReportStatus,
+  from: z.string(),
+  to: z.string(),
+  standby: z.boolean(),
+  hours: z.number(),
+  amount: z.number(),
+});
+export type PersonAssignment = z.infer<typeof PersonAssignment>;
+
+export const AssignAuthor = z.object({ authorPersonId: z.uuid().nullable() });
+export type AssignAuthor = z.infer<typeof AssignAuthor>;
+
+/** Reminder e-mail to the authors of open reports. */
+export const RemindAuthors = z.object({
+  personIds: z.array(z.uuid()).min(1),
+  message: z.string().trim().default(''),
+});
+export type RemindAuthors = z.input<typeof RemindAuthors>;
+
+export const RemindResult = z.object({
+  sent: z.array(z.string()),
+  /** Authors without an e-mail address. */
+  missingEmail: z.array(z.string()),
+});
+export type RemindResult = z.infer<typeof RemindResult>;

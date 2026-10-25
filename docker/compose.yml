@@ -1,0 +1,41 @@
+# Running f.orga: application and database.
+# Start: docker compose -f docker/compose.yml up -d   (values in docker/.env, template docker/.env.example)
+services:
+  forga:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: forga:latest
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://forga:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is missing}@db:5432/forga
+      # Set to true as soon as f.orga is served via HTTPS.
+      FORGA_SECURE_COOKIES: ${FORGA_SECURE_COOKIES:-false}
+      # Plugin packages (.tgz) and the trusted keys of their publishers (comma separated, base64).
+      FORGA_PLUGIN_DIR: /plugins
+      FORGA_PLUGIN_KEYS: ${FORGA_PLUGIN_KEYS:-}
+    volumes:
+      - forga-plugins:/plugins
+    ports:
+      - '${FORGA_PORT:-8080}:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: forga
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is missing}
+      POSTGRES_DB: forga
+    volumes:
+      - forga-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U forga']
+      interval: 5s
+      retries: 10
+
+volumes:
+  forga-db:
+  forga-plugins:

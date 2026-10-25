@@ -1,0 +1,209 @@
+import { z } from 'zod';
+import { LocalizedText } from '@forga/core-contracts';
+
+/**
+ * Evidence a session type produces for every person present,
+ * taken over by the respiratory protection module.
+ */
+/** `training-track`: Atemschutzstrecke, a stress exercise with fixed work and duration. */
+export const RecordKind = z.enum(['stress-exercise', 'training-track', 'briefing', 'exercise-under-ba', 'chemical-suit-exercise']);
+export type RecordKind = z.infer<typeof RecordKind>;
+
+/** How a session type is compensated: like an exercise, with its own rate (fire watch) or not at all. */
+export const SessionCompensation = z.enum(['training', 'fire-watch', 'none']);
+export type SessionCompensation = z.infer<typeof SessionCompensation>;
+
+export const SessionTypeInput = z.object({
+  key: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
+  name: LocalizedText,
+  /** Counts for the participation rate of a person. */
+  countsForParticipation: z.boolean().default(true),
+  compensation: SessionCompensation.default('training'),
+  record: RecordKind.nullable().default(null),
+  active: z.boolean().default(true),
+  sortOrder: z.number().int().default(0),
+});
+export type SessionTypeInput = z.input<typeof SessionTypeInput>;
+
+export const SessionType = SessionTypeInput.extend({ id: z.uuid(), version: z.number() });
+export type SessionType = z.infer<typeof SessionType>;
+
+const t = (key: string, de: string, en: string, extra: Partial<z.input<typeof SessionTypeInput>> = {}, sortOrder = 0): SessionTypeInput => ({ key, name: { de, en }, sortOrder, ...extra });
+
+/** Session types of a volunteer brigade in Baden-Württemberg. */
+export const SESSION_TYPE_TEMPLATE: SessionTypeInput[] = [
+  t('exercise', 'Übung', 'Exercise', {}, 10),
+  t('lesson', 'Unterricht', 'Lesson', {}, 20),
+  t('stress-exercise', 'Atemschutz-Belastungsübung (Übungsstrecke)', 'BA stress exercise (training track)', { record: 'stress-exercise' }, 30),
+  t('ba-briefing', 'Atemschutz-Unterweisung', 'BA briefing', { record: 'briefing' }, 40),
+  t('ba-exercise', 'Atemschutz-Einsatzübung', 'BA exercise', { record: 'exercise-under-ba' }, 50),
+  t('chemical-suit', 'CSA-Übung', 'Chemical suit exercise', { record: 'chemical-suit-exercise' }, 60),
+  t('machinist', 'Maschinistenfortbildung', 'Pump operator training', {}, 70),
+  t('maintenance', 'Arbeitsdienst / Gerätepflege', 'Maintenance', {}, 80),
+  t('fire-watch', 'Brandsicherheitswache', 'Fire watch', { compensation: 'fire-watch', countsForParticipation: false }, 90),
+  t('meeting', 'Sitzung / Ausschuss', 'Meeting / committee', { compensation: 'none', countsForParticipation: false }, 100),
+  t('youth', 'Jugendfeuerwehrdienst', 'Youth fire brigade session', { compensation: 'none' }, 110),
+];
+
+export const SessionStatus = z.enum(['planned', 'held', 'closed']);
+export type SessionStatus = z.infer<typeof SessionStatus>;
+
+const datetime = z.iso.datetime({ offset: true });
+const text = z.string().default('');
+
+export const SessionInput = z
+  .object({
+    /** Version the client loaded (optimistic locking). */
+    version: z.number().int().optional(),
+    type: z.string().min(1),
+    title: z.string().trim().min(1),
+    startsAt: datetime,
+    endsAt: datetime,
+    stationId: z.uuid().nullable().default(null),
+    departmentIds: z.array(z.uuid()).min(1),
+    responsiblePersonId: z.uuid().nullable().default(null),
+    instructorIds: z.array(z.uuid()).default([]),
+    topic: text,
+    goals: text,
+    procedure: text,
+    material: text,
+  })
+  .refine((s) => new Date(s.endsAt) > new Date(s.startsAt), { message: 'End before start', path: ['endsAt'] });
+export type SessionInput = z.input<typeof SessionInput>;
+
+/** Several sessions at the same weekday and time, e.g. every second Friday. */
+export const SessionSeries = z.object({
+  session: SessionInput,
+  intervalWeeks: z.number().int().min(1).max(8),
+  until: z.iso.date(),
+});
+export type SessionSeries = z.input<typeof SessionSeries>;
+
+/**
+ * Copies the sessions of a period, e.g. last year's plan: same local time, shifted by whole weeks
+ * (52 weeks keep the weekday). Without attendance; sessions already copied are skipped.
+ */
+export const SessionCopy = z
+  .object({
+    from: z.iso.date(),
+    to: z.iso.date(),
+    weeks: z.number().int().min(1).max(104),
+    departmentId: z.uuid().nullable().default(null),
+  })
+  .refine((c) => c.to >= c.from, { message: 'End before start', path: ['to'] });
+export type SessionCopy = z.input<typeof SessionCopy>;
+export const SessionCopyResult = z.object({ created: z.number(), skipped: z.number() });
+export type SessionCopyResult = z.infer<typeof SessionCopyResult>;
+
+export const AttendanceStatus = z.enum(['present', 'excused', 'absent']);
+export type AttendanceStatus = z.infer<typeof AttendanceStatus>;
+
+export const AttendanceInput = z.object({
+  personId: z.uuid(),
+  status: AttendanceStatus,
+  /** `null` = times of the session. */
+  from: datetime.nullable().default(null),
+  to: datetime.nullable().default(null),
+  /** E.g. `instructor`. */
+  role: z.string().nullable().default(null),
+  breathingApparatus: z.boolean().default(false),
+  /** Stress exercise: work achieved in kJ and whether it was passed. */
+  kilojoules: z.number().int().min(0).nullable().default(null),
+  passed: z.boolean().nullable().default(null),
+  /** Own forces injured (annual statistics F26). */
+  injured: z.boolean().default(false),
+});
+export type AttendanceInput = z.input<typeof AttendanceInput>;
+
+export const Attendance = z.object({
+  personId: z.uuid(),
+  status: AttendanceStatus,
+  from: z.string().nullable(),
+  to: z.string().nullable(),
+  role: z.string().nullable(),
+  breathingApparatus: z.boolean(),
+  kilojoules: z.number().nullable(),
+  passed: z.boolean().nullable(),
+  injured: z.boolean(),
+  /** Set when the person checked in via QR code. */
+  checkedInAt: z.string().nullable(),
+  /** `false` after a QR check-in until the attendance list is saved (confirmed). */
+  confirmed: z.boolean(),
+  /** Reason given with an excuse in "My area". */
+  note: z.string(),
+});
+export type Attendance = z.infer<typeof Attendance>;
+
+/** A session in "My area": upcoming or past, with the own attendance. */
+export interface MySession {
+  id: string;
+  type: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  stationId: string | null;
+  departmentIds: string[];
+  status: SessionStatus;
+  own: { status: AttendanceStatus; note: string } | null;
+}
+
+export interface MyTraining {
+  upcoming: MySession[];
+  past: MySession[];
+  /** Closed sessions of the own departments this year and how many the person attended. */
+  year: { sessions: number; present: number; excused: number };
+}
+
+export const ExcuseInput = z.object({ note: z.string().trim().max(500).default('') });
+export type ExcuseInput = z.input<typeof ExcuseInput>;
+
+export const Session = z.object({
+  id: z.uuid(),
+  type: z.string(),
+  title: z.string(),
+  startsAt: z.string(),
+  endsAt: z.string(),
+  stationId: z.uuid().nullable(),
+  departmentIds: z.array(z.uuid()),
+  responsiblePersonId: z.uuid().nullable(),
+  instructorIds: z.array(z.uuid()),
+  topic: z.string(),
+  goals: z.string(),
+  procedure: z.string(),
+  material: z.string(),
+  status: SessionStatus,
+  closedAt: z.string().nullable(),
+  closedBy: z.string().nullable(),
+  attendance: z.array(Attendance),
+  /** Other sessions of the same departments at the same time. */
+  overlaps: z.array(z.object({ id: z.uuid(), title: z.string(), startsAt: z.string() })),
+  version: z.number(),
+});
+export type Session = z.infer<typeof Session>;
+
+/** Code shown as QR code; valid from shortly before the start until the end of the session. */
+export const CheckIn = z.object({ code: z.string(), validFrom: z.string(), validUntil: z.string() });
+export type CheckIn = z.infer<typeof CheckIn>;
+
+export const TrainingSettings = z.object({
+  /** Minutes before the start from which the QR check-in works. */
+  checkInBeforeMinutes: z.number().int().min(0).max(240).default(30),
+  /** Secret part of the calendar feed address; empty = no feed. */
+  feedToken: z.string().default(''),
+  /** Reusable texts for the learning goals and the procedure of a session. */
+  snippets: z.array(z.object({ title: z.string().trim().min(1).max(100), text: z.string().max(4000) })).max(200).default([]),
+});
+export type TrainingSettings = z.infer<typeof TrainingSettings>;
+
+export const TRAINING_SETTINGS = { 'training.general': TrainingSettings } as const;
+
+/** Participation of one person in a period. */
+export const Participation = z.object({
+  personId: z.uuid(),
+  sessions: z.number(),
+  present: z.number(),
+  excused: z.number(),
+  rate: z.number(),
+  hours: z.number(),
+});
+export type Participation = z.infer<typeof Participation>;

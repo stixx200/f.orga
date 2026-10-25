@@ -1,0 +1,38 @@
+{
+  "name": "compensation-web",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/compensation/compensation-web/src",
+  "projectType": "application",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "command": "vite",
+        "cwd": "modules/compensation/compensation-web"
+      },
+      "readyWhen": {
+        "signal": true
+      },
+      "dependsOn": [
+        "shell:serve"
+      ]
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite build",
+        "cwd": "modules/compensation/compensation-web"
+      }
+    },
+    "typecheck": {
+      "options": {
+        "command": "tsc --noEmit -p tsconfig.json"
+      }
+    }
+  },
+  "tags": [
+    "scope:module-compensation",
+    "type:web"
+  ]
+}

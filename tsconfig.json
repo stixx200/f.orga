@@ -1,0 +1,71 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "references": [
+    {
+      "path": "./apps/server"
+    },
+    {
+      "path": "./libs/core/core-contracts"
+    },
+    {
+      "path": "./libs/core/core-api"
+    },
+    {
+      "path": "./libs/web/web-sdk"
+    },
+    {
+      "path": "./libs/web/web-ui"
+    },
+    {
+      "path": "./modules/masterdata/masterdata-contracts"
+    },
+    {
+      "path": "./modules/incidents/incidents-contracts"
+    },
+    {
+      "path": "./modules/masterdata/masterdata-api"
+    },
+    {
+      "path": "./modules/incidents/incidents-api"
+    },
+    {
+      "path": "./modules/respiratory-protection/respiratory-protection-contracts"
+    },
+    {
+      "path": "./modules/respiratory-protection/respiratory-protection-api"
+    },
+    {
+      "path": "./modules/cost-recovery/cost-recovery-contracts"
+    },
+    {
+      "path": "./modules/compensation/compensation-contracts"
+    },
+    {
+      "path": "./modules/cost-recovery/cost-recovery-api"
+    },
+    {
+      "path": "./modules/promotions/promotions-contracts"
+    },
+    {
+      "path": "./modules/compensation/compensation-api"
+    },
+    {
+      "path": "./modules/equipment/equipment-contracts"
+    },
+    {
+      "path": "./modules/training/training-contracts"
+    },
+    {
+      "path": "./modules/promotions/promotions-api"
+    },
+    {
+      "path": "./modules/equipment/equipment-api"
+    },
+    {
+      "path": "./modules/training/training-api"
+    }
+  ],
+  "compilerOptions": {}
+}

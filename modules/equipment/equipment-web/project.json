@@ -1,0 +1,38 @@
+{
+  "name": "equipment-web",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/equipment/equipment-web/src",
+  "projectType": "application",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "command": "vite",
+        "cwd": "modules/equipment/equipment-web"
+      },
+      "readyWhen": {
+        "signal": true
+      },
+      "dependsOn": [
+        "shell:serve"
+      ]
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite build",
+        "cwd": "modules/equipment/equipment-web"
+      }
+    },
+    "typecheck": {
+      "options": {
+        "command": "tsc --noEmit -p tsconfig.json"
+      }
+    }
+  },
+  "tags": [
+    "scope:module-equipment",
+    "type:web"
+  ]
+}

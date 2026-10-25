@@ -1,0 +1,27 @@
+# Builds server, shell and all module frontends into one image.
+FROM node:24-alpine AS build
+WORKDIR /repo
+COPY package.json package-lock.json ./
+COPY apps apps
+COPY libs libs
+COPY modules modules
+COPY tools tools
+COPY nx.json tsconfig.base.json tsconfig.json jest.preset.js jest.config.ts ./
+RUN npm ci --no-audit --no-fund
+ENV NX_DAEMON=false NX_NO_CLOUD=true
+RUN npx nx run-many -t build -p shell masterdata-web incidents-web training-web respiratory-protection-web compensation-web equipment-web cost-recovery-web promotions-web \
+ && npx nx run @forga/server:prune
+RUN mkdir -p /web/modules \
+ && cp -r apps/shell/dist /web/shell \
+ && for m in modules/*/*-web; do cp -r "$m/dist" "/web/modules/$(basename "$m" -web)"; done
+
+FROM node:24-alpine
+WORKDIR /app
+ENV NODE_ENV=production FORGA_WEB_DIR=/app/web PORT=3000
+COPY --from=build /repo/apps/server/dist ./
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+COPY --from=build /web ./web
+RUN mkdir -p /plugins && chown node:node /plugins
+USER node
+EXPOSE 3000
+CMD ["node", "main.js"]

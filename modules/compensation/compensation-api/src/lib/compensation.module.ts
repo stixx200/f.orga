@@ -1,0 +1,49 @@
+import { Global, Module, type OnModuleInit } from '@nestjs/common';
+import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry } from '@forga/core-api';
+import { COMPENSATION_MANIFEST, COMPENSATION_SETTINGS, COMPENSATION_STATUTE } from '@forga/compensation-contracts';
+import { COMPENSATION_MIGRATIONS } from '../migrations/index.js';
+import { FunctionHolderEntity, ItemEntity, RunEntity } from './compensation.entities.js';
+import { CompensationData } from './data/compensation.data.js';
+import { FunctionsController } from './functions/functions.controller.js';
+import { FunctionsService } from './functions/functions.service.js';
+import { ItemsController } from './items/items.controller.js';
+import { ItemsService } from './items/items.service.js';
+import { CompensationLists } from './lists/compensation.lists.js';
+import { YearTotals } from './lists/year-totals.js';
+import { PreviewController } from './preview/preview.controller.js';
+import { RunsController } from './runs/runs.controller.js';
+import { RunsService } from './runs/runs.service.js';
+
+/** Global, so the incidents module can use the statute parameters (`COMPENSATION_STATUTE`). */
+@Global()
+@Module({
+  controllers: [ItemsController, RunsController, FunctionsController, PreviewController],
+  providers: [ItemsService, RunsService, FunctionsService, YearTotals, CompensationLists, CompensationData, { provide: COMPENSATION_STATUTE, useExisting: ItemsService }],
+  exports: [COMPENSATION_STATUTE],
+})
+export class CompensationModule implements OnModuleInit {
+  constructor(
+    private readonly lists: ListRegistry,
+    private readonly moduleLists: CompensationLists,
+    private readonly deadlines: DeadlineRegistry,
+    private readonly exports: ExportRegistry,
+    private readonly data: CompensationData,
+    private readonly historyAccess: HistoryAccessRegistry,
+  ) {}
+
+  onModuleInit(): void {
+    for (const definition of this.moduleLists.definitions()) this.lists.register('compensation', definition);
+    this.deadlines.register(this.data);
+    this.exports.register('compensation', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
+    for (const entity of ['compensation.run', 'compensation.item', 'compensation.function_holder']) this.historyAccess.registerPermission(entity, 'compensation.runs');
+  }
+}
+
+export const compensationModule = defineModule({
+  manifest: COMPENSATION_MANIFEST,
+  nestModule: CompensationModule,
+  entities: [RunEntity, ItemEntity, FunctionHolderEntity],
+  historized: [RunEntity, ItemEntity, FunctionHolderEntity],
+  migrations: COMPENSATION_MIGRATIONS,
+  settings: COMPENSATION_SETTINGS,
+});

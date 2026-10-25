@@ -1,0 +1,61 @@
+/* Global styles of f.orga following Stil.md and the approved mockups. */
+
+:root {
+  --forga-service: #8c1d18;
+  --forga-text: #222222;
+  --forga-meta: #595959;
+  --forga-alternate: #fbf7f6;
+  --forga-grid: #e0d2d0;
+  --forga-page: #f7f4f3;
+  --forga-warning: #f8eceb;
+  --forga-done: #eef6f0;
+  --forga-done-text: #2e6b3f;
+  --forga-primary-report: #f3e4e2;
+  --forga-field-border: #9b8a88;
+  --forga-notice: #fff6e0;
+  --forga-notice-text: #6b4b00;
+}
+
+body {
+  background: var(--forga-page);
+  color: var(--forga-text);
+}
+
+/* Focus: 2 px service red on fields, visible outline elsewhere. */
+.mantine-Input-input:focus,
+.mantine-Input-input:focus-within {
+  border-color: var(--forga-service);
+  box-shadow: inset 0 0 0 1px var(--forga-service);
+}
+
+:focus-visible {
+  outline: 3px solid var(--forga-service);
+  outline-offset: 2px;
+}
+
+.mantine-InputWrapper-label {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+/* Touch targets on phones. */
+@media (max-width: 48em) {
+  .mantine-Button-root {
+    min-height: 44px;
+  }
+}
+
+/* Skip link. */
+.forga-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  z-index: 1000;
+  background: #fff;
+  padding: 8px 16px;
+  border: 2px solid var(--forga-service);
+}
+
+.forga-skip-link:focus {
+  left: 8px;
+}

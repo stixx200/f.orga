@@ -1,0 +1,40 @@
+{
+  "name": "@forga/incidents-api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "@forga/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "tslib": "^2.3.0",
+    "@forga/core-api": "*",
+    "@forga/incidents-contracts": "*",
+    "@nestjs/common": "^11.0.0",
+    "@mikro-orm/migrations": "^7.2.5",
+    "@forga/core-contracts": "*",
+    "@forga/masterdata-contracts": "*",
+    "@mikro-orm/core": "^7.2.5",
+    "uuid": "^14.0.3",
+    "zod": "^4.6.7",
+    "exceljs": "^4.4.0",
+    "@forga/respiratory-protection-contracts": "*",
+    "@forga/training-contracts": "*",
+    "@forga/compensation-contracts": "*"
+  },
+  "nx": {
+    "tags": [
+      "scope:module-incidents",
+      "type:api"
+    ]
+  }
+}

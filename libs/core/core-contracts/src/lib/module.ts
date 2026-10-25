@@ -1,0 +1,70 @@
+import { z } from 'zod';
+import { LocalizedText } from './i18n.js';
+
+/** Where a permission applies: the whole brigade or individual departments. */
+export const PermissionScope = z.enum(['brigade', 'department']);
+export type PermissionScope = z.infer<typeof PermissionScope>;
+
+export const Permission = z.object({
+  id: z.string().regex(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/),
+  name: LocalizedText,
+  scope: PermissionScope,
+});
+export type Permission = z.infer<typeof Permission>;
+
+export const NavigationEntry = z.object({
+  label: LocalizedText,
+  /** Path relative to the module, e.g. `persons` → `/masterdata/persons`. */
+  path: z.string(),
+  permission: z.string().optional(),
+  /** Icon key known to the shell, e.g. `users`, `truck`, `check`, `chart`. */
+  icon: z.string().optional(),
+  /** `administration`: shown in the section "Verwaltung" with the global settings instead of the module section. */
+  section: z.enum(['module', 'administration']).optional(),
+});
+export type NavigationEntry = z.infer<typeof NavigationEntry>;
+
+/**
+ * A role template. Templates with the same key are merged across modules (union of permissions),
+ * so every module adds its permissions to the standard roles such as `group-leader`.
+ */
+export const RoleTemplate = z.object({
+  key: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  /** Only needed by the module that introduces the key; the core names the standard roles. */
+  name: LocalizedText.optional(),
+  description: LocalizedText.optional(),
+  permissions: z.array(z.string()).default([]),
+  /** Permissions that apply in all departments even if the role is assigned to one department (e.g. reading persons). */
+  permissionsAllDepartments: z.array(z.string()).default([]),
+});
+export type RoleTemplate = z.input<typeof RoleTemplate>;
+
+/** Self-description of a module, shared by its backend and frontend. */
+export const ModuleManifest = z.object({
+  id: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  name: LocalizedText,
+  version: z.string(),
+  requires: z.array(z.string()).default([]),
+  optional: z.array(z.string()).default([]),
+  permissions: z.array(Permission).default([]),
+  navigation: z.array(NavigationEntry).default([]),
+  roles: z.array(RoleTemplate).default([]),
+  /** Federation name and exposed entry of the frontend package, e.g. `masterdata_web` / `./Module`. */
+  frontend: z.object({ remote: z.string(), exposed: z.string() }).optional(),
+});
+export type ModuleManifest = z.input<typeof ModuleManifest>;
+
+/** Database schema of a module: its ID with dashes replaced by underscores. */
+export function schemaName(moduleId: string): string {
+  return moduleId.replaceAll('-', '_');
+}
+
+/** A module as the shell receives it from `GET /api/core/modules`. */
+export const ActiveModule = z.object({
+  id: z.string(),
+  name: LocalizedText,
+  version: z.string(),
+  navigation: z.array(NavigationEntry),
+  frontend: z.object({ remote: z.string(), exposed: z.string(), entry: z.string() }).optional(),
+});
+export type ActiveModule = z.infer<typeof ActiveModule>;

@@ -1,0 +1,113 @@
+{
+  "name": "@forga/server",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "targets": {
+      "prune-lockfile": {
+        "dependsOn": [
+          "build"
+        ],
+        "cache": true,
+        "executor": "@nx/js:prune-lockfile",
+        "outputs": [
+          "{workspaceRoot}/apps/server/dist/package.json",
+          "{workspaceRoot}/apps/server/dist/package-lock.json"
+        ],
+        "options": {
+          "buildTarget": "build"
+        }
+      },
+      "copy-workspace-modules": {
+        "dependsOn": [
+          "build"
+        ],
+        "cache": true,
+        "outputs": [
+          "{workspaceRoot}/apps/server/dist/workspace_modules"
+        ],
+        "executor": "@nx/js:copy-workspace-modules",
+        "options": {
+          "buildTarget": "build"
+        }
+      },
+      "prune": {
+        "dependsOn": [
+          "prune-lockfile",
+          "copy-workspace-modules"
+        ],
+        "executor": "nx:noop"
+      },
+      "serve": {
+        "continuous": true,
+        "executor": "@nx/js:node",
+        "defaultConfiguration": "development",
+        "dependsOn": [
+          "build"
+        ],
+        "readyWhen": {
+          "signal": true
+        },
+        "options": {
+          "buildTarget": "@forga/server:build",
+          "runBuildTargetDependencies": false
+        },
+        "configurations": {
+          "development": {
+            "buildTarget": "@forga/server:build:development"
+          },
+          "production": {
+            "buildTarget": "@forga/server:build:production"
+          }
+        }
+      },
+      "test": {
+        "options": {
+          "passWithNoTests": true
+        }
+      },
+      "integration": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "vitest run --config vitest.integration.mts",
+          "cwd": "apps/server"
+        }
+      }
+    },
+    "tags": [
+      "scope:app",
+      "type:server"
+    ]
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.0",
+    "tslib": "^2.3.0",
+    "@forga/core-api": "*",
+    "@forga/masterdata-api": "*",
+    "@forga/incidents-api": "*",
+    "@mikro-orm/core": "^7.2.5",
+    "@mikro-orm/postgresql": "^7.2.5",
+    "@mikro-orm/nestjs": "^7.0.0",
+    "@nestjs/serve-static": "^5.0.5",
+    "@mikro-orm/migrations": "^7.2.5",
+    "cookie-parser": "^1.4.7",
+    "@forga/incidents-contracts": "*",
+    "@forga/masterdata-contracts": "*",
+    "@forga/core-contracts": "*",
+    "@nestjs/swagger": "^11.4.7",
+    "@forga/training-api": "*",
+    "@forga/respiratory-protection-api": "*",
+    "@forga/compensation-api": "*",
+    "@forga/equipment-api": "*",
+    "@forga/cost-recovery-api": "*",
+    "@forga/promotions-api": "*"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.0.0",
+    "exceljs": "^4.4.0"
+  }
+}

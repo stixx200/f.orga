@@ -1,0 +1,124 @@
+.steps {
+  display: flex;
+  gap: 4px;
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--forga-grid);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--forga-text);
+  font: inherit;
+}
+
+.step[aria-current='step'] {
+  border-bottom-color: var(--forga-service);
+}
+
+.stepNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--forga-field-border);
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.step[data-state='done'] .stepNumber {
+  background: var(--forga-done-text);
+  border-color: var(--forga-done-text);
+  color: #fff;
+}
+
+.step[data-state='error'] .stepNumber {
+  background: var(--forga-service);
+  border-color: var(--forga-service);
+  color: #fff;
+}
+
+.step[aria-current='step'] .stepNumber {
+  border-color: var(--forga-service);
+}
+
+.stepLabel {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.stepState {
+  display: block;
+  font-size: 12px;
+  color: var(--forga-meta);
+  font-weight: 400;
+}
+
+.vehicle {
+  border: 1px solid var(--forga-grid);
+  border-top: 4px solid var(--forga-service);
+  overflow: hidden;
+}
+
+.vehicle[data-standby] {
+  border-top-color: var(--forga-field-border);
+}
+
+.vehicleHead {
+  padding: 10px 12px;
+  background: var(--forga-alternate);
+  border-bottom: 1px solid var(--forga-grid);
+}
+
+.person {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--forga-grid);
+  min-height: 44px;
+}
+
+.person:hover {
+  background: var(--forga-alternate);
+}
+
+.person[data-problem] {
+  background: var(--forga-warning);
+}
+
+.fn {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--forga-meta);
+}
+
+.name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.amount {
+  font-size: 13px;
+  color: var(--forga-meta);
+  white-space: nowrap;
+}

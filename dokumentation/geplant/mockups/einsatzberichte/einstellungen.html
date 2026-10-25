@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Einstellungen Einsatzberichte · f.orga</title>
+<link rel="stylesheet" href="../assets/mockup.css">
+<script src="../assets/i18n.js" defer></script>
+<script src="../assets/mockup.js" defer></script>
+</head>
+<body>
+<a class="sprung" href="#inhalt">Zum Inhalt springen</a>
+<div class="mockup-hinweis">Mockup · nicht funktionsfähig · <a href="../index.html">Übersicht aller Mockups</a></div>
+<header class="kopf">
+  <button type="button" class="symbol-knopf menue-knopf" aria-label="Menü" aria-controls="hauptmenue" aria-expanded="false"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <a class="marke" href="../shell/start.html">
+    <img src="../assets/logo.svg" alt="Wappen">
+    <span><span class="kicker">Freiwillige Feuerwehr Musterstadt</span><span class="produkt">f.orga</span></span>
+  </a>
+  <form class="suche" role="search" action="#"><label class="unsichtbar" for="globale-suche">Suchen</label><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="globale-suche" type="search" placeholder="Personen, Fahrzeuge, Einsätze suchen"></form>
+  <div class="werkzeuge">
+    <button type="button" class="symbol-knopf such-knopf" aria-label="Suchen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></button>
+    <a class="symbol-knopf" href="../shell/start.html#aufgaben" aria-label="Aufgaben (5)" title="Aufgaben"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg><span class="zahl" aria-hidden="true">5</span></a>
+    <div class="nicht-mobil"><div class="sprache" role="group" aria-label="Sprache">
+  <button type="button" data-sprache="de" aria-pressed="true" lang="de" title="Deutsch">DE</button><button type="button" data-sprache="en" aria-pressed="false" lang="en" title="English">EN</button>
+</div></div>
+    <details class="benutzermenue nicht-mobil">
+      <summary><span class="avatar">MV</span><span class="name">M. Vogt<small>Kommandant</small></span></summary>
+      <div class="menue-liste">
+        <a href="../shell/benutzer.html">Mein Profil</a>
+        <a href="../shell/benutzer.html">Passwort ändern</a>
+        <a href="../shell/anmeldung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Abmelden</a>
+      </div>
+    </details>
+  </div>
+</header>
+<div class="rahmen">
+<nav class="seitenleiste" id="hauptmenue" aria-label="Hauptnavigation">
+<div class="nur-mobil menue-kopf">
+  <div class="benutzer-zeile"><span class="avatar">MV</span><span><strong>Markus Vogt</strong><br><span class="meta">Kommandant</span></span></div>
+  <div class="menue-sprache"><span class="meta">Sprache</span><div class="sprache" role="group" aria-label="Sprache">
+  <button type="button" data-sprache="de" aria-pressed="true" lang="de" title="Deutsch">DE</button><button type="button" data-sprache="en" aria-pressed="false" lang="en" title="English">EN</button>
+</div></div>
+  <a href="../shell/anmeldung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Abmelden</a>
+</div>
+<div class="gruppe">Übersicht</div>
+<a href="../shell/start.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Startseite</span></a>
+<div class="gruppe">Einsatzberichte</div>
+<a href="../einsatzberichte/einsaetze.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 17V7h11v10"/><path d="M13 10h5l3 4v3h-2"/><circle cx="6.5" cy="17.5" r="2"/><circle cx="16.5" cy="17.5" r="2"/></svg><span>Einsätze</span></a>
+<a href="../einsatzberichte/pruefung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 12l5 5L20 6"/></svg><span>Zur Prüfung</span><span class="zahl">4</span></a>
+<a href="../einsatzberichte/offene-berichte.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg><span>Offene Berichte</span><span class="zahl">7</span></a>
+<a href="../einsatzberichte/jahresstatistik.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V11M10 20V5M16 20v-7M2 20h20"/></svg><span>Jahresstatistik</span></a>
+<a href="../einsatzberichte/einstellungen.html" class="aktiv" aria-current="page"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg><span>Einstellungen</span></a>
+<div class="gruppe">Stammdaten</div>
+<a href="../stammdaten/personen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span>Personen</span></a>
+<a href="../stammdaten/organisation.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="5"/><rect x="3" y="16" width="6" height="5"/><rect x="15" y="16" width="6" height="5"/><path d="M12 8v4M6 16v-4h12v4"/></svg><span>Organisation</span></a>
+<a href="../stammdaten/fahrzeug.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><span>Fahrzeuge</span></a>
+<a href="../stammdaten/lehrgangsplanung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/></svg><span>Lehrgangsplanung</span></a>
+<a href="../stammdaten/listen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6h1M4 12h1M4 18h1"/></svg><span>Listen</span></a>
+<a href="../stammdaten/import.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 15v5h16v-5"/></svg><span>Import</span></a>
+<div class="gruppe">Verwaltung</div>
+<a href="../shell/benutzer.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5c2.5.5 4 2.5 4 5.5"/></svg><span>Benutzer</span></a>
+<a href="../shell/rollen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></svg><span>Rollen</span></a>
+<a href="../shell/module.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>Module</span></a>
+<a href="../shell/api-tokens.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 8l-5 4 5 4M16 8l5 4-5 4"/></svg><span>API-Tokens</span></a>
+<a href="../shell/einstellungen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg><span>Einstellungen</span></a>
+</nav>
+<main class="inhalt" id="inhalt">
+<div class="seitenkopf"><div><nav class="brotkrumen" aria-label="Pfad"><span>Einsatzberichte</span> <span aria-hidden="true">›</span> <span>Einstellungen</span></nav><h1>Einstellungen Einsatzberichte</h1></div></div>
+
+<div data-reitergruppe>
+<div class="reiter">
+  <button class="aktiv" data-reiter="e-satz">Entschädigung</button>
+  <button data-reiter="e-stw">Stichworte und Statistik</button>
+  <button data-reiter="e-regel">Prüfregeln</button>
+  <button data-reiter="e-kat">Kataloge</button>
+</div>
+<div class="reiter-inhalt aktiv" id="e-satz">
+<div class="raster seite">
+<section class="karte">
+  <div class="karte-kopf"><h2>Stundensätze</h2><a class="knopf klein sekundaer" href="#">+ Satz</a></div>
+  <div class="tabelle-huelle"><table class=""><thead><tr><th scope="col">Art</th><th class="zahl" scope="col">Satz je Stunde</th><th scope="col">gültig ab</th><th scope="col">gültig bis</th></tr></thead><tbody><tr><td data-label="Art">Einsatz</td><td class="zahl" data-label="Satz je Stunde">15,00 €</td><td data-label="gültig ab">01.07.2025</td><td data-label="gültig bis">–</td></tr><tr><td data-label="Art">Bereitschaft auf Wache</td><td class="zahl" data-label="Satz je Stunde">15,00 € (pauschal 1 h)</td><td data-label="gültig ab">01.07.2025</td><td data-label="gültig bis">–</td></tr><tr><td data-label="Art">Brandsicherheitsdienst</td><td class="zahl" data-label="Satz je Stunde">12,00 €</td><td data-label="gültig ab">01.01.2024</td><td data-label="gültig bis">–</td></tr><tr class="erledigt"><td data-label="Art">Einsatz</td><td class="zahl" data-label="Satz je Stunde">12,50 €</td><td data-label="gültig ab">01.01.2022</td><td data-label="gültig bis">30.06.2025</td></tr><tr class="erledigt"><td data-label="Art">Bereitschaft auf Wache</td><td class="zahl" data-label="Satz je Stunde">12,50 € (pauschal 1 h)</td><td data-label="gültig ab">01.01.2022</td><td data-label="gültig bis">30.06.2025</td></tr></tbody></table></div>
+  <p class="meta" style="margin-top:6px">Grün hinterlegt: abgelaufene Sätze, gelten weiter für Einsätze in ihrem Zeitraum.</p>
+  <h3 style="margin-top:16px">Pauschalen</h3>
+  <div class="tabelle-huelle"><table class=""><thead><tr><th scope="col">Pauschale</th><th class="zahl" scope="col">Betrag</th><th scope="col">Anwendung</th></tr></thead><tbody><tr><td data-label="Pauschale">Einsatzleiter</td><td class="zahl" data-label="Betrag">10,00 €</td><td data-label="Anwendung">je Einsatz, Funktion EL</td></tr><tr><td data-label="Pauschale">Schmutzzulage</td><td class="zahl" data-label="Betrag">5,00 €</td><td data-label="Anwendung">manuell je Person</td></tr></tbody></table></div>
+</section>
+<section class="karte">
+  <h2>Berechnung</h2>
+  <div class="feld"><label for="f1">Rundung</label><select id="f1"><option>je angefangene Stunde</option><option>je angefangene halbe Stunde</option><option>Minutengenau (Takt 10 min)</option></select></div>
+  <div class="feld"><label for="f2">Zeitbasis</label><select id="f2"><option>Alarmierung bis Einsatzbereitschaft</option><option>Alarmierung bis Einsatzende</option></select></div>
+  <div class="feld"><label for="f3">Mindestdauer</label><select id="f3"><option>1 Stunde</option><option>keine</option></select></div>
+  <div class="feld"><label for="f4">Bereitschaft</label><select id="f4"><option>immer 1 Stunde</option></select></div>
+  <label class="schalter"><input type="checkbox" checked> Arbeitszeit beim Dienstherrn: keine Entschädigung</label>
+  <h3 style="margin-top:16px">Freigabe</h3>
+  <label class="schalter"><input type="checkbox" checked> Freigabe in zwei Stufen: erst zur Entschädigungsauszahlung, dann zur Abrechnung</label>
+  <p class="meta" style="margin:4px 0 0">Ausgeschaltet gibt der Kommandant direkt zur Abrechnung frei. Die Auszahlung ist darin enthalten.</p>
+  <div class="formular-fuss"><a class="knopf primaer" href="#">Speichern</a></div>
+</section>
+</div>
+</div>
+<div class="reiter-inhalt" id="e-stw">
+<section class="karte">
+  <div class="karte-kopf"><h2>Stichwort-Katalog</h2><a class="knopf klein sekundaer" href="#">+ Stichwort</a></div>
+  <p class="meta">Das Stichwort füllt im Hauptbericht Einsatzhauptart und Unterkategorie vor. Die Brandgröße wählt der Verfasser.</p>
+  <div class="tabelle-huelle"><table class="stapel"><thead><tr><th scope="col">Stichwort</th><th scope="col">Bezeichnung</th><th scope="col">Einsatzhauptart</th><th scope="col">Unterkategorie</th><th scope="col">Fahrzeugpflicht</th><th scope="col">Statistik</th></tr></thead><tbody><tr><td data-label="Stichwort"><div class="zelle">B1</div></td><td data-label="Bezeichnung"><div class="zelle">Brand klein</div></td><td data-label="Einsatzhauptart"><div class="zelle">Brand / Explosion</div></td><td data-label="Unterkategorie"><div class="zelle">–</div></td><td data-label="Fahrzeugpflicht"><div class="zelle">ja</div></td><td data-label="Statistik"><div class="zelle">ja</div></td></tr><tr><td data-label="Stichwort"><div class="zelle">B2</div></td><td data-label="Bezeichnung"><div class="zelle">Brand Wohnung</div></td><td data-label="Einsatzhauptart"><div class="zelle">Brand / Explosion</div></td><td data-label="Unterkategorie"><div class="zelle">–</div></td><td data-label="Fahrzeugpflicht"><div class="zelle">ja</div></td><td data-label="Statistik"><div class="zelle">ja</div></td></tr><tr><td data-label="Stichwort"><div class="zelle">B3</div></td><td data-label="Bezeichnung"><div class="zelle">Brand Gebäude groß</div></td><td data-label="Einsatzhauptart"><div class="zelle">Brand / Explosion</div></td><td data-label="Unterkategorie"><div class="zelle">–</div></td><td data-label="Fahrzeugpflicht"><div class="zelle">ja</div></td><td data-label="Statistik"><div class="zelle">ja</div></td></tr><tr><td data-label="Stichwort"><div class="zelle">TH1</div></td><td data-label="Bezeichnung"><div class="zelle">Ölspur</div></td><td data-label="Einsatzhauptart"><div class="zelle">Technische Hilfe</div></td><td data-label="Unterkategorie"><div class="zelle">3 Ölspur</div></td><td data-label="Fahrzeugpflicht"><div class="zelle">ja</div></td><td data-label="Statistik"><div class="zelle">ja</div></td></tr><tr><td data-label="Stichwort"><div class="zelle">TH2</div></td><td data-label="Bezeichnung"><div class="zelle">VU eingeklemmte Person</div></td><td data-label="Einsatzhauptart"><div class="zelle">Technische Hilfe</div></td><td data-label="Unterkategorie"><div class="zelle">1 Menschenrettung · Verkehrsunfall</div></td><td data-label="Fahrzeugpflicht"><div class="zelle">ja</div></td><td data-label="Statistik"><div class="zelle">ja</div></td></tr><tr><td data-label="Stichwort"><div class="zelle">BMA</div></td><td data-label="Bezeichnung"><div class="zelle">Brandmeldeanlage</div></td><td data-label="Einsatzhauptart"><div class="zelle">Fehlalarm</div></td><td data-label="Unterkategorie"><div class="zelle">Brandmeldeanlage</div></td><td data-label="Fahrzeugpflicht"><div class="zelle">ja</div></td><td data-label="Statistik"><div class="zelle">ja</div></td></tr><tr><td data-label="Stichwort"><div class="zelle">BSW</div></td><td data-label="Bezeichnung"><div class="zelle">Brandsicherheitsdienst</div></td><td data-label="Einsatzhauptart"><div class="zelle">–</div></td><td data-label="Unterkategorie"><div class="zelle">–</div></td><td data-label="Fahrzeugpflicht"><div class="zelle">nein</div></td><td data-label="Statistik"><div class="zelle">nein</div></td></tr><tr><td data-label="Stichwort"><div class="zelle">SONST</div></td><td data-label="Bezeichnung"><div class="zelle">Sonstiges</div></td><td data-label="Einsatzhauptart"><div class="zelle">Sonstiges</div></td><td data-label="Unterkategorie"><div class="zelle">–</div></td><td data-label="Fahrzeugpflicht"><div class="zelle">nein</div></td><td data-label="Statistik"><div class="zelle">nein</div></td></tr></tbody></table></div>
+  <div class="feld" style="margin-top:14px;max-width:360px"><label for="f5">Eigene Gemeinde (für Überlandhilfe)</label><select id="f5"><option>Stadt Musterstadt (aus Einstellungen der Feuerwehr)</option></select></div>
+</section>
+</div>
+<div class="reiter-inhalt" id="e-regel">
+<section class="karte">
+  <h2>Prüfregeln</h2>
+  <p class="meta">Fehler verhindern das Fertigmelden. Warnungen brauchen eine Begründung.</p>
+  <div class="tabelle-huelle"><table class=""><thead><tr><th scope="col">Regel</th><th scope="col">Stufe</th></tr></thead><tbody><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Hauptbericht fehlt (beim Freigeben)</label></td><td data-label="Stufe"><select aria-label="Stufe: Hauptbericht fehlt (beim Freigeben)"><option>Fehler</option><option>Warnung</option></select></td></tr><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Bericht leer (Lage/Verlauf)</label></td><td data-label="Stufe"><select aria-label="Stufe: Bericht leer (Lage/Verlauf)"><option>Fehler</option><option>Warnung</option></select></td></tr><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Statistik fehlt im Hauptbericht</label></td><td data-label="Stufe"><select aria-label="Stufe: Statistik fehlt im Hauptbericht"><option>Fehler</option><option>Warnung</option></select></td></tr><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Statistik bei Sonderdienst / Sonstiges</label></td><td data-label="Stufe"><select aria-label="Stufe: Statistik bei Sonderdienst / Sonstiges"><option>Fehler</option><option>Warnung</option></select></td></tr><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Kein Personal</label></td><td data-label="Stufe"><select aria-label="Stufe: Kein Personal"><option>Fehler</option><option>Warnung</option></select></td></tr><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Fahrzeug fehlt</label></td><td data-label="Stufe"><select aria-label="Stufe: Fahrzeug fehlt"><option>Fehler</option><option>Warnung</option></select></td></tr><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Personaldoppelung im Einsatz</label></td><td data-label="Stufe"><select aria-label="Stufe: Personaldoppelung im Einsatz"><option>Fehler</option><option>Warnung</option></select></td></tr><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Ende vor Beginn</label></td><td data-label="Stufe"><select aria-label="Stufe: Ende vor Beginn"><option>Fehler</option><option>Warnung</option></select></td></tr><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Arbeitszeit und Verdienstausfall zugleich</label></td><td data-label="Stufe"><select aria-label="Stufe: Arbeitszeit und Verdienstausfall zugleich"><option>Fehler</option><option>Warnung</option></select></td></tr><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Überschneidung mit anderem Einsatz</label></td><td data-label="Stufe"><select aria-label="Stufe: Überschneidung mit anderem Einsatz"><option>Warnung</option><option>Fehler</option></select></td></tr><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Dauer über 24 Stunden</label></td><td data-label="Stufe"><select aria-label="Stufe: Dauer über 24 Stunden"><option>Warnung</option><option>Fehler</option></select></td></tr><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Verdienstausfall ohne Betrag</label></td><td data-label="Stufe"><select aria-label="Stufe: Verdienstausfall ohne Betrag"><option>Warnung</option><option>Fehler</option></select></td></tr><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Besatzung überschritten</label></td><td data-label="Stufe"><select aria-label="Stufe: Besatzung überschritten"><option>Warnung</option><option>Fehler</option></select></td></tr><tr><td data-label="Regel"><label class="schalter"><input type="checkbox" checked> Atemschutz ohne Qualifikation / Untersuchung</label></td><td data-label="Stufe"><select aria-label="Stufe: Atemschutz ohne Qualifikation / Untersuchung"><option>Warnung</option><option>Fehler</option></select></td></tr></tbody></table></div>
+  <div class="formular-fuss"><a class="knopf primaer" href="#">Speichern</a></div>
+</section>
+</div>
+<div class="reiter-inhalt" id="e-kat">
+<div class="raster drei">
+<section class="karte"><h3>Funktionen</h3><p class="neben">Einsatzleiter, Gruppenführer, Maschinist, Melder, Angriffstrupp, Wassertrupp, Schlauchtrupp, Führungsassistent …</p><a class="knopf klein" href="#">Bearbeiten</a></section>
+<section class="karte"><h3>Sonstige Kräfte</h3><p class="neben">Polizei, Rettungsdienst, Notarzt, THW, Nachbarfeuerwehr, Energieversorger, Straßenmeisterei …</p><a class="knopf klein" href="#">Bearbeiten</a></section>
+<section class="karte"><h3>Beteiligtenrollen</h3><p class="neben">Geschädigter, Verursacher, Zeuge, Eigentümer, Halter, Melder, Sonstige</p><a class="knopf klein" href="#">Bearbeiten</a></section>
+<section class="karte"><h3>Wetterlagen</h3><p class="neben">Regen, Schnee, Glätte, Sturm, Hitze, Gewitter, Nebel</p><a class="knopf klein" href="#">Bearbeiten</a></section>
+<section class="karte"><h3>Textbausteine</h3><p class="neben">Belüftung, Brandwache, Übergabe an Polizei, Ölspur abgestreut …</p><a class="knopf klein" href="#">Bearbeiten</a></section>
+</div>
+</div>
+</div>
+</main>
+<footer class="fuss">
+  <p>Freiwillige Feuerwehr Musterstadt · Feuerwehrstraße 1 · 12345 Musterstadt</p>
+  <p>Telefon 01234/5678-0 · Fax 01234/5678-99 · www.feuerwehr-musterstadt.example</p>
+</footer>
+</div>
+<div class="menue-schleier" aria-hidden="true"></div>
+
+</body>
+</html>

@@ -1,0 +1,25 @@
+.sheet {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.label {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border: 1px dashed #c9b8b5;
+  background: #fff;
+  break-inside: avoid;
+}
+
+@media print {
+  .noPrint {
+    display: none;
+  }
+
+  .sheet {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
