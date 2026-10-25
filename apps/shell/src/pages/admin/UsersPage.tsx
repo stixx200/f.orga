@@ -3,7 +3,7 @@ import { IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import type { Role, User, UserInput } from '@forga/core-contracts';
 import { can, formatDateTime, send, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
+import { ConfirmDialog, DataTable, matchesSearch, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
 import { type DepartmentOption, personLabel, USERS_KEY, useDepartments, usePersons, useRoles, useUsers } from './data';
 
 type Draft = Required<Omit<UserInput, 'password'>> & { password: string };
@@ -201,7 +201,7 @@ export function UsersPage() {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return users
-      .filter((u) => !q || u.username.toLowerCase().includes(q) || u.displayName.toLowerCase().includes(q))
+      .filter((u) => matchesSearch([u.username, u.displayName], q))
       .filter((u) => !roleFilter || u.roles.some((r) => r.roleId === roleFilter))
       .filter((u) => status === 'all' || (status === 'active' ? u.active : !u.active))
       .toSorted((a, b) => a.displayName.localeCompare(b.displayName));

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { type EntityClass, EntityManager, type FilterQuery, wrap } from '@mikro-orm/core';
-import type { AuthenticatedUser } from '@forga/core-api';
+import { type AuthenticatedUser, wordsWhere } from '@forga/core-api';
 import type { SearchHit } from '@forga/core-contracts';
 import {
   AlarmKeywordEntity,
@@ -24,10 +24,9 @@ export class IncidentsData {
   constructor(private readonly em: EntityManager) {}
 
   async search(user: AuthenticatedUser, query: string): Promise<SearchHit[]> {
-    const like = `%${query}%`;
-    const where: FilterQuery<IncidentEntity>[] = [
-      { $or: [{ dispatchNumber: { $ilike: like } }, { alarmKeyword: { $ilike: like } }, { alarmMessage: { $ilike: like } }] },
-    ];
+    const words = wordsWhere(query, ['dispatchNumber', 'alarmKeyword', 'alarmMessage']);
+    if (!words) return [];
+    const where: FilterQuery<IncidentEntity>[] = [words as FilterQuery<IncidentEntity>];
     const grant = user.grant(RELEASE) === 'brigade' ? 'brigade' : user.grant(READ);
     if (!grant) return [];
     if (grant !== 'brigade') where.push({ reports: { departmentId: { $in: grant } } });

@@ -232,6 +232,12 @@ describe('search, export and retention', () => {
 
     const hits = (await get('/core/search?q=Suchbar')).body as { title: string; to: string }[];
     expect(hits).toContainEqual(expect.objectContaining({ title: 'Suchbar, Xaver', to: `/masterdata/persons/${person}` }));
+    // Words in any order and with a comma, as names are written; every word must match.
+    for (const q of ['Xaver', 'Xaver Suchbar', 'Suchbar, Xaver', 'suchbar xav']) {
+      expect(((await get(`/core/search?q=${encodeURIComponent(q)}`)).body as { title: string }[]).map((h) => h.title)).toContain('Suchbar, Xaver');
+    }
+    expect(((await get(`/core/search?q=${encodeURIComponent('Xaver Unbekannt')}`)).body as { title: string }[]).map((h) => h.title)).not.toContain('Suchbar, Xaver');
+    expect(((await get(`/masterdata/persons?q=${encodeURIComponent('Suchbar, Xaver')}`)).body as { id: string }[]).map((p) => p.id)).toEqual([person]);
 
     const full = await get('/core/export/masterdata').expect(200);
     const body = JSON.parse(full.text) as { format: string; data: { persons: { id: string }[] } };

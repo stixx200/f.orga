@@ -154,19 +154,53 @@ export function addMonths(value: string, months: number): string {
   return new Date(Date.UTC(year, month - 1 + months, Math.min(day, lastDay))).toISOString().slice(0, 10);
 }
 
+const DAY = 86_400_000;
+const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / DAY);
+const addDays = (value: string, count: number) => new Date(Date.parse(value) + count * DAY).toISOString().slice(0, 10);
+
+/** Time a piece was issued: from the issue to the return, `to: null` while it is still issued. */
+export interface UsagePeriod {
+  from: string;
+  to: string | null;
+}
+
 /**
- * Next impregnation and inspection of a piece. Without an earlier one the interval counts from the purchase,
- * else from the day the piece was recorded; impregnating also counts as washing.
+ * Next impregnation and inspection of a piece. Washing and impregnation are only needed for pieces in use: the
+ * interval counts the time issued since the last impregnation (else since the first issue); time in stock does not
+ * count, and a piece in stock has no due date. Inspections count from the last one, else from the purchase or the day
+ * the piece was recorded.
  */
 export function dueDates(
   article: Pick<Article, 'impregnationMonths' | 'inspectionMonths'>,
-  item: { purchasedOn: string | null; createdOn: string; lastImpregnatedOn: string | null; lastInspectedOn: string | null },
+  item: { purchasedOn: string | null; createdOn: string; lastImpregnatedOn: string | null; lastInspectedOn: string | null; usage: UsagePeriod[] },
 ): { impregnationDueOn: string | null; inspectionDueOn: string | null } {
   const start = item.purchasedOn ?? item.createdOn;
+  const current = item.usage.find((p) => p.to === null);
+  let impregnationDueOn: string | null = null;
+  if (article.impregnationMonths && current) {
+    const since = item.lastImpregnatedOn;
+    const after = (day: string) => (since && day < since ? since : day);
+    // Days already in use since the last impregnation, in earlier periods.
+    const used = item.usage
+      .filter((p) => p.to !== null && (!since || p.to > since))
+      .reduce((sum, p) => sum + Math.max(0, days(after(p.from), p.to!)), 0);
+    impregnationDueOn = addDays(addMonths(after(current.from), article.impregnationMonths), -used);
+  }
   return {
-    impregnationDueOn: article.impregnationMonths ? addMonths(item.lastImpregnatedOn ?? start, article.impregnationMonths) : null,
+    impregnationDueOn,
     inspectionDueOn: article.inspectionMonths ? addMonths(item.lastInspectedOn ?? start, article.inspectionMonths) : null,
   };
+}
+
+/** Periods in use from the issue and return records of a piece (in any order). */
+export function usagePeriods(records: { kind: IssueKind; date: string }[]): UsagePeriod[] {
+  const periods: UsagePeriod[] = [];
+  for (const record of records.toSorted((a, b) => a.date.localeCompare(b.date) || (a.kind === 'return' ? -1 : 1))) {
+    const open = periods.at(-1);
+    if (record.kind === 'issue' && (!open || open.to !== null)) periods.push({ from: record.date, to: null });
+    else if (record.kind === 'return' && open && open.to === null) open.to = record.date;
+  }
+  return periods;
 }
 
 /** Common articles of a fire brigade's clothing store; added on request, keys stay stable. */

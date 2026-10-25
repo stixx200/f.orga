@@ -2,7 +2,7 @@ import { Code, Select, Stack, Text, TextInput, Group } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { api, can, formatDateTime, useSession, useTranslation } from '@forga/web-sdk';
-import { DataTable, PageHeader } from '@forga/web-ui';
+import { DataTable, matchesSearch, PageHeader } from '@forga/web-ui';
 import { useUsers } from './data';
 
 interface AuditEntry {
@@ -25,7 +25,7 @@ export function AuditPage() {
   const userName = (id: string | null) => (id ? (users.find((u) => u.id === id)?.displayName ?? id.slice(0, 8)) : t('audit.system'));
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return entries.filter((e) => !q || e.action.toLowerCase().includes(q) || JSON.stringify(e.details ?? {}).toLowerCase().includes(q) || userName(e.userId).toLowerCase().includes(q));
+    return entries.filter((e) => matchesSearch([e.action, JSON.stringify(e.details ?? {}), userName(e.userId)], q));
     // oxlint-disable-next-line react/exhaustive-deps -- userName depends on users only
   }, [entries, query, users]);
 

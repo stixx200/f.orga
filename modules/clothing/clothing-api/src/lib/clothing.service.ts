@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
-import { assertVersion, type AuthenticatedUser, berlinDate } from '@forga/core-api';
+import { assertVersion, type AuthenticatedUser, berlinDate, wordsWhere } from '@forga/core-api';
 import { normalizeRfid } from '@forga/core-contracts';
 import {
   type Article,
@@ -19,6 +19,7 @@ import {
   ItemIssueInput,
   ItemReturnInput,
   type PersonClothing,
+  usagePeriods,
 } from '@forga/clothing-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory, type PersonSnapshot } from '@forga/masterdata-contracts';
 import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, IssueEntity } from './clothing.entities.js';
@@ -148,10 +149,11 @@ export class ClothingService {
   async toDtos(em: EntityManager, items: ClothingItemEntity[]): Promise<Item[]> {
     if (!items.length) return [];
     const ids = items.map((i) => i.id);
-    const [articles, care, inspections] = await Promise.all([
+    const [articles, care, inspections, records] = await Promise.all([
       em.find(ArticleEntity, {}),
       em.find(CareEntity, { item: { $in: ids } }),
       em.find(ClothingInspectionEntity, { item: { $in: ids } }),
+      em.find(IssueEntity, { itemId: { $in: ids } }),
     ]);
     const byKey = new Map(articles.map((a) => [a.key, a]));
     return items.map((item) => {
@@ -161,7 +163,7 @@ export class ClothingService {
       const lastInspectedOn = latest(inspections.filter((i) => i.item.id === item.id).map((i) => i.date));
       const article = byKey.get(item.articleKey);
       const due = article && item.status !== 'retired'
-        ? dueDates({ impregnationMonths: article.impregnationMonths ?? null, inspectionMonths: article.inspectionMonths ?? null }, { purchasedOn: item.purchasedOn ?? null, createdOn: item.createdOn, lastImpregnatedOn, lastInspectedOn })
+        ? dueDates({ impregnationMonths: article.impregnationMonths ?? null, inspectionMonths: article.inspectionMonths ?? null }, { purchasedOn: item.purchasedOn ?? null, createdOn: item.createdOn, lastImpregnatedOn, lastInspectedOn, usage: item.status === 'issued' ? usagePeriods(records.filter((r) => r.itemId === item.id)) : [] })
         : { impregnationDueOn: null, inspectionDueOn: null };
       return {
         id: item.id, articleKey: item.articleKey, inventoryNumber: item.inventoryNumber, size: item.size, serialNumber: item.serialNumber,
@@ -180,7 +182,8 @@ export class ClothingService {
     else where.push({ status: { $ne: 'retired' } });
     if (filter.articleKey) where.push({ articleKey: filter.articleKey });
     if (filter.holderId) where.push({ holderId: filter.holderId });
-    if (filter.query) where.push({ $or: [{ inventoryNumber: { $ilike: `%${filter.query}%` } }, { serialNumber: { $ilike: `%${filter.query}%` } }, { barcode: { $ilike: `%${filter.query}%` } }, { rfid: { $ilike: `%${normalizeRfid(filter.query) || filter.query}%` } }] });
+    const words = filter.query ? wordsWhere(filter.query, ['inventoryNumber', 'serialNumber', 'barcode']) : null;
+    if (filter.query) where.push({ $or: [...(words ? [words] : []), { rfid: { $ilike: `%${normalizeRfid(filter.query) || filter.query}%` } }] } as FilterQuery<ClothingItemEntity>);
     const em = this.em.fork();
     return this.toDtos(em, await em.find(ClothingItemEntity, { $and: where }, { orderBy: { inventoryNumber: 'asc' } }));
   }

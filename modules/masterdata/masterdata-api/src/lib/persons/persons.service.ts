@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
-import type { AuthenticatedUser } from '@forga/core-api';
+import { type AuthenticatedUser, wordsWhere } from '@forga/core-api';
 import type { Person as PersonDto, PersonSnapshot, PersonSummary } from '@forga/masterdata-contracts';
 import { today } from '../shared/access.js';
 import { HonorAward, Membership, Person, PersonQualification, RankAssignment, OfficeAssignment, RestPeriod } from '../masterdata.entities.js';
@@ -119,16 +119,9 @@ export class PersonsService {
     const conditions: FilterQuery<Person>[] = [visible];
     if (filter.status) conditions.push({ status: filter.status as Person['status'] });
     else if (!filter.includeLeft) conditions.push({ status: { $ne: 'left' } });
-    if (filter.query) {
-      const like = `%${filter.query.trim()}%`;
-      conditions.push({
-        $or: [
-          { firstName: { $ilike: like } },
-          { lastName: { $ilike: like } },
-          ...(full ? [{ $and: [full, { personnelNumber: { $ilike: like } }] }] : []),
-        ],
-      });
-    }
+    // Each word in first or last name, so "Felix", "Funke, Felix" and "Felix Funke" find the same person.
+    const words = wordsWhere(filter.query ?? '', ['firstName', 'lastName'], (like) => (full ? [{ $and: [full, { personnelNumber: { $ilike: like } }] }] : []));
+    if (words) conditions.push(words as FilterQuery<Person>);
     if (filter.departmentId) conditions.push({ memberships: { department: filter.departmentId } });
     if (filter.qualification) conditions.push({ qualifications: { qualification: filter.qualification } });
 

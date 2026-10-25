@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
+import { wordsWhere } from '@forga/core-api';
 import type {
   CatalogEntry as CatalogEntryDto,
   CatalogKind,
@@ -35,12 +36,12 @@ export class PersonDirectoryService implements PersonDirectory {
   ) {}
 
   async search(query: string, options: { departmentIds?: string[]; limit?: number } = {}): Promise<PersonSummary[]> {
-    const like = `%${query.trim()}%`;
+    const words = wordsWhere(query, ['firstName', 'lastName', 'personnelNumber']);
     const found = await this.em.fork().find(
       Person,
       {
         status: { $ne: 'left' },
-        $or: [{ firstName: { $ilike: like } }, { lastName: { $ilike: like } }, { personnelNumber: { $ilike: like } }],
+        ...words,
         ...(options.departmentIds ? { memberships: { department: { $in: options.departmentIds } } } : {}),
       },
       { populate: POPULATE, orderBy: { lastName: 'asc', firstName: 'asc' }, limit: options.limit ?? 20 },

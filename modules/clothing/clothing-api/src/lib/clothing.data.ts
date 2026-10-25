@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
 import { z } from 'zod';
 import { type ListColumn, normalizeRfid, type SearchHit } from '@forga/core-contracts';
-import { type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, type ListDefinition } from '@forga/core-api';
+import { type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, type ListDefinition, wordsWhere } from '@forga/core-api';
 import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, IssueEntity } from './clothing.entities.js';
 import { ClothingService, ISSUE, READ } from './clothing.service.js';
@@ -49,9 +49,9 @@ export class ClothingData implements DeadlineProvider {
   async search(user: AuthenticatedUser, query: string): Promise<SearchHit[]> {
     const visible = this.clothing.visible(user);
     if (!visible) return [];
-    const like = `%${query}%`;
     const names = await this.names();
-    const found = await this.em.fork().find(ClothingItemEntity, { $and: [visible, { $or: [{ inventoryNumber: { $ilike: like } }, { serialNumber: { $ilike: like } }, { barcode: { $ilike: like } }, { rfid: { $ilike: `%${normalizeRfid(query) || query}%` } }] }] }, { limit: 6 });
+    const words = wordsWhere(query, ['inventoryNumber', 'serialNumber', 'barcode']);
+    const found = await this.em.fork().find(ClothingItemEntity, { $and: [visible, { $or: [...(words ? [words] : []), { rfid: { $ilike: `%${normalizeRfid(query) || query}%` } }] }] } as never, { limit: 6 });
     return found.map((i) => this.hit(i, names));
   }
 

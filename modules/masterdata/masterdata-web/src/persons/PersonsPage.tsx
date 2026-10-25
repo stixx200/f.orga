@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { PersonSummary } from '@forga/masterdata-contracts';
 import { can, useSession, useTranslation } from '@forga/web-sdk';
-import { DataTable, PageHeader, StatusBadge, type Tone } from '@forga/web-ui';
+import { DataTable, matchesSearch, PageHeader, StatusBadge, type Tone } from '@forga/web-ui';
 import { READ, useCatalog, useCatalogNames, useDepartments, usePersons, WRITE } from '../api';
 import { HonorCertificatesDialog } from './HonorCertificatesDialog';
 
@@ -55,7 +55,7 @@ export function PersonsPage() {
     return persons
       .filter((p) => !statuses.length || statuses.includes(p.status))
       .filter((p) => !departmentIds.length || p.departmentIds.some((d) => departmentIds.includes(d)))
-      .filter((p) => !q || [p.firstName, p.lastName, p.personnelNumber ?? '', p.email, p.phoneMobile].some((v) => v.toLowerCase().includes(q)))
+      .filter((p) => matchesSearch([p.firstName, p.lastName, p.personnelNumber, p.email, p.phoneMobile], q))
       .filter((p) => !qualifications.length || p.qualifications.some((x) => qualifications.includes(x)))
       .filter((p) => !ranks.length || (p.rank !== null && ranks.includes(p.rank)));
   }, [persons, statuses, departmentIds, query, qualifications, ranks]);

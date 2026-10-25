@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, type OnModuleInit, Optional } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
-import { assertVersion, type AuthenticatedUser, berlinDate, DomainEvents, Notifications } from '@forga/core-api';
+import { assertVersion, type AuthenticatedUser, berlinDate, DomainEvents, Notifications, wordsWhere } from '@forga/core-api';
 import { normalizeRfid } from '@forga/core-contracts';
 import {
   addMonths,
@@ -164,7 +164,8 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     if (filter.vehicleId) where.push({ vehicleId: filter.vehicleId });
     if (filter.status) where.push({ status: filter.status as ItemStatus });
     else if (!filter.includeRetired) where.push({ status: { $ne: 'retired' } });
-    if (filter.q) where.push({ $or: [{ name: { $ilike: `%${filter.q}%` } }, { inventoryNumber: { $ilike: `%${filter.q}%` } }, { serialNumber: { $ilike: `%${filter.q}%` } }, { barcode: { $ilike: `%${filter.q}%` } }, { rfid: { $ilike: `%${normalizeRfid(filter.q) || filter.q}%` } }] });
+    const words = filter.q ? wordsWhere(filter.q, ['name', 'inventoryNumber', 'serialNumber', 'barcode']) : null;
+    if (filter.q) where.push({ $or: [...(words ? [words] : []), { rfid: { $ilike: `%${normalizeRfid(filter.q) || filter.q}%` } }] } as FilterQuery<EquipmentItemEntity>);
     const items = await this.em.fork().find(EquipmentItemEntity, { $and: where }, { orderBy: { inventoryNumber: 'asc' }, limit: 5000 });
     const dtos = await this.toDtos(items);
     return filter.dueBefore ? dtos.filter((i) => i.nextDue !== null && i.nextDue <= filter.dueBefore!) : dtos;
@@ -327,8 +328,9 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     const visible = this.visible(user, REPORT_DEFECTS);
     const q = query.trim();
     if (!visible || q.length < 2) return [];
-    const like = `%${q.replaceAll('%', '').replaceAll('_', '')}%`;
-    const items = await this.em.fork().find(EquipmentItemEntity, { $and: [visible, { status: { $ne: 'retired' } }, { $or: [{ inventoryNumber: { $ilike: like } }, { name: { $ilike: like } }, { barcode: { $ilike: like } }, { rfid: { $ilike: `%${normalizeRfid(query) || query}%` } }] }] }, { limit: 20, orderBy: { inventoryNumber: 'asc' } });
+    const words = wordsWhere(q, ['inventoryNumber', 'name', 'barcode']);
+    const match = { $or: [...(words ? [words] : []), { rfid: { $ilike: `%${normalizeRfid(q) || q}%` } }] } as FilterQuery<EquipmentItemEntity>;
+    const items = await this.em.fork().find(EquipmentItemEntity, { $and: [visible, { status: { $ne: 'retired' } }, match] }, { limit: 20, orderBy: { inventoryNumber: 'asc' } });
     return items.map((i) => ({ id: i.id, inventoryNumber: i.inventoryNumber, name: i.name }));
   }
 
