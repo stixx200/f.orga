@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Item, ItemInput } from '@forga/equipment-contracts';
 import { can, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { ResponsiveDialog, useAction } from '@forga/web-ui';
+import { CodeInput, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { keys, useCategories, useDepartments, useStations, useTypes, useVehicles, WRITE } from '../api';
 
 type Form = Required<Omit<ItemInput, 'inspections' | 'version'>>;
@@ -15,6 +15,8 @@ const fromItem = (item?: Item): Form => ({
   typeKey: item?.typeKey ?? null,
   categoryKey: item?.categoryKey ?? '',
   serialNumber: item?.serialNumber ?? '',
+  barcode: item?.barcode ?? '',
+  rfid: item?.rfid ?? '',
   manufacturer: item?.manufacturer ?? '',
   yearBuilt: item?.yearBuilt ?? null,
   purchasedOn: item?.purchasedOn ?? null,
@@ -84,6 +86,8 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
           <TextInput label={t('fields.inventoryNumber')} value={form.inventoryNumber} onChange={(e) => set('inventoryNumber', e.currentTarget.value)} required />
           <TextInput label={t('fields.name')} value={form.name} onChange={(e) => set('name', e.currentTarget.value)} required />
           <TextInput label={t('fields.serialNumber')} value={form.serialNumber} onChange={(e) => set('serialNumber', e.currentTarget.value)} />
+          <CodeInput label={common('codes.barcode')} description={common('codes.barcodeHint')} value={form.barcode ?? ''} onChange={(v) => set('barcode', v)} source="camera" />
+          <CodeInput label={common('codes.rfid')} description={common('codes.rfidHint')} value={form.rfid ?? ''} onChange={(v) => set('rfid', v)} source="nfc" />
           <TextInput label={t('fields.manufacturer')} value={form.manufacturer} onChange={(e) => set('manufacturer', e.currentTarget.value)} />
           <NumberInput label={t('fields.yearBuilt')} value={form.yearBuilt ?? ''} onChange={(v) => set('yearBuilt', v === '' ? null : Number(v))} min={1900} max={2100} />
           <DateInput label={t('fields.purchasedOn')} value={form.purchasedOn} onChange={(v) => set('purchasedOn', v)} valueFormat="DD.MM.YYYY" clearable />

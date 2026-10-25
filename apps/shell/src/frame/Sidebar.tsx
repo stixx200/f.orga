@@ -1,7 +1,8 @@
+import { useQuery } from '@tanstack/react-query';
 import { Fragment } from 'react';
 import { NavLink } from 'react-router';
 import type { Session } from '@forga/core-contracts';
-import { can, useLocalized, useTranslation } from '@forga/web-sdk';
+import { api, can, useLocalized, useTranslation } from '@forga/web-sdk';
 import type { LoadedModule } from '../modules';
 import classes from './frame.module.css';
 import { mySections } from '../pages/MyAreaPage';
@@ -53,10 +54,13 @@ function Section({ title, entries, onNavigate }: { title: string; entries: Entry
 export function Sidebar({ modules, session, onNavigate }: { modules: LoadedModule[]; session: Session; onNavigate?: () => void }) {
   const { t } = useTranslation('shell');
   const localized = useLocalized();
+  // Only modules with labeled items (equipment, clothing) resolve codes; the server knows which the user may search.
+  const { data: codeModules = [] } = useQuery({ queryKey: ['core', 'codes', 'modules'], queryFn: () => api<string[]>('core/codes/modules'), staleTime: Infinity });
   const overview: Entry[] = [
     { to: '/', label: t('nav.start'), icon: 'home', end: true },
     ...(session.user.personId && mySections(session).length ? [{ to: '/me', label: t('me.title'), icon: 'user' }] : []),
     { to: '/lists', label: t('nav.lists'), icon: 'list' },
+    ...(codeModules.length ? [{ to: '/scan', label: t('nav.scan'), icon: 'barcode' }] : []),
     ...(Object.keys(session.permissions).some((p) => p.endsWith('.write') || p.endsWith('.manage')) ? [{ to: '/import', label: t('nav.import'), icon: 'import' }] : []),
   ];
   const administration: Entry[] = [

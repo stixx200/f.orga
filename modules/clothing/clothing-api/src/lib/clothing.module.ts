@@ -1,6 +1,6 @@
 import { Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
+import { CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
 import { CLOTHING_MANIFEST } from '@forga/clothing-contracts';
 import { ORGANIZATION_REFERENCES, type OrganizationReferences, PERSON_HOLDINGS, type PersonHoldings } from '@forga/masterdata-contracts';
 import { CLOTHING_MIGRATIONS } from '../migrations/index.js';
@@ -18,6 +18,7 @@ export class ClothingModule implements OnModuleInit {
     private readonly lists: ListRegistry,
     private readonly deadlines: DeadlineRegistry,
     private readonly search: SearchRegistry,
+    private readonly codes: CodeRegistry,
     private readonly exports: ExportRegistry,
     private readonly historyAccess: HistoryAccessRegistry,
     @Inject(ORGANIZATION_REFERENCES) private readonly references: OrganizationReferences,
@@ -28,6 +29,7 @@ export class ClothingModule implements OnModuleInit {
     for (const definition of this.data.lists()) this.lists.register('clothing', definition);
     this.deadlines.register(this.data);
     this.search.register('clothing', (user, query) => this.data.search(user, query));
+    this.codes.register('clothing', (user, code) => this.data.code(user, code));
     this.exports.register('clothing', { all: () => this.data.exportAll() });
     this.historyAccess.register('clothing.item', async (user, id) => {
       const item = await this.em.fork().findOne(ClothingItemEntity, id);

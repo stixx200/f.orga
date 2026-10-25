@@ -16,6 +16,7 @@ Alle Pfade liegen unter `/api`.
 | `auth.forbidden` | `403` | Berechtigung fehlt |
 | `auth.csrf` | `403` | Header `x-forga` fehlt |
 | `validation.failed` | `400` | Eingabe ungültig |
+| `codes.taken` | `400`/`409` | Barcode oder RFID-Chip (`field`, `value`) gehört schon zu einem anderen Gegenstand des Moduls |
 
 ## Core
 
@@ -50,6 +51,8 @@ Alle Pfade liegen unter `/api`.
 | `GET` | `/core/modules/status` | `core.modules.manage` | Alle installierten Module mit Name, Version, `active`, `requires` und `optional` |
 | `PUT` | `/core/modules/:id` | `core.modules.manage` | Aktivieren/Deaktivieren (`ModuleActivation`). Fehler: `modules.requirementsInactive`, `modules.requiredByActive` |
 | `GET` | `/core/history/:entity/:id` | Prüfung des Moduls (`HistoryAccessRegistry`), sonst eine Berechtigung des Moduls von `:entity` | Historieneinträge des Datensatzes und seiner Kinddatensätze (`parentEntity`/`parentId`), neueste zuerst. Maskierte Felder haben `hidden: true`. Ohne Leserecht `404`. `:entity` z. B. `masterdata.person` |
+| `GET` | `/core/codes?code=` | angemeldet; Treffer je nach Rechten im Modul | Gegenstände mit genau diesem Code (`SearchHit[]`): Barcode, RFID-Chip (Trennzeichen und Schreibweise egal), Inventar-, Seriennummer oder URL eines QR-Etiketts |
+| `GET` | `/core/codes/modules` | angemeldet | Module, in denen der Benutzer Codes suchen kann (`string[]`) |
 | `GET` | `/core/audit?limit=` | `core.audit.read` | Audit-Einträge, neueste zuerst (höchstens 1000) |
 | `GET` | `/core/lists` | angemeldet | Listenvorlagen, für die der Benutzer das Recht hat (`ListInfo`) |
 | `GET` | `/core/lists/:id?<parameter>&lang=` | Recht der Liste | Listeninhalt für die Vorschau (`ListData`: Titel, Untertitel, Spalten, Zeilen). Ungültige Parameter `400`, unbekannte oder nicht erlaubte Liste `404` |
@@ -193,7 +196,7 @@ Abteilungsbezogene Rechte gelten für die Abteilung des Berichts. Wer `incidents
 | `POST`, `PUT` | `/clothing/articles`, `/clothing/articles/:id` | `clothing.manage` für die Gesamtwehr | Artikel anlegen/ändern (`ArticleInput`). Fehler: `clothing.articleKeyTaken`, `clothing.articleKeyFixed`, `clothing.articleKindFixed` |
 | `POST` | `/clothing/articles/template` | `clothing.manage` für die Gesamtwehr | Fehlende Artikel der Vorlage anlegen, Antwort `{ added }` |
 | `GET` | `/clothing/items?status&articleKey&holderId&q` | `clothing.read`, abteilungsbezogen | Stücke mit letzter Wäsche, Imprägnierung, Prüfung und Fälligkeiten (`Item[]`); ohne `status` alle nicht ausgesonderten |
-| `POST`, `PUT` | `/clothing/items`, `/clothing/items/:id` | `clothing.manage`, abteilungsbezogen | Stück anlegen/ändern (`ItemInput`). Fehler: `clothing.notInventoried`, `clothing.inventoryNumberTaken` (409), `clothing.articleFixed` |
+| `POST`, `PUT` | `/clothing/items`, `/clothing/items/:id` | `clothing.manage`, abteilungsbezogen | Stück anlegen/ändern (`ItemInput`, mit `barcode` und `rfid`). Fehler: `clothing.notInventoried`, `clothing.inventoryNumberTaken` (409), `codes.taken` (409), `clothing.articleFixed` |
 | `GET` | `/clothing/items/:id` | `clothing.read` | Stück mit Wäsche, Prüfungen und Verlauf (`ItemDetail`) |
 | `POST` | `/clothing/items/:id/issue` | `clothing.issue` für Stück und Person | Ausgeben (`ItemIssueInput`: `personId`, `date`, `notes`). Fehler: `clothing.notInStock`, `clothing.personLeft` |
 | `POST` | `/clothing/items/:id/return` | `clothing.issue` | Zurücknehmen (`ItemReturnInput`, `retire` sondert aus). Fehler: `clothing.notIssued`, `clothing.returnBeforeIssue` |

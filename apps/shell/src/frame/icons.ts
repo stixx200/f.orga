@@ -1,4 +1,5 @@
 import {
+  IconBarcode,
   IconAdjustmentsHorizontal,
   IconAlertCircle,
   IconApi,
@@ -32,6 +33,7 @@ import {
 /** Icons that navigation entries of modules may refer to by key. */
 export const NAV_ICONS: Record<string, Icon> = {
   home: IconHome,
+  barcode: IconBarcode,
   user: IconUser,
   users: IconUsers,
   sitemap: IconSitemap,

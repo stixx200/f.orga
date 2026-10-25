@@ -1,5 +1,6 @@
 export * from './lib/theme';
 export * from './lib/components/ActionBar';
+export * from './lib/components/CodeScanner';
 export * from './lib/components/DataTable';
 export * from './lib/components/Dialogs';
 export * from './lib/components/EmptyState';

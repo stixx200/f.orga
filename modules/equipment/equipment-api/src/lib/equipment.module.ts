@@ -1,6 +1,6 @@
 import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Attachments, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
+import { Attachments, CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
 import { EQUIPMENT_MANIFEST, EQUIPMENT_USAGE } from '@forga/equipment-contracts';
 import { ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
 import { EQUIPMENT_MIGRATIONS } from '../migrations/index.js';
@@ -26,6 +26,7 @@ export class EquipmentModule implements OnModuleInit {
     private readonly moduleLists: EquipmentLists,
     private readonly deadlines: DeadlineRegistry,
     private readonly search: SearchRegistry,
+    private readonly codes: CodeRegistry,
     private readonly exports: ExportRegistry,
     private readonly imports: ImportRegistry,
     private readonly historyAccess: HistoryAccessRegistry,
@@ -39,6 +40,7 @@ export class EquipmentModule implements OnModuleInit {
     for (const definition of this.moduleLists.definitions()) this.lists.register('equipment', definition);
     this.deadlines.register(this.data);
     this.search.register('equipment', (user, query) => this.data.search(user, query));
+    this.codes.register('equipment', (user, code) => this.data.code(user, code));
     this.exports.register('equipment', { all: () => this.data.exportAll() });
     this.imports.register('equipment', this.inventory.profile());
     this.historyAccess.register('equipment.item', async (user, id) => {

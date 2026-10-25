@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
 import { type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider } from '@forga/core-api';
-import type { LocalizedText, SearchHit } from '@forga/core-contracts';
+import { type LocalizedText, normalizeRfid, type SearchHit } from '@forga/core-contracts';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
 import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, UsageEntity } from '../equipment.entities.js';
 import { INSPECT, ItemsService, WRITE } from '../items/items.service.js';
@@ -78,8 +78,25 @@ export class EquipmentData implements DeadlineProvider {
     const visible = this.items.visible(user);
     if (!visible) return [];
     const like = `%${query}%`;
-    const found = await this.em.fork().find(EquipmentItemEntity, { $and: [visible, { $or: [{ name: { $ilike: like } }, { inventoryNumber: { $ilike: like } }, { serialNumber: { $ilike: like } }] }] } as never, { limit: 6 });
-    return found.map((i) => ({ id: i.id, group: { de: 'Geräte', en: 'Equipment' }, title: `${i.inventoryNumber} ${i.name}`, description: i.serialNumber, to: `/equipment/items/${i.id}` }));
+    const found = await this.em.fork().find(EquipmentItemEntity, { $and: [visible, { $or: [{ name: { $ilike: like } }, { inventoryNumber: { $ilike: like } }, { serialNumber: { $ilike: like } }, { barcode: { $ilike: like } }, { rfid: { $ilike: `%${normalizeRfid(query) || query}%` } }] }] } as never, { limit: 6 });
+    return found.map((i) => this.hit(i));
+  }
+
+  /** Scanned code: label URL of f.orga, barcode, RFID chip, inventory or serial number (exact, ignoring case). */
+  async code(user: AuthenticatedUser, code: string): Promise<SearchHit[]> {
+    const visible = this.items.visible(user);
+    if (!visible) return [];
+    const label = /\/equipment\/items\/([0-9a-f-]{36})/i.exec(code);
+    const exact = code.replace(/[\\%_]/g, '\\$&');
+    const where = label
+      ? { id: label[1].toLowerCase() }
+      : { $or: [{ barcode: { $ilike: exact } }, { rfid: normalizeRfid(code) }, { inventoryNumber: { $ilike: exact } }, { serialNumber: { $ilike: exact } }] };
+    const found = await this.em.fork().find(EquipmentItemEntity, { $and: [visible, where] } as never, { limit: 20, orderBy: { inventoryNumber: 'asc' } });
+    return found.map((i) => this.hit(i));
+  }
+
+  private hit(i: EquipmentItemEntity): SearchHit {
+    return { id: i.id, group: { de: 'Geräte', en: 'Equipment' }, title: `${i.inventoryNumber} ${i.name}`, description: i.serialNumber, to: `/equipment/items/${i.id}` };
   }
 
   async exportAll(): Promise<Record<string, unknown>> {

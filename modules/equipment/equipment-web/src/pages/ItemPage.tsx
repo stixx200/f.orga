@@ -190,6 +190,7 @@ function IncidentsTab({ item }: { item: Item }) {
 export function ItemPage() {
   const { id = '' } = useParams();
   const { t, i18n } = useTranslation('equipment');
+  const { t: common } = useTranslation('common');
   const session = useSession().data;
   const category = useCategoryName();
   const place = usePlace();
@@ -207,6 +208,8 @@ export function ItemPage() {
     [t('fields.department'), departments.find((d) => d.id === item.departmentId)?.name ?? ''],
     [t('fields.place'), place(item)],
     [t('fields.serialNumber'), item.serialNumber],
+    [common('codes.barcode'), item.barcode ?? ''],
+    [common('codes.rfid'), item.rfid ?? ''],
     [t('fields.manufacturer'), item.manufacturer],
     [t('fields.yearBuilt'), item.yearBuilt ? String(item.yearBuilt) : ''],
     [t('fields.purchasedOn'), formatDate(item.purchasedOn, i18n.language)],

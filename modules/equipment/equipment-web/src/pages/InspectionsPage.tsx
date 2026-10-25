@@ -7,7 +7,7 @@ import { apiUrl, formatDate, localDate, send, useLocalized, useTranslation } fro
 import { ActionBar, DataTable, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { keys, useDepartments, useItems, usePlace } from '../api';
 import { DueDate } from '../parts';
-import { ScanDialog, scannedCode } from './ScanDialog';
+import { matchesCode, ScanDialog, scannedCode } from './ScanDialog';
 
 type Row = { item: Item; due: Due };
 
@@ -42,8 +42,8 @@ export function InspectionsPage() {
   // A scanned label selects the item if the chosen inspection is due for it.
   const onScan = (text: string) => {
     const code = scannedCode(text);
-    const row = visible.find((r) => (code.id ? r.item.id === code.id : r.item.inventoryNumber.toLowerCase() === code.inventoryNumber?.toLowerCase()));
-    if (!row) return t('scan.notDue', { code: code.inventoryNumber ?? text });
+    const row = visible.find((r) => matchesCode(r.item, code));
+    if (!row) return t('scan.notDue', { code: code.code ?? text });
     if (selected.includes(row.item.id)) return t('scan.already', { item: `${row.item.inventoryNumber} · ${row.item.name}` });
     setSelected((s) => [...s, row.item.id]);
     return t('scan.selected', { item: `${row.item.inventoryNumber} · ${row.item.name}`, count: selected.length + 1 });

@@ -36,6 +36,9 @@ export const ItemSchema = defineEntity({
     inventoryNumber: p.string().unique(),
     size: p.string().default(''),
     serialNumber: p.string().default(''),
+    /** Unique where set; several pieces may have none. */
+    barcode: p.string().nullable().unique(),
+    rfid: p.string().nullable().unique(),
     manufacturer: p.string().default(''),
     purchasedOn: p.string().length(10).nullable(),
     departmentId: p.string().index(),

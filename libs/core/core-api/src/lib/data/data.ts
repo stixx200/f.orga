@@ -47,6 +47,31 @@ export class SearchRegistry {
   }
 }
 
+/** Finds the item with a scanned code: exact barcode, RFID chip, inventory or serial number, or the URL of a label. */
+export type CodeSource = (user: AuthenticatedUser, code: string) => Promise<SearchHit[]>;
+
+/** Modules with labeled items (equipment, clothing) resolve scanned codes; each source checks the permissions itself. */
+@Injectable()
+export class CodeRegistry {
+  private readonly sources: { module: string; source: CodeSource }[] = [];
+
+  register(module: string, source: CodeSource): void {
+    this.sources.push({ module, source });
+  }
+
+  /** Modules whose codes the user may look up; without any, the shell hides the input mask. */
+  modules(user: AuthenticatedUser): string[] {
+    return [...new Set(this.sources.filter((s) => user.canAnythingIn(s.module)).map((s) => s.module))];
+  }
+
+  async lookup(user: AuthenticatedUser, code: string): Promise<SearchHit[]> {
+    const results = await Promise.all(
+      this.sources.filter((s) => user.canAnythingIn(s.module)).map((s) => s.source(user, code).catch((): SearchHit[] => [])),
+    );
+    return results.flat();
+  }
+}
+
 // ----- Full export and data access request -----
 
 export interface ExportSource {
@@ -135,6 +160,7 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
 export class DataController {
   constructor(
     private readonly search: SearchRegistry,
+    private readonly codes: CodeRegistry,
     private readonly exports: ExportRegistry,
     private readonly retention: RetentionService,
     private readonly audit: Audit,
@@ -144,6 +170,18 @@ export class DataController {
   find(@Query('q') query: string | undefined, @CurrentUser() user: AuthenticatedUser): Promise<SearchHit[]> {
     const q = (query ?? '').trim();
     return q.length < 2 ? Promise.resolve([]) : this.search.search(user, q);
+  }
+
+  /** Items carrying a scanned barcode or RFID chip (input mask "Code suchen"). */
+  @Get('codes')
+  code(@Query('code') code: string | undefined, @CurrentUser() user: AuthenticatedUser): Promise<SearchHit[]> {
+    const value = (code ?? '').trim().slice(0, 500);
+    return value ? this.codes.lookup(user, value) : Promise.resolve([]);
+  }
+
+  @Get('codes/modules')
+  codeModules(@CurrentUser() user: AuthenticatedUser): string[] {
+    return this.codes.modules(user);
   }
 
   /** Modules that offer a full export. */

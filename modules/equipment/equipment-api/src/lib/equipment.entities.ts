@@ -50,6 +50,9 @@ export const ItemSchema = defineEntity({
     typeKey: p.string().nullable(),
     categoryKey: p.string().index(),
     serialNumber: p.string().default(''),
+    /** Unique where set; several items may have none. */
+    barcode: p.string().nullable().unique(),
+    rfid: p.string().nullable().unique(),
     manufacturer: p.string().default(''),
     yearBuilt: p.integer().nullable(),
     purchasedOn: p.string().length(10).nullable(),

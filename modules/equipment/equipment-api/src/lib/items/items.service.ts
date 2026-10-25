@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, type OnModuleInit, Optional } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { assertVersion, type AuthenticatedUser, berlinDate, DomainEvents, Notifications } from '@forga/core-api';
+import { normalizeRfid } from '@forga/core-contracts';
 import {
   addMonths,
   BulkInspectionInput,
@@ -145,7 +146,7 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
       const dues = item.status === 'retired' ? [] : computeDues(inspections.get(item.id) ?? [], last.get(item.id) ?? new Map(), item.triggered, today);
       const due = dues.map((d) => d.dueOn).filter((d): d is string => d !== null).toSorted();
       return {
-        id: item.id, inventoryNumber: item.inventoryNumber, name: item.name, typeKey: item.typeKey ?? null, categoryKey: item.categoryKey, serialNumber: item.serialNumber, manufacturer: item.manufacturer,
+        id: item.id, inventoryNumber: item.inventoryNumber, name: item.name, typeKey: item.typeKey ?? null, categoryKey: item.categoryKey, serialNumber: item.serialNumber, barcode: item.barcode ?? null, rfid: item.rfid ?? null, manufacturer: item.manufacturer,
         yearBuilt: item.yearBuilt ?? null, purchasedOn: item.purchasedOn ?? null, price: item.price === null || item.price === undefined ? null : Number(item.price), properties: item.properties, departmentId: item.departmentId, vehicleId: item.vehicleId ?? null,
         stationId: item.stationId ?? null, loadingPlace: item.loadingPlace, quantity: item.quantity, expiresOn: item.expiresOn ?? null, inspections: inspections.get(item.id) ?? [], ownInspections: item.inspections !== null && item.inspections !== undefined,
         status: item.status, retirement: item.retirement ?? null, forVehicleId: item.forVehicleId ?? null, dues, nextDue: due[0] ?? null,
@@ -163,7 +164,7 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     if (filter.vehicleId) where.push({ vehicleId: filter.vehicleId });
     if (filter.status) where.push({ status: filter.status as ItemStatus });
     else if (!filter.includeRetired) where.push({ status: { $ne: 'retired' } });
-    if (filter.q) where.push({ $or: [{ name: { $ilike: `%${filter.q}%` } }, { inventoryNumber: { $ilike: `%${filter.q}%` } }, { serialNumber: { $ilike: `%${filter.q}%` } }] });
+    if (filter.q) where.push({ $or: [{ name: { $ilike: `%${filter.q}%` } }, { inventoryNumber: { $ilike: `%${filter.q}%` } }, { serialNumber: { $ilike: `%${filter.q}%` } }, { barcode: { $ilike: `%${filter.q}%` } }, { rfid: { $ilike: `%${normalizeRfid(filter.q) || filter.q}%` } }] });
     const items = await this.em.fork().find(EquipmentItemEntity, { $and: where }, { orderBy: { inventoryNumber: 'asc' }, limit: 5000 });
     const dtos = await this.toDtos(items);
     return filter.dueBefore ? dtos.filter((i) => i.nextDue !== null && i.nextDue <= filter.dueBefore!) : dtos;
@@ -172,6 +173,12 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
   private async validate(em: EntityManager, input: ParsedItem, id?: string): Promise<void> {
     if (await em.count(EquipmentItemEntity, { inventoryNumber: input.inventoryNumber, ...(id ? { id: { $ne: id } } : {}) })) {
       throw new BadRequestException({ code: 'equipment.inventoryNumberTaken', value: input.inventoryNumber });
+    }
+    for (const field of ['barcode', 'rfid'] as const) {
+      const value = input[field];
+      if (value && (await em.count(EquipmentItemEntity, { [field]: value, ...(id ? { id: { $ne: id } } : {}) }))) {
+        throw new BadRequestException({ code: 'codes.taken', field, value });
+      }
     }
     if (!(await em.count(CategoryEntity, { key: input.categoryKey }))) throw new BadRequestException({ code: 'equipment.unknownCategory', key: input.categoryKey });
     if (input.typeKey && !(await em.count(EquipmentTypeEntity, { key: input.typeKey }))) throw new BadRequestException({ code: 'equipment.unknownType', key: input.typeKey });
@@ -321,7 +328,7 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     const q = query.trim();
     if (!visible || q.length < 2) return [];
     const like = `%${q.replaceAll('%', '').replaceAll('_', '')}%`;
-    const items = await this.em.fork().find(EquipmentItemEntity, { $and: [visible, { status: { $ne: 'retired' } }, { $or: [{ inventoryNumber: { $ilike: like } }, { name: { $ilike: like } }] }] }, { limit: 20, orderBy: { inventoryNumber: 'asc' } });
+    const items = await this.em.fork().find(EquipmentItemEntity, { $and: [visible, { status: { $ne: 'retired' } }, { $or: [{ inventoryNumber: { $ilike: like } }, { name: { $ilike: like } }, { barcode: { $ilike: like } }, { rfid: { $ilike: `%${normalizeRfid(query) || query}%` } }] }] }, { limit: 20, orderBy: { inventoryNumber: 'asc' } });
     return items.map((i) => ({ id: i.id, inventoryNumber: i.inventoryNumber, name: i.name }));
   }
 

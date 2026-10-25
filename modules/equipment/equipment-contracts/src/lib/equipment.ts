@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LocalizedText } from '@forga/core-contracts';
+import { ItemCode, LocalizedText, RfidCode } from '@forga/core-contracts';
 
 const date = z.iso.date();
 const text = z.string().trim().default('');
@@ -66,6 +66,9 @@ export const ItemInput = z
     typeKey: key.nullable().default(null),
     categoryKey: key,
     serialNumber: text,
+    /** Barcode on the item (also a QR code that is not a label of f.orga). */
+    barcode: ItemCode,
+    rfid: RfidCode,
     manufacturer: text,
     yearBuilt: z.number().int().min(1900).max(2100).nullable().default(null),
     purchasedOn: date.nullable().default(null),
@@ -104,6 +107,8 @@ export const Item = z.object({
   typeKey: z.string().nullable(),
   categoryKey: z.string(),
   serialNumber: z.string(),
+  barcode: z.string().nullable(),
+  rfid: z.string().nullable(),
   manufacturer: z.string(),
   yearBuilt: z.number().nullable(),
   purchasedOn: z.string().nullable(),

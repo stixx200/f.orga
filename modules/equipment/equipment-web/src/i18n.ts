@@ -38,7 +38,6 @@ const de = {
   scan: {
     open: 'Per QR-Code auswählen',
     title: 'Geräte scannen',
-    noCamera: 'Die Kamera ist in diesem Browser nicht nutzbar. Code oder Inventarnummer eingeben (oder mit einem Handscanner einlesen).',
     code: 'Code oder Inventarnummer',
     add: 'Übernehmen',
     selected: '✓ {{item}} ausgewählt ({{count}} insgesamt)',
@@ -71,7 +70,7 @@ const de = {
   },
   dashboard: { due: 'Prüfungen fällig', dueHint_one: '{{count}} Gerät defekt', dueHint_other: '{{count}} Geräte defekt' },
   me: {
-    title: 'Mangel melden', hint: 'Gerät über Inventarnummer oder Bezeichnung suchen; am Gerät geht es auch über den QR-Code.', item: 'Gerät', search: 'Inventarnummer oder Bezeichnung',
+    title: 'Mangel melden', hint: 'Gerät über Inventarnummer oder Bezeichnung suchen; am Gerät geht es auch über den QR-Code.', item: 'Gerät', search: 'Inventarnummer, Bezeichnung, Barcode oder RFID',
     notFound: 'Kein Gerät gefunden.',
   },
   errors: {
@@ -125,7 +124,6 @@ const en: typeof de = {
   scan: {
     open: 'Select by QR code',
     title: 'Scan items',
-    noCamera: 'The camera cannot be used in this browser. Enter the code or inventory number (or read it with a hand scanner).',
     code: 'Code or inventory number',
     add: 'Add',
     selected: '✓ {{item}} selected ({{count}} in total)',
@@ -158,7 +156,7 @@ const en: typeof de = {
   },
   dashboard: { due: 'Inspections due', dueHint_one: '{{count}} item defective', dueHint_other: '{{count}} items defective' },
   me: {
-    title: 'Report a defect', hint: 'Search the item by inventory number or name; at the item, the QR code works as well.', item: 'Item', search: 'Inventory number or name',
+    title: 'Report a defect', hint: 'Search the item by inventory number or name; at the item, the QR code works as well.', item: 'Item', search: 'Inventory number, name, barcode or RFID',
     notFound: 'No item found.',
   },
   errors: {

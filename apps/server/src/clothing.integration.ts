@@ -72,6 +72,23 @@ describe('clothing store', () => {
     await get(`/clothing/persons/${ids.anna}`, leader).expect(404);
   });
 
+  it('stores barcodes and RFID chips once and finds pieces by a scanned code', async () => {
+    const jacket = (await get(`/clothing/items/${ids.jacket}`, officer).expect(200)).body;
+    const input = { articleKey: 'jacket', inventoryNumber: 'J-001', size: '52', departmentId: ids.musterstadt, purchasedOn: '2026-01-15' };
+    expect((await post('/clothing/items', { ...input, inventoryNumber: 'J-002', barcode: 'PSA-J-001', rfid: '04:a2:1f:6b:c3:5d:80' }, officer).expect(201)).body).toMatchObject({ rfid: '04A21F6BC35D80' });
+    const taken = await test.http.put(`/api/clothing/items/${ids.jacket}`).set('Cookie', officer).set(UI).send({ ...input, barcode: 'psa-j-001', rfid: '04A21F6BC35D80', version: jacket.version }).expect(409);
+    expect(taken.body).toMatchObject({ code: 'codes.taken', field: 'rfid' });
+
+    const lookup = async (code: string, cookie = officer) => ((await get(`/core/codes?code=${encodeURIComponent(code)}`, cookie).expect(200)).body as { title: string }[]).map((h) => h.title);
+    expect(await lookup('04 A2 1F 6B C3 5D 80')).toEqual(['J-002 Einsatzjacke']);
+    expect(await lookup('psa-j-001')).toEqual(['J-002 Einsatzjacke']);
+    expect(await lookup('J-001')).toEqual(['J-001 Einsatzjacke']);
+    // The group leader has no right in the clothing store: no hits and no input mask.
+    expect(await lookup('psa-j-001', leader)).toEqual([]);
+    expect((await get('/core/codes/modules', leader).expect(200)).body).not.toContain('clothing');
+    expect((await get('/core/codes/modules', officer).expect(200)).body).toContain('clothing');
+  });
+
   it('records washing and impregnation; impregnating counts as washing and restarts the interval', async () => {
     await post('/clothing/care', { itemIds: [ids.jacket, ids.trousers], kind: 'wash', date: '2026-03-01', place: 'Feuerwehrhaus' }, officer).expect(201);
     let jacket = (await get(`/clothing/items/${ids.jacket}`, officer).expect(200)).body;

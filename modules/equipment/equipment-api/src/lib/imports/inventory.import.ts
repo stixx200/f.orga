@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { type ImportContext, type ImportProfile, type ImportRow, normalizeHeading, parseDate } from '@forga/core-api';
-import type { ImportResult, ImportRowResult } from '@forga/core-contracts';
+import { type ImportResult, type ImportRowResult, normalizeRfid } from '@forga/core-contracts';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
 import { CategoryEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity } from '../equipment.entities.js';
 import { WRITE } from '../items/items.service.js';
@@ -19,6 +19,8 @@ const FIELDS = [
   field('category', 'Kategorie', 'Category', ['Kategorie', 'Gruppe', 'Geräteart']),
   field('type', 'Gerätetyp', 'Equipment type', ['Gerätetyp', 'Typ']),
   field('serialNumber', 'Seriennummer', 'Serial number', ['Seriennummer', 'Serien-Nr.', 'S/N']),
+  field('barcode', 'Barcode', 'Barcode', ['Barcode', 'Strichcode', 'EAN', 'QR-Code']),
+  field('rfid', 'RFID-Chip', 'RFID chip', ['RFID', 'RFID-Chip', 'Transponder', 'Chip-ID', 'UID']),
   field('manufacturer', 'Hersteller', 'Manufacturer', ['Hersteller']),
   field('department', 'Abteilung', 'Department', ['Abteilung', 'Abt.'], true),
   field('vehicle', 'Fahrzeug', 'Vehicle', ['Fahrzeug', 'Funkrufname']),
@@ -56,6 +58,8 @@ export class InventoryImport {
     const categories = await em.find(CategoryEntity, {});
     const types = await em.find(EquipmentTypeEntity, {});
     const results: ImportRowResult[] = [];
+    // Codes claimed by earlier rows of the same file.
+    const claimed = new Map<string, string>();
     for (const { row, values } of rows) {
       const label = `${values['inventoryNumber'] ?? ''} ${values['name'] ?? ''}`.trim();
       const error = (code: string, params?: Record<string, string>) => results.push({ row, action: 'error', label, messages: [{ code, params }] });
@@ -78,11 +82,18 @@ export class InventoryImport {
         loadingPlace: values['loadingPlace'] ?? '',
         quantity: Number(values['quantity'] ?? 1) || 1,
       };
+      // Codes are only set when the file has them, so an import without these columns keeps the stored ones.
+      const codes = {
+        ...(values['barcode'] ? { barcode: values['barcode'].trim() } : {}),
+        ...(values['rfid'] ? { rfid: normalizeRfid(values['rfid']) } : {}),
+      };
       let item = await em.findOne(EquipmentItemEntity, { inventoryNumber: values['inventoryNumber']! });
+      const taken = await this.codeTaken(em, codes, values['inventoryNumber']!, claimed);
+      if (taken) { error('codes.taken', { value: taken }); continue; }
       const action = item ? 'update' : 'create';
       if (!dryRun) {
-        if (item) Object.assign(item, fields);
-        else item = em.create(EquipmentItemEntity, { ...fields, inventoryNumber: values['inventoryNumber']!, status: 'ready', triggered: {}, forVehicleId: null });
+        if (item) Object.assign(item, fields, codes);
+        else item = em.create(EquipmentItemEntity, { ...fields, ...codes, inventoryNumber: values['inventoryNumber']!, status: 'ready', triggered: {}, forVehicleId: null });
         const periodic = type?.inspections.find((t) => t.trigger === 'periodic' && t.intervalMonths);
         if (lastInspection && periodic && !(await em.count(InspectionEntity, { item, inspectionKey: periodic.key, date: lastInspection }))) {
           em.create(InspectionEntity, { item, inspectionKey: periodic.key, date: lastInspection, result: 'passed', recordedBy: `Import (${user.displayName})`, inspectorCompany: '', checklist: [], measurements: '', notes: '', qualificationWarning: false, nextDueOn: null });
@@ -94,5 +105,16 @@ export class InventoryImport {
     const counts = { create: 0, update: 0, unchanged: 0, error: 0 };
     for (const r of results) counts[r.action]++;
     return { dryRun, counts, rows: results };
+  }
+
+  /** The code if another item (stored or earlier in the file) already carries it. */
+  private async codeTaken(em: EntityManager, codes: { barcode?: string; rfid?: string }, inventoryNumber: string, claimed: Map<string, string>): Promise<string | null> {
+    for (const [kind, value] of Object.entries(codes)) {
+      const key = `${kind}:${value}`;
+      const owner = claimed.get(key) ?? (await em.findOne(EquipmentItemEntity, { [kind]: value }))?.inventoryNumber;
+      if (owner && owner !== inventoryNumber) return value;
+      claimed.set(key, inventoryNumber);
+    }
+    return null;
   }
 }

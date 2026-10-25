@@ -69,6 +69,29 @@ describe('equipment', () => {
     await put(`/equipment/items/${ids.scba}`, item, member).expect(403);
   });
 
+  it('stores barcodes and RFID chips once and finds items by a scanned code', async () => {
+    const scba = { inventoryNumber: 'AS-PA-0001', name: 'Pressluftatmer 1', typeKey: 'scba', categoryKey: 'breathing', departmentId: ids.musterstadt, vehicleId: ids.lf, loadingPlace: 'G1' };
+    const hose = { inventoryNumber: 'S-B-0001', name: 'B-Schlauch 20 m', typeKey: 'pressure-hose-b', categoryKey: 'hoses', departmentId: ids.musterstadt, quantity: 1, properties: { Länge: '20 m' } };
+    const version = async (id: string) => (await get(`/equipment/items/${id}`, officer).expect(200)).body.version as number;
+    const saved = await put(`/equipment/items/${ids.scba}`, { ...scba, barcode: ' 4006381333931 ', rfid: 'e2:00:00:17:22:11', version: await version(ids.scba) }, officer).expect(200);
+    // RFID readers write the chip ID in different forms; it is stored normalized.
+    expect(saved.body).toMatchObject({ barcode: '4006381333931', rfid: 'E20000172211' });
+    const taken = await put(`/equipment/items/${ids.hose}`, { ...hose, rfid: 'E2 00 00 17 22 11', version: await version(ids.hose) }, officer).expect(400);
+    expect(taken.body).toMatchObject({ code: 'codes.taken', field: 'rfid' });
+    // Without codes the field stays empty; several items may have none.
+    expect((await put(`/equipment/items/${ids.hose}`, { ...hose, barcode: '', version: await version(ids.hose) }, officer).expect(200)).body.barcode).toBeNull();
+
+    const lookup = async (code: string, cookie = member) => ((await get(`/core/codes?code=${encodeURIComponent(code)}`, cookie).expect(200)).body as { to: string }[]).map((h) => h.to);
+    expect(await lookup('e2-00-00-17-22-11')).toEqual([`/equipment/items/${ids.scba}`]);
+    expect(await lookup('4006381333931')).toEqual([`/equipment/items/${ids.scba}`]);
+    expect(await lookup('s-b-0001')).toEqual([`/equipment/items/${ids.hose}`]);
+    expect(await lookup(`https://forga.example.org/equipment/items/${ids.hose}`)).toEqual([`/equipment/items/${ids.hose}`]);
+    // Exact codes only: a part of a barcode is no hit.
+    expect(await lookup('400638%')).toEqual([]);
+    expect((await get('/core/codes/modules', member).expect(200)).body).toContain('equipment');
+    expect(((await get('/equipment/items?q=E2000017', officer).expect(200)).body as { id: string }[]).map((i) => i.id)).toEqual([ids.scba]);
+  });
+
   it('records inspections with qualification check, after-use triggers and bulk inspections', async () => {
     const inspection = (await post(`/equipment/items/${ids.scba}/inspections`, { inspectionKey: 'scba-check', date: today, inspectorPersonId: ids.gw, result: 'passed', checklist: [{ point: 'Warnsignal', state: 'ok' }] }, officer).expect(201)).body;
     expect(inspection).toMatchObject({ qualificationWarning: true, recordedBy: 'Gerätewart' });

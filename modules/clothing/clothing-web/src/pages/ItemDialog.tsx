@@ -3,7 +3,7 @@ import { DateInput } from '@mantine/dates';
 import { useState } from 'react';
 import type { Item, ItemInput } from '@forga/clothing-contracts';
 import { can, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { ResponsiveDialog, useAction } from '@forga/web-ui';
+import { CodeInput, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { keys, MANAGE, useArticles, useDepartments } from '../api';
 
 /** Records a new piece or corrects one. */
@@ -20,6 +20,8 @@ export function ItemDialog({ item, onClose, onSaved }: { item?: Item; onClose: (
     inventoryNumber: item?.inventoryNumber ?? '',
     size: item?.size ?? '',
     serialNumber: item?.serialNumber ?? '',
+    barcode: item?.barcode ?? '',
+    rfid: item?.rfid ?? '',
     manufacturer: item?.manufacturer ?? '',
     purchasedOn: item?.purchasedOn ?? null,
     departmentId: item?.departmentId ?? (writable.length === 1 ? writable[0].id : ''),
@@ -63,6 +65,8 @@ export function ItemDialog({ item, onClose, onSaved }: { item?: Item; onClose: (
         <Select label={t('items.department')} data={writable.map((d) => ({ value: d.id, label: d.name }))} value={form.departmentId || null} onChange={(v) => set('departmentId', v ?? '')} required />
         <TextInput label={t('items.manufacturer')} value={form.manufacturer} onChange={(e) => set('manufacturer', e.currentTarget.value)} />
         <TextInput label={t('items.serialNumber')} value={form.serialNumber} onChange={(e) => set('serialNumber', e.currentTarget.value)} />
+        <CodeInput label={common('codes.barcode')} description={common('codes.barcodeHint')} value={form.barcode ?? ''} onChange={(v) => set('barcode', v)} source="camera" />
+        <CodeInput label={common('codes.rfid')} description={common('codes.rfidHint')} value={form.rfid ?? ''} onChange={(v) => set('rfid', v)} source="nfc" />
         <DateInput label={t('items.purchasedOn')} description={t('items.purchasedOnHint')} value={form.purchasedOn} onChange={(v) => set('purchasedOn', v)} valueFormat="DD.MM.YYYY" clearable />
         <Textarea label={t('items.notes')} value={form.notes} onChange={(e) => set('notes', e.currentTarget.value)} autosize minRows={1} />
       </SimpleGrid>
