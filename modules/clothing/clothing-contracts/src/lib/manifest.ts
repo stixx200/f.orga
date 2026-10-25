@@ -1,5 +1,8 @@
 import type { ModuleManifest } from '@forga/core-contracts';
 
+/** Standard roles that see their own protective equipment in "My area" (like the other modules' `*.self`). */
+const SELF_ROLES = ['member', 'commander', 'department-commander', 'group-leader', 'course-coordinator', 'breathing-apparatus-officer', 'equipment-officer', 'administration'];
+
 export const CLOTHING_MANIFEST = {
   id: 'clothing',
   name: { de: 'Kleiderkammer', en: 'Clothing store' },
@@ -15,10 +18,12 @@ export const CLOTHING_MANIFEST = {
     { label: { de: 'Kleiderkammer', en: 'Clothing store' }, path: 'items', permission: 'clothing.read', icon: 'shirt' },
     { label: { de: 'Ausgabe', en: 'Issue' }, path: 'issue', permission: 'clothing.issue', icon: 'shirt' },
     { label: { de: 'Wäsche', en: 'Washing' }, path: 'care', permission: 'clothing.issue', icon: 'wash' },
+    { label: { de: 'Prüfung', en: 'Inspection' }, path: 'inspections', permission: 'clothing.issue', icon: 'check' },
+    { label: { de: 'Bestand', en: 'Stock' }, path: 'stock', permission: 'clothing.read', icon: 'list' },
     { label: { de: 'Kleiderkammer', en: 'Clothing store' }, path: 'articles', permission: 'clothing.manage', icon: 'settings', section: 'administration' },
   ],
   roles: [
-    { key: 'member', permissions: ['clothing.self'] },
+    ...SELF_ROLES.map((key) => ({ key, permissions: ['clothing.self'] })),
     {
       key: 'clothing-officer',
       name: { de: 'Kleiderwart', en: 'Clothing officer' },

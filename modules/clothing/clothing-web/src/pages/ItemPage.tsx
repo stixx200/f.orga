@@ -1,13 +1,14 @@
 import { Button, Checkbox, Group, SegmentedControl, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import type { Care, Inspection, IssueRecord } from '@forga/clothing-contracts';
 import { can, formatDate, localDate, send, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, EmptyState, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { ConfirmDialog, DataTable, EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { ISSUE, keys, MANAGE, useArticleName, useArticles, useItem, usePersonName, usePersons } from '../api';
-import { Due, ItemStatusBadge } from '../parts';
+import { BlockBadges, CancelButton, Cancelled, Due, inspectionOverdue, ItemStatusBadge, useMayCancel } from '../parts';
 import { ItemDialog } from './ItemDialog';
+import { HistoryKind } from './PersonClothingView';
 
 type Dialog = 'issue' | 'return' | 'care' | 'inspection' | 'edit' | 'retire' | null;
 
@@ -18,6 +19,12 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       <Text size="sm" component="div">{children || '–'}</Text>
     </Group>
   );
+}
+
+/** Link to the clothing tab of a person's file. */
+function PersonLink({ id, name }: { id: string | null; name: string }) {
+  if (!id || !name) return <>{name}</>;
+  return <Text component={Link} to={`/masterdata/persons/${id}?tab=clothing`} size="sm" c="brand">{name}</Text>;
 }
 
 /** One piece: master data, holder, washing, inspections and history. */
@@ -31,6 +38,7 @@ export function ItemPage() {
   const { data: persons = [] } = usePersons();
   const articleName = useArticleName();
   const personName = usePersonName();
+  const mayCancel = useMayCancel();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [flag, setFlag] = useState(false);
@@ -43,8 +51,14 @@ export function ItemPage() {
   };
   const close = () => setDialog(null);
   const done = { success: t('items.saved'), invalidate: [keys.all], onSuccess: close };
-  const issue = useAction(() => send('POST', `clothing/items/${id}/issue`, { personId: value('person'), date: value('date', localDate()), notes: value('notes') }), done);
-  const giveBack = useAction(() => send('POST', `clothing/items/${id}/return`, { date: value('date', localDate()), notes: value('notes'), retire: flag }), done);
+  const issue = useAction(
+    () => send('POST', `clothing/items/${id}/issue`, { personId: value('person'), date: value('date', localDate()), notes: value('notes'), acceptOverdueInspection: flag }),
+    done,
+  );
+  const giveBack = useAction(
+    () => send('POST', `clothing/items/${id}/return`, { date: value('date', localDate()), notes: value('notes'), retire: value('to') === 'retire', laundry: value('to') === 'laundry' }),
+    done,
+  );
   const care = useAction(() => send('POST', 'clothing/care', { itemIds: [id], kind: value('kind', 'wash'), date: value('date', localDate()), place: value('place'), notes: value('notes') }), done);
   const inspect = useAction(() => send('POST', `clothing/items/${id}/inspections`, { date: value('date', localDate()), passed: flag, inspector: value('inspector'), notes: value('notes') }), done);
   const retire = useAction(() => send('POST', `clothing/items/${id}/retire`), done);
@@ -54,7 +68,11 @@ export function ItemPage() {
   const article = articles.find((a) => a.key === item.articleKey);
   const mayIssue = can(session, ISSUE, item.departmentId);
   const mayManage = can(session, MANAGE, item.departmentId);
-  const date = (label: string) => <DateInput label={label} value={value('date', localDate())} onChange={(v) => setValue('date', v)} valueFormat="DD.MM.YYYY" required />;
+  const overdue = inspectionOverdue(item);
+  const recipient = persons.find((p) => p.id === value('person'));
+  // Only the newest issue or return can be cancelled.
+  const lastRecord = item.history.find((h) => !h.cancelledAt)?.id;
+  const date = (label: string) => <DateInput label={label} value={value('date', localDate())} onChange={(v) => setValue('date', v)} maxDate={localDate()} valueFormat="DD.MM.YYYY" required />;
   const notes = <Textarea label={t('items.notes')} value={value('notes')} onChange={(e) => setValue('notes', e.currentTarget.value)} autosize minRows={1} />;
   const actions = (submit: () => void, loading: boolean, ok = true) => (
     <Group justify="flex-end">
@@ -62,6 +80,7 @@ export function ItemPage() {
       <Button onClick={submit} loading={loading} disabled={!ok}>{common('actions.save')}</Button>
     </Group>
   );
+  const cancel = (entry: Care | Inspection | IssueRecord, path: string) => mayIssue && mayCancel(entry, [item.departmentId]) && <CancelButton path={path} />;
 
   return (
     <Stack gap="lg">
@@ -70,7 +89,7 @@ export function ItemPage() {
         title={`${item.inventoryNumber} · ${articleName(item.articleKey)}`}
         actions={
           <Group>
-            {mayIssue && item.status === 'stock' && <Button onClick={() => open('issue')}>{t('items.issue')}</Button>}
+            {mayIssue && item.status === 'stock' && article?.active && !item.blockedBy.length && <Button onClick={() => open('issue')}>{t('items.issue')}</Button>}
             {mayIssue && item.status === 'issued' && <Button onClick={() => open('return')}>{t('items.return')}</Button>}
             {mayIssue && article?.textile && item.status !== 'retired' && <Button variant="default" onClick={() => open('care')}>{t('care.record')}</Button>}
             {mayIssue && article?.inspectionMonths && item.status !== 'retired' && <Button variant="default" onClick={() => open('inspection')}>{t('inspections.record')}</Button>}
@@ -79,11 +98,18 @@ export function ItemPage() {
           </Group>
         }
       />
+      {item.blockedBy.map((block) => <Notice key={block} kind="warning">{t(`blockHints.${block}`)}</Notice>)}
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
         <Panel title={t('items.details')}>
           <Stack gap={6}>
-            <Row label={t('items.status')}><ItemStatusBadge status={item.status} /></Row>
-            <Row label={t('items.holder')}>{item.holderId ? `${personName(item.holderId)} · ${t('items.since', { date: formatDate(item.issuedOn, i18n.language) })}` : ''}</Row>
+            <Row label={t('items.status')}><Group gap={4}><ItemStatusBadge status={item.status} /><BlockBadges item={item} /></Group></Row>
+            <Row label={t('items.holder')}>
+              {item.holderId && (
+                <>
+                  <PersonLink id={item.holderId} name={personName(item.holderId)} /> · {t('items.since', { date: formatDate(item.issuedOn, i18n.language) })}
+                </>
+              )}
+            </Row>
             <Row label={t('items.size')}>{item.size}</Row>
             <Row label={t('items.manufacturer')}>{item.manufacturer}</Row>
             <Row label={t('items.serialNumber')}>{item.serialNumber}</Row>
@@ -98,7 +124,11 @@ export function ItemPage() {
             {article?.textile && <Row label={t('items.lastWashed')}>{formatDate(item.lastWashedOn, i18n.language)}</Row>}
             {article?.textile && <Row label={t('items.lastImpregnated')}>{formatDate(item.lastImpregnatedOn, i18n.language)}</Row>}
             {article?.impregnationMonths && <Row label={t('items.impregnationDue')}><Due date={item.impregnationDueOn} /></Row>}
-            {article?.inspectionMonths && <Row label={t('items.lastInspected')}>{formatDate(item.lastInspectedOn, i18n.language)}</Row>}
+            {article?.inspectionMonths && (
+              <Row label={t('items.lastInspected')}>
+                {item.lastInspectedOn && `${formatDate(item.lastInspectedOn, i18n.language)} · ${t(item.lastInspectionPassed ? 'inspections.passed' : 'inspections.failed')}`}
+              </Row>
+            )}
             {article?.inspectionMonths && <Row label={t('items.inspectionDue')}><Due date={item.inspectionDueOn} /></Row>}
             {!article?.textile && !article?.inspectionMonths && <Text size="sm" c="dimmed">{t('items.noDues')}</Text>}
           </Stack>
@@ -111,11 +141,12 @@ export function ItemPage() {
             rowKey={(c) => c.id}
             empty={t('care.empty')}
             columns={[
-              { key: 'date', header: t('care.date'), render: (c) => formatDate(c.date, i18n.language) },
+              { key: 'date', header: t('care.date'), render: (c) => <Cancelled entry={c}>{formatDate(c.date, i18n.language)}</Cancelled> },
               { key: 'kind', header: t('care.kind'), render: (c) => <StatusBadge tone={c.kind === 'impregnation' ? 'primary' : 'neutral'}>{t(`care.kinds.${c.kind}`)}</StatusBadge> },
               { key: 'place', header: t('care.place'), render: (c) => c.place },
               { key: 'notes', header: t('items.notes'), render: (c) => c.notes },
               { key: 'by', header: t('items.recordedBy'), render: (c) => c.recordedBy },
+              { key: 'cancel', header: '', export: false, render: (c) => cancel(c, `clothing/care/${c.id}`) },
             ]}
           />
         </Panel>
@@ -127,10 +158,11 @@ export function ItemPage() {
             rowKey={(i) => i.id}
             empty={t('inspections.empty')}
             columns={[
-              { key: 'date', header: t('care.date'), render: (i) => formatDate(i.date, i18n.language) },
+              { key: 'date', header: t('care.date'), render: (i) => <Cancelled entry={i}>{formatDate(i.date, i18n.language)}</Cancelled> },
               { key: 'passed', header: t('inspections.result'), render: (i) => <StatusBadge tone={i.passed ? 'done' : 'error'}>{t(i.passed ? 'inspections.passed' : 'inspections.failed')}</StatusBadge> },
               { key: 'inspector', header: t('inspections.inspector'), render: (i) => i.inspector },
               { key: 'notes', header: t('items.notes'), render: (i) => i.notes },
+              { key: 'cancel', header: '', export: false, render: (i) => cancel(i, `clothing/inspections/${i.id}`) },
             ]}
           />
         </Panel>
@@ -141,27 +173,30 @@ export function ItemPage() {
           rowKey={(h) => h.id}
           empty={t('history.empty')}
           columns={[
-            { key: 'date', header: t('care.date'), render: (h) => formatDate(h.date, i18n.language) },
-            { key: 'kind', header: t('history.kind'), render: (h) => t(`history.kinds.${h.kind}`) },
-            { key: 'person', header: t('history.person'), render: (h) => personName(h.personId) },
+            { key: 'date', header: t('care.date'), render: (h) => <Cancelled entry={h}>{formatDate(h.date, i18n.language)}</Cancelled> },
+            { key: 'kind', header: t('history.kind'), render: (h) => <HistoryKind record={h} /> },
+            { key: 'person', header: t('history.person'), render: (h) => <PersonLink id={h.personId} name={personName(h.personId)} /> },
             { key: 'notes', header: t('items.notes'), render: (h) => h.notes },
             { key: 'by', header: t('items.recordedBy'), render: (h) => h.recordedBy },
+            { key: 'cancel', header: '', export: false, render: (h) => h.id === lastRecord && cancel(h, `clothing/issues/${h.id}`) },
           ]}
         />
       </Panel>
 
       {dialog === 'issue' && (
-        <ResponsiveDialog opened onClose={close} title={t('items.issue')} actions={actions(() => issue.mutate(undefined), issue.isPending, Boolean(value('person')))}>
+        <ResponsiveDialog opened onClose={close} title={t('items.issue')} actions={actions(() => issue.mutate(undefined), issue.isPending, Boolean(value('person')) && (!overdue || flag))}>
           <Stack gap="sm">
             <Select
               label={t('history.person')}
-              data={persons.filter((p) => p.status !== 'left' && !p.restricted).map((p) => ({ value: p.id, label: `${p.lastName}, ${p.firstName}` }))}
+              data={persons.filter((p) => p.status !== 'left' && p.status !== 'veterans' && !p.restricted).map((p) => ({ value: p.id, label: `${p.lastName}, ${p.firstName}` }))}
               value={value('person') || null}
               onChange={(v) => setValue('person', v)}
               searchable
               required
             />
+            {recipient && (recipient.status === 'passive' || recipient.status === 'youth') && <Notice kind="warning">{t(`issue.personStatus.${recipient.status}`)}</Notice>}
             {date(t('items.issuedOn'))}
+            {overdue && <Checkbox color="orange" label={t('issue.acceptOverdue', { numbers: item.inventoryNumber })} checked={flag} onChange={(e) => setFlag(e.currentTarget.checked)} />}
             {notes}
           </Stack>
         </ResponsiveDialog>
@@ -171,7 +206,12 @@ export function ItemPage() {
           <Stack gap="sm">
             <Text size="sm">{t('items.returnText', { name: personName(item.holderId) })}</Text>
             {date(t('items.returnedOn'))}
-            <Checkbox label={t('items.retireOnReturn')} description={t('items.retireOnReturnHint')} checked={flag} onChange={(e) => setFlag(e.currentTarget.checked)} />
+            <SegmentedControl
+              value={value('to', 'stock')}
+              onChange={(v) => setValue('to', v)}
+              data={(['stock', 'laundry', 'retire'] as const).filter((d) => d !== 'laundry' || article?.textile).map((d) => ({ value: d, label: t(`returns.dispositions.${d}`) }))}
+            />
+            <Text size="xs" c="dimmed">{t('returns.hint')}</Text>
             {notes}
           </Stack>
         </ResponsiveDialog>
@@ -192,6 +232,7 @@ export function ItemPage() {
           <Stack gap="sm">
             {date(t('care.date'))}
             <Checkbox label={t('inspections.passed')} checked={flag} onChange={(e) => setFlag(e.currentTarget.checked)} />
+            <Text size="xs" c="dimmed">{t('inspections.failedHint')}</Text>
             <TextInput label={t('inspections.inspector')} value={value('inspector')} onChange={(e) => setValue('inspector', e.currentTarget.value)} />
             {notes}
           </Stack>

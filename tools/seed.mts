@@ -671,7 +671,9 @@ async function clothing(persons: PersonRef[]): Promise<void> {
   for (const article of articles) {
     if (!sizes[article.key] || (article['sizes'] as string[]).length) continue;
     const { id: _id, version: _version, ...input } = article;
-    await call('PUT', `clothing/articles/${article.id}`, { ...input, sizes: sizes[article.key] });
+    // Minimum stock for the common garment sizes.
+    const minimumStock = ['jacket', 'trousers'].includes(article.key) ? { '50': 2, '52': 2, '54': 2 } : {};
+    await call('PUT', `clothing/articles/${article.id}`, { ...input, sizes: sizes[article.key], minimumStock });
   }
 
   // Operational departments as they are in the instance (also when it holds other data than this script's).
@@ -693,6 +695,11 @@ async function clothing(persons: PersonRef[]): Promise<void> {
     return { id: created.id, articleKey, departmentId };
   };
 
+  // Consumables received into the store (counter: received minus handed out).
+  for (const [articleKey, articleSizes] of [['gloves', sizes.gloves], ['cap', ['']], ['t-shirt', sizes['t-shirt']], ['hood', ['']]] as const) {
+    for (const size of articleSizes) await call('POST', 'clothing/consumables/receipts', { articleKey, size, quantity: between(15, 40), date: daysAgo(1600), notes: 'Erstausstattung' });
+  }
+
   const issued: Piece[] = [];
   let consumables = 0;
   let replaced = 0;
@@ -701,18 +708,20 @@ async function clothing(persons: PersonRef[]): Promise<void> {
     const garmentSize = pick(garment.slice(2, 9));
     const kit: [string, string][] = [['jacket', garmentSize], ['trousers', garmentSize], ['boots', pick(sizes.boots.slice(2, 9))], ['helmet', pick(sizes.helmet)]];
     if (person.qualifications.includes('breathing-apparatus')) kit.push(['breathing-apparatus-trousers', pick(sizes['breathing-apparatus-trousers'])]);
+    // Size profile of the person, preselecting the stock at the issue desk.
+    await call('PUT', `clothing/persons/${person.id}/sizes`, { sizes: Object.fromEntries(kit) });
     for (const [articleKey, size] of kit) {
       // Some members had a worn piece replaced: the old one was taken back and retired.
       if (articleKey !== 'helmet' && chance(0.12)) {
         const old = await create(articleKey, departmentId, size, isoDate(new Date(between(2012, 2016), between(0, 11), between(1, 28))));
         const issuedOn = later('2016-01-01');
-        await call('POST', `clothing/items/${old.id}/issue`, { personId: person.id, date: issuedOn });
+        await call('POST', `clothing/items/${old.id}/issue`, { personId: person.id, date: issuedOn, acceptOverdueInspection: true });
         await call('POST', `clothing/items/${old.id}/return`, { date: later(issuedOn), retire: true, notes: pick(['verschlissen', 'Riss im Obermaterial', 'Reflexstreifen beschädigt', 'zu klein']) });
         replaced++;
       }
       const purchasedOn = purchase();
       const piece = await create(articleKey, departmentId, size, purchasedOn);
-      await call('POST', `clothing/items/${piece.id}/issue`, { personId: person.id, date: later(purchasedOn) });
+      await call('POST', `clothing/items/${piece.id}/issue`, { personId: person.id, date: later(purchasedOn), acceptOverdueInspection: true });
       issued.push(piece);
     }
     // Consumables: gloves now and then, a cap and T-shirts, hoods for breathing apparatus wearers.

@@ -6,7 +6,7 @@ import { DataTable, PageHeader, ResponsiveDialog, StatusBadge, useAction } from 
 import { keys, useArticles } from '../api';
 
 type Form = Required<ArticleInput>;
-const empty: Form = { key: '', name: { de: '', en: '' }, kind: 'inventory', sizes: [], textile: false, impregnationMonths: null, inspectionMonths: null, active: true, sortOrder: 0 };
+const empty: Form = { key: '', name: { de: '', en: '' }, kind: 'inventory', sizes: [], textile: false, impregnationMonths: null, inspectionMonths: null, active: true, sortOrder: 0, minimumStock: {} };
 
 function ArticleDialog({ article, onClose }: { article?: Article; onClose: () => void }) {
   const { t } = useTranslation('clothing');
@@ -61,7 +61,23 @@ function ArticleDialog({ article, onClose }: { article?: Article; onClose: () =>
             <NumberInput label={t('articles.inspectionMonths')} description={t('articles.emptyNone')} value={form.inspectionMonths ?? ''} onChange={(v) => set('inspectionMonths', v === '' ? null : Number(v))} min={1} max={120} />
           </>
         )}
-        <Switch label={t('articles.active')} checked={form.active} onChange={(e) => set('active', e.currentTarget.checked)} mt="md" />
+        <Switch label={t('articles.active')} description={t('articles.activeHint')} checked={form.active} onChange={(e) => set('active', e.currentTarget.checked)} mt="md" />
+        <Stack gap={4} style={{ gridColumn: '1 / -1' }}>
+          <Text size="sm" fw={500}>{t('articles.minimumStock')}</Text>
+          <Text size="xs" c="dimmed">{t('articles.minimumStockHint')}</Text>
+          <SimpleGrid cols={{ base: 3, sm: 6 }}>
+            {(form.sizes.length ? form.sizes : ['']).map((size) => (
+              <NumberInput
+                key={size}
+                label={size || t('articles.noSize')}
+                min={0}
+                max={10_000}
+                value={form.minimumStock[size] ?? ''}
+                onChange={(v) => set('minimumStock', { ...form.minimumStock, [size]: v === '' ? 0 : Number(v) })}
+              />
+            ))}
+          </SimpleGrid>
+        </Stack>
       </SimpleGrid>
     </ResponsiveDialog>
   );

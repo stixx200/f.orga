@@ -23,16 +23,36 @@ export const ArticleInput = z.object({
   impregnationMonths: z.number().int().min(1).max(120).nullable().default(null),
   /** Inspection every this many months; `null` = none. */
   inspectionMonths: z.number().int().min(1).max(120).nullable().default(null),
+  /** Inactive articles are no longer issued. */
   active: z.boolean().default(true),
   sortOrder: z.number().int().default(0),
+  /** Minimum stock per size (`''` for articles without sizes); below it the stock list shows a reorder hint. */
+  minimumStock: z.record(z.string(), z.number().int().min(0).max(10_000)).default({}),
 });
 export type ArticleInput = z.input<typeof ArticleInput>;
 
-export const Article = ArticleInput.extend({ id: z.uuid(), sizes: z.array(z.string()), textile: z.boolean(), impregnationMonths: z.number().nullable(), inspectionMonths: z.number().nullable(), active: z.boolean(), sortOrder: z.number(), version: z.number() });
+export const Article = ArticleInput.extend({
+  id: z.uuid(),
+  sizes: z.array(z.string()),
+  textile: z.boolean(),
+  impregnationMonths: z.number().nullable(),
+  inspectionMonths: z.number().nullable(),
+  active: z.boolean(),
+  sortOrder: z.number(),
+  minimumStock: z.record(z.string(), z.number()),
+  version: z.number(),
+});
 export type Article = z.infer<typeof Article>;
 
 export const ItemStatus = z.enum(['stock', 'issued', 'retired']);
 export type ItemStatus = z.infer<typeof ItemStatus>;
+
+/**
+ * Why a piece may not be issued: `inspection` = the last inspection failed (to repair, until an inspection is passed),
+ * `laundry` = taken back for washing (e.g. contaminated after a fire), until a washing is recorded.
+ */
+export const ItemBlock = z.enum(['inspection', 'laundry']);
+export type ItemBlock = z.infer<typeof ItemBlock>;
 
 /** A piece of an inventory article. */
 export const ItemInput = z.object({
@@ -74,10 +94,28 @@ export const Item = z.object({
   /** Next impregnation per article interval; `null` = not required. */
   impregnationDueOn: z.string().nullable(),
   lastInspectedOn: z.string().nullable(),
+  /** Result of the last inspection; `null` = none yet. */
+  lastInspectionPassed: z.boolean().nullable(),
+  /** Counts from the last passed inspection: a failed one does not restart the interval. */
   inspectionDueOn: z.string().nullable(),
+  /** Empty = may be issued (when in stock). */
+  blockedBy: z.array(ItemBlock),
   version: z.number(),
 });
 export type Item = z.infer<typeof Item>;
+
+/** Wrong entries are cancelled with a reason instead of deleted; they stay visible, crossed out. */
+export const CancelInput = z.object({ reason: z.string().trim().min(3).max(500) });
+export type CancelInput = z.input<typeof CancelInput>;
+
+const recorded = {
+  recordedBy: z.string(),
+  /** User who recorded the entry; they (or someone with `clothing.manage`) may cancel it. */
+  recordedById: z.string().nullable(),
+  cancelledAt: z.string().nullable(),
+  cancelledBy: z.string().nullable(),
+  cancelReason: z.string(),
+};
 
 /** Impregnating always includes washing. */
 export const CareKind = z.enum(['wash', 'impregnation']);
@@ -93,13 +131,21 @@ export const CareInput = z.object({
 });
 export type CareInput = z.input<typeof CareInput>;
 
-export const Care = z.object({ id: z.uuid(), itemId: z.uuid(), kind: CareKind, date: z.string(), place: z.string(), notes: z.string(), recordedBy: z.string() });
+export const Care = z.object({ id: z.uuid(), itemId: z.uuid(), kind: CareKind, date: z.string(), place: z.string(), notes: z.string(), ...recorded });
 export type Care = z.infer<typeof Care>;
 
 export const InspectionInput = z.object({ date, passed: z.boolean(), inspector: text, notes: text });
 export type InspectionInput = z.input<typeof InspectionInput>;
 
-export const Inspection = z.object({ id: z.uuid(), itemId: z.uuid(), date: z.string(), passed: z.boolean(), inspector: z.string(), notes: z.string(), recordedBy: z.string() });
+/** Inspections of several pieces on one day, one result per piece (e.g. the yearly inspection of all jackets). */
+export const InspectionsInput = z.object({
+  date,
+  inspector: text,
+  results: z.array(z.object({ itemId: z.uuid(), passed: z.boolean(), notes: text })).min(1).max(1000),
+});
+export type InspectionsInput = z.input<typeof InspectionsInput>;
+
+export const Inspection = z.object({ id: z.uuid(), itemId: z.uuid(), date: z.string(), passed: z.boolean(), inspector: z.string(), notes: z.string(), ...recorded });
 export type Inspection = z.infer<typeof Inspection>;
 
 /** Handing out consumables (not assigned; only recorded in the person's history). */
@@ -113,13 +159,31 @@ export const ConsumableIssueInput = z.object({
 });
 export type ConsumableIssueInput = z.input<typeof ConsumableIssueInput>;
 
-/** Assigning an inventory piece to a person. */
-export const ItemIssueInput = z.object({ personId: z.uuid(), date, notes: text });
+/**
+ * Assigning an inventory piece to a person. A piece whose inspection is overdue is only issued with
+ * `acceptOverdueInspection`.
+ */
+export const ItemIssueInput = z.object({ personId: z.uuid(), date, notes: text, acceptOverdueInspection: z.boolean().default(false) });
 export type ItemIssueInput = z.input<typeof ItemIssueInput>;
 
-/** Taking a piece back; `retire` takes it out of use (worn out, damaged). */
-export const ItemReturnInput = z.object({ date, notes: text, retire: z.boolean().default(false) });
+/** Several pieces to one person in one step (complete outfitting); all or none are issued. */
+export const IssueManyInput = ItemIssueInput.extend({ itemIds: z.array(z.uuid()).min(1).max(100) });
+export type IssueManyInput = z.input<typeof IssueManyInput>;
+
+/**
+ * Taking a piece back; `retire` takes it out of use (worn out, damaged), `laundry` keeps it from being issued until a
+ * washing is recorded (e.g. contaminated after a fire).
+ */
+export const ItemReturnInput = z.object({ date, notes: text, retire: z.boolean().default(false), laundry: z.boolean().default(false) });
 export type ItemReturnInput = z.input<typeof ItemReturnInput>;
+
+/** Several pieces back in one step (e.g. everything a person holds), each into stock, to the laundry or retired. */
+export const ReturnManyInput = z.object({
+  date,
+  notes: text,
+  items: z.array(z.object({ itemId: z.uuid(), retire: z.boolean().default(false), laundry: z.boolean().default(false) })).min(1).max(100),
+});
+export type ReturnManyInput = z.input<typeof ReturnManyInput>;
 
 export const IssueKind = z.enum(['issue', 'return']);
 export type IssueKind = z.infer<typeof IssueKind>;
@@ -136,13 +200,50 @@ export const IssueRecord = z.object({
   quantity: z.number(),
   date: z.string(),
   notes: z.string(),
-  recordedBy: z.string(),
+  /** Return: taken out of use, or to the laundry. */
+  retire: z.boolean(),
+  laundry: z.boolean(),
+  ...recorded,
 });
 export type IssueRecord = z.infer<typeof IssueRecord>;
 
-/** Person file tab: pieces held now and the history of issues and returns. */
-export const PersonClothing = z.object({ items: z.array(Item), history: z.array(IssueRecord) });
+/** Clothing sizes of a person by article key (e.g. `jacket: '52'`); preselects the stock when issuing. */
+export const SizeProfile = z.record(z.string(), z.string().trim().max(20));
+export type SizeProfile = z.infer<typeof SizeProfile>;
+
+export const SizeProfileInput = z.object({ sizes: SizeProfile });
+export type SizeProfileInput = z.input<typeof SizeProfileInput>;
+
+/** Person file tab: pieces held now, the history of issues and returns, and the sizes. */
+export const PersonClothing = z.object({ items: z.array(Item), history: z.array(IssueRecord), sizes: SizeProfile });
 export type PersonClothing = z.infer<typeof PersonClothing>;
+
+/** Consumables received into the store (or a correction after counting, with a negative quantity). */
+export const ConsumableReceiptInput = z.object({
+  articleKey: z.string().min(1),
+  size: text,
+  quantity: z.number().int().min(-10_000).max(10_000).refine((q) => q !== 0),
+  date,
+  notes: text,
+});
+export type ConsumableReceiptInput = z.input<typeof ConsumableReceiptInput>;
+
+/**
+ * Stock of one article in one size. Inventory articles: pieces of the visible departments in stock (`available` may
+ * be issued, `blocked` are to repair or to wash) and issued. Consumables: received minus handed out (`available`).
+ */
+export const StockRow = z.object({
+  articleKey: z.string(),
+  kind: ArticleKind,
+  size: z.string(),
+  available: z.number(),
+  blocked: z.number(),
+  issued: z.number(),
+  minimum: z.number().nullable(),
+  /** Below the minimum stock. */
+  reorder: z.boolean(),
+});
+export type StockRow = z.infer<typeof StockRow>;
 
 export const ItemDetail = Item.extend({ care: z.array(Care), inspections: z.array(Inspection), history: z.array(IssueRecord) });
 export type ItemDetail = z.infer<typeof ItemDetail>;
@@ -167,8 +268,8 @@ export interface UsagePeriod {
 /**
  * Next impregnation and inspection of a piece. Washing and impregnation are only needed for pieces in use: the
  * interval counts the time issued since the last impregnation (else since the first issue); time in stock does not
- * count, and a piece in stock has no due date. Inspections count from the last one, else from the purchase or the day
- * the piece was recorded.
+ * count, and a piece in stock has no due date. Inspections count from the last passed one (passed as
+ * `lastInspectedOn`), else from the purchase or the day the piece was recorded.
  */
 export function dueDates(
   article: Pick<Article, 'impregnationMonths' | 'inspectionMonths'>,
@@ -192,14 +293,20 @@ export function dueDates(
   };
 }
 
-/** Periods in use from the issue and return records of a piece (in any order). */
-export function usagePeriods(records: { kind: IssueKind; date: string }[]): UsagePeriod[] {
+/**
+ * Periods in use from the issue and return records of a piece (in any order). `issuedOn` is the current issue of a
+ * piece that is issued now: the last period stays open from there even if the records are inconsistent (e.g. an issue
+ * dated before the last return), so an issued piece always has a due date.
+ */
+export function usagePeriods(records: { kind: IssueKind; date: string }[], issuedOn: string | null = null): UsagePeriod[] {
   const periods: UsagePeriod[] = [];
   for (const record of records.toSorted((a, b) => a.date.localeCompare(b.date) || (a.kind === 'return' ? -1 : 1))) {
     const open = periods.at(-1);
     if (record.kind === 'issue' && (!open || open.to !== null)) periods.push({ from: record.date, to: null });
     else if (record.kind === 'return' && open && open.to === null) open.to = record.date;
   }
+  const last = periods.at(-1);
+  if (issuedOn && (!last || last.to !== null)) periods.push({ from: last?.to && last.to > issuedOn ? last.to : issuedOn, to: null });
   return periods;
 }
 
