@@ -9,7 +9,7 @@ COPY tools tools
 COPY nx.json tsconfig.base.json tsconfig.json jest.preset.js jest.config.ts ./
 RUN npm ci --no-audit --no-fund
 ENV NX_DAEMON=false NX_NO_CLOUD=true
-RUN npx nx run-many -t build -p shell masterdata-web incidents-web training-web respiratory-protection-web compensation-web equipment-web cost-recovery-web promotions-web \
+RUN npx nx run-many -t build -p shell masterdata-web incidents-web training-web respiratory-protection-web compensation-web equipment-web cost-recovery-web promotions-web clothing-web \
  && npx nx run @forga/server:prune
 RUN mkdir -p /web/modules \
  && cp -r apps/shell/dist /web/shell \

@@ -441,6 +441,7 @@ Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elt
 | --- | --- |
 | `PERSON_DIRECTORY` | `search`, `snapshots(ids, date)` mit Abteilungen, gültigen Qualifikationen, Dienstgrad, Geschlecht, Beschäftigung, Musiker und Führerscheinklassen zum Stichtag, `findByPersonnelNumber`, `memberPeriods` (Name und Mitgliedschaftszeiträume aller Personen, mit `membersOnDate` für Importe über viele Tage), `membersOn(date)` (alle Personen mit Mitgliedschaft am Tag), `careers(ids?)` (mit Ämtern), `offices({ offices? })` (Inhaber von Ämtern mit Zeitraum) |
 | `ORGANIZATION` | `departments`, `stations`, `vehicles` |
+| `PERSON_HOLDINGS` | `register(module, count(personId))`: andere Module melden, was eine Person noch hält (z. B. Schutzausrüstung); Austritt und Übernahme in die Altersabteilung lehnen dann mit `masterdata.personHoldsItems` ab |
 
 ## Modul Einsatzberichte (`incidents`)
 
@@ -857,6 +858,32 @@ Benötigt `masterdata`. Das System schlägt vor, wer zum Stichtag die Voraussetz
 **Schnittstelle:** `GET /api/promotions/candidates?on`, `GET /api/promotions/persons/:id` (Dienstgrad, nächste Beförderung mit Erklärung, Listen), `GET|POST /api/promotions/lists`, `GET|PUT|DELETE …/lists/:id`, `POST …/lists/:id/(refresh|decide|reopen|execute)`, `PUT|DELETE …/lists/:id/entries/:personId`, `POST …/lists/:id/entries` (außerhalb der Regel), `GET …/lists/:id/certificates.pdf?personId`, Ausschlüsse `GET|POST /api/promotions/exclusions`, `PUT|DELETE …/exclusions/:id`. Rechte: `read` und `propose` je Abteilung, `decide`, `exclude` und `settings.manage` für die Gesamtwehr. Den Grund eines Ausschlusses sieht nur, wer `promotions.exclude` hat.
 
 **Listen:** Beförderungsvorschau zum Stichtag (erfüllt und demnächst); Beförderungsliste (`promotions.list`, `listId`, optional `departmentId`) mit Dienstgrad, Ziel, Grundlage (Beschreibung der Regel bzw. „außerhalb der Regel“), Entscheidung und Bemerkung, gesamt oder je Abteilung, als PDF oder Excel.
+
+## Modul Kleiderkammer (`clothing`)
+
+Verwaltet die persönliche Schutzausrüstung (PSA). Backend `modules/clothing/clothing-api`, Oberfläche `clothing-web`, Verträge `clothing-contracts`.
+
+**Rechte:** `clothing.read` (einsehen), `clothing.issue` (ausgeben, zurücknehmen, Wäsche und Prüfungen erfassen), `clothing.manage` (Stücke anlegen, ändern, aussondern; der Artikelkatalog braucht das Recht für die Gesamtwehr), alle abteilungsbezogen, und `clothing.self` (eigene Ausrüstung in „Mein Bereich“). Rollenvorlage „Kleiderwart“ (`clothing-officer`) mit `clothing.*` und `masterdata.persons.read`.
+
+**Artikel** (`ArticleEntity`, `article`, historisiert): Schlüssel, Name, Art und Größen.
+- `consumable` (z. B. Mütze, Handschuhe): wird nur abgegeben, nicht zugeordnet; die Abgabe steht im Verlauf der Person.
+- `inventory` (z. B. Einsatzjacke, Hose, Atemschutz-Überhose, Stiefel, Helm): Einzelstücke mit Inventarnummer, einer Person zugeordnet.
+- Inventarisierte Artikel können Textil sein (`textile`: Wäsche wird erfasst) mit Imprägnier-Intervall (`impregnationMonths`) und ein Prüfintervall haben (`inspectionMonths`).
+- Vorlage `ARTICLE_TEMPLATE` (Einsatzjacke und -hose 12 Monate Imprägnieren und Prüfen, Atemschutz-Überhose, Stiefel, Helm, Flammschutzhaube, Handschuhe, Mütze, T-Shirt), ergänzt nur fehlende Schlüssel.
+
+**Stücke** (`ClothingItemEntity`, `item`, historisiert): Artikel, Inventarnummer (eindeutig), Größe, Hersteller, Seriennummer, Anschaffung, Kleiderkammer der Abteilung, Status `stock`/`issued`/`retired`, Träger und Ausgabedatum.
+
+**Ausgabe und Rücknahme** (`IssueEntity`, `issue`): Jede Ausgabe (Stück oder Verbrauchsartikel mit Größe und Anzahl) und jede Rücknahme ist ein Eintrag im Verlauf der Person mit Datum, Bemerkung und Erfasser. Ausgeben darf, wer `clothing.issue` für die Kleiderkammer des Stücks und für eine Abteilung der Person hat; an Ausgeschiedene wird nichts ausgegeben. Bei der Rücknahme kann das Stück direkt ausgesondert werden.
+
+**Wäsche** (`CareEntity`, `care`): Waschen oder Imprägnieren (schließt Waschen ein) mit Datum und Ort, für mehrere Textil-Stücke auf einmal. Fällig ist das Imprägnieren `impregnationMonths` nach dem letzten Imprägnieren, ohne eines nach der Anschaffung (sonst nach der Erfassung); Waschen dazwischen ist beliebig oft möglich und ändert die Frist nicht.
+
+**Prüfungen** (`ClothingInspectionEntity`, `inspection`): Datum, bestanden, Prüfer; fällig `inspectionMonths` nach der letzten Prüfung (sonst nach der Anschaffung).
+
+**Austritt:** Die Kleiderkammer meldet sich beim `PERSON_HOLDINGS` der Stammdaten. Solange einer Person Stücke zugeordnet sind, lehnen Austritt und Übernahme in die Altersabteilung mit `masterdata.personHoldsItems` (409) ab.
+
+**Oberfläche:** Schutzausrüstung (Bestand mit Filtern, Fristen farbig), Stück (Stammdaten, Ausgabe, Rücknahme, Wäsche, Prüfung, Verlauf), Ausgabe (Person wählen: Stück aus dem Lager ausgeben, Verbrauchsartikel abgeben, zurücknehmen, Verlauf), Wäsche (mehrere Stücke, „Fällige auswählen“), Verwaltung → Kleiderkammer (Artikel, Vorlage). Reiter „Kleiderkammer“ in der Personalakte und „Meine Schutzausrüstung“ in „Mein Bereich“.
+
+**Fristen:** Imprägnieren und Prüfung je Stück (30 Tage Vorlauf, zuständig `clothing.issue` der Kleiderkammer). **Listen:** ausgegebene Schutzausrüstung, fällige Wäsche und Prüfungen. **Daten:** Suche nach Inventar- und Seriennummer, Vollexport. Abteilungen mit Stücken lassen sich nicht löschen.
 
 ## Mehrsprachigkeit
 

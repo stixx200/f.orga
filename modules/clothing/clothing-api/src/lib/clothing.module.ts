@@ -1,0 +1,49 @@
+import { Inject, Module, type OnModuleInit } from '@nestjs/common';
+import { EntityManager } from '@mikro-orm/core';
+import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
+import { CLOTHING_MANIFEST } from '@forga/clothing-contracts';
+import { ORGANIZATION_REFERENCES, type OrganizationReferences, PERSON_HOLDINGS, type PersonHoldings } from '@forga/masterdata-contracts';
+import { CLOTHING_MIGRATIONS } from '../migrations/index.js';
+import { ClothingController } from './clothing.controller.js';
+import { ClothingData } from './clothing.data.js';
+import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, IssueEntity } from './clothing.entities.js';
+import { ClothingService, MANAGE, READ } from './clothing.service.js';
+
+@Module({ controllers: [ClothingController], providers: [ClothingService, ClothingData] })
+export class ClothingModule implements OnModuleInit {
+  constructor(
+    private readonly em: EntityManager,
+    private readonly service: ClothingService,
+    private readonly data: ClothingData,
+    private readonly lists: ListRegistry,
+    private readonly deadlines: DeadlineRegistry,
+    private readonly search: SearchRegistry,
+    private readonly exports: ExportRegistry,
+    private readonly historyAccess: HistoryAccessRegistry,
+    @Inject(ORGANIZATION_REFERENCES) private readonly references: OrganizationReferences,
+    @Inject(PERSON_HOLDINGS) private readonly holdings: PersonHoldings,
+  ) {}
+
+  onModuleInit(): void {
+    for (const definition of this.data.lists()) this.lists.register('clothing', definition);
+    this.deadlines.register(this.data);
+    this.search.register('clothing', (user, query) => this.data.search(user, query));
+    this.exports.register('clothing', { all: () => this.data.exportAll() });
+    this.historyAccess.register('clothing.item', async (user, id) => {
+      const item = await this.em.fork().findOne(ClothingItemEntity, id);
+      return { allowed: Boolean(item) && user.can(READ, item!.departmentId) };
+    });
+    this.historyAccess.registerPermission('clothing.article', MANAGE);
+    // Leaving the brigade or moving to the veterans: no protective equipment may still be assigned.
+    this.holdings.register('clothing', (personId) => this.service.held(personId));
+    this.references.register('clothing', (kind, id) => (kind === 'department' ? this.data.countDepartment(id) : Promise.resolve(0)));
+  }
+}
+
+export const clothingModule = defineModule({
+  manifest: CLOTHING_MANIFEST,
+  nestModule: ClothingModule,
+  entities: [ArticleEntity, ClothingItemEntity, IssueEntity, CareEntity, ClothingInspectionEntity],
+  historized: [ArticleEntity, ClothingItemEntity],
+  migrations: CLOTHING_MIGRATIONS,
+});

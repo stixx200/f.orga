@@ -176,6 +176,21 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Audit-Log | audit (`core.audit`) |
 | Kern (Shell-Backend) | core |
 
+### Kleiderkammer
+
+| Fachbegriff | Code |
+| --- | --- |
+| Persönliche Schutzausrüstung (PSA) | protective equipment |
+| Artikel (Einsatzjacke, Handschuhe …) | `Article` (`ArticleEntity`) |
+| inventarisierter Artikel / Verbrauchsartikel | `kind: 'inventory'` / `kind: 'consumable'` |
+| Stück (mit Inventarnummer) | `Item` (`ClothingItemEntity`) |
+| Träger | `holderId` |
+| Ausgabe / Rücknahme | issue / return (`IssueEntity`, `kind`) |
+| Waschen / Imprägnieren | care `wash` / `impregnation` (`CareEntity`) |
+| Aussondern | retire (`status: 'retired'`) |
+| Kleiderwart | Rollenvorlage `clothing-officer` |
+| Was eine Person noch hält | `PERSON_HOLDINGS` (Stammdaten-Vertrag) |
+
 ### Modul-IDs
 
 Die Modul-ID ist zugleich das Präfix der Berechtigungen und der Pfad in API und Oberfläche. Das Datenbankschema heißt wie die ID, mit `_` statt `-`.
@@ -191,3 +206,4 @@ Die Modul-ID ist zugleich das Präfix der Berechtigungen und der Pfad in API und
 | Geräte | `equipment` |
 | Kostenersatz | `cost-recovery` |
 | Beförderungen | `promotions` |
+| Kleiderkammer | `clothing` |

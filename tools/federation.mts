@@ -27,6 +27,7 @@ export const MODULE_PORTS: Record<string, number> = {
   equipment: 4206,
   'cost-recovery': 4207,
   promotions: 4208,
+  clothing: 4209,
 };
 
 export const SERVER_PORT = 3000;

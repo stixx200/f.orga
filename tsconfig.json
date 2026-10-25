@@ -65,6 +65,12 @@
     },
     {
       "path": "./modules/training/training-api"
+    },
+    {
+      "path": "./modules/clothing/clothing-contracts"
+    },
+    {
+      "path": "./modules/clothing/clothing-api"
     }
   ],
   "compilerOptions": {}
