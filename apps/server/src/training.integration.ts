@@ -1,5 +1,8 @@
+import { createHmac } from 'node:crypto';
+import { EntityManager } from '@mikro-orm/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Attachments, DomainEvents } from '@forga/core-api';
+import { SessionEntity } from '@forga/training-api';
 import { type SessionClosedEvent, TRAINING_EVENTS } from '@forga/training-contracts';
 import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
 
@@ -118,14 +121,63 @@ describe('training sessions', () => {
     await post('/training/check-in', { code: 'falscher-code' }, leader).expect(404);
     await post('/training/check-in', { code }).expect(400);
 
-    // Saving the list again keeps the check-in and updates the row in place.
+    // A list loaded before the check-in does not overwrite it: the check-in stays unconfirmed.
+    const stale = await put(`/training/sessions/${ids.session}/attendance`, [
+      { personId: ids.jonas, status: 'present' },
+      { personId: ids.max, status: 'excused' },
+    ], leader).expect(200);
+    expect(stale.body.attendance.find((a: { personId: string }) => a.personId === ids.max)).toMatchObject({ status: 'present', confirmed: false });
+    await put(`/training/sessions/${ids.session}/attendance`, [{ personId: ids.jonas, status: 'present' }], leader).expect(200);
+    expect((await get(`/training/sessions/${ids.session}`)).body.attendance.some((a: { personId: string }) => a.personId === ids.max)).toBe(true);
+
+    // Saving the list with the check-in known confirms it and updates the row in place.
+    const checkedInAt = session.attendance.find((a: { personId: string }) => a.personId === ids.max).checkedInAt;
     const saved = await put(`/training/sessions/${ids.session}/attendance`, [
       { personId: ids.jonas, status: 'present' },
-      { personId: ids.max, status: 'present', breathingApparatus: true },
+      { personId: ids.max, status: 'present', breathingApparatus: true, checkedInAt },
     ], leader).expect(200);
     const max = saved.body.attendance.find((a: { personId: string }) => a.personId === ids.max);
     expect(max).toMatchObject({ status: 'present', breathingApparatus: true, confirmed: true });
     expect(max.checkedInAt).not.toBeNull();
+  });
+
+  it('rotates the check-in code and admits only members of the session', async () => {
+    const shown = (await get(`/training/sessions/${ids.session}/check-in`, leader).expect(200)).body;
+    expect(shown).toMatchObject({ checkedIn: 1 });
+    expect(new Date(shown.rotatesAt).getTime() - Date.now()).toBeLessThanOrEqual(60_000);
+    // A code of three minutes ago (e.g. a photo of the QR code) no longer works; a forged one neither.
+    const secret = (await test.app.get(EntityManager).fork().findOneOrFail(SessionEntity, ids.session)).checkInSecret!;
+    const period = Math.floor(Date.now() / 60_000) - 3;
+    const old = `${ids.session}.${createHmac('sha256', secret).update(`${ids.session}:${period}`).digest('base64url').slice(0, 22)}`;
+    expect((await post('/training/check-in', { code: old }, leader).expect(400)).body).toMatchObject({ code: 'training.codeExpired' });
+    await post('/training/check-in', { code: `${ids.session}.AAAAAAAAAAAAAAAAAAAAAA` }, leader).expect(400);
+
+    // Lena belongs to another department and is not invited.
+    const roles = (await get('/core/roles')).body as { id: string; templateKey: string }[];
+    const member = roles.find((r) => r.templateKey === 'member')!.id;
+    await post('/core/users', { username: 'lena', displayName: 'Lena', password: 'auch-sehr-geheim', personId: ids.lena, roles: [{ roleId: member, departmentId: ids.ahornfeld }] }).expect(201);
+    const lena = await test.login({ username: 'lena', password: 'auch-sehr-geheim' });
+    expect((await post('/training/check-in', { code: shown.code }, lena).expect(403)).body).toMatchObject({ code: 'training.notInvited' });
+  });
+
+  it('checks the times of the attendance and records it only once the session began', async () => {
+    const start = new Date(Date.now() - 30 * 60_000);
+    const time = (minutes: number) => new Date(start.getTime() + minutes * 60_000).toISOString();
+    const session = (await post('/training/sessions', { type: 'exercise', title: 'Zeiten', startsAt: start.toISOString(), endsAt: time(120), departmentIds: [ids.musterstadt] }).expect(201)).body.id;
+    const attend = (row: Record<string, unknown>) => put(`/training/sessions/${session}/attendance`, [{ personId: ids.jonas, status: 'present', ...row }], leader);
+    expect((await attend({ from: time(60), to: time(30) }).expect(400)).body).toMatchObject({ code: 'training.attendanceEndBeforeStart', personId: ids.jonas });
+    expect((await attend({ from: time(-300) }).expect(400)).body).toMatchObject({ code: 'training.attendanceOutsideSession' });
+    expect((await attend({ to: time(-10) }).expect(400)).body).toMatchObject({ code: 'training.attendanceEndBeforeStart' });
+    await attend({ from: time(-30), to: time(150) }).expect(200);
+
+    // A session next month: excuses in advance, but no presence and no closing.
+    const later = (await post('/training/sessions', { type: 'exercise', title: 'Später', startsAt: at(60 * 24 * 30), endsAt: at(60 * 24 * 30 + 120), departmentIds: [ids.musterstadt] }).expect(201)).body.id;
+    expect((await put(`/training/sessions/${later}/attendance`, [{ personId: ids.jonas, status: 'present' }], leader).expect(400)).body).toMatchObject({ code: 'training.notStarted' });
+    expect((await put(`/training/sessions/${later}/attendance`, [{ personId: ids.max, status: 'excused' }], leader).expect(200)).body.status).toBe('planned');
+    // Within the check-in time before the start presence may be recorded, closing waits for the start.
+    const soon = (await post('/training/sessions', { type: 'exercise', title: 'Gleich', startsAt: at(10), endsAt: at(130), departmentIds: [ids.musterstadt] }).expect(201)).body.id;
+    await put(`/training/sessions/${soon}/attendance`, [{ personId: ids.jonas, status: 'present' }], leader).expect(200);
+    expect((await post(`/training/sessions/${soon}/close`, {}).expect(409)).body).toMatchObject({ code: 'training.notStarted' });
   });
 
   it('counts own forces injured in training sessions for the annual statistics (F26)', async () => {

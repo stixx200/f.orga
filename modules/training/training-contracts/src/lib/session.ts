@@ -112,8 +112,16 @@ export const AttendanceInput = z.object({
   passed: z.boolean().nullable().default(null),
   /** Own forces injured (annual statistics F26). */
   injured: z.boolean().default(false),
+  /**
+   * QR check-in of the person as the client loaded it. An unconfirmed check-in the client did not know yet (made while
+   * the list was being edited) is kept instead of being overwritten.
+   */
+  checkedInAt: datetime.nullable().default(null),
 });
 export type AttendanceInput = z.input<typeof AttendanceInput>;
+
+/** Attendance may start and end this much outside the session times (e.g. setting up, cleaning up). */
+export const ATTENDANCE_TOLERANCE_MINUTES = 120;
 
 export const Attendance = z.object({
   personId: z.uuid(),
@@ -181,8 +189,21 @@ export const Session = z.object({
 });
 export type Session = z.infer<typeof Session>;
 
-/** Code shown as QR code; valid from shortly before the start until the end of the session. */
-export const CheckIn = z.object({ code: z.string(), validFrom: z.string(), validUntil: z.string() });
+/** A QR check-in code is replaced every this many seconds; a scanned code is accepted for one more period. */
+export const CHECK_IN_ROTATION_SECONDS = 60;
+
+/**
+ * Code shown as QR code. Check-in is open from shortly before the start until the end of the session (`validFrom`,
+ * `validUntil`); the code itself changes every minute (`rotatesAt`), so a photo of it does not work later.
+ */
+export const CheckIn = z.object({
+  code: z.string(),
+  validFrom: z.string(),
+  validUntil: z.string(),
+  rotatesAt: z.string(),
+  /** Persons checked in via QR so far. */
+  checkedIn: z.number(),
+});
 export type CheckIn = z.infer<typeof CheckIn>;
 
 export const TrainingSettings = z.object({

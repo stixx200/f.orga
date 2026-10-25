@@ -43,8 +43,8 @@ export const SessionSchema = defineEntity({
     status: p.string().$type<SessionStatus>().default('planned'),
     closedAt: p.datetime().nullable(),
     closedBy: p.string().nullable(),
-    /** Random code for the QR check-in; created on first request. */
-    checkInCode: p.string().nullable().unique(),
+    /** Random secret for the rotating QR check-in codes of the session; created on first request, never shown. */
+    checkInSecret: p.string().nullable(),
     attendance: () => p.oneToMany(AttendanceEntity).mappedBy('session').orphanRemoval(),
     version: p.integer().version(),
   },

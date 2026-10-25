@@ -1,10 +1,12 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { addBerlinDays, assertVersion, Attachments, type AuthenticatedUser, berlinDate, berlinDayAfter, berlinDayEnd, berlinDayStart, DomainEvents, SettingsService } from '@forga/core-api';
-import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
+import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import {
+  ATTENDANCE_TOLERANCE_MINUTES,
   AttendanceInput,
+  CHECK_IN_ROTATION_SECONDS,
   type CheckIn,
   type Session,
   type SessionClosedEvent,
@@ -31,6 +33,12 @@ type ParsedAttendance = ReturnType<typeof AttendanceInput.parse>;
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 
+/** Number of the current period of the rotating check-in code. */
+const checkInPeriod = (now: Date) => Math.floor(now.getTime() / (CHECK_IN_ROTATION_SECONDS * 1000));
+/** Signature of a check-in code: HMAC of session and period with the session's secret. */
+const checkInSignature = (secret: string, sessionId: string, period: number) => createHmac('sha256', secret).update(`${sessionId}:${period}`).digest('base64url').slice(0, 22);
+const safeEqual = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+
 @Injectable()
 export class SessionsService implements TrainingCasualties {
   constructor(
@@ -39,6 +47,7 @@ export class SessionsService implements TrainingCasualties {
     private readonly settings: SettingsService,
     private readonly attachments: Attachments,
     @Inject(ORGANIZATION) private readonly organization: Organization,
+    @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
   ) {}
 
   /** Sessions of departments the user may read (brigade-wide: all). */
@@ -172,17 +181,26 @@ export class SessionsService implements TrainingCasualties {
     await this.attachments.removeAll('training.session', id);
   }
 
-  /** Replaces the attendance list; a session with attendance counts as held. */
-  async setAttendance(user: AuthenticatedUser, id: string, list: ParsedAttendance[]): Promise<SessionEntity> {
+  /**
+   * Replaces the attendance list; a session with attendance counts as held. Presence is recorded only once the
+   * session has begun (from the opening of the QR check-in), with times inside the session (with a tolerance).
+   * QR check-ins made while the list was being edited are kept: unconfirmed check-ins the client did not know.
+   */
+  async setAttendance(user: AuthenticatedUser, id: string, input: ParsedAttendance[], now = new Date()): Promise<SessionEntity> {
     const em = this.em.fork();
     const session = await this.load(em, id, user);
     if (!this.can(user, ATTENDANCE, session)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [ATTENDANCE] });
     if (session.status === 'closed') throw new ConflictException({ code: 'training.closed' });
-    const ids = list.map((a) => a.personId);
+    const ids = input.map((a) => a.personId);
     if (new Set(ids).size !== ids.length) throw new BadRequestException({ code: 'training.personTwice' });
-    // Update rows in place (keeps their history), remove those no longer listed, add new ones.
+    if (input.some((a) => a.status !== 'excused') && now < (await this.checkInWindow(session)).from) throw new BadRequestException({ code: 'training.notStarted' });
+    for (const a of input.filter((x) => x.status === 'present')) this.assertTimes(session, a);
     const existing = new Map(session.attendance.getItems().map((a) => [a.personId, a]));
-    for (const [personId, row] of existing) if (!ids.includes(personId)) session.attendance.remove(row);
+    const unseen = (row: AttendanceEntity | undefined, a?: ParsedAttendance) =>
+      Boolean(row && !row.confirmed && row.checkedInAt && (!a || !a.checkedInAt || new Date(a.checkedInAt).getTime() !== row.checkedInAt.getTime()));
+    const list = input.filter((a) => !unseen(existing.get(a.personId), a));
+    // Update rows in place (keeps their history), remove those no longer listed, add new ones.
+    for (const [personId, row] of existing) if (!ids.includes(personId) && !unseen(row)) session.attendance.remove(row);
     for (const a of list) {
       const values = {
         status: a.status,
@@ -200,9 +218,20 @@ export class SessionsService implements TrainingCasualties {
       if (row) Object.assign(row, values);
       else session.attendance.add(em.create(AttendanceEntity, { session, personId: a.personId, checkedInAt: null, ...values }));
     }
-    session.status = list.some((a) => a.status === 'present') ? 'held' : 'planned';
+    session.status = session.attendance.getItems().some((a) => a.status === 'present') ? 'held' : 'planned';
     await em.flush();
     return session;
+  }
+
+  /** Own times of a person present: end after start, inside the session give or take the tolerance. */
+  private assertTimes(session: SessionEntity, a: ParsedAttendance): void {
+    const from = a.from ? new Date(a.from) : session.startsAt;
+    const to = a.to ? new Date(a.to) : session.endsAt;
+    if (to <= from) throw new BadRequestException({ code: 'training.attendanceEndBeforeStart', personId: a.personId });
+    const tolerance = ATTENDANCE_TOLERANCE_MINUTES * 60_000;
+    if (from.getTime() < session.startsAt.getTime() - tolerance || to.getTime() > session.endsAt.getTime() + tolerance) {
+      throw new BadRequestException({ code: 'training.attendanceOutsideSession', personId: a.personId });
+    }
   }
 
   /** Closing creates the records and compensation entries in other modules (event `training.session.closed`). */
@@ -211,6 +240,7 @@ export class SessionsService implements TrainingCasualties {
     const session = await this.load(em, id, user);
     if (!this.can(user, CLOSE, session)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [CLOSE] });
     if (session.status !== 'held') throw new ConflictException({ code: 'training.notHeld', status: session.status });
+    if (new Date() < session.startsAt) throw new ConflictException({ code: 'training.notStarted' });
     const unconfirmed = session.attendance.getItems().filter((a) => !a.confirmed).length;
     if (unconfirmed) throw new ConflictException({ code: 'training.unconfirmedCheckIns', count: unconfirmed });
     const type = await this.requireType(em, session.type);
@@ -257,7 +287,7 @@ export class SessionsService implements TrainingCasualties {
       attendances: present.map((a) => {
         const from = a.from ?? session.startsAt;
         const to = a.to ?? session.endsAt;
-        return { personId: a.personId, from: from.toISOString(), to: to.toISOString(), minutes: Math.round((to.getTime() - from.getTime()) / 60_000), breathingApparatus: a.breathingApparatus, injured: a.injured };
+        return { personId: a.personId, from: from.toISOString(), to: to.toISOString(), minutes: Math.max(0, Math.round((to.getTime() - from.getTime()) / 60_000)), breathingApparatus: a.breathingApparatus, injured: a.injured };
       }),
       records: type.record
         ? present
@@ -281,15 +311,27 @@ export class SessionsService implements TrainingCasualties {
     return session;
   }
 
-  /** Code for the QR check-in of a session. */
-  async checkInCode(user: AuthenticatedUser, id: string): Promise<CheckIn> {
+  /**
+   * Current code for the QR check-in of a session: `<session id>.<signature>`, signed with the session's secret for the
+   * current minute. The code shown changes every minute; a scanned code is accepted during the following minute too.
+   */
+  async checkInCode(user: AuthenticatedUser, id: string, now = new Date()): Promise<CheckIn> {
     const em = this.em.fork();
     const session = await this.load(em, id, user);
     if (!this.can(user, ATTENDANCE, session)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [ATTENDANCE] });
-    session.checkInCode ??= randomBytes(12).toString('base64url');
-    await em.flush();
+    if (!session.checkInSecret) {
+      session.checkInSecret = randomBytes(24).toString('base64url');
+      await em.flush();
+    }
     const { from, until } = await this.checkInWindow(session);
-    return { code: session.checkInCode, validFrom: from.toISOString(), validUntil: until.toISOString() };
+    const period = checkInPeriod(now);
+    return {
+      code: `${session.id}.${checkInSignature(session.checkInSecret, session.id, period)}`,
+      validFrom: from.toISOString(),
+      validUntil: until.toISOString(),
+      rotatesAt: new Date((period + 1) * CHECK_IN_ROTATION_SECONDS * 1000).toISOString(),
+      checkedIn: session.attendance.getItems().filter((a) => a.checkedInAt).length,
+    };
   }
 
   private async checkInWindow(session: SessionEntity) {
@@ -297,15 +339,30 @@ export class SessionsService implements TrainingCasualties {
     return { from: new Date(session.startsAt.getTime() - settings.checkInBeforeMinutes * 60_000), until: session.endsAt };
   }
 
-  /** A member scans the QR code and is marked present (needs a user linked to a person). */
+  /**
+   * A member scans the QR code and is marked present (needs a user linked to a person). Only members of the session's
+   * departments and persons invited to it (responsible, instructors, already listed) may check in.
+   */
   async checkIn(user: AuthenticatedUser, code: string, now = new Date()): Promise<{ sessionId: string; title: string }> {
     if (!user.personId) throw new BadRequestException({ code: 'training.noPerson' });
     const em = this.em.fork();
-    const session = await em.findOne(SessionEntity, { checkInCode: code }, { populate: ['attendance'] });
-    if (!session) throw new NotFoundException({ code: 'training.unknownCode' });
+    const [sessionId, signature] = code.split('.');
+    const session = /^[0-9a-f-]{36}$/i.test(sessionId ?? '') ? await em.findOne(SessionEntity, sessionId.toLowerCase(), { populate: ['attendance'] }) : null;
+    if (!session?.checkInSecret || !signature) throw new NotFoundException({ code: 'training.unknownCode' });
+    const period = checkInPeriod(now);
+    if (![period, period - 1].some((p) => safeEqual(checkInSignature(session.checkInSecret!, session.id, p), signature))) {
+      throw new BadRequestException({ code: 'training.codeExpired' });
+    }
     if (session.status === 'closed') throw new ConflictException({ code: 'training.closed' });
     const window = await this.checkInWindow(session);
     if (now < window.from || now > window.until) throw new BadRequestException({ code: 'training.checkInClosed' });
+    const [person] = await this.directory.snapshots([user.personId]);
+    const invited =
+      person?.departmentIds.some((d) => session.departmentIds.includes(d)) ||
+      session.responsiblePersonId === user.personId ||
+      session.instructorIds.includes(user.personId) ||
+      session.attendance.getItems().some((a) => a.personId === user.personId);
+    if (!invited) throw new ForbiddenException({ code: 'training.notInvited' });
     const existing = session.attendance.getItems().find((a) => a.personId === user.personId);
     if (existing) {
       // Already recorded present by the person responsible: nothing to confirm.
