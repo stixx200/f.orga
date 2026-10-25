@@ -50,7 +50,7 @@ npm run dev
 
 ## Demodaten
 
-`npm run seed` (`tools/seed.mts`) füllt eine laufende Instanz über die API mit erfundenen Daten. Echte Personen kommen nicht vor.
+`npm run seed` (`tools/seed.mts`) füllt eine laufende Instanz über die API mit erfundenen Daten. Echte Personen kommen nicht vor. Für die Ersteinrichtung einer leeren Datenbank nimmt es den Einrichtungsschlüssel aus `FORGA_SETUP_TOKEN` oder aus `apps/server/.env` (Entwicklung: `dev-setup-token`).
 
 - Ersteinrichtung, falls nötig: „Freiwillige Feuerwehr Musterstadt“, Administrator aus `FORGA_ADMIN_USER` / `FORGA_ADMIN_PASSWORD` (Vorgabe `admin` / `sehr-geheim-123`). Server-Adresse aus `FORGA_URL` (Vorgabe `http://localhost:3000`). Die Ersteinrichtung braucht den Einrichtungsschlüssel in `FORGA_SETUP_TOKEN` (aus dem Protokoll des Servers oder derselbe Wert, mit dem der Server gestartet wurde).
 - Einstellungen der Feuerwehr, BW-Vorlagen (Kataloge, Lehrgänge, Alarmstichworte) und die Standardrollen.

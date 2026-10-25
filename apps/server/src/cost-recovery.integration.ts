@@ -11,6 +11,14 @@ const ids: Record<string, string> = {};
 const post = (path: string, body: unknown, cookie = admin) => test.http.post(`/api${path}`).set('Cookie', cookie).set(UI).send(body as object);
 const put = (path: string, body: unknown, cookie = admin) => test.http.put(`/api${path}`).set('Cookie', cookie).set(UI).send(body as object);
 const get = (path: string, cookie = admin) => test.http.get(`/api${path}`).set('Cookie', cookie);
+
+/** Submits a report (acknowledging its warnings) and releases it for billing, as the workflow requires. */
+async function releaseForBilling(reportId: string): Promise<void> {
+  const report = (await get(`/incidents/reports/${reportId}`).expect(200)).body as { findings: { rule: string; level: string; subject: string | null; acknowledged: boolean }[] };
+  const acknowledgements = report.findings.filter((f) => f.level === 'warning' && !f.acknowledged).map((f) => ({ rule: f.rule, subject: f.subject, reason: 'Test' }));
+  await post(`/incidents/reports/${reportId}/submit`, { acknowledgements }).expect(200);
+  await post(`/incidents/reports/${reportId}/release`, { level: 'billing' }).expect(200);
+}
 const T = (time: string) => `2026-10-21T${time}:00+02:00`;
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date());
 const germanToday = today.split('-').toReversed().join('.');
@@ -121,7 +129,7 @@ describe('cost recovery', () => {
     expect((await post(`/cost-recovery/notices/${ids.notice}/submit`, {}).expect(200)).body).toMatchObject({ status: 'review', submittedBy: 'Admin' });
     // The report is not released for billing yet.
     expect((await post(`/cost-recovery/notices/${ids.notice}/issue`, {}).expect(409)).body.code).toBe('cost-recovery.notReleased');
-    await post(`/incidents/reports/${ids.report}/release`, { level: 'billing' }).expect(200);
+    await releaseForBilling(ids.report);
     // Four-eyes principle: the submitter cannot issue.
     await configure({ fourEyes: true });
     expect((await post(`/cost-recovery/notices/${ids.notice}/issue`, {}).expect(403)).body.code).toBe('cost-recovery.fourEyes');
@@ -227,7 +235,7 @@ describe('cost recovery', () => {
     const notices = (await get('/cost-recovery/notices?year=2026').expect(200)).body as { id: string; dispatchNumber: string }[];
     const id = notices.find((n) => n.dispatchNumber === '2026-778')!.id;
     await post(`/cost-recovery/notices/${id}/amend`, {}).expect(409);
-    await post(`/incidents/reports/${ids.careerReport}/release`, { level: 'billing' }).expect(200);
+    await releaseForBilling(ids.careerReport);
     await post(`/cost-recovery/notices/${id}/submit`, {}).expect(200);
     // The cash reference may be required, and belongs to one notice in effect only.
     await configure({ cashReferenceRequired: true });

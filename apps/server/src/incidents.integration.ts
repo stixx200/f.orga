@@ -1,6 +1,7 @@
 import { EntityManager } from '@mikro-orm/core';
 import ExcelJS from 'exceljs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { SAMPLE_STATUTE } from '@forga/compensation-contracts';
 import { DomainEvents, MailService } from '@forga/core-api';
 import { INCIDENTS_EVENTS, INCIDENTS_LOOKUP, type IncidentsLookup, type ReportReleasedEvent } from '@forga/incidents-contracts';
 import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
@@ -38,6 +39,8 @@ beforeAll(async () => {
   await post('/masterdata/catalog/templates/bw', {}).expect(201);
   await post('/incidents/keywords/templates/bw', {}).expect(201);
   await put('/core/settings/incidents.general', { homeMunicipalities: ['Musterstadt'] }).expect(200);
+  // The statute rates are no defaults any more: adopt the sample statute like a brigade would.
+  await put('/core/settings/compensation.general', SAMPLE_STATUTE).expect(200);
 
   ids.musterstadt = (await post('/masterdata/departments', { name: 'Abteilung Musterstadt', shortName: 'Musterstadt', type: 'operational' }).expect(201)).body.id;
   ids.ahornfeld = (await post('/masterdata/departments', { name: 'Abteilung Ahornfeld', shortName: 'Ahornfeld', type: 'operational' }).expect(201)).body.id;

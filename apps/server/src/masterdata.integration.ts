@@ -577,7 +577,10 @@ describe('review fixes', () => {
     const hits = (await test.http.get('/api/core/search?q=Prüfung').set('Cookie', kdt).expect(200)).body as { title: string; description?: string; to: string }[];
     const persons = hits.filter((h) => h.title.startsWith('Prüfung,'));
     const restricted = persons.findIndex((h) => h.to.startsWith('/masterdata/persons?'));
-    expect(persons.slice(0, restricted).map((h) => h.title)).toEqual(['Prüfung, Anna', 'Prüfung, Paul']);
+    // Own department and its sub-departments (here also the youth fire brigade) come first.
+    expect(restricted).toBeGreaterThan(0);
+    expect(persons.slice(0, restricted).map((h) => h.title)).toEqual(expect.arrayContaining(['Prüfung, Anna', 'Prüfung, Paul']));
+    expect(persons.slice(0, restricted).every((h) => h.to.startsWith('/masterdata/persons/'))).toBe(true);
     expect(persons.slice(restricted)).toEqual(expect.arrayContaining([expect.objectContaining({ title: 'Prüfung, Anton', description: 'Abteilung Musterstadt', to: '/masterdata/persons?q=Anton%20Pr%C3%BCfung' })]));
 
     const settings = test.http.put('/api/core/settings/masterdata.membership').set('Cookie', admin).set(UI);

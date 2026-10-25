@@ -11,6 +11,7 @@
  *   FORGA_URL=http://localhost:3000 FORGA_ADMIN_USER=admin FORGA_ADMIN_PASSWORD=… npm run seed
  *   FORGA_SETUP_TOKEN=… npm run seed     (empty instance: the setup token from the server log or its environment)
  */
+import { readFileSync } from 'node:fs';
 import ExcelJS from 'exceljs';
 import { VWV_2022_RULES } from '@forga/promotions-contracts';
 import { BW_TEMPLATE } from '@forga/cost-recovery-contracts';
@@ -362,7 +363,8 @@ function dutyCalendar(officers: PersonRef[]): string {
 async function login(): Promise<void> {
   const setup = await call<{ required: boolean }>('GET', 'core/setup');
   if (setup.required) {
-    const setupToken = process.env['FORGA_SETUP_TOKEN'];
+    // The development server reads the same token from `apps/server/.env`.
+    const setupToken = process.env['FORGA_SETUP_TOKEN'] ?? /^FORGA_SETUP_TOKEN=(.+)$/m.exec(readFileSync('apps/server/.env', 'utf8'))?.[1]?.trim();
     if (!setupToken) throw new Error('Ersteinrichtung nötig: FORGA_SETUP_TOKEN setzen (Wert aus dem Server-Protokoll oder der Umgebung des Servers).');
     console.log('Ersteinrichtung …');
     await call('POST', 'core/setup', { setupToken, brigadeName: BRIGADE, username: ADMIN.username, displayName: 'Administrator', email: 'admin@example.org', password: ADMIN.password });
