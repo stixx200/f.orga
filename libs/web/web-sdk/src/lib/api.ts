@@ -12,13 +12,35 @@ export class ApiError extends Error {
     this.code = body?.code ?? 'generic';
   }
 
-  /** The error in the current UI language. */
+  /** Failing fields of a `validation.failed` error, e.g. `memberships.0.from`. */
+  get fields(): string[] {
+    const issues = Array.isArray(this.body?.['issues']) ? (this.body['issues'] as { path?: unknown }[]) : [];
+    return [...new Set(issues.map((issue) => String(issue.path ?? '')).filter(Boolean))];
+  }
+
+  /** The error in the current UI language; validation errors name the failing fields. */
   translated(): string {
+    if (this.code === 'validation.failed' && this.fields.length) {
+      return i18n.t('errors.validation.failedFields', { ns: 'common', fields: this.fields.map(fieldLabel).join(', ') });
+    }
     const details = Object.fromEntries(
       Object.entries(this.body ?? {}).map(([key, value]) => [key, Array.isArray(value) ? value.join(', ') : value]),
     );
     return translateCode(this.code, details);
   }
+}
+
+/**
+ * Readable name of a field path: `fields.<name>` of the shell or a module namespace if translated
+ * (for list entries `memberships.0.from` → "from (2)"), otherwise the path itself.
+ */
+function fieldLabel(path: string): string {
+  const parts = path.split('.');
+  const name = parts.filter((p) => !/^\d+$/.test(p)).at(-1) ?? path;
+  const index = parts.find((p) => /^\d+$/.test(p));
+  const namespaces = ['shell', ...Object.keys(i18n.store.data[i18n.language] ?? {})];
+  const label = i18n.t(`fields.${name}`, { ns: namespaces, defaultValue: name });
+  return index === undefined ? label : `${label} (${Number(index) + 1})`;
 }
 
 /**

@@ -97,7 +97,7 @@ export class RolesController {
   @RequirePermissions('core.roles.manage')
   async update(@Param('id') id: string, @Body(new ZodPipe(RoleInput)) input: ParsedRoleInput, @CurrentUser() current: AuthenticatedUser): Promise<RoleDto> {
     this.validate(input);
-    const role = await this.em.fork().transactional(async (em) => {
+    const saved = await this.em.fork().transactional(async (em) => {
       const role = await em.findOne(Role, id);
       if (!role) throw new NotFoundException();
       await this.assertNotWider(
@@ -114,8 +114,8 @@ export class RolesController {
       await assertAdministratorRemains(em);
       return role;
     });
-    await this.audit.log('roles.updated', { roleId: role.id, permissions: role.permissions, permissionsAllDepartments: role.permissionsAllDepartments });
-    return toRoleDto(role);
+    await this.audit.log('roles.updated', { roleId: saved.id, permissions: saved.permissions, permissionsAllDepartments: saved.permissionsAllDepartments });
+    return toRoleDto(saved);
   }
 
   /** Sets the permissions of a standard role back to its template (e.g. after an update brought new defaults). */
@@ -123,7 +123,7 @@ export class RolesController {
   @HttpCode(200)
   @RequirePermissions('core.roles.manage')
   async applyTemplate(@Param('id') id: string, @CurrentUser() current: AuthenticatedUser): Promise<RoleDto> {
-    const { role, template } = await this.em.fork().transactional(async (em) => {
+    const applied = await this.em.fork().transactional(async (em) => {
       const role = await em.findOne(Role, id);
       if (!role) throw new NotFoundException();
       const template = this.templates.all.find((t) => t.key === role.templateKey);
@@ -139,15 +139,15 @@ export class RolesController {
       await assertAdministratorRemains(em);
       return { role, template };
     });
-    await this.audit.log('roles.template-applied', { roleId: role.id, templateKey: template.key });
-    return toRoleDto(role);
+    await this.audit.log('roles.template-applied', { roleId: applied.role.id, templateKey: applied.template.key });
+    return toRoleDto(applied.role);
   }
 
   @Delete('roles/:id')
   @HttpCode(204)
   @RequirePermissions('core.roles.manage')
   async remove(@Param('id') id: string, @CurrentUser() current: AuthenticatedUser): Promise<void> {
-    const role = await this.em.fork().transactional(async (em) => {
+    const removed = await this.em.fork().transactional(async (em) => {
       const role = await em.findOne(Role, id);
       if (!role) throw new NotFoundException();
       // Deleting a role takes its permissions from its users: only for roles within the own permissions.
@@ -156,7 +156,7 @@ export class RolesController {
       await assertAdministratorRemains(em);
       return role;
     });
-    await this.audit.log('roles.deleted', { roleId: id, name: role.name });
+    await this.audit.log('roles.deleted', { roleId: id, name: removed.name });
   }
 
   /** Permissions added to a role must be held brigade-wide by whoever edits it (no self-promotion via roles). */

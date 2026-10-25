@@ -14,7 +14,7 @@ type Values = Record<string, string>;
 const initialValues = (list: ListInfo): Values =>
   Object.fromEntries(list.parameters.map((p) => [p.key, p.type === 'year' ? String(new Date().getFullYear()) : p.type === 'boolean' ? 'false' : '']));
 
-function ParameterField({ parameter, value, onChange }: { parameter: ListParameter; value: string; onChange: (value: string) => void }) {
+function ParameterField({ parameter, value, onChange, allowed }: { parameter: ListParameter; value: string; onChange: (value: string) => void; allowed: ListInfo['departments'] }) {
   const localized = useLocalized();
   const { t } = useTranslation('shell');
   const { data: departments = [] } = useDepartments();
@@ -26,7 +26,18 @@ function ParameterField({ parameter, value, onChange }: { parameter: ListParamet
     case 'year':
       return <NumberInput label={label} value={value} onChange={(v) => onChange(String(v))} min={2000} max={2100} required={required} />;
     case 'department':
-      return <Select label={label} placeholder={t('lists.allDepartments')} data={departments.map((d) => ({ value: d.id, label: d.name }))} value={value || null} onChange={(v) => onChange(v ?? '')} clearable={!required} required={required} />;
+      // Only the departments the user may run the list for; without a choice the list covers exactly those.
+      return (
+        <Select
+          label={label}
+          placeholder={t(allowed === 'brigade' ? 'lists.allDepartments' : 'lists.ownDepartments')}
+          data={departments.filter((d) => allowed === 'brigade' || allowed.includes(d.id)).map((d) => ({ value: d.id, label: d.name }))}
+          value={value || null}
+          onChange={(v) => onChange(v ?? '')}
+          clearable={!required}
+          required={required}
+        />
+      );
     case 'select':
       return <Select label={label} data={(parameter.options ?? []).map((o) => ({ value: o.value, label: localized(o.label) }))} value={value || null} onChange={(v) => onChange(v ?? '')} clearable={!required} required={required} />;
     case 'boolean':
@@ -70,7 +81,7 @@ function ListView({ list }: { list: ListInfo }) {
             {list.parameters.length > 0 && (
               <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
                 {list.parameters.map((p) => (
-                  <ParameterField key={p.key} parameter={p} value={values[p.key] ?? ''} onChange={(value) => setValues((v) => ({ ...v, [p.key]: value }))} />
+                  <ParameterField key={p.key} parameter={p} allowed={list.departments} value={values[p.key] ?? ''} onChange={(value) => setValues((v) => ({ ...v, [p.key]: value }))} />
                 ))}
               </SimpleGrid>
             )}

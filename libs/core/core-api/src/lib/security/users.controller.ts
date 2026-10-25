@@ -122,7 +122,7 @@ export class UsersController {
     @Body(new ZodPipe(UserInput)) input: ParsedUserInput,
     @CurrentUser() current: AuthenticatedUser,
   ): Promise<UserDto> {
-    const user = await this.em.fork().transactional(async (em) => {
+    const updated = await this.em.fork().transactional(async (em) => {
       const user = await em.findOne(User, { id, technical: false }, { populate: ['roles.role'] });
       if (!user) throw new NotFoundException();
       if (user.id === current.id && !input.active) throw new BadRequestException({ code: 'users.cannotDeactivateSelf' });
@@ -153,11 +153,11 @@ export class UsersController {
       return user;
     });
     await this.audit.log('users.updated', {
-      userId: user.id,
+      userId: updated.id,
       roles: input.roles,
       passwordReset: Boolean(input.password),
     });
-    return toUserDto(await this.em.fork().findOneOrFail(User, user.id, { populate: ['roles.role', 'passwordHash'] }));
+    return toUserDto(await this.em.fork().findOneOrFail(User, updated.id, { populate: ['roles.role', 'passwordHash'] }));
   }
 
   /**
