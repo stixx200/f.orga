@@ -85,17 +85,11 @@ export type HouseholdRate = z.infer<typeof HouseholdRate>;
 
 /** Settings section `compensation.general`. The incident report computes its amounts with `incidentRates` while the module is active. */
 export const CompensationSettings = z.object({
-  trainingRates: z.array(TrainingRate).default([
-    { kind: 'training', validFrom: '2026-01-01', amount: 15 },
-    { kind: 'fire-watch', validFrom: '2026-01-01', amount: 15 },
-  ]),
+  /** Statute values start empty; the sample statute is only taken over explicitly (`SAMPLE_STATUTE`). */
+  trainingRates: z.array(TrainingRate).default([]),
   trainingRounding: Rounding.default('started-hour'),
-  /** Hourly rates for incidents (taken over from the incident reports' settings by a migration). */
-  incidentRates: z.array(IncidentRate).default([
-    { kind: 'incident', validFrom: '2026-01-01', amount: 15 },
-    { kind: 'standby', validFrom: '2026-01-01', amount: 15 },
-    { kind: 'fire-watch', validFrom: '2026-01-01', amount: 15 },
-  ]),
+  /** Hourly rates for incidents; while empty, the incident reports compute with their own settings. */
+  incidentRates: z.array(IncidentRate).default([]),
   incidentRounding: Rounding.default('started-hour'),
   /** Billable hours of an incident are at least this many (not for standby); `null`: no minimum. */
   incidentMinimumHours: z.number().min(0).max(24).nullable().default(null),
@@ -109,12 +103,14 @@ export const CompensationSettings = z.object({
    * persons running a household get `householdRates`. The run shows a hint for the individual settlement.
    */
   multiDayAfterDays: z.number().int().min(1).default(2),
-  householdRates: z.array(HouseholdRate).default([{ validFrom: '2026-01-01', amount: 15 }]),
-  courseAllowances: z.array(CourseAllowance).default(DEFAULT_COURSE_ALLOWANCES),
+  householdRates: z.array(HouseholdRate).default([]),
+  courseAllowances: z.array(CourseAllowance).default([]),
   /** Upper limits for the hourly compensation per incident or session and per person and day; `null`: none. */
   maxPerService: money.min(0).nullable().default(null),
   maxPerDay: money.min(0).nullable().default(null),
-  functionAllowances: z.array(FunctionAllowance).default(DEFAULT_FUNCTION_ALLOWANCES),
+  functionAllowances: z.array(FunctionAllowance).default([]),
+  /** Optional step before the payout: the commander signs the closed run as factually correct ("sachlich richtig"). */
+  factualApproval: z.boolean().default(false),
   /** Change of a function holder within the year: full allowance for the holder on 31 Dec, or by months held. */
   functionSplit: z.enum(['holder-at-year-end', 'by-months']).default('by-months'),
   /** Tax-free amounts (R 3.12 LStR); only a hint for the treasury. */
@@ -128,6 +124,28 @@ export const CompensationSettings = z.object({
 export type CompensationSettings = z.infer<typeof CompensationSettings>;
 
 export const COMPENSATION_SETTINGS = { 'compensation.general': CompensationSettings } as const;
+
+/**
+ * Sample statute ("Vorlage"): example rates (15 €/h), household rate, course and function allowances. Only applied
+ * when the administration takes it over in the settings; the values have to be replaced by the local statute.
+ */
+export const SAMPLE_STATUTE = {
+  trainingRates: [
+    { kind: 'training', validFrom: '2026-01-01', amount: 15 },
+    { kind: 'fire-watch', validFrom: '2026-01-01', amount: 15 },
+  ],
+  incidentRates: [
+    { kind: 'incident', validFrom: '2026-01-01', amount: 15 },
+    { kind: 'standby', validFrom: '2026-01-01', amount: 15 },
+    { kind: 'fire-watch', validFrom: '2026-01-01', amount: 15 },
+  ],
+  householdRates: [{ validFrom: '2026-01-01', amount: 15 }],
+  courseAllowances: DEFAULT_COURSE_ALLOWANCES,
+  functionAllowances: DEFAULT_FUNCTION_ALLOWANCES,
+} satisfies Partial<CompensationSettings>;
+
+/** No hourly rates for sessions and incidents yet: the statute is not maintained. */
+export const statuteMissing = (config: Pick<CompensationSettings, 'trainingRates' | 'incidentRates'>) => !config.trainingRates.length && !config.incidentRates.length;
 
 export const Item = z.object({
   id: z.uuid(),
@@ -151,9 +169,27 @@ export const Item = z.object({
   correction: z.boolean(),
   reason: z.string(),
   runId: z.uuid().nullable(),
+  /** Deferred to the next run from this draft run ("In nächsten Lauf verschieben"). */
+  deferredFrom: z.uuid().nullable(),
   version: z.number(),
 });
 export type Item = z.infer<typeof Item>;
+
+/** Items of a draft run moved to the next run, or taken back. */
+export const DeferInput = z.object({ itemIds: z.array(z.uuid()).min(1) });
+export type DeferInput = z.input<typeof DeferInput>;
+
+/** Several amounts at once (loss of earnings in a list). */
+export const AmountsInput = z.array(z.object({ id: z.uuid(), amount: money.min(0), reason: z.string().trim().default('') })).min(1);
+export type AmountsInput = z.input<typeof AmountsInput>;
+
+/** Closing a run: persons without valid IBAN have to be confirmed explicitly. */
+export const CloseInput = z.object({ acceptMissingIban: z.boolean().default(false) });
+export type CloseInput = z.input<typeof CloseInput>;
+
+/** "Meine Entschädigung": the own items of a year, open and paid out. */
+export const MyCompensation = z.object({ year: z.number(), items: z.array(Item.extend({ paidOut: z.boolean() })), open: z.number(), paid: z.number() });
+export type MyCompensation = z.infer<typeof MyCompensation>;
 
 export const ManualItemInput = z.object({
   personId: z.uuid(),
@@ -212,6 +248,11 @@ export const Run = z.object({
   itemCount: z.number(),
   closedAt: z.string().nullable(),
   closedBy: z.string().nullable(),
+  /** Persons without valid IBAN confirmed when closing; they are left out of the transfer files. */
+  withoutIban: z.array(z.string()),
+  /** Factual approval ("sachlich richtig") of the closed run. */
+  approvedAt: z.string().nullable(),
+  approvedBy: z.string().nullable(),
   handedOverAt: z.string().nullable(),
   paidAt: z.string().nullable(),
   version: z.number(),
@@ -220,6 +261,8 @@ export type Run = z.infer<typeof Run>;
 
 export const RunDetail = Run.extend({
   items: z.array(Item),
+  /** Items deferred from this draft to the next run. */
+  deferred: z.array(Item),
   persons: z.array(PersonTotal),
   departments: z.array(z.object({ departmentId: z.uuid().nullable(), persons: z.number(), incidents: z.number(), amount: z.number() })),
   problems: z.array(Problem),

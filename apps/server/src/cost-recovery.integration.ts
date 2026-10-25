@@ -206,7 +206,7 @@ describe('cost recovery', () => {
       involvedParties: [{ role: 'owner', name: 'Muster GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
       statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
     }).expect(200);
-    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true }).expect(200);
+    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Täuschungsalarm BMA' }).expect(200);
     const settings = (await get('/core/settings/cost-recovery.general').expect(200)).body ?? {};
     await configure({ personnelRates: [...(settings.personnelRates ?? []), { kind: 'career-intermediate', validFrom: '2026-01-01', amount: 70 }] });
     // The legal ground chosen in the report beats the suggestion from the statistics.
@@ -314,7 +314,7 @@ describe('cost recovery', () => {
       vehicles: [{ vehicleId: ids.lf, departedAt: T('14:05'), returnedAt: T('15:20') }],
       involvedParties: [{ ...owner, name: 'Muster  GmbH' }],
     }).expect(200);
-    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true }).expect(200);
+    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Täuschungsalarm BMA' }).expect(200);
 
     const notice = (await post('/cost-recovery/notices', { incidentId: incident.id }).expect(201)).body;
     expect(notice.debtors).toHaveLength(1);

@@ -13,6 +13,7 @@
 import ExcelJS from 'exceljs';
 import { VWV_2022_RULES } from '@forga/promotions-contracts';
 import { BW_TEMPLATE } from '@forga/cost-recovery-contracts';
+import { SAMPLE_STATUTE } from '@forga/compensation-contracts';
 
 const BASE = (process.env['FORGA_URL'] ?? 'http://localhost:3000').replace(/\/$/, '');
 const ADMIN = { username: process.env['FORGA_ADMIN_USER'] ?? 'admin', password: process.env['FORGA_ADMIN_PASSWORD'] ?? 'sehr-geheim-123' };
@@ -554,6 +555,9 @@ async function compensation(persons: PersonRef[]): Promise<void> {
     console.log('  Auszahlungsläufe vorhanden');
     return;
   }
+  // The statute values are taken over explicitly from the sample statute (example values).
+  const statute = (await call<Record<string, unknown> | null>('GET', 'core/settings/compensation.general')) ?? {};
+  await call('PUT', 'core/settings/compensation.general', { ...statute, ...SAMPLE_STATUTE });
   for (const y of [year - 1, year]) {
     await call('POST', 'incidents/reports/republish', { from: `${y}-01-01`, to: `${y}-12-31` });
     await call('POST', 'training/sessions/republish', { from: `${y}-01-01`, to: `${y}-12-31` });
@@ -568,7 +572,8 @@ async function compensation(persons: PersonRef[]): Promise<void> {
   // A closed and paid run for the previous year; the current year stays open.
   const run = await call<{ id: string; items: { id: string; amount: number | null }[] }>('POST', 'compensation/runs', { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` });
   for (const item of run.items.filter((i) => i.amount === null)) await call('PUT', `compensation/items/${item.id}/amount`, { amount: between(40, 180), reason: 'Bescheinigung Arbeitgeber' });
-  await call('POST', `compensation/runs/${run.id}/close`, {});
+  // Demo persons without bank account are confirmed explicitly; they are left out of the transfer files.
+  await call('POST', `compensation/runs/${run.id}/close`, { acceptMissingIban: true });
   await call('POST', `compensation/runs/${run.id}/hand-over`, {});
   await call('POST', `compensation/runs/${run.id}/paid`, {});
   const open = await call<unknown[]>('GET', 'compensation/items?open=true');
