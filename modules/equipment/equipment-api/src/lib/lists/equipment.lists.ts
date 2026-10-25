@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { z } from 'zod';
 import type { ListColumn } from '@forga/core-contracts';
-import { type AuthenticatedUser, berlinDate, type ListDefinition, SettingsService } from '@forga/core-api';
+import { type AuthenticatedUser, berlinDate, type ListDefinition, SettingsService, wordsWhere } from '@forga/core-api';
 import { EquipmentSettings, type Item } from '@forga/equipment-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { CategoryEntity, InspectionEntity } from '../equipment.entities.js';
@@ -143,7 +143,24 @@ export class EquipmentLists {
       name: { de: 'Prüfprotokoll', en: 'Inspection report' },
       description: { de: 'Eine Prüfung oder alle Prüfungen eines Tages mit Checkliste, Messwerten und Unterschrift', en: 'One inspection or all inspections of a day with checklist, measurements and signature' },
       permission: READ,
-      parameters: [{ key: 'date', label: { de: 'Tag', en: 'Day' }, type: 'date' }, department, { key: 'inspectionId', label: { de: 'Prüfung (ID)', en: 'Inspection (ID)' }, type: 'text' }],
+      parameters: [{ key: 'date', label: { de: 'Tag', en: 'Day' }, type: 'date' }, department, {
+          key: 'inspectionId',
+          label: { de: 'Einzelne Prüfung', en: 'Single inspection' },
+          type: 'choice',
+          // The latest inspections of the visible items, found by inventory number or name.
+          choices: async (user, query) => {
+            const visible = this.items.visible(user);
+            if (!visible) return [];
+            const words = wordsWhere(query, ['inventoryNumber', 'name']);
+            const found = await this.em.fork().find(
+              InspectionEntity,
+              { $and: [{ cancelled: false }, { item: { $and: [visible, ...(words ? [words] : [])] } as object }] },
+              { populate: ['item'], orderBy: { date: 'desc' }, limit: 50 },
+            );
+            return found.map((i) => ({ value: i.id, label: `${i.item.inventoryNumber} ${i.item.name}`, description: `${i.date} · ${i.inspectionKey}` }));
+          },
+        },
+      ],
       schema: ReportParams,
       orientation: 'landscape',
       signatureColumn: true,
