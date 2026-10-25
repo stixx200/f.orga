@@ -14,7 +14,8 @@ import { MikroORM } from '@mikro-orm/postgresql';
 import { INSTALLED_MODULES } from '../apps/server/src/app/installed-modules.ts';
 
 const SERVER = (process.env.DATABASE_URL ?? 'postgresql://forga:forga@localhost:5433/forga').replace(/\/[^/]*$/, '');
-const TEMPORARY = 'forga_migration_reset';
+/** Own name per checkout (`FORGA_RESET_DATABASE`), so parallel worktrees do not share the temporary database. */
+const TEMPORARY = process.env.FORGA_RESET_DATABASE ?? 'forga_migration_reset';
 
 const directory = (id: string) => (id === 'core' ? 'libs/core/core-api' : `modules/${id}/${id}-api`);
 

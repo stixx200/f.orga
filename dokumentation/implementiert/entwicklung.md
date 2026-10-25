@@ -128,7 +128,7 @@ Ein fester Zufallsstartwert je Schritt erzeugt bei jedem Lauf dieselben Daten. E
 npm run migration:reset   # löscht alle Migrationen, erzeugt je Modul eine neue `initial`
 ```
 
-1. `migration:reset` arbeitet in einer eigenen, vorübergehenden Datenbank (`forga_migration_reset`). Ein laufender Entwicklungsserver bleibt ungestört.
+1. `migration:reset` arbeitet in einer eigenen, vorübergehenden Datenbank (`forga_migration_reset`, anderer Name über `FORGA_RESET_DATABASE`, z. B. je Worktree). Ein laufender Entwicklungsserver bleibt ungestört. Integrationstests nutzen `TEST_DATABASE_URL` (Standard `forga_test`).
 2. Danach die Entwicklungsdatenbank neu anlegen. Der Server spielt die neuen Migrationen beim nächsten Start ein, `npm run seed` füllt die Demodaten.
 3. Datenmigrationen (`--blank`) braucht es bis dahin nicht.
 
