@@ -1111,8 +1111,8 @@ Typ => Type
 Übungen und Dienste, Anwesenheit, Ausbildungsnachweis. => Exercises and duties, attendance, training record.
 Übungsdienst => Training
 Uhrzeit => Time
-UL-FW 1144
-UL-FW 144
+MS-FW 1144
+MS-FW 144
 Umzug => Moved away
 und der Anschrift. Bitte prüfen und bei Bedarf ändern. Diese Angaben zählen für die Jahresstatistik der Gesamtwehr. => and the address. Please check and change if needed. These details count for the brigade's annual statistics.
 unter Atemschutz => under breathing apparatus
