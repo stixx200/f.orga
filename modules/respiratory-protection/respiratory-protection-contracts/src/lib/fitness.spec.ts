@@ -1,5 +1,5 @@
 import { FitnessRule } from './evidence.js';
-import { addMonths, ageOn, evaluateFitness, type FitnessEvidence } from './fitness.js';
+import { addMonths, ageOn, evaluateFitness, examinationMonths, type FitnessEvidence, minimumKilojoules } from './fitness.js';
 
 const rule = FitnessRule.parse({});
 const wearer = { birthDate: '1990-05-01', qualifications: ['breathing-apparatus'] };
@@ -112,6 +112,29 @@ describe('age at the date of the evidence', () => {
     expect(result.conditions.find((c) => c.key === 'examination')?.dueOn).toBe('2029-03-01');
     // 65 kJ at 49 were not enough.
     expect(result.conditions.find((c) => c.key === 'stress-exercise')?.met).toBe(false);
+  });
+});
+
+describe('age boundary and examination result', () => {
+  it('counts the configured age itself as older, for the interval and for the kJ minimum alike', () => {
+    // Born 1976-03-01: exactly 50 at the examination and at the stress exercise.
+    const person = { birthDate: '1976-03-01', qualifications: ['breathing-apparatus'] };
+    expect(examinationMonths(rule, person.birthDate, '2026-03-01', null)).toBe(12);
+    expect(examinationMonths(rule, person.birthDate, '2026-02-28', null)).toBe(36);
+    expect(minimumKilojoules(rule, person.birthDate, '2026-03-01')).toBe(60);
+    expect(minimumKilojoules(rule, person.birthDate, '2026-02-28')).toBe(80);
+    const result = evaluateFitness(person, [e('examination', '2026-03-01'), e('stress-exercise', '2026-03-01', { kilojoules: 60, passed: true })], rule, today);
+    expect(result.conditions.find((c) => c.key === 'examination')?.dueOn).toBe('2027-03-01');
+    expect(result.conditions.find((c) => c.key === 'stress-exercise')?.met).toBe(true);
+  });
+
+  it('is red with the result "concerns", whatever the interval', () => {
+    const concerns = [...complete.filter((x) => x.kind !== 'examination'), e('examination', '2026-02-01', { result: 'concerns' })];
+    const result = evaluateFitness(wearer, concerns, rule, today);
+    expect(result.color).toBe('red');
+    expect(result.conditions.find((c) => c.key === 'examination')).toMatchObject({ met: false, concerns: true, lastDate: '2026-02-01' });
+    // A later examination without concerns counts again.
+    expect(evaluateFitness(wearer, [...concerns, e('examination', '2026-06-01', { result: 'no-concerns' })], rule, today).color).toBe('green');
   });
 });
 

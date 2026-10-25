@@ -5,6 +5,7 @@ import type { ImportResult, ImportRowResult } from '@forga/core-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory, type PersonSnapshot } from '@forga/masterdata-contracts';
 import { EvidenceEntity } from '../respiratory-protection.entities.js';
 import { EvidenceService, EXAMINATIONS } from '../evidence/evidence.service.js';
+import { parseResult } from './examination-result.js';
 import { matchPerson } from './person-match.js';
 import { readExaminations } from './evidence.transfer.js';
 
@@ -17,9 +18,10 @@ const FIELDS = [
   field('validUntil', 'Gültig bis', 'Valid until', ['gültig bis', 'nächste Untersuchung', 'Wiedervorstellung']),
   field('examiner', 'Arzt / Stelle', 'Doctor / office', ['Arzt', 'Stelle', 'Untersucher']),
   field('restrictions', 'Einschränkungen', 'Restrictions', ['Einschränkung', 'Einschränkungen', 'Auflagen']),
+  field('result', 'Ergebnis', 'Result', ['Ergebnis', 'Beurteilung', 'Bedenken']),
 ];
 
-/** Medical examinations from a CSV/Excel file (only date, valid until, doctor and restrictions). */
+/** Medical examinations from a CSV/Excel file (date, valid until, doctor, restrictions and result; no findings). */
 @Injectable()
 export class ExaminationsImport {
   constructor(
@@ -33,8 +35,8 @@ export class ExaminationsImport {
       id: 'respiratory-protection.examinations',
       name: { de: 'Eignungsuntersuchungen', en: 'Medical examinations' },
       description: {
-        de: 'Eine Zeile je Untersuchung mit Personalnummer oder Name, Datum und „gültig bis“. Befunde werden nicht übernommen. Eine schon vorhandene Untersuchung derselben Person am selben Tag wird aktualisiert.',
-        en: 'One row per examination with personnel number or name, date and "valid until". Findings are not taken over. An existing examination of the same person on the same day is updated.',
+        de: 'Eine Zeile je Untersuchung mit Personalnummer oder Name, Datum, „gültig bis“ (nach dem Datum) und optional dem Ergebnis („keine Bedenken“, „befristet keine Bedenken“, „keine Bedenken unter bestimmten Voraussetzungen“, „Bedenken“). Befunde werden nicht übernommen. Eine schon vorhandene Untersuchung derselben Person am selben Tag wird aktualisiert.',
+        en: 'One row per examination with personnel number or name, date, "valid until" (after the date) and optionally the result ("no concerns", "no concerns for a limited time", "no concerns under certain conditions", "concerns"). Findings are not taken over. An existing examination of the same person on the same day is updated.',
       },
       permission: EXAMINATIONS,
       fields: FIELDS,
@@ -57,12 +59,17 @@ export class ExaminationsImport {
       if (!date) { error('imports.invalidDate'); continue; }
       const validUntil = values['validUntil'] ? parseDate(values['validUntil']) : null;
       if (values['validUntil'] && !validUntil) { error('imports.invalidDate'); continue; }
+      if (validUntil && validUntil <= date) { error('respiratory-protection.validUntilNotAfterDate'); continue; }
+      const result = parseResult(values['result'] ?? '');
+      if (result === undefined) { error('respiratory-protection.import.unknownResult', { value: values['result'] ?? '' }); continue; }
       const [person] = await this.directory.snapshots([personId]);
       if (!person || !this.evidence.can(user, EXAMINATIONS, person)) { error('auth.forbidden'); continue; }
 
-      const fields = { validUntil, examiner: values['examiner'] ?? '', restrictions: values['restrictions'] ?? '' };
+      // Without a result column, a stored result stays.
+      const fields = { validUntil, examiner: values['examiner'] ?? '', restrictions: values['restrictions'] ?? '', ...(result ? { result } : {}) };
       const existing = await em.findOne(EvidenceEntity, { personId, kind: 'examination', date });
-      const changed = existing && (existing.validUntil !== fields.validUntil || existing.examiner !== fields.examiner || existing.restrictions !== fields.restrictions);
+      const changed =
+        existing && (existing.validUntil !== fields.validUntil || existing.examiner !== fields.examiner || existing.restrictions !== fields.restrictions || (result !== null && existing.result !== result));
       if (!dryRun) {
         if (existing) Object.assign(existing, fields);
         else em.create(EvidenceEntity, { personId, kind: 'examination', date, ...fields, source: 'import', sourceId: null, withdrawn: false });

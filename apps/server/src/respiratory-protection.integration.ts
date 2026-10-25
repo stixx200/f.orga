@@ -61,14 +61,20 @@ describe('respiratory protection', () => {
   });
 
   it('keeps examinations to those allowed to see health data', async () => {
-    await post('/respiratory-protection/evidence', { personId: ids.jonas, kind: 'examination', date: daysAgo(200), validUntil: daysAgo(-500), restrictions: 'nur bis 5 kg' }, leader).expect(403);
-    const exam = await post('/respiratory-protection/evidence', { personId: ids.jonas, kind: 'examination', date: daysAgo(200), validUntil: daysAgo(-500), restrictions: 'nur bis 5 kg' }, officer).expect(201);
+    const examination = { personId: ids.jonas, kind: 'examination', date: daysAgo(200), validUntil: daysAgo(-500), restrictions: 'nur bis 5 kg', result: 'no-concerns-conditional' };
+    await post('/respiratory-protection/evidence', examination, leader).expect(403);
+    // The result is required; "valid until" lies after the date and within the interval of the rule (36 months at 31).
+    expect((await post('/respiratory-protection/evidence', { ...examination, result: null }, officer).expect(400)).body.code).toBe('respiratory-protection.resultRequired');
+    expect((await post('/respiratory-protection/evidence', { ...examination, validUntil: daysAgo(200) }, officer).expect(400)).body.code).toBe('respiratory-protection.validUntilNotAfterDate');
+    expect((await post('/respiratory-protection/evidence', { ...examination, validUntil: daysAgo(-1200) }, officer).expect(400)).body.code).toBe('respiratory-protection.validUntilTooLate');
+    expect((await post('/respiratory-protection/evidence', { ...examination, result: 'no-concerns-limited', validUntil: null }, officer).expect(400)).body.code).toBe('respiratory-protection.validUntilRequired');
+    const exam = await post('/respiratory-protection/evidence', examination, officer).expect(201);
     ids.exam = exam.body.id;
     const seenByLeader = (await get(`/respiratory-protection/persons/${ids.jonas}`, leader).expect(200)).body;
     expect(seenByLeader.evidence).toEqual([]);
     expect(seenByLeader.status.conditions[0]).toMatchObject({ key: 'examination', met: true });
     const seenByOfficer = (await get(`/respiratory-protection/persons/${ids.jonas}`, officer).expect(200)).body;
-    expect(seenByOfficer.evidence[0]).toMatchObject({ kind: 'examination', restrictions: 'nur bis 5 kg', source: 'manual' });
+    expect(seenByOfficer.evidence[0]).toMatchObject({ kind: 'examination', restrictions: 'nur bis 5 kg', source: 'manual', result: 'no-concerns-conditional' });
     // The history of an examination is health data: only for those allowed to see examinations.
     await get(`/core/history/respiratory_protection.evidence/${ids.exam}`, leader).expect(404);
     await get(`/core/history/respiratory_protection.evidence/${ids.exam}`, officer).expect(200);
@@ -76,6 +82,11 @@ describe('respiratory protection', () => {
 
   it('takes over records of closed training sessions and real incidents', async () => {
     await post('/respiratory-protection/evidence/quick', { kind: 'briefing', date: daysAgo(30), entries: [{ personId: ids.jonas }] }, officer).expect(201);
+    // A stress exercise below the minimum work (80 kJ at 31) cannot be recorded as passed.
+    const weak = await post('/respiratory-protection/evidence/quick', { kind: 'stress-exercise', date: daysAgo(30), entries: [{ personId: ids.jonas, kilojoules: 70, passed: true }] }, officer).expect(400);
+    expect(weak.body).toMatchObject({ code: 'respiratory-protection.belowMinimum', minimum: 80 });
+    await post('/respiratory-protection/evidence', { personId: ids.jonas, kind: 'stress-exercise', date: daysAgo(30), kilojoules: 70, passed: true }, officer).expect(400);
+    expect((await get('/respiratory-protection/status', officer)).body.find((s: { personId: string }) => s.personId === ids.jonas)).toMatchObject({ minimumKilojoules: 80 });
 
     // Stress exercise in the training module.
     const session = (await post('/training/sessions', { type: 'stress-exercise', title: 'Übungsstrecke', startsAt: at(-120), endsAt: at(-30), departmentIds: [ids.musterstadt] }).expect(201)).body.id;
@@ -107,7 +118,7 @@ describe('respiratory protection', () => {
     // In a chemical protective suit the incident also counts as chemical suit evidence.
     expect(view.evidence.filter((e: { kind: string; source: string }) => e.kind === 'chemical-suit' && e.source === 'incidents')).toHaveLength(1);
     // The device of the report goes into the record.
-    expect(view.evidence.find((e: { kind: string }) => e.kind === 'incident')).toMatchObject({ device: 'compressed-air' });
+    expect(view.evidence.find((e: { kind: string }) => e.kind === 'incident')).toMatchObject({ device: 'compressed-air', source: 'incidents', sourceId: event.reportId, note: 'B2 · Nr. 2026-1' });
     expect(view.status.color).toBe('green');
     expect(changes).toContainEqual({ personId: ids.jonas, previous: 'red', color: 'green' });
 
@@ -133,13 +144,35 @@ describe('respiratory protection', () => {
     expect(await color(ids.jonas, officer)).toBe('green');
   });
 
+  it('shows concerns only to those allowed to see examinations and does not lose the e-mail when sending fails', async () => {
+    const mail = test.app.get(MailService);
+    const sent = mail.sent.length;
+    const send = mail.send.bind(mail);
+    mail.send = () => Promise.reject(new Error('mail server down'));
+    const concerns = (await post('/respiratory-protection/evidence', { personId: ids.jonas, kind: 'examination', date: daysAgo(1), result: 'concerns' }, officer).expect(201)).body;
+    mail.send = send;
+    expect(await color(ids.jonas, officer)).toBe('red');
+    const officerView = (await get(`/respiratory-protection/persons/${ids.jonas}`, officer)).body.status.conditions[0];
+    expect(officerView).toMatchObject({ key: 'examination', met: false, concerns: true });
+    const leaderView = (await get(`/respiratory-protection/persons/${ids.jonas}`, leader)).body.status.conditions[0];
+    expect(leaderView).toEqual({ key: 'examination', met: false, lastDate: null, dueOn: null });
+    expect(mail.sent).toHaveLength(sent);
+    // The next check of the person sends the pending e-mail.
+    const briefing = (await post('/respiratory-protection/evidence', { personId: ids.jonas, kind: 'briefing', date: daysAgo(5) }, officer).expect(201)).body;
+    expect(mail.sent.slice(sent)).toEqual([expect.objectContaining({ to: 'agw@example.org', subject: 'Atemschutz: Jonas Test ist nicht mehr einsatzbereit' })]);
+    await del(`/respiratory-protection/evidence/${briefing.id}`, officer).expect(204);
+    await del(`/respiratory-protection/evidence/${concerns.id}`, officer).expect(204);
+    expect(await color(ids.jonas, officer)).toBe('green');
+    expect(mail.sent).toHaveLength(sent + 1);
+  });
+
   it('applies the configurable rule; the officer may change it', async () => {
     await put('/core/settings/respiratory-protection.rule', { briefing: false, exercise: false, stressExercise: false, leadDays: 30 }, leader).expect(403);
     await put('/core/settings/respiratory-protection.rule', { briefing: false, exercise: false, stressExercise: false, leadDays: 30 }, officer).expect(200);
     const lena = (await get(`/respiratory-protection/persons/${ids.lena}`, officer)).body.status;
     expect(lena.conditions.map((c: { key: string }) => c.key)).toEqual(['examination']);
     // Lena is over 50: an examination without "valid until" is valid 12 months.
-    await post('/respiratory-protection/evidence', { personId: ids.lena, kind: 'examination', date: daysAgo(350) }, officer).expect(201);
+    await post('/respiratory-protection/evidence', { personId: ids.lena, kind: 'examination', date: daysAgo(350), result: 'no-concerns' }, officer).expect(201);
     const after = (await get(`/respiratory-protection/persons/${ids.lena}`, officer)).body.status;
     expect(after).toMatchObject({ color: 'yellow' });
     await put('/core/settings/respiratory-protection.rule', {}, officer).expect(200);
@@ -170,13 +203,18 @@ describe('respiratory protection', () => {
 
     const tasks = (await get(`/core/tasks?asOf=${today}`, officer).expect(200)).body as { kind: string }[];
     expect(tasks.some((t) => t.kind.startsWith('breathing-apparatus-'))).toBe(true);
+    // The examination deadline goes to those who record evidence, like the other conditions (no results in it).
+    expect(tasks.some((t) => t.kind === 'breathing-apparatus-examination')).toBe(true);
 
-    const csv = 'Name;Datum;gültig bis;Einschränkungen\nLena Test;01.02.2026;31.01.2027;\nUnbekannt Niemand;01.02.2026;;\n';
+    const csv = 'Name;Datum;gültig bis;Einschränkungen;Ergebnis\nLena Test;01.02.2026;31.01.2027;;keine Bedenken\nUnbekannt Niemand;01.02.2026;;;\nJonas Test;01.03.2026;28.02.2026;;\nJonas Test;02.03.2026;;;tauglich\n';
     const upload = await test.http.post('/api/core/imports').set('Cookie', officer).set(UI).attach('file', Buffer.from(csv, 'utf8'), 'g26.csv').expect(201);
     const mapping = upload.body.suggestions['respiratory-protection.examinations'];
-    expect(mapping).toMatchObject({ personName: 'Name', date: 'Datum', validUntil: 'gültig bis' });
+    expect(mapping).toMatchObject({ personName: 'Name', date: 'Datum', validUntil: 'gültig bis', result: 'Ergebnis' });
     const applied = await post(`/core/imports/${upload.body.id}/apply`, { profile: 'respiratory-protection.examinations', mapping }, officer).expect(200);
-    expect(applied.body.counts).toMatchObject({ create: 1, error: 1 });
+    // Unknown person, "valid until" before the date, unknown result.
+    expect(applied.body.counts).toMatchObject({ create: 1, error: 3 });
+    const examined = (await get(`/respiratory-protection/persons/${ids.lena}`, officer)).body.evidence.find((e: { kind: string; date: string }) => e.kind === 'examination' && e.date === '2026-02-01');
+    expect(examined).toMatchObject({ result: 'no-concerns', source: 'import' });
 
     // Stress exercises from a training facility: kJ decide by the rule, "passed" overrides.
     const facility = 'Teilnehmer;Datum;kJ;Anlage\nLena Test;03.02.2026;65;Übungsstrecke Kreisstadt\nJonas Test;03.02.2026;abc;Übungsstrecke Kreisstadt\nLena Test;04.02.2026;;Übungsstrecke Kreisstadt\n';

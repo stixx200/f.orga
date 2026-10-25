@@ -22,12 +22,21 @@ export type BreathingDevice = z.infer<typeof BreathingDevice>;
 export const ExaminationGroup = z.enum(['up-to-5kg', 'over-5kg']);
 export type ExaminationGroup = z.infer<typeof ExaminationGroup>;
 
+/**
+ * Result of the medical examination (DGUV G 26): no concerns, no concerns for a limited time (certificate with
+ * "valid until"), no concerns under certain conditions (see restrictions), concerns (not fit).
+ */
+export const ExaminationResult = z.enum(['no-concerns', 'no-concerns-limited', 'no-concerns-conditional', 'concerns']);
+export type ExaminationResult = z.infer<typeof ExaminationResult>;
+
 export const EvidenceInput = z.object({
   personId: z.uuid(),
   kind: EvidenceKind,
   date,
-  /** Examination: "valid until" of the certificate; without it the interval of the rule applies. */
+  /** Examination: "valid until" of the certificate (after the date, at most the interval of the rule); without it the interval applies. */
   validUntil: date.nullable().default(null),
+  /** Examination: result, required when recording; `null` only for examinations taken over without result. */
+  result: ExaminationResult.nullable().default(null),
   /** Examination: doctor or office. */
   examiner: optionalText,
   /** Examination: e.g. "only devices up to 5 kg"; no findings. */
@@ -63,6 +72,7 @@ export const Evidence = z.object({
   kind: EvidenceKind,
   date: z.string(),
   validUntil: z.string().nullable(),
+  result: ExaminationResult.nullable(),
   examiner: z.string(),
   restrictions: z.string(),
   examinationGroup: ExaminationGroup.nullable(),
@@ -91,13 +101,16 @@ export const FitnessRule = z.object({
   /** Annual evidence: valid 12 months, or until the end of the following calendar year. */
   window: z.enum(['twelve-months', 'calendar-year']).default('twelve-months'),
   minKilojoules: z.number().int().min(0).default(80),
-  /** From the age `olderFromAge` (default 50). */
+  /** From the age `olderFromAge` (default 50) on. */
   minKilojoulesFrom50: z.number().int().min(0).default(60),
   /** Minimum age of wearers (FwDV 7). */
   minimumAge: z.number().int().min(0).max(99).default(18),
-  /** Age from which the lower kJ limit and the shorter examination intervals apply (DGUV G 26). */
+  /**
+   * Age from which on (inclusive: `age >= olderFromAge` on the date of the evidence) the lower kJ limit and the
+   * shorter examination intervals apply (DGUV G 26).
+   */
   olderFromAge: z.number().int().min(0).max(99).default(50),
-  /** Examination interval `by-age` in months: up to `olderFromAge`, above it, and above it for devices up to 5 kg. */
+  /** Examination interval `by-age` in months: below `olderFromAge`, from it on, and from it on for devices up to 5 kg. */
   examinationMonths: z.number().int().min(1).max(120).default(36),
   examinationMonthsOlder: z.number().int().min(1).max(120).default(12),
   examinationMonthsOlderLight: z.number().int().min(1).max(120).default(24),
@@ -127,6 +140,8 @@ export const Condition = z.object({
   lastDate: z.string().nullable(),
   /** Until when it is fulfilled. */
   dueOn: z.string().nullable(),
+  /** Examination with the result "concerns" (only for those who may see examinations). */
+  concerns: z.boolean().optional(),
 });
 export type Condition = z.infer<typeof Condition>;
 
@@ -138,6 +153,8 @@ export const FitnessStatus = z.object({
   color: FitnessColor,
   conditions: z.array(Condition),
   nextDue: z.string().nullable(),
+  /** Minimum work in kJ of a stress exercise today (by age; without birth date the general minimum). */
+  minimumKilojoules: z.number(),
 });
 export type FitnessStatus = z.infer<typeof FitnessStatus>;
 
