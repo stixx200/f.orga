@@ -35,11 +35,24 @@ export function toLocalInput(value: string | null | undefined): string {
   return `${parts['year']}-${parts['month']}-${parts['day']}T${parts['hour']}:${parts['minute']}`;
 }
 
-/** ISO timestamp from a local date-time input interpreted in Europe/Berlin. */
+/** Offset of Europe/Berlin from UTC in milliseconds at the instant `time`. */
+function offsetAt(time: number): number {
+  return Date.parse(`${toLocalInput(new Date(time).toISOString())}:00Z`) - time;
+}
+
+const HALF_DAY_MS = 12 * 60 * 60_000;
+
+/**
+ * ISO timestamp from a local date-time input interpreted in Europe/Berlin. The offset is the one valid at the intended
+ * local time, also in the nights of the clock changes: a time that occurs twice (end of summer time) is the earlier
+ * one, a time that does not exist (start of summer time) moves forward by the gap.
+ */
 export function fromLocalInput(local: string): string {
-  const asUtc = new Date(`${local}:00Z`);
-  const zoned = (zone: string) => new Date(asUtc.toLocaleString('en-US', { timeZone: zone })).getTime();
-  return new Date(asUtc.getTime() - (zoned(ZONE) - zoned('UTC'))).toISOString();
+  const wall = Date.parse(`${local}:00Z`);
+  // The offsets before and after a possible change; at most one change lies within a day.
+  const offsets = [...new Set([offsetAt(wall - HALF_DAY_MS), offsetAt(wall + HALF_DAY_MS)])];
+  const matching = offsets.map((offset) => wall - offset).filter((time) => toLocalInput(new Date(time).toISOString()) === local);
+  return new Date(matching.length ? Math.min(...matching) : wall - offsets[0]).toISOString();
 }
 
 /** `Freitag, 23. Oktober 2026` in Europe/Berlin. */
