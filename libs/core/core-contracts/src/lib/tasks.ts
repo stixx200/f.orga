@@ -16,6 +16,8 @@ export const Deadline = z.object({
   stage: DeadlineStage,
   /** Heading the weekly e-mail groups the deadline under, e.g. category and vehicle of an item. */
   group: LocalizedText.optional(),
+  /** Page of the app where the task is done, e.g. `/equipment/items/<id>`; without it the shell derives it from the subject type. */
+  to: z.string().optional(),
 });
 export type Deadline = z.infer<typeof Deadline>;
 

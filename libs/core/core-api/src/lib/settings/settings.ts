@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { defineEntity, EntityManager, p } from '@mikro-orm/core';
 import type { z } from 'zod';
-import { CORE_SETTINGS, SECRET_SETTING_FIELDS } from '@forga/core-contracts';
+import { CORE_SETTINGS, CORE_SETTINGS_ACCESS, SECRET_SETTING_FIELDS, type SettingsAccess } from '@forga/core-contracts';
 import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { CurrentUser } from '../security/decorators.js';
@@ -34,6 +34,7 @@ SettingSchema.setClass(Setting);
 @Injectable()
 export class SettingsService {
   private readonly schemas: Map<string, z.ZodType>;
+  private readonly access: Map<string, SettingsAccess>;
 
   constructor(
     private readonly em: EntityManager,
@@ -41,6 +42,17 @@ export class SettingsService {
   ) {
     // A Map, so names like `constructor` or `__proto__` are unknown sections instead of object internals.
     this.schemas = new Map(Object.entries(Object.assign({}, CORE_SETTINGS, ...options.modules.map((m) => m.settings)) as Record<string, z.ZodType>));
+    this.access = new Map(Object.entries(Object.assign({}, CORE_SETTINGS_ACCESS, ...options.modules.map((m) => m.settingsAccess)) as Record<string, SettingsAccess>));
+  }
+
+  /** Managers of a section: `core.settings.manage`, or `<module>.settings.manage` for the sections of that module. */
+  managerPermissions(section: string): string[] {
+    const module = section.includes('.') ? section.slice(0, section.indexOf('.')) : null;
+    return ['core.settings.manage', ...(module && module !== 'core' ? [`${module}.settings.manage`] : [])];
+  }
+
+  isManager(user: AuthenticatedUser, section: string): boolean {
+    return this.managerPermissions(section).some((permission) => user.can(permission));
   }
 
   schema(section: string): z.ZodType {
@@ -53,8 +65,15 @@ export class SettingsService {
   async get<T = Record<string, unknown>>(section: string): Promise<T | null> {
     const schema = this.schema(section);
     const stored = await this.em.fork().findOne(Setting, { section });
-    const result = schema.safeParse(stored?.value ?? {});
-    return result.success ? (result.data as T) : null;
+    const value = stored?.value ?? {};
+    const result = schema.safeParse(value);
+    if (result.success) return result.data as T;
+    // A field stored before a stricter rule existed (e.g. an invalid address) falls back to its default
+    // instead of losing the whole section.
+    const invalid = new Set(result.error.issues.map((issue) => String(issue.path[0] ?? '')));
+    if (invalid.has('')) return null;
+    const retry = schema.safeParse(Object.fromEntries(Object.entries(value).filter(([key]) => !invalid.has(key))));
+    return retry.success ? (retry.data as T) : null;
   }
 
   async set(section: string, value: Record<string, unknown>): Promise<void> {
@@ -70,12 +89,20 @@ export class SettingsService {
     await em.flush();
   }
 
-  /** The value as the UI may see it: without write-only fields. */
-  async getPublic(section: string): Promise<Record<string, unknown> | null> {
+  /**
+   * The value as the user may see it: never write-only fields; sections and fields reserved for the managers
+   * only for them.
+   */
+  async getVisible(section: string, user: AuthenticatedUser): Promise<Record<string, unknown> | null> {
+    this.schema(section);
+    const access = this.access.get(section) ?? {};
+    const manager = this.isManager(user, section);
+    if (access.managersOnly && !manager) throw new ForbiddenException({ code: 'auth.forbidden', permissions: this.managerPermissions(section) });
     const value = await this.get(section);
     if (!value) return null;
     const visible = { ...value };
     for (const field of SECRET_SETTING_FIELDS[section] ?? []) delete visible[field];
+    if (!manager) for (const field of access.managerFields ?? []) delete visible[field];
     return visible;
   }
 }
@@ -84,20 +111,22 @@ export class SettingsService {
 export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
 
-  /** Every authenticated user may read settings (e.g. the brigade name for the header). */
+  /**
+   * Authenticated users may read the sections module UIs need (e.g. the brigade name for the header, incident settings);
+   * sections with server addresses and accounts (SMTP, OIDC, privacy, reminders) and fields such as the calendar
+   * feed token only the managers of the section.
+   */
   @Get(':section')
-  get(@Param('section') section: string) {
-    return this.settings.getPublic(section);
+  get(@Param('section') section: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.settings.getVisible(section, user);
   }
 
   /** `core.settings.manage` for every section; `<module>.settings.manage` for the sections of that module. */
   @Put(':section')
   async set(@Param('section') section: string, @Body() body: unknown, @CurrentUser() user: AuthenticatedUser) {
-    const module = section.includes('.') ? section.slice(0, section.indexOf('.')) : null;
-    const permissions = ['core.settings.manage', ...(module && module !== 'core' ? [`${module}.settings.manage`] : [])];
-    if (!permissions.some((permission) => user.can(permission))) throw new ForbiddenException({ code: 'auth.forbidden', permissions });
+    if (!this.settings.isManager(user, section)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: this.settings.managerPermissions(section) });
     const value = new ZodPipe(this.settings.schema(section)).transform(body) as Record<string, unknown>;
     await this.settings.set(section, value);
-    return this.settings.getPublic(section);
+    return this.settings.getVisible(section, user);
   }
 }

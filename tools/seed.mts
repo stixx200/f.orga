@@ -9,6 +9,7 @@
  *   npm run seed
  *   npm run seed -- --only clothing      (only the clothing store, into an instance with persons)
  *   FORGA_URL=http://localhost:3000 FORGA_ADMIN_USER=admin FORGA_ADMIN_PASSWORD=… npm run seed
+ *   FORGA_SETUP_TOKEN=… npm run seed     (empty instance: the setup token from the server log or its environment)
  */
 import ExcelJS from 'exceljs';
 import { VWV_2022_RULES } from '@forga/promotions-contracts';
@@ -359,8 +360,10 @@ function dutyCalendar(officers: PersonRef[]): string {
 async function login(): Promise<void> {
   const setup = await call<{ required: boolean }>('GET', 'core/setup');
   if (setup.required) {
+    const setupToken = process.env['FORGA_SETUP_TOKEN'];
+    if (!setupToken) throw new Error('Ersteinrichtung nötig: FORGA_SETUP_TOKEN setzen (Wert aus dem Server-Protokoll oder der Umgebung des Servers).');
     console.log('Ersteinrichtung …');
-    await call('POST', 'core/setup', { brigadeName: BRIGADE, username: ADMIN.username, displayName: 'Administrator', password: ADMIN.password });
+    await call('POST', 'core/setup', { setupToken, brigadeName: BRIGADE, username: ADMIN.username, displayName: 'Administrator', email: 'admin@example.org', password: ADMIN.password });
   }
   await call('POST', 'core/login', ADMIN);
 }

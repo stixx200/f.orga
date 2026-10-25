@@ -1,32 +1,25 @@
-import { ActionIcon, Indicator, Popover, Stack, Text, UnstyledButton } from '@mantine/core';
+import { ActionIcon, Indicator, Popover, ScrollArea, Text } from '@mantine/core';
 import { IconBell } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import type { Deadline } from '@forga/core-contracts';
-import { api, useLocalized, useTranslation } from '@forga/web-sdk';
-import { StatusBadge } from '@forga/web-ui';
-import { deadlineBadge } from './stage';
+import { api, useTranslation } from '@forga/web-sdk';
+import { groupCount, TaskGroups } from './TaskGroups';
+
+const BELL_GROUPS = 8;
 
 export function useTasks() {
   return useQuery({ queryKey: ['core', 'tasks'], queryFn: () => api<Deadline[]>('core/tasks'), staleTime: 60_000 });
 }
 
-/** Link of a task to the subject's page, if the subject type is known. */
-export function taskLink(deadline: Deadline): string | undefined {
-  if (deadline.subject.type === 'masterdata.person') return `/masterdata/persons/${deadline.subject.id}`;
-  if (deadline.subject.type === 'incidents.report') return `/incidents/reports/${deadline.subject.id}`;
-  if (deadline.subject.type === 'core.me') return '/me';
-  return undefined;
-}
-
-/** Bell with the number of overdue and due tasks; opens the list. */
+/** Bell with the number of overdue and due tasks; opens the grouped list. */
 export function TasksBell() {
   const { t } = useTranslation('shell');
-  const localized = useLocalized();
   const { data = [] } = useTasks();
   const urgent = data.filter((d) => d.stage !== 'upcoming').length;
+  const more = groupCount(data) - BELL_GROUPS;
   return (
-    <Popover width={360} position="bottom-end" shadow="lg">
+    <Popover width={380} position="bottom-end" shadow="lg">
       <Popover.Target>
         <Indicator label={urgent} size={18} disabled={!urgent} color="brand" offset={4}>
           <ActionIcon size={44} aria-label={`${t('header.tasks')} (${urgent})`}>
@@ -37,24 +30,10 @@ export function TasksBell() {
       <Popover.Dropdown>
         <Text fw={700} c="brand" mb="xs">{t('header.tasks')}</Text>
         {!data.length && <Text size="sm" c="dimmed">{t('header.noTasks')}</Text>}
-        <Stack gap={4}>
-          {data.slice(0, 8).map((d) => {
-            const badge = deadlineBadge(d, t);
-            const to = taskLink(d);
-            const content = (
-              <>
-                <StatusBadge tone={badge.tone}>{badge.text}</StatusBadge>
-                <Text size="sm" fw={700} mt={2}>{localized(d.title)}</Text>
-                <Text size="xs" c="dimmed">{d.subject.label}</Text>
-              </>
-            );
-            return to ? (
-              <UnstyledButton key={d.id} component={Link} to={to} p={6}>{content}</UnstyledButton>
-            ) : (
-              <div key={d.id} style={{ padding: 6 }}>{content}</div>
-            );
-          })}
-        </Stack>
+        <ScrollArea.Autosize mah={420}>
+          <TaskGroups tasks={data} compact limit={BELL_GROUPS} />
+        </ScrollArea.Autosize>
+        {more > 0 && <Text size="xs" c="dimmed" mt={4}>{t('header.moreTasks', { count: more })}</Text>}
         {data.length > 0 && <Text component={Link} to="/" size="sm" c="brand" fw={700} mt="sm" display="block">{t('header.allTasks')}</Text>}
       </Popover.Dropdown>
     </Popover>

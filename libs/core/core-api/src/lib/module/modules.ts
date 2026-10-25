@@ -134,7 +134,16 @@ export class ModuleGateMiddleware implements NestMiddleware {
   constructor(private readonly modules: ModuleStateService) {}
 
   async use(req: Request, res: Response, next: NextFunction): Promise<void> {
-    const segment = /^\/api\/([^/?]+)/.exec(req.originalUrl)?.[1];
+    // Express matches routes case-insensitively and decoded, so the gate compares the same way
+    // (`/api/Cost-Recovery/…` must not bypass a deactivated module).
+    const raw = /^\/+api\/+([^/?#]+)/i.exec(req.originalUrl)?.[1];
+    let segment = raw;
+    try {
+      segment = raw && decodeURIComponent(raw);
+    } catch {
+      // Malformed escapes: Express answers 400 anyway; compare the raw segment.
+    }
+    segment = segment?.toLowerCase();
     if (segment && (await this.modules.inactiveIds()).has(segment)) {
       res.status(404).json({ code: 'modules.inactive', module: segment });
       return;

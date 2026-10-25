@@ -7,13 +7,18 @@ export function matches(pattern: string, permission: string): boolean {
   return pattern === permission;
 }
 
+/** The given department and all departments below it (e.g. youth and veterans department of an operational department). */
+export type SubDepartments = (departmentId: string) => readonly string[];
+
 /**
  * Turns role assignments into effective grants.
- * An assignment for a department only applies to permissions with scope `department`.
+ * An assignment for a department only applies to permissions with scope `department`;
+ * it covers the departments below the assigned one as well (`subDepartments`).
  */
 export function computeGrants(
   known: readonly Permission[],
   assignments: readonly { patterns: readonly string[]; departmentId: string | null }[],
+  subDepartments: SubDepartments = (id) => [id],
 ): Map<string, Grant> {
   const result = new Map<string, Grant>();
   for (const permission of known) {
@@ -25,7 +30,7 @@ export function computeGrants(
         break;
       }
       if (permission.scope !== 'department') continue;
-      result.set(permission.id, [...new Set([...(current ?? []), departmentId])]);
+      result.set(permission.id, [...new Set([...(current ?? []), departmentId, ...subDepartments(departmentId)])]);
     }
   }
   return result;

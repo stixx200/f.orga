@@ -1,9 +1,9 @@
-import { ActionIcon, Button, Grid, Group, PasswordInput, Select, Stack, Switch, Text, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Button, Grid, Group, MultiSelect, PasswordInput, Select, Stack, Switch, Text, TextInput, Title } from '@mantine/core';
 import { IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
-import type { Role, User, UserInput } from '@forga/core-contracts';
-import { can, formatDateTime, send, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, matchesSearch, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
+import type { BulkUserInvitationResult, Role, User, UserInput } from '@forga/core-contracts';
+import { can, currentLanguage, formatDateTime, send, useSession, useTranslation } from '@forga/web-sdk';
+import { ConfirmDialog, DataTable, matchesSearch, notifySuccess, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { type DepartmentOption, personLabel, USERS_KEY, useDepartments, usePersons, useRoles, useUsers } from './data';
 
 type Draft = Required<Omit<UserInput, 'password'>> & { password: string };
@@ -53,6 +53,7 @@ function UserEditor({ user, onDone }: { user: User | null; onDone: (id: string |
   const impersonate = useAction((reason: string) => send('POST', `core/users/${user!.id}/impersonate`, { reason }), {
     onSuccess: () => window.location.assign('/'),
   });
+  const resend = useAction(() => send('POST', `core/users/${user!.id}/invitation`), { success: t('users.resent') });
   const unlinkOidc = useAction(() => send('DELETE', `core/users/${user!.id}/oidc`), { success: t('users.oidcUnlinked'), invalidate: [USERS_KEY] });
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
@@ -78,7 +79,7 @@ function UserEditor({ user, onDone }: { user: User | null; onDone: (id: string |
   return (
     <Panel
       title={user ? user.displayName : t('users.new')}
-      aside={user && <StatusBadge tone={user.active ? 'done' : 'warning'}>{t(user.active ? 'users.active' : 'users.locked')}</StatusBadge>}
+      aside={user && <StatusBadge tone={user.active ? (user.passwordSet ? 'done' : 'neutral') : 'warning'}>{t(!user.active ? 'users.locked' : user.passwordSet ? 'users.active' : 'users.pending')}</StatusBadge>}
     >
       <form
         onSubmit={(event) => {
@@ -148,6 +149,7 @@ function UserEditor({ user, onDone }: { user: User | null; onDone: (id: string |
             {user && !isSelf && user.active && !user.technical && can(session, 'core.users.impersonate') && !session?.impersonator && (
               <Button variant="subtle" onClick={() => setImpersonating(true)}>{t('users.impersonate')}</Button>
             )}
+            {user && !user.passwordSet && user.active && <Button variant="subtle" onClick={() => resend.mutate(undefined)} loading={resend.isPending}>{t('users.resend')}</Button>}
             {user?.oidcLinked && <Button variant="subtle" onClick={() => unlinkOidc.mutate(undefined)} loading={unlinkOidc.isPending}>{t('users.oidcUnlink')}</Button>}
             {user && !isSelf && (
               user.active ? (
@@ -197,6 +199,7 @@ export function UsersPage() {
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const [status, setStatus] = useState<string>('active');
   const [selected, setSelected] = useState<string | null>(null);
+  const [inviting, setInviting] = useState<'one' | 'many' | null>(null);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -214,8 +217,18 @@ export function UsersPage() {
       <PageHeader
         breadcrumbs={[{ label: t('nav.administration') }, { label: t('nav.users') }]}
         title={t('nav.users')}
-        actions={<Button onClick={() => setSelected('new')}>{t('users.create')}</Button>}
+        actions={
+          <Group gap="xs">
+            {persons.length > 0 && <Button variant="default" onClick={() => setInviting('many')}>{t('users.bulk')}</Button>}
+            {persons.length > 0 && <Button variant="default" onClick={() => setInviting('one')}>{t('users.invite')}</Button>}
+            <Button onClick={() => setSelected('new')}>{t('users.create')}</Button>
+          </Group>
+        }
       />
+      {inviting && <InviteDialog many={inviting === 'many'} linked={new Set(users.flatMap((u) => (u.personId ? [u.personId] : [])))} onClose={(id) => {
+        setInviting(null);
+        if (id) setSelected(id);
+      }} />}
       <Grid gap="lg">
         <Grid.Col span={{ base: 12, lg: selected ? 7 : 12 }}>
           <Stack gap="md">
@@ -243,7 +256,11 @@ export function UsersPage() {
                 {
                   key: 'status',
                   header: t('users.status'),
-                  render: (u) => <StatusBadge tone={u.technical ? 'neutral' : u.active ? 'done' : 'warning'}>{t(u.technical ? 'users.technical' : u.active ? 'users.active' : 'users.locked')}</StatusBadge>,
+                  render: (u) => (
+                    <StatusBadge tone={u.technical || (u.active && !u.passwordSet) ? 'neutral' : u.active ? 'done' : 'warning'}>
+                      {t(u.technical ? 'users.technical' : !u.active ? 'users.locked' : u.passwordSet ? 'users.active' : 'users.pending')}
+                    </StatusBadge>
+                  ),
                 },
               ]}
             />
@@ -256,5 +273,60 @@ export function UsersPage() {
         )}
       </Grid>
     </Stack>
+  );
+}
+
+/** Invites one person (or several, `many`) to f.orga: user from the person file, link to set the password by e-mail. */
+function InviteDialog({ many, linked, onClose }: { many: boolean; linked: Set<string>; onClose: (createdId?: string) => void }) {
+  const { t } = useTranslation('shell');
+  const { t: common } = useTranslation('common');
+  const { data: roles = [] } = useRoles();
+  const { data: departments = [] } = useDepartments();
+  const { data: persons = [] } = usePersons();
+  const [personIds, setPersonIds] = useState<string[]>([]);
+  const [roleId, setRoleId] = useState<string | null>(null);
+  const [departmentId, setDepartmentId] = useState('');
+  const options = persons.filter((p) => !linked.has(p.id)).map((p) => ({ value: p.id, label: personLabel(p) }));
+  const body = () => ({ language: currentLanguage(), roles: roleId ? [{ roleId, departmentId: departmentId || null }] : [] });
+  const one = useAction(() => send<User>('POST', 'core/users/invitations', { personId: personIds[0], ...body() }), {
+    invalidate: [USERS_KEY],
+    onSuccess: (user) => {
+      notifySuccess(t('users.invited', { email: user.email }));
+      onClose(user.id);
+    },
+  });
+  const bulk = useAction(() => send<BulkUserInvitationResult>('POST', 'core/users/invitations/bulk', { personIds, ...body() }), {
+    invalidate: [USERS_KEY],
+    onSuccess: (result) => {
+      notifySuccess(t('users.bulkResult', { invited: result.invited.length, skipped: result.skipped.length }));
+      onClose();
+    },
+  });
+  const action = many ? bulk : one;
+  return (
+    <ResponsiveDialog
+      opened
+      onClose={() => onClose()}
+      title={t(many ? 'users.bulkTitle' : 'users.inviteTitle')}
+      actions={
+        <>
+          <Button variant="outline" color="gray" onClick={() => onClose()}>{common('actions.cancel')}</Button>
+          <Button loading={action.isPending} disabled={!personIds.length} onClick={() => action.mutate(undefined)}>
+            {many ? t('users.bulkSend', { count: personIds.length }) : t('users.inviteSend')}
+          </Button>
+        </>
+      }
+    >
+      <Text size="sm">{t(many ? 'users.bulkText' : 'users.inviteText')}</Text>
+      {many ? (
+        <MultiSelect label={t('users.bulkPersons')} data={options} value={personIds} onChange={setPersonIds} searchable clearable />
+      ) : (
+        <Select label={t('users.invitePerson')} data={options} value={personIds[0] ?? null} onChange={(value) => setPersonIds(value ? [value] : [])} searchable required />
+      )}
+      <Group grow align="end">
+        <Select label={t('users.roleOptional')} data={roles.map((r) => ({ value: r.id, label: r.name }))} value={roleId} onChange={setRoleId} clearable />
+        <Select label={t('users.area')} data={[{ value: '', label: t('users.brigade') }, ...departments.map((d) => ({ value: d.id, label: d.name }))]} value={departmentId} onChange={(value) => setDepartmentId(value ?? '')} allowDeselect={false} />
+      </Group>
+    </ResponsiveDialog>
   );
 }

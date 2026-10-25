@@ -20,6 +20,8 @@ export interface DeadlineInput {
   personIds?: string[];
   /** Heading in the weekly e-mail, e.g. category and vehicle of an item. */
   group?: LocalizedText;
+  /** Page of the app where the task is done (absolute route, e.g. `/equipment/items/<id>`). */
+  to?: string;
 }
 
 /**
@@ -72,6 +74,7 @@ export class DeadlineRegistry {
           dueOn: input.dueOn,
           stage: stageOf(input.dueOn, asOf),
           ...(input.group ? { group: input.group } : {}),
+          ...(input.to ? { to: input.to } : {}),
         });
       }
     }

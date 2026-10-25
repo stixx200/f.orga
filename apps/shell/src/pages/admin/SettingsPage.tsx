@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import type { BrigadeSettings, OidcSettings, PrivacySettings, ReminderSettings, RetentionResult, SmtpSettings } from '@forga/core-contracts';
 import { api, can, send, upload as uploadFile, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, notifySuccess, PageHeader, Panel, useAction } from '@forga/web-ui';
+import { ConfirmDialog, Notice, notifySuccess, PageHeader, Panel, useAction } from '@forga/web-ui';
 import type { LoadedModule } from '../../modules';
 
 const key = (section: string) => ['core', 'settings', section] as const;
@@ -43,7 +43,38 @@ function SectionFormLoaded<T extends object>({ section, initial, children }: { s
 }
 
 const BRIGADE_DEFAULTS: BrigadeSettings = { name: '', street: '', postalCode: '', city: '', phone: '', fax: '', website: '', email: '', municipality: '', population: null, publicUrl: '' };
-const PRIVACY_DEFAULTS: PrivacySettings = { anonymizeLeftAfterYears: 10, auditRetentionMonths: 24 };
+const PRIVACY_DEFAULTS: PrivacySettings = { anonymizeLeftAfterYears: null, auditRetentionMonths: 24 };
+const TABS = ['brigade', 'smtp', 'reminders', 'privacy', 'oidc', 'export'];
+
+/** Persons a period would anonymise now (dry run with the chosen value, before saving). */
+function AffectedPersons({ years }: { years: number | null }) {
+  const { t } = useTranslation('shell');
+  const { data } = useQuery({
+    queryKey: ['core', 'retention', 'preview', years],
+    queryFn: () => send<RetentionResult>('POST', 'core/retention/run', { dryRun: true, settings: { anonymizeLeftAfterYears: years } }),
+    enabled: years !== null,
+  });
+  if (years === null || !data) return null;
+  const count = data.counts['masterdata.persons'] ?? 0;
+  return <Notice kind={count > 0 ? 'warning' : 'info'}>{t('settings.privacy.affected', { count })}</Notice>;
+}
+
+/** Warnings and the connection test of the OIDC settings. */
+function OidcChecks({ matchBy }: { matchBy: OidcSettings['matchBy'] }) {
+  const { t } = useTranslation('shell');
+  const { data: brigade } = useSection<BrigadeSettings>('brigade');
+  const test = useAction(() => send<{ issuer: string }>('POST', 'core/settings/oidc/test'), { onSuccess: (r) => notifySuccess(t('settings.oidc.testOk', { issuer: r.issuer })) });
+  return (
+    <Stack gap="sm">
+      {matchBy === 'username' && <Notice kind="warning">{t('settings.oidc.usernameWarning')}</Notice>}
+      {brigade && !brigade.publicUrl && <Notice kind="warning">{t('settings.oidc.noPublicUrl')}</Notice>}
+      <Text size="xs" c="dimmed">{t('settings.oidc.adminHint')}</Text>
+      <Group>
+        <Button variant="default" loading={test.isPending} onClick={() => test.mutate(undefined)}>{t('settings.oidc.test')}</Button>
+      </Group>
+    </Stack>
+  );
+}
 const SMTP_DEFAULTS: SmtpSettings = { host: '', port: 587, starttls: true, username: '', password: '', sender: '' };
 const REMINDER_DEFAULTS: ReminderSettings = { enabled: true, weekday: 1, hour: 7 };
 const OIDC_DEFAULTS: OidcSettings = { enabled: false, issuer: '', clientId: '', clientSecret: '', scopes: 'openid email profile', matchBy: 'email', buttonLabel: { de: 'Mit Konto der Gemeinde anmelden', en: 'Sign in with the municipal account' } };
@@ -60,11 +91,15 @@ export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
     const module = modules.find((m) => m.info.id === id);
     return module ? localized(module.info.name) : id;
   };
+  const [tab, setTab] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    return requested && TABS.includes(requested) ? requested : 'brigade';
+  });
   const weekdays = [1, 2, 3, 4, 5, 6, 7].map((day) => ({ value: String(day), label: t(`settings.weekdays.${day}`) }));
   return (
     <Stack gap="lg">
       <PageHeader breadcrumbs={[{ label: t('nav.administration') }, { label: t('nav.settings') }]} title={t('nav.settings')} />
-      <Tabs defaultValue="brigade" keepMounted={false}>
+      <Tabs value={tab} onChange={(value) => setTab(value ?? 'brigade')} keepMounted={false}>
         <Tabs.List mb="lg">
           <Tabs.Tab value="brigade">{t('settings.tabs.brigade')}</Tabs.Tab>
           <Tabs.Tab value="smtp">{t('settings.tabs.smtp')}</Tabs.Tab>
@@ -154,6 +189,7 @@ export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
                     <TextInput label={t('settings.oidc.labelEn')} value={v.buttonLabel.en} onChange={(e) => set('buttonLabel', { ...v.buttonLabel, en: e.currentTarget.value })} />
                   </SimpleGrid>
                   <Text size="xs" c="dimmed">{t('settings.oidc.redirect')}</Text>
+                  <OidcChecks matchBy={v.matchBy} />
                 </>
               )}
             </SectionForm>
@@ -163,6 +199,7 @@ export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
           <Panel title={t('settings.privacy.title')} maw={880}>
             <SectionForm section="privacy" defaults={PRIVACY_DEFAULTS}>
               {(v, set) => (
+                <>
                 <SimpleGrid cols={{ base: 1, sm: 2 }}>
                   <Select
                     label={t('settings.privacy.anonymize')}
@@ -180,6 +217,8 @@ export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
                     allowDeselect={false}
                   />
                 </SimpleGrid>
+                <AffectedPersons years={v.anonymizeLeftAfterYears} />
+                </>
               )}
             </SectionForm>
             <Group mt="md" align="center">

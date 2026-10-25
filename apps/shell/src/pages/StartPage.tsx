@@ -1,12 +1,13 @@
-import { Grid, SimpleGrid, Stack, Text, UnstyledButton } from '@mantine/core';
+import { Button, Grid, Group, Select, SimpleGrid, Stack, Text } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
-import type { Session } from '@forga/core-contracts';
-import { can, formatDate, formatLongDate, useLocalized, useTranslation } from '@forga/web-sdk';
-import { EmptyState, KpiTile, PageHeader, Panel, StatusBadge } from '@forga/web-ui';
+import type { OnboardingItem, Session } from '@forga/core-contracts';
+import { api, can, formatLongDate, useLocalized, useTranslation } from '@forga/web-sdk';
+import { EmptyState, KpiTile, PageHeader, Panel } from '@forga/web-ui';
 import type { LoadedModule } from '../modules';
-import { deadlineBadge } from '../frame/stage';
-import { taskLink, useTasks } from '../frame/TasksBell';
+import { TaskGroups } from '../frame/TaskGroups';
+import { useTasks } from '../frame/TasksBell';
 
 function greetingKey(hour: number): 'morning' | 'day' | 'evening' {
   if (hour < 11) return 'morning';
@@ -19,34 +20,58 @@ function brigadeScope(session: Session): boolean {
   return Object.values(session.permissions).some((grant) => grant === 'brigade');
 }
 
-function TaskList() {
-  const { t, i18n } = useTranslation('shell');
+/** Tasks grouped by kind and due date, filterable by module. */
+function TaskList({ modules }: { modules: LoadedModule[] }) {
+  const { t } = useTranslation('shell');
   const localized = useLocalized();
   const { data = [] } = useTasks();
+  const [module, setModule] = useState<string | null>(null);
   if (!data.length) return <EmptyState title={t('start.noTasks')} />;
+  const present = [...new Set(data.map((d) => d.module))];
+  const moduleName = (id: string) => {
+    const loaded = modules.find((m) => m.info.id === id);
+    return loaded ? localized(loaded.info.name) : id === 'core' ? t('nav.administration') : id;
+  };
   return (
-    <Stack gap={0}>
-      {data.map((d) => {
-        const badge = deadlineBadge(d, t);
-        const to = taskLink(d);
-        const row = (
-          <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', padding: '8px 0', borderBottom: '1px solid var(--forga-grid)' }}>
-            <div style={{ minWidth: 112 }}>
-              <StatusBadge tone={badge.tone}>{badge.text}</StatusBadge>
-            </div>
-            <div style={{ flex: 1 }}>
-              <Text size="sm" fw={700}>{localized(d.title)}</Text>
-              <Text size="xs" c="dimmed">{d.subject.label} · {formatDate(d.dueOn, i18n.language)}</Text>
-            </div>
-          </div>
-        );
-        return to ? (
-          <UnstyledButton key={d.id} component={Link} to={to}>{row}</UnstyledButton>
-        ) : (
-          <div key={d.id}>{row}</div>
-        );
-      })}
+    <Stack gap="sm">
+      {present.length > 1 && (
+        <Select
+          aria-label={t('tasks.module')}
+          placeholder={t('tasks.allModules')}
+          data={present.map((id) => ({ value: id, label: moduleName(id) }))}
+          value={module}
+          onChange={setModule}
+          clearable
+          size="xs"
+          maw={260}
+        />
+      )}
+      <TaskGroups tasks={module ? data.filter((d) => d.module === module) : data} />
     </Stack>
+  );
+}
+
+/** What an administrator still has to set up; disappears once everything is done. */
+function Onboarding() {
+  const { t } = useTranslation('shell');
+  const localized = useLocalized();
+  const { data = [] } = useQuery({ queryKey: ['core', 'onboarding'], queryFn: () => api<OnboardingItem[]>('core/onboarding') });
+  const open = data.filter((item) => !item.done);
+  if (!open.length) return null;
+  const label = (item: OnboardingItem) =>
+    item.key.startsWith('module:') ? t('onboarding.items.module', { name: item.label ? localized(item.label) : item.key.slice(7) }) : t(`onboarding.items.${item.key}`);
+  return (
+    <Panel title={t('onboarding.title')} aside={<Text size="xs" c="dimmed">{t('onboarding.done', { done: data.length - open.length, total: data.length })}</Text>}>
+      <Text size="sm" mb="xs">{t('onboarding.intro')}</Text>
+      <Stack gap={6}>
+        {open.map((item) => (
+          <Group key={item.key} justify="space-between" wrap="nowrap" gap="sm">
+            <Text size="sm">{label(item)}</Text>
+            <Button component={Link} to={item.to} size="compact-xs" variant="default" style={{ flexShrink: 0 }}>{t('onboarding.open')}</Button>
+          </Group>
+        ))}
+      </Stack>
+    </Panel>
   );
 }
 
@@ -70,6 +95,7 @@ export function StartPage({ modules, session }: { modules: LoadedModule[]; sessi
         title={t(`start.greeting.${greetingKey(now.getHours())}`, { name: session.user.displayName })}
         subtitle={`${formatLongDate(now, i18n.language)} · ${t(brigadeScope(session) ? 'start.scopeBrigade' : 'start.scopeDepartments')}`}
       />
+      {(can(session, 'core.settings.manage') || can(session, 'core.users.manage')) && <Onboarding />}
       <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md">
         {area('kpi').map(({ id, component: Item }) => (
           <Item key={id} />
@@ -89,7 +115,7 @@ export function StartPage({ modules, session }: { modules: LoadedModule[]; sessi
         <Grid.Col span={{ base: 12, md: area('main').length > 0 ? 4 : 12 }}>
           <Stack gap="lg">
             <Panel title={t('start.tasks')} aside={<Text size="xs" c="dimmed">{t('start.tasksForRoles')}</Text>}>
-              <TaskList />
+              <TaskList modules={modules} />
             </Panel>
             {area('side').map(({ id, component: Item }) => (
               <Item key={id} />
