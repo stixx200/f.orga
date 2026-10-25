@@ -6,8 +6,8 @@ import { ORGANIZATION_REFERENCES, type OrganizationReferences, PERSON_HOLDINGS, 
 import { CLOTHING_MIGRATIONS } from '../migrations/index.js';
 import { ClothingController } from './clothing.controller.js';
 import { ClothingData } from './clothing.data.js';
-import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, IssueEntity } from './clothing.entities.js';
-import { ClothingService, MANAGE, READ } from './clothing.service.js';
+import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, ConsumableReceiptEntity, IssueEntity, SizeProfileEntity } from './clothing.entities.js';
+import { ClothingService, ISSUE, MANAGE, READ } from './clothing.service.js';
 
 @Module({ controllers: [ClothingController], providers: [ClothingService, ClothingData] })
 export class ClothingModule implements OnModuleInit {
@@ -36,6 +36,8 @@ export class ClothingModule implements OnModuleInit {
       return { allowed: Boolean(item) && user.can(READ, item!.departmentId) };
     });
     this.historyAccess.registerPermission('clothing.article', MANAGE);
+    this.historyAccess.registerPermission('clothing.size_profile', ISSUE);
+    this.historyAccess.registerPermission('clothing.consumable_receipt', READ);
     // Leaving the brigade or moving to the veterans: no protective equipment may still be assigned.
     this.holdings.register('clothing', (personId) => this.service.held(personId));
     this.references.register('clothing', (kind, id) => (kind === 'department' ? this.data.countDepartment(id) : Promise.resolve(0)));
@@ -45,7 +47,7 @@ export class ClothingModule implements OnModuleInit {
 export const clothingModule = defineModule({
   manifest: CLOTHING_MANIFEST,
   nestModule: ClothingModule,
-  entities: [ArticleEntity, ClothingItemEntity, IssueEntity, CareEntity, ClothingInspectionEntity],
-  historized: [ArticleEntity, ClothingItemEntity],
+  entities: [ArticleEntity, ClothingItemEntity, IssueEntity, CareEntity, ClothingInspectionEntity, SizeProfileEntity, ConsumableReceiptEntity],
+  historized: [ArticleEntity, ClothingItemEntity, { entity: CareEntity, parent: 'item' }, { entity: ClothingInspectionEntity, parent: 'item' }, SizeProfileEntity, ConsumableReceiptEntity],
   migrations: CLOTHING_MIGRATIONS,
 });

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { Article, Item, ItemDetail, PersonClothing } from '@forga/clothing-contracts';
+import type { Article, Item, ItemDetail, PersonClothing, StockRow } from '@forga/clothing-contracts';
 import type { Department, PersonSummary } from '@forga/masterdata-contracts';
 import { api, useLocalized, withQuery } from '@forga/web-sdk';
 
@@ -20,6 +20,7 @@ export type ItemFilter = { status?: string; articleKey?: string; holderId?: stri
 
 export const useArticles = () => useQuery({ queryKey: [...keys.all, 'articles'], queryFn: () => api<Article[]>('clothing/articles'), staleTime: LONG });
 export const useItems = (filter: ItemFilter, enabled = true) => useQuery({ queryKey: [...keys.all, 'items', filter], queryFn: () => api<Item[]>(withQuery('clothing/items', filter)), enabled });
+export const useStock = (departmentId?: string) => useQuery({ queryKey: [...keys.all, 'stock', departmentId ?? ''], queryFn: () => api<StockRow[]>(withQuery('clothing/stock', { departmentId })) });
 export const useItem = (id: string) => useQuery({ queryKey: keys.item(id), queryFn: () => api<ItemDetail>(`clothing/items/${id}`) });
 export const usePersonClothing = (personId: string | null, self = false) =>
   useQuery({ queryKey: self ? [...keys.all, 'me'] : keys.person(personId ?? ''), queryFn: () => api<PersonClothing>(self ? 'clothing/me' : `clothing/persons/${personId}`), enabled: self || Boolean(personId) });

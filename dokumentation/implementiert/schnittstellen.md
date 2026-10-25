@@ -193,19 +193,26 @@ Abteilungsbezogene Rechte gelten für die Abteilung des Berichts. Wer `incidents
 
 | Methode | Pfad | Recht | Zweck |
 | --- | --- | --- | --- |
-| `GET` | `/clothing/articles` | angemeldet | Artikel (`Article[]`) |
-| `POST`, `PUT` | `/clothing/articles`, `/clothing/articles/:id` | `clothing.manage` für die Gesamtwehr | Artikel anlegen/ändern (`ArticleInput`). Fehler: `clothing.articleKeyTaken`, `clothing.articleKeyFixed`, `clothing.articleKindFixed` |
+| `GET` | `/clothing/articles` | angemeldet | Artikel (`Article[]`, mit `minimumStock`) |
+| `POST`, `PUT` | `/clothing/articles`, `/clothing/articles/:id` | `clothing.manage` für die Gesamtwehr | Artikel anlegen/ändern (`ArticleInput`, Mindestbestand je Größe). Fehler: `clothing.articleKeyTaken`, `clothing.articleKeyFixed`, `clothing.articleKindFixed` |
 | `POST` | `/clothing/articles/template` | `clothing.manage` für die Gesamtwehr | Fehlende Artikel der Vorlage anlegen, Antwort `{ added }` |
-| `GET` | `/clothing/items?status&articleKey&holderId&q` | `clothing.read`, abteilungsbezogen | Stücke mit letzter Wäsche, Imprägnierung, Prüfung und Fälligkeiten (`Item[]`); ohne `status` alle nicht ausgesonderten |
-| `POST`, `PUT` | `/clothing/items`, `/clothing/items/:id` | `clothing.manage`, abteilungsbezogen | Stück anlegen/ändern (`ItemInput`, mit `barcode` und `rfid`). Fehler: `clothing.notInventoried`, `clothing.inventoryNumberTaken` (409), `codes.taken` (409), `clothing.articleFixed` |
-| `GET` | `/clothing/items/:id` | `clothing.read` | Stück mit Wäsche, Prüfungen und Verlauf (`ItemDetail`) |
-| `POST` | `/clothing/items/:id/issue` | `clothing.issue` für Stück und Person | Ausgeben (`ItemIssueInput`: `personId`, `date`, `notes`). Fehler: `clothing.notInStock`, `clothing.personLeft` |
-| `POST` | `/clothing/items/:id/return` | `clothing.issue` | Zurücknehmen (`ItemReturnInput`, `retire` sondert aus). Fehler: `clothing.notIssued`, `clothing.returnBeforeIssue` |
+| `GET` | `/clothing/items?status&articleKey&holderId&q` | `clothing.read`, abteilungsbezogen | Stücke mit letzter Wäsche, Imprägnierung, Prüfung (`lastInspectionPassed`), Fälligkeiten und Sperren (`blockedBy`) (`Item[]`); ohne `status` alle nicht ausgesonderten |
+| `POST`, `PUT` | `/clothing/items`, `/clothing/items/:id` | `clothing.manage`, abteilungsbezogen | Stück anlegen/ändern (`ItemInput`, mit `barcode` und `rfid`). Fehler: `clothing.notInventoried`, `clothing.articleInactive`, `clothing.unknownSize`, `clothing.dateInFuture`, `clothing.inventoryNumberTaken` (409), `codes.taken` (409), `clothing.articleFixed` |
+| `GET` | `/clothing/items/:id` | `clothing.read` | Stück mit Wäsche, Prüfungen und Verlauf, auch stornierte Einträge (`ItemDetail`) |
+| `POST` | `/clothing/items/:id/issue` | `clothing.issue` für Stück und Person | Ausgeben (`ItemIssueInput`: `personId`, `date`, `notes`, `acceptOverdueInspection`). Fehler: `clothing.notInStock`, `clothing.articleInactive`, `clothing.failedInspection`, `clothing.awaitingLaundry`, `clothing.inspectionOverdue` (409), `clothing.issueBeforePurchase`, `clothing.issueBeforeReturn`, `clothing.dateInFuture`, `clothing.personLeft`, `clothing.personVeteran` |
+| `POST` | `/clothing/issue` | wie oben | Mehrere Stücke an eine Person (`IssueManyInput`: zusätzlich `itemIds`), alle oder keines; Antwort `Item[]` |
+| `POST` | `/clothing/items/:id/return` | `clothing.issue` | Zurücknehmen (`ItemReturnInput`, `retire` sondert aus, `laundry` sperrt bis zur Wäsche). Fehler: `clothing.notIssued`, `clothing.returnBeforeIssue`, `clothing.dateInFuture`, `clothing.notTextile` |
+| `POST` | `/clothing/return` | `clothing.issue` | Mehrere Stücke zurücknehmen (`ReturnManyInput`: `date`, `notes`, `items` mit `itemId`, `retire`, `laundry`), alle oder keines |
 | `POST` | `/clothing/items/:id/retire` | `clothing.manage` | Stück im Lager aussondern |
-| `POST` | `/clothing/items/:id/inspections` | `clothing.issue` | Prüfung erfassen (`InspectionInput`) |
-| `POST` | `/clothing/care` | `clothing.issue` | Waschen oder Imprägnieren mehrerer Stücke (`CareInput`: `itemIds`, `kind`, `date`, `place`). Fehler: `clothing.notTextile`, `clothing.retired` |
-| `POST` | `/clothing/consumables` | `clothing.issue` für eine Abteilung der Person | Verbrauchsartikel abgeben (`ConsumableIssueInput`); nur Eintrag im Verlauf. Fehler: `clothing.inventoried`, `clothing.personLeft` |
-| `GET` | `/clothing/persons/:personId` | `clothing.read` für eine Abteilung der Person, sonst `404` | Zugeordnete Stücke und Verlauf (`PersonClothing`) |
+| `POST` | `/clothing/items/:id/inspections` | `clothing.issue` | Prüfung erfassen (`InspectionInput`). Fehler: `clothing.dateInFuture`, `clothing.retired` |
+| `POST` | `/clothing/inspections` | `clothing.issue` | Prüfungen mehrerer Stücke (`InspectionsInput`: `date`, `inspector`, `results` mit `itemId`, `passed`, `notes`) |
+| `POST` | `/clothing/care` | `clothing.issue` | Waschen oder Imprägnieren mehrerer Stücke (`CareInput`: `itemIds`, `kind`, `date`, `place`). Fehler: `clothing.notTextile`, `clothing.retired`, `clothing.dateInFuture` |
+| `POST` | `/clothing/care/:id/cancel`, `/clothing/inspections/:id/cancel`, `/clothing/issues/:id/cancel` | `clothing.issue` als Erfasser oder `clothing.manage` der Abteilung | Eintrag mit Grund stornieren (`CancelInput`: `reason`). Fehler: `clothing.notOwnEntry` (403), `clothing.alreadyCancelled` (409), `clothing.notLastEntry` (409, nur letzte Ausgabe oder Rücknahme eines Stücks) |
+| `POST` | `/clothing/consumables` | `clothing.issue` für eine Abteilung der Person | Verbrauchsartikel abgeben (`ConsumableIssueInput`); nur Eintrag im Verlauf. Fehler: `clothing.inventoried`, `clothing.articleInactive`, `clothing.unknownSize`, `clothing.dateInFuture`, `clothing.personLeft`, `clothing.personVeteran` |
+| `POST` | `/clothing/consumables/receipts` | `clothing.manage` in einer Abteilung | Zugang an Verbrauchsartikeln (`ConsumableReceiptInput`, negative Anzahl als Korrektur); Antwort der neue Bestand (`StockRow[]`) |
+| `GET` | `/clothing/stock?departmentId` | `clothing.read` | Bestand je Artikel und Größe mit Mindestbestand und `reorder` (`StockRow[]`) |
+| `GET` | `/clothing/persons/:personId` | `clothing.read` für eine Abteilung der Person, sonst `404` | Zugeordnete Stücke, Verlauf und Größen (`PersonClothing`) |
+| `PUT` | `/clothing/persons/:personId/sizes` | `clothing.issue` für eine Abteilung der Person | Größen der Person je Artikel (`SizeProfileInput`); leere und unbekannte Artikel entfallen |
 | `GET` | `/clothing/me` | `clothing.self` | Eigene Schutzausrüstung |
 
 ## Inaktive Module

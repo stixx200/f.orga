@@ -3,11 +3,15 @@ import { type AuthenticatedUser, CurrentUser, RequirePermissions, ZodPipe } from
 import {
   type Article,
   ArticleInput,
+  CancelInput,
   type Care,
   CareInput,
   ConsumableIssueInput,
+  ConsumableReceiptInput,
   type Inspection,
   InspectionInput,
+  InspectionsInput,
+  IssueManyInput,
   type IssueRecord,
   type Item,
   type ItemDetail,
@@ -15,6 +19,9 @@ import {
   ItemIssueInput,
   ItemReturnInput,
   type PersonClothing,
+  ReturnManyInput,
+  SizeProfileInput,
+  type StockRow,
 } from '@forga/clothing-contracts';
 import { ClothingService, ISSUE, MANAGE, READ, SELF } from './clothing.service.js';
 
@@ -85,11 +92,27 @@ export class ClothingController {
     return this.clothing.issueItem(user, id, input);
   }
 
+  /** Several pieces to one person in one step. */
+  @Post('issue')
+  @HttpCode(200)
+  @RequirePermissions(ISSUE)
+  issueMany(@Body(new ZodPipe(IssueManyInput)) input: Parsed<typeof IssueManyInput>, @CurrentUser() user: AuthenticatedUser): Promise<Item[]> {
+    return this.clothing.issueMany(user, input);
+  }
+
   @Post('items/:id/return')
   @HttpCode(200)
   @RequirePermissions(ISSUE)
   returnItem(@Param('id') id: string, @Body(new ZodPipe(ItemReturnInput)) input: Parsed<typeof ItemReturnInput>, @CurrentUser() user: AuthenticatedUser): Promise<Item> {
     return this.clothing.returnItem(user, id, input);
+  }
+
+  /** Several pieces back in one step, e.g. everything a person holds. */
+  @Post('return')
+  @HttpCode(200)
+  @RequirePermissions(ISSUE)
+  returnMany(@Body(new ZodPipe(ReturnManyInput)) input: Parsed<typeof ReturnManyInput>, @CurrentUser() user: AuthenticatedUser): Promise<Item[]> {
+    return this.clothing.returnMany(user, input);
   }
 
   @Post('items/:id/retire')
@@ -105,11 +128,40 @@ export class ClothingController {
     return this.clothing.recordInspection(user, id, input);
   }
 
+  /** Inspections of several pieces at once, one result each. */
+  @Post('inspections')
+  @RequirePermissions(ISSUE)
+  inspectMany(@Body(new ZodPipe(InspectionsInput)) input: Parsed<typeof InspectionsInput>, @CurrentUser() user: AuthenticatedUser): Promise<Inspection[]> {
+    return this.clothing.recordInspections(user, input);
+  }
+
+  @Post('inspections/:id/cancel')
+  @HttpCode(200)
+  @RequirePermissions(ISSUE)
+  cancelInspection(@Param('id') id: string, @Body(new ZodPipe(CancelInput)) input: Parsed<typeof CancelInput>, @CurrentUser() user: AuthenticatedUser): Promise<Inspection> {
+    return this.clothing.cancelInspection(user, id, input);
+  }
+
   /** Washing or impregnation of several pieces at once. */
   @Post('care')
   @RequirePermissions(ISSUE)
   care(@Body(new ZodPipe(CareInput)) input: Parsed<typeof CareInput>, @CurrentUser() user: AuthenticatedUser): Promise<Care[]> {
     return this.clothing.recordCare(user, input);
+  }
+
+  @Post('care/:id/cancel')
+  @HttpCode(200)
+  @RequirePermissions(ISSUE)
+  cancelCare(@Param('id') id: string, @Body(new ZodPipe(CancelInput)) input: Parsed<typeof CancelInput>, @CurrentUser() user: AuthenticatedUser): Promise<Care> {
+    return this.clothing.cancelCare(user, id, input);
+  }
+
+  /** Cancels a consumable handed out or the last issue or return of a piece. */
+  @Post('issues/:id/cancel')
+  @HttpCode(200)
+  @RequirePermissions(ISSUE)
+  cancelIssue(@Param('id') id: string, @Body(new ZodPipe(CancelInput)) input: Parsed<typeof CancelInput>, @CurrentUser() user: AuthenticatedUser): Promise<IssueRecord> {
+    return this.clothing.cancelIssue(user, id, input);
   }
 
   /** Handing out consumables (caps, gloves); only recorded in the person's history. */
@@ -119,9 +171,29 @@ export class ClothingController {
     return this.clothing.issueConsumable(user, input);
   }
 
+  /** Consumables received into the store; returns the new stock. */
+  @Post('consumables/receipts')
+  @RequirePermissions(MANAGE)
+  receiveConsumable(@Body(new ZodPipe(ConsumableReceiptInput)) input: Parsed<typeof ConsumableReceiptInput>, @CurrentUser() user: AuthenticatedUser): Promise<StockRow[]> {
+    return this.clothing.receiveConsumable(user, input);
+  }
+
+  /** Stock per article and size with the minimum stock. */
+  @Get('stock')
+  @RequirePermissions(READ)
+  stock(@CurrentUser() user: AuthenticatedUser, @Query('departmentId') departmentId?: string): Promise<StockRow[]> {
+    return this.clothing.stock(user, { departmentId });
+  }
+
   @Get('persons/:personId')
   person(@Param('personId') personId: string, @CurrentUser() user: AuthenticatedUser): Promise<PersonClothing> {
     return this.clothing.personClothing(user, personId);
+  }
+
+  @Put('persons/:personId/sizes')
+  @RequirePermissions(ISSUE)
+  sizes(@Param('personId') personId: string, @Body(new ZodPipe(SizeProfileInput)) input: Parsed<typeof SizeProfileInput>, @CurrentUser() user: AuthenticatedUser): Promise<PersonClothing> {
+    return this.clothing.setSizes(user, personId, input);
   }
 
   /** "My area": the own protective equipment. */

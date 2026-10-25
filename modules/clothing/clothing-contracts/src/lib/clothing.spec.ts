@@ -26,4 +26,17 @@ describe('due dates of clothing', () => {
     // Impregnated during the first period: only the use after it counts.
     expect(dueDates(article, { ...piece, lastImpregnatedOn: '2025-01-21', usage }).impregnationDueOn).toBe('2027-02-19');
   });
+
+  it('keeps an issued piece in use even if an issue is dated before the last return', () => {
+    const records = [
+      { kind: 'issue' as const, date: '2025-01-01' },
+      { kind: 'return' as const, date: '2025-03-01' },
+      { kind: 'issue' as const, date: '2025-02-01' },
+    ];
+    // Without the current issue the records end with the return: no period in use.
+    expect(usagePeriods(records).at(-1)?.to).toBe('2025-03-01');
+    const usage = usagePeriods(records, '2025-02-01');
+    expect(usage.at(-1)).toEqual({ from: '2025-03-01', to: null });
+    expect(dueDates(article, { ...piece, usage }).impregnationDueOn).not.toBeNull();
+  });
 });

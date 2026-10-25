@@ -1,11 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { EntityManager, wrap } from '@mikro-orm/core';
+import { EntityManager, type FilterQuery, wrap } from '@mikro-orm/core';
 import { z } from 'zod';
 import { type ListColumn, normalizeRfid, type SearchHit } from '@forga/core-contracts';
 import { type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, type ListDefinition, wordsWhere } from '@forga/core-api';
 import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
-import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, IssueEntity } from './clothing.entities.js';
-import { ClothingService, ISSUE, READ } from './clothing.service.js';
+import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, ConsumableReceiptEntity, IssueEntity, SizeProfileEntity } from './clothing.entities.js';
+import { ClothingService, ISSUE, READ, SELF } from './clothing.service.js';
 
 const col = (key: string, de: string, en: string, width?: number): ListColumn => ({ key, label: { de, en }, ...(width ? { width } : {}) });
 const department = { key: 'departmentId', label: { de: 'Abteilung', en: 'Department' }, type: 'department' as const };
@@ -55,18 +55,28 @@ export class ClothingData implements DeadlineProvider {
     return found.map((i) => this.hit(i, names));
   }
 
-  /** Scanned code: label URL of f.orga, barcode, RFID chip, inventory or serial number (exact, ignoring case). */
+  /**
+   * Scanned code: label URL of f.orga, barcode, RFID chip, inventory or serial number (exact, ignoring case).
+   * Members with `clothing.self` find the pieces they hold themselves, leading to "My area".
+   */
   async code(user: AuthenticatedUser, code: string): Promise<SearchHit[]> {
     const visible = this.clothing.visible(user);
-    if (!visible) return [];
+    const own = user.personId && user.can(SELF) ? { holderId: user.personId, status: 'issued' as const } : null;
+    if (!visible && !own) return [];
     const label = /\/clothing\/items\/([0-9a-f-]{36})/i.exec(code);
     const exact = code.replace(/[\\%_]/g, '\\$&');
     const where = label
       ? { id: label[1].toLowerCase() }
       : { $or: [{ barcode: { $ilike: exact } }, { rfid: normalizeRfid(code) }, { inventoryNumber: { $ilike: exact } }, { serialNumber: { $ilike: exact } }] };
-    const found = await this.em.fork().find(ClothingItemEntity, { $and: [visible, where] }, { limit: 20, orderBy: { inventoryNumber: 'asc' } });
+    const scope = [...(visible ? [visible] : []), ...(own ? [own] : [])];
+    const found = await this.em.fork().find(ClothingItemEntity, { $and: [{ $or: scope }, where] } as FilterQuery<ClothingItemEntity>, { limit: 20, orderBy: { inventoryNumber: 'asc' } });
     const names = await this.names();
-    return found.map((i) => this.hit(i, names));
+    return found.map((i) => (visible && user.can(READ, i.departmentId) ? this.hit(i, names) : this.ownHit(i, names)));
+  }
+
+  /** A piece the member holds: only article, number and size, opening "My area". */
+  private ownHit(i: ClothingItemEntity, names: Map<string, { de: string; en: string }>): SearchHit {
+    return { ...this.hit(i, names), to: '/me' };
   }
 
   private hit(i: ClothingItemEntity, names: Map<string, { de: string; en: string }>): SearchHit {
@@ -83,6 +93,8 @@ export class ClothingData implements DeadlineProvider {
       issues: await plain(IssueEntity),
       care: await plain(CareEntity),
       inspections: await plain(ClothingInspectionEntity),
+      sizeProfiles: await plain(SizeProfileEntity),
+      consumableReceipts: await plain(ConsumableReceiptEntity),
     };
   }
 
