@@ -28,10 +28,11 @@ const configure = async (changes: object) => {
 };
 type NoticeBody = { version: number; offenseKey: string; debtors: unknown[]; positions: unknown[]; reasoning: string; remedy: string; cashReference: string };
 const body = (n: NoticeBody, changes: Partial<NoticeBody> = {}) => ({ version: n.version, offenseKey: n.offenseKey, debtors: n.debtors, positions: n.positions, reasoning: n.reasoning, remedy: n.remedy, cashReference: n.cashReference, ...changes });
-const importPayments = async (csv: string) => {
+type ImportResult = { counts: Record<string, number>; rows: { action: string; messages: { code: string }[] }[] };
+const importPayments = async (csv: string, step: 'apply' | 'preview' = 'apply') => {
   const upload = (await test.http.post('/api/core/imports').set('Cookie', admin).set(UI).attach('file', Buffer.from(csv, 'utf8'), 'zahlungen.csv').expect(201)).body;
   const mapping = upload.suggestions['cost-recovery.payments'];
-  return (await post(`/core/imports/${upload.id}/apply`, { profile: 'cost-recovery.payments', mapping }).expect(200)).body as { counts: Record<string, number>; rows: { messages: { code: string }[] }[] };
+  return (await post(`/core/imports/${upload.id}/${step}`, { profile: 'cost-recovery.payments', mapping }).expect(200)).body as ImportResult;
 };
 
 beforeAll(async () => {
@@ -99,7 +100,7 @@ describe('cost recovery', () => {
     // District equal to the city is not repeated.
     expect(notice.location).toBe('Industriestraße 4, 12345 Musterstadt');
     // Personnel 10:00–11:10 = 70 min → 2 h each (half an hour up to 30 min, beyond started hours) × 21,30 €; the guest is not charged.
-    expect(notice.positions[0]).toMatchObject({ kind: 'personnel', quantity: 4, rate: 21.3, amount: 85.2, persons: 2, hoursEach: 2, label: 'Personal Musterstadt (2 Personen; 1 Gast nicht berechnet)' });
+    expect(notice.positions[0]).toMatchObject({ kind: 'personnel', quantity: 4, rate: 21.3, amount: 85.2, persons: 2, hoursEach: 2, label: 'Personal Musterstadt (2 Personen)' });
     // LF 20 10:04–10:50 = 46 min → 1 h × 205 €; MTW without own times from the report's departure: 10:04–11:10 → 2 h × 34 €.
     expect(notice.positions[1]).toMatchObject({ kind: 'vehicle', category: 'lf-20', quantity: 1, rate: 205, amount: 205 });
     expect(notice.positions[2]).toMatchObject({ kind: 'vehicle', category: 'mtw', quantity: 2, rate: 34, amount: 68 });
@@ -343,5 +344,135 @@ describe('cost recovery', () => {
     const candidate = ((await get('/cost-recovery/candidates?from=2026-01-01&to=2026-12-31').expect(200)).body as { incidentId: string; noticeId: string | null }[]).find((c) => c.incidentId === incident.id);
     expect(candidate?.noticeId).toBeNull();
     await post('/cost-recovery/notices', { incidentId: incident.id }).expect(201);
+  });
+
+  it('sets the legal ground only for existing, chargeable incidents', async () => {
+    expect((await put('/cost-recovery/incidents/01a16846-0000-7000-8000-0000000000aa/offense', { offenseKey: 'intent' }).expect(404)).body.code).toBe('cost-recovery.unknownIncident');
+    const plain = (await post('/incidents/incidents', { dispatchNumber: '2026-781', alarmKeyword: 'B-BMA', alarmedAt: T('18:00'), departmentIds: [ids.musterstadt] }).expect(201)).body;
+    expect((await put(`/cost-recovery/incidents/${plain.id}/offense`, { offenseKey: 'intent' }).expect(409)).body.code).toBe('cost-recovery.notChargeable');
+    // Clearing is always possible.
+    expect((await put(`/cost-recovery/incidents/${plain.id}/offense`, { offenseKey: null }).expect(200)).body).toEqual({ offenseKey: null });
+  });
+
+  it('keeps reasoned deviations when recalculating and enforces the four-eyes principle on edits in review', async () => {
+    const incident = (await post('/incidents/incidents', { dispatchNumber: '2026-780', alarmKeyword: 'B-BMA', alarmedAt: T('16:00'), departmentIds: [ids.musterstadt] }).expect(201)).body;
+    ids.fourEyesReport = incident.reports[0].id;
+    await put(`/incidents/reports/${ids.fourEyesReport}`, {
+      version: incident.reports[0].version,
+      times: { alarmedAt: T('16:00'), departedAt: T('16:04'), returnedAt: T('16:50') },
+      situation: 'BMA', actions: 'Erkundung', incidentCommander: 'Jonas Test',
+      personnel: [{ guestName: 'Gast Nachbarwehr', vehicleId: ids.lf }],
+      vehicles: [{ vehicleId: ids.lf }],
+      involvedParties: [{ role: 'owner', name: 'Muster GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
+      statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
+    }).expect(200);
+    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Täuschungsalarm' }).expect(200);
+    const notice = (await post('/cost-recovery/notices', { incidentId: incident.id }).expect(201)).body;
+    ids.fourEyes = notice.id;
+    // A report with only guests: no personnel position, but the guests are counted for the notice.
+    expect(notice.guestsNotCharged).toBe(1);
+    expect(notice.positions.filter((p: { kind: string }) => p.kind === 'personnel')).toEqual([]);
+
+    // "als MTW" with a reason stays when the calculation of the vehicle is unchanged.
+    const positions = notice.positions.map((p: { kind: string; quantity: number }) => (p.kind === 'vehicle' ? { ...p, category: 'mtw', rate: 34, amount: p.quantity * 34, reason: 'Nur Mannschaftstransport' } : p));
+    await put(`/cost-recovery/notices/${notice.id}`, body(notice, { positions })).expect(200);
+    const recalculated = (await post(`/cost-recovery/notices/${notice.id}/recalculate`, {}).expect(200)).body;
+    expect(recalculated.positions.find((p: { kind: string }) => p.kind === 'vehicle')).toMatchObject({ category: 'mtw', rate: 34, reason: 'Nur Mannschaftstransport' });
+
+    await releaseForBilling(ids.fourEyesReport);
+    await post(`/cost-recovery/notices/${notice.id}/submit`, {}).expect(200);
+    await configure({ fourEyes: true });
+    // The treasury adds its cash reference: no change of the content.
+    const review = (await get(`/cost-recovery/notices/${notice.id}`).expect(200)).body;
+    const withReference = (await put(`/cost-recovery/notices/${notice.id}`, body(review, { cashReference: 'KZ-4780' }), treasurer).expect(200)).body;
+    expect(withReference.lastEditedById).toBeNull();
+    // A change of the content in review: whoever made it cannot issue, the submitter neither.
+    const edited = (await put(`/cost-recovery/notices/${notice.id}`, body(withReference, { reasoning: `${withReference.reasoning} Ergänzt.` }), treasurer).expect(200)).body;
+    expect(edited.lastEditedBy).toBe('Kasse');
+    expect((await post(`/cost-recovery/notices/${notice.id}/issue`, {}, treasurer).expect(403)).body.code).toBe('cost-recovery.fourEyes');
+    await post(`/cost-recovery/notices/${notice.id}/issue`, {}).expect(403);
+    // Back to the draft and submitted again by the editor: the other person issues.
+    await post(`/cost-recovery/notices/${notice.id}/return`, {}).expect(200);
+    await post(`/cost-recovery/notices/${notice.id}/submit`, {}, treasurer).expect(200);
+    const issued = (await post(`/cost-recovery/notices/${notice.id}/issue`, {}).expect(200)).body;
+    await configure({ fourEyes: false });
+    expect(issued).toMatchObject({ status: 'issued', issuedBy: 'Admin', lastEditedById: null });
+  });
+
+  it('reminds with a new term, counts duplicate payments consistently and hands over paid notices', async () => {
+    const id = ids.fourEyes;
+    const sql = test.app.get(EntityManager).getConnection();
+    await sql.execute(`update cost_recovery.notice set due_on = '2026-01-31' where id = '${id}'`);
+    await post(`/cost-recovery/notices/${id}/reminders`, {}).expect(200);
+    // After the reminder the new term applies: not overdue, no second reminder, no task.
+    expect((await get(`/cost-recovery/notices/${id}`).expect(200)).body.overdue).toBe(false);
+    expect((await post(`/cost-recovery/notices/${id}/reminders`, {}).expect(409)).body.code).toBe('cost-recovery.notOverdue');
+    const tasks = async () => ((await get(`/core/tasks?asOf=${today}`).expect(200)).body as { kind: string; title: { de: string }; subject: { id: string } }[]).filter((t) => t.subject.id === id);
+    expect(await tasks()).toEqual([]);
+    await sql.execute(`update cost_recovery.notice set reminders = jsonb_set(reminders, '{0,dueOn}', '"2026-02-15"') where id = '${id}'`);
+    expect((await get(`/cost-recovery/notices/${id}`).expect(200)).body.overdue).toBe(true);
+    expect(await tasks()).toEqual([expect.objectContaining({ kind: 'cost-recovery-overdue', title: expect.objectContaining({ de: 'Kostenbescheid trotz Zahlungserinnerung offen' }) })]);
+
+    // Two instalments of the same amount on one day: booked both, in the preview as in the import.
+    const notice = (await get(`/cost-recovery/notices/${id}`).expect(200)).body;
+    const file = `Aktenzeichen;Datum;Betrag\n${notice.number};${germanToday};10\n${notice.number};${germanToday};10,00\n`;
+    const preview = await importPayments(file, 'preview');
+    expect(preview.counts).toMatchObject({ update: 2, unchanged: 0 });
+    expect(preview.rows[1]!.messages.map((m) => m.code)).toContain('cost-recovery.import.repeated');
+    expect((await importPayments(file)).counts).toMatchObject({ update: 2, unchanged: 0 });
+    expect((await get(`/cost-recovery/notices/${id}`).expect(200)).body.paid).toBe(20);
+    // Imported again: nothing is booked twice, and the rows say why.
+    const again = await importPayments(file);
+    expect(again.counts).toMatchObject({ update: 0, unchanged: 2 });
+    expect(again.rows.map((r) => r.messages.map((m) => m.code))).toEqual([['cost-recovery.import.alreadyRecorded'], ['cost-recovery.import.alreadyRecorded']]);
+    await importPayments(`Aktenzeichen;Datum\n${notice.number};${germanToday}\n`);
+    const paid = (await get(`/cost-recovery/notices/${id}`).expect(200)).body;
+    expect(paid).toMatchObject({ status: 'paid', balance: 0 });
+
+    // Paid before the handover: the treasury still gets the claim, once.
+    const handover = await post('/cost-recovery/export/hand-over', {}).expect(200);
+    expect(handover.text).toContain(`;${notice.number};Sollstellung`);
+    expect((await get(`/cost-recovery/notices/${id}`).expect(200)).body).toMatchObject({ status: 'paid', handedOverAt: expect.any(String) });
+    expect((await post('/cost-recovery/export/hand-over', {}).expect(200)).text).not.toContain(notice.number);
+  });
+
+  it('allows objection, amendment and cancellation of paid notices and asks the treasury to refund overpayments', async () => {
+    const id = ids.fourEyes;
+    const original = (await get(`/cost-recovery/notices/${id}`).expect(200)).body;
+    // An objection against a paid notice; rejected, it is paid again.
+    expect((await post(`/cost-recovery/notices/${id}/objection`, { date: today, result: 'pending', note: '' }).expect(200)).body.status).toBe('objection');
+    expect((await post(`/cost-recovery/notices/${id}/objection`, { date: today, result: 'rejected', note: '' }).expect(200)).body.status).toBe('paid');
+
+    // A lower amendment of a paid notice: the payments carry over, 10 € are overpaid.
+    const amendment = (await post(`/cost-recovery/notices/${id}/amend`, {}).expect(201)).body;
+    const positions = amendment.positions.map((p: { amount: number }, i: number) => (i === 0 ? { ...p, amount: p.amount - 10, reason: 'Kürzere Einsatzzeit' } : p));
+    await put(`/cost-recovery/notices/${amendment.id}`, body(amendment, { positions })).expect(200);
+    await post(`/cost-recovery/notices/${amendment.id}/submit`, {}).expect(200);
+    const issued = (await post(`/cost-recovery/notices/${amendment.id}/issue`, {}).expect(200)).body;
+    expect(issued).toMatchObject({ status: 'paid', balance: -10, refundDue: 10 });
+    expect((await get(`/cost-recovery/notices/${amendment.id}/pdf`).buffer(true).expect(200)).body.subarray(0, 4).toString()).toBe('%PDF');
+    expect((await get(`/cost-recovery/notices/${id}`).expect(200)).body).toMatchObject({ status: 'amended', balance: 0, refundDue: 0 });
+    // Also the amendment cancelled earlier with a payment of 50 € has something to refund.
+    const refunds = (await get('/cost-recovery/notices?refund=true').expect(200)).body as { id: string; refundDue: number }[];
+    expect(refunds.map((n) => n.id)).toContain(amendment.id);
+    expect(refunds.every((n) => n.refundDue > 0)).toBe(true);
+    const refundTask = async () => ((await get(`/core/tasks?asOf=${today}`).expect(200)).body as { kind: string; subject: { id: string } }[]).filter((t) => t.kind === 'cost-recovery-refund' && t.subject.id === amendment.id);
+    expect(await refundTask()).toHaveLength(1);
+    expect((await post(`/cost-recovery/notices/${amendment.id}/refunds`, { date: today, amount: 20 }).expect(400)).body.code).toBe('cost-recovery.refundTooHigh');
+    const refunded = (await post(`/cost-recovery/notices/${amendment.id}/refunds`, { date: today, amount: 10 }).expect(200)).body;
+    expect(refunded).toMatchObject({ status: 'paid', balance: 0, refundDue: 0 });
+    expect(await refundTask()).toEqual([]);
+
+    // Cancelled before it was handed over: the treasury knows the original, so the cancellation refers to it.
+    const cancelled = (await post(`/cost-recovery/notices/${amendment.id}/cancel`, { reason: 'Verzicht' }).expect(200)).body;
+    expect(cancelled).toMatchObject({ status: 'cancelled', refundDue: issued.total, balance: -issued.total });
+    const report = await post('/cost-recovery/export/hand-over', {}).expect(200);
+    expect(report.text).toContain(`;${amendment.number};Aufhebung;${original.number};-${original.total.toFixed(2).replace('.', ',')}`);
+
+    const audit = (await get('/core/audit?action=cost-recovery.').expect(200)).body as { action: string; details: { noticeId?: string } }[];
+    const actions = new Set(audit.map((e) => e.action));
+    for (const action of ['cost-recovery.notice-submitted', 'cost-recovery.notice-issued', 'cost-recovery.notice-cancelled', 'cost-recovery.notice-discarded', 'cost-recovery.amendment-created', 'cost-recovery.payment-recorded', 'cost-recovery.payment-reversed', 'cost-recovery.refund-recorded', 'cost-recovery.handover-exported', 'cost-recovery.payments-imported']) {
+      expect(actions).toContain(action);
+    }
   });
 });

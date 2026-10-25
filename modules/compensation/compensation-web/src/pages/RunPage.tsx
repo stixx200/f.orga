@@ -2,9 +2,9 @@ import { Button, Checkbox, Group, Menu, NumberInput, Pagination, Select, Stack, 
 import { IconSearch } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { type Item, ItemKind, type PersonTotal, type Problem, type RunDetail, statuteMissing } from '@forga/compensation-contracts';
+import { type Item, ItemKind, type ManualPayout, type PersonTotal, type Problem, type RunDetail, statuteMissing } from '@forga/compensation-contracts';
 import { ApiError, apiUrl, can, formatDate, formatDateTime, formatMoney, send, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, EmptyState, matchesSearch, Notice, PageHeader, ResponsiveDialog, useAction } from '@forga/web-ui';
+import { ConfirmDialog, DataTable, EmptyState, matchesSearch, Notice, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { keys, RUNS, useCompensationSettings, useDepartments, usePersonName, useRun } from '../api';
 import { Amount, ItemLabel, RunStatusBadge } from '../parts';
 
@@ -172,6 +172,7 @@ export function RunPage() {
   const approve = useAction(() => send('POST', `compensation/runs/${id}/approve`), done);
   const handOver = useAction(() => send('POST', `compensation/runs/${id}/hand-over`), done);
   const paid = useAction(() => send('POST', `compensation/runs/${id}/paid`), done);
+  const markPaid = useAction((key: string) => send('POST', `compensation/runs/${id}/payouts/${encodeURIComponent(key)}/paid`), { invalidate: [keys.all] });
   const remove = useAction(() => send('DELETE', `compensation/runs/${id}`), { invalidate: [keys.all], onSuccess: () => navigate('/compensation/runs') });
   const undefer = useAction((itemIds: string[]) => send('POST', `compensation/runs/${id}/undefer`, { itemIds }), { invalidate: [keys.all] });
   const defer = useAction((itemIds: string[]) => send('POST', `compensation/runs/${id}/defer`, { itemIds }), { invalidate: [keys.all], success: t('run.deferredNotice') });
@@ -215,8 +216,8 @@ export function RunPage() {
                 {prepares && <Menu.Item component="a" href={apiUrl('core/lists/compensation.statement/export/pdf', { runId: id, lang: i18n.language })} target="_blank">{t('run.overview')}</Menu.Item>}
               </Menu.Dropdown>
             </Menu>
-            {!draft && prepares && <Button variant="default" loading={download.isPending} onClick={() => download.mutate('transfer.csv')}>{t('run.transfer')}</Button>}
-            {!draft && prepares && <Button variant="default" loading={download.isPending} onClick={() => download.mutate('transfer.xml')}>{t('run.sepa')}</Button>}
+            {!draft && prepares && <Button variant="default" disabled={approvalNeeded} title={approvalNeeded ? t('run.approvalBeforeTransfer') : undefined} loading={download.isPending} onClick={() => download.mutate('transfer.csv')}>{t('run.transfer')}</Button>}
+            {!draft && prepares && <Button variant="default" disabled={approvalNeeded} title={approvalNeeded ? t('run.approvalBeforeTransfer') : undefined} loading={download.isPending} onClick={() => download.mutate('transfer.xml')}>{t('run.sepa')}</Button>}
             {draft && prepares && <Button variant="default" loading={refresh.isPending} onClick={() => refresh.mutate(undefined)}>{t('run.refresh')}</Button>}
             {draft && prepares && <Button variant="default" color="red" onClick={() => setConfirm('delete')}>{t('run.delete')}</Button>}
             {draft && prepares && <Button disabled={blocking > 0} onClick={() => setConfirm('close')}>{t('run.close')}</Button>}
@@ -229,7 +230,22 @@ export function RunPage() {
       {settings && statuteMissing(settings) && <Notice kind="warning">{t('settings.statuteMissing')}</Notice>}
       {blocking > 0 && <Notice kind="error">{t('run.blocking', { count: blocking })}</Notice>}
       {run.closedAt && <Notice kind="done">{t('run.closedBy', { name: run.closedBy, at: formatDateTime(run.closedAt, i18n.language) })}</Notice>}
-      {run.withoutIban.length > 0 && <Notice kind="warning">{t('run.withoutIban', { names: run.withoutIban.join(', ') })}</Notice>}
+      {run.withoutIban.length > 0 && !run.manualPayouts.length && <Notice kind="warning">{t('run.withoutIban', { names: run.withoutIban.join(', ') })}</Notice>}
+      {run.manualPayouts.length > 0 && (
+        <Panel title={t('run.manualPayouts')}>
+          <DataTable<ManualPayout>
+            rows={run.manualPayouts}
+            rowKey={(p) => p.key}
+            exportable={false}
+            columns={[
+              { key: 'name', header: t('run.name'), render: (p) => p.name },
+              { key: 'amount', header: t('items.amount'), align: 'right', render: (p) => formatMoney(p.amount, i18n.language) },
+              { key: 'state', header: t('person.status'), render: (p) => (p.paidAt ? t('run.manualPaid', { at: formatDateTime(p.paidAt, i18n.language), by: p.paidBy }) : t('run.manualOpen')) },
+              { key: 'action', header: '', align: 'right', render: (p) => !p.paidAt && prepares && <Button size="compact-xs" variant="default" loading={markPaid.isPending && markPaid.variables === p.key} onClick={() => markPaid.mutate(p.key)}>{t('run.markPaid')}</Button> },
+            ]}
+          />
+        </Panel>
+      )}
       {run.approvedAt && <Notice kind="done">{t('run.approvedBy', { name: run.approvedBy, at: formatDateTime(run.approvedAt, i18n.language) })}</Notice>}
       {approvalNeeded && <Notice kind="info">{t('run.approvalPending')}</Notice>}
       <Tabs value={tab} onChange={(v) => { setTab(v); if (v !== 'items') setFocus(null); }}>

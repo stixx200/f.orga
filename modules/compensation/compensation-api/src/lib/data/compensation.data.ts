@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import type { DeadlineInput, DeadlineProvider } from '@forga/core-api';
+import { berlinDate, type DeadlineInput, type DeadlineProvider } from '@forga/core-api';
 import { FunctionHolderEntity, ItemEntity, RunEntity } from '../compensation.entities.js';
 import { RUNS } from '../items/items.service.js';
+
+const euro = (value: number) => value.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
 /** Export and deadlines of the compensation module. */
 @Injectable()
@@ -11,10 +13,30 @@ export class CompensationData implements DeadlineProvider {
 
   constructor(private readonly em: EntityManager) {}
 
-  /** Loss of earnings without amount blocks the next run: remind those who prepare the runs. */
+  /**
+   * Loss of earnings without amount blocks the next run: remind those who prepare the runs. Payouts another way
+   * (payees confirmed without IBAN when closing) stay a task for the treasury until marked as paid.
+   */
   async deadlines(): Promise<DeadlineInput[]> {
-    const open = await this.em.fork().find(ItemEntity, { kind: 'loss-of-earnings', amount: null, $or: [{ run: null }, { run: { status: 'draft' } }] });
-    return open.map((i) => ({
+    const em = this.em.fork();
+    const runs = await em.find(RunEntity, { status: { $ne: 'draft' } });
+    const payouts = runs.flatMap((run) =>
+      (run.manualPayouts ?? [])
+        .filter((p) => !p.paidAt)
+        .map((p): DeadlineInput => ({
+          id: `manual-payout:${run.id}:${p.key}`,
+          kind: 'compensation-manual-payout',
+          title: { de: `Ohne Bankverbindung auszahlen: ${euro(p.amount)}`, en: `Pay out without bank account: ${p.amount.toFixed(2)} €` },
+          subject: { type: 'compensation.run', id: run.id, label: `${run.number} · ${p.name}` },
+          dueOn: berlinDate(run.closedAt ?? new Date()),
+          leadDays: 0,
+          departmentIds: [],
+          permission: RUNS,
+          to: `/compensation/runs/${run.id}`,
+        })),
+    );
+    const open = await em.find(ItemEntity, { kind: 'loss-of-earnings', amount: null, $or: [{ run: null }, { run: { status: 'draft' } }] });
+    return [...payouts, ...open.map((i) => ({
       id: `loss-of-earnings:${i.id}`,
       kind: 'compensation-amount-missing',
       title: { de: 'Verdienstausfall: Betrag eintragen', en: 'Loss of earnings: enter amount' },
@@ -23,7 +45,7 @@ export class CompensationData implements DeadlineProvider {
       leadDays: 0,
       departmentIds: [],
       permission: RUNS,
-    }));
+    }))];
   }
 
   async exportAll(): Promise<Record<string, unknown>> {

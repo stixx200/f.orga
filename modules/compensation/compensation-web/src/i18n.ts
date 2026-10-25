@@ -20,6 +20,7 @@ const de = {
     refreshment: 'Erfrischungszuschuss prüfen (Satzung ohne Betrag)',
     'multi-day': 'Mehrtägiger Einsatz: Verdienstausfall und Auslagen in tatsächlicher Höhe',
     'above-day-maximum': 'Höchstbetrag je Tag überschritten',
+    'other-payment': 'Andere Zahlungsart (beim Abschluss bestätigt, keine Bankverbindung)',
   },
   takeOver: {
     title: 'Vorhandene Daten übernehmen',
@@ -79,6 +80,8 @@ const de = {
     approvedBy: 'Sachlich richtig gezeichnet von {{name}} am {{at}}.',
     approvalPending: 'Vor der Übergabe an die Kämmerei muss der Lauf sachlich richtig gezeichnet werden (Einstellung).',
     withoutIban: 'Ohne gültige IBAN, beim Abschluss bestätigt und nicht in Überweisungs- und SEPA-Datei: {{names}}. Bitte zahlen Sie diese Beträge anders aus.',
+    manualPayouts: 'Auszahlung auf anderem Weg (ohne Bankverbindung)', manualPaid: 'Ausgezahlt am {{at}} ({{by}})', markPaid: 'Als ausgezahlt markieren', manualOpen: 'offen',
+    approvalBeforeTransfer: 'Überweisungs- und SEPA-Datei gibt es erst nach „sachlich richtig“.',
     ibanConfirm: {
       title: 'Personen ohne gültige IBAN',
       text: 'Für folgende Empfänger fehlt eine gültige IBAN: {{names}}. Schließen Sie trotzdem ab, fehlen sie in der Überweisungs- und der SEPA-Datei und müssen anders ausgezahlt werden. Sonst ergänzen Sie zuerst die Bankverbindung in der Personalakte.',
@@ -173,6 +176,9 @@ const de = {
     incidentRateKinds: { incident: 'Einsatz', standby: 'Bereitschaft im Gerätehaus', 'fire-watch': 'Brandsicherheitswache' },
     rateKind: 'Art',
     rateKinds: { training: 'Übungsdienst', 'fire-watch': 'Brandsicherheitswache' },
+    paidStatuses: 'Entschädigung für Dienste bei Status',
+    paidStatusesHint: 'Nach der Satzung; Mitglieder der Jugendfeuerwehr nur, wenn die Satzung es vorsieht.',
+    statuses: { probation: 'Probezeit', active: 'Aktiv', passive: 'Passiv', youth: 'Jugendfeuerwehr', veterans: 'Altersabteilung' },
     validFrom: 'Gültig ab',
     amount: 'Betrag',
     remove: 'Entfernen',
@@ -185,7 +191,7 @@ const de = {
     templateApply: 'Vorlage übernehmen',
     statuteMissing: 'Satzung noch nicht gepflegt: Es sind keine Stundensätze für Dienste und Einsätze hinterlegt. Dienste ergeben Posten ohne Betrag; Einsätze rechnen mit den Sätzen der Einsatzberichte. Tragen Sie die Werte Ihrer Satzung unter Verwaltung → Entschädigungen ein oder übernehmen Sie die Vorlage.',
     factualApproval: 'Sachlich richtig vor der Auszahlung',
-    factualApprovalHint: 'Ein abgeschlossener Lauf muss von jemandem mit dem Recht „Auszahlungslauf sachlich richtig zeichnen“ (Rolle Kommandant) gezeichnet werden, bevor er an die Kämmerei geht.',
+    factualApprovalHint: 'Ein abgeschlossener Lauf muss von jemandem mit dem Recht „Auszahlungslauf sachlich richtig zeichnen“ (Rolle Kommandant), aber nicht von der Person, die ihn abgeschlossen hat, gezeichnet werden, bevor Überweisungsdateien entstehen und er an die Kämmerei geht.',
     nameDe: 'Funktion (deutsch)',
     nameEn: 'Funktion (englisch)',
     maxHolders: 'Höchstzahl',
@@ -223,7 +229,7 @@ const de = {
     workingHours: 'Arbeitszeit',
     hintKinds: { refreshment: 'Erfrischungszuschuss prüfen', 'multi-day': 'mehrtägig', capped: 'Höchstbetrag' },
   },
-  my: { title: 'Meine Entschädigung', totals: 'offen {{open}} · ausgezahlt {{paid}}', empty: 'Keine Posten in diesem Jahr.', open: 'offen', paid: 'ausgezahlt' },
+  my: { title: 'Meine Entschädigung', totals: 'offen {{open}} · abgerechnet {{settled}} · ausgezahlt {{paid}}', empty: 'Keine Posten in diesem Jahr.', states: { open: 'offen', settled: 'abgerechnet', 'paid-out': 'ausgezahlt' } },
   person: {
     title: 'Entschädigung {{year}}',
     total: 'Summe {{total}}',
@@ -260,6 +266,9 @@ const de = {
     'compensation.noStatements': 'Keine Personen in dieser Abteilung.',
     'compensation.functionFromOffices': 'Die Inhaber dieser Funktion kommen aus den Ämtern der Personalakte.',
     'compensation.endBeforeStart': 'Das Ende liegt vor dem Beginn.',
+    'compensation.approverIsCloser': 'Wer den Lauf abgeschlossen hat, kann ihn nicht sachlich richtig zeichnen.',
+    'compensation.unknownPayout': 'Diese Auszahlung gibt es im Lauf nicht.',
+    'compensation.payoutDone': 'Diese Auszahlung ist schon als ausgezahlt markiert.',
   },
 };
 
@@ -283,6 +292,7 @@ const en: typeof de = {
     refreshment: 'Check refreshment allowance (no amount in the statute)',
     'multi-day': 'Multi-day incident: loss of earnings and expenses in actual amount',
     'above-day-maximum': 'Maximum per day exceeded',
+    'other-payment': 'Other payment method (confirmed when closing, no bank account)',
   },
   takeOver: {
     title: 'Take over existing data',
@@ -342,6 +352,8 @@ const en: typeof de = {
     approvedBy: 'Approved as factually correct by {{name}} on {{at}}.',
     approvalPending: 'The run has to be approved as factually correct before it is handed over to the treasury (setting).',
     withoutIban: 'Without valid IBAN, confirmed when closing and left out of the transfer and SEPA files: {{names}}. Please pay these amounts another way.',
+    manualPayouts: 'Payout another way (no bank account)', manualPaid: 'Paid out on {{at}} ({{by}})', markPaid: 'Mark as paid out', manualOpen: 'open',
+    approvalBeforeTransfer: 'Transfer and SEPA files are available after the factual approval.',
     ibanConfirm: {
       title: 'Persons without valid IBAN',
       text: 'These payees have no valid IBAN: {{names}}. If you close anyway, they are left out of the transfer and SEPA files and have to be paid another way. Otherwise add the bank account in the person file first.',
@@ -436,6 +448,9 @@ const en: typeof de = {
     incidentRateKinds: { incident: 'Incident', standby: 'Standby at the station', 'fire-watch': 'Fire watch' },
     rateKind: 'Kind',
     rateKinds: { training: 'Training', 'fire-watch': 'Fire watch' },
+    paidStatuses: 'Compensation for sessions with status',
+    paidStatusesHint: 'Per statute; youth fire brigade members only when the statute provides for it.',
+    statuses: { probation: 'Probation', active: 'Active', passive: 'Passive', youth: 'Youth fire brigade', veterans: 'Veterans' },
     validFrom: 'Valid from',
     amount: 'Amount',
     remove: 'Remove',
@@ -448,7 +463,7 @@ const en: typeof de = {
     templateApply: 'Apply template',
     statuteMissing: 'Statute not maintained yet: no hourly rates for sessions and incidents. Sessions result in items without amount; incidents compute with the rates of the incident reports. Enter the values of your statute under Administration → Compensation or apply the template.',
     factualApproval: 'Factual approval before the payout',
-    factualApprovalHint: 'A closed run has to be approved by someone with the permission "Approve payout runs as factually correct" (role commander) before it goes to the treasury.',
+    factualApprovalHint: 'A closed run has to be approved by someone with the permission "Approve payout runs as factually correct" (role commander), other than the person who closed it, before transfer files exist and it goes to the treasury.',
     nameDe: 'Function (German)',
     nameEn: 'Function (English)',
     maxHolders: 'Maximum',
@@ -486,7 +501,7 @@ const en: typeof de = {
     workingHours: 'Working hours',
     hintKinds: { refreshment: 'Check refreshment allowance', 'multi-day': 'multi-day', capped: 'Maximum' },
   },
-  my: { title: 'My compensation', totals: '{{open}} open · {{paid}} paid out', empty: 'No items in this year.', open: 'open', paid: 'paid out' },
+  my: { title: 'My compensation', totals: '{{open}} open · {{settled}} settled · {{paid}} paid out', empty: 'No items in this year.', states: { open: 'open', settled: 'settled', 'paid-out': 'paid out' } },
   person: {
     title: 'Compensation {{year}}',
     total: 'Total {{total}}',
@@ -523,6 +538,9 @@ const en: typeof de = {
     'compensation.noStatements': 'No persons in this department.',
     'compensation.functionFromOffices': 'The holders of this function come from the offices in the person files.',
     'compensation.endBeforeStart': 'The end is before the start.',
+    'compensation.approverIsCloser': 'Whoever closed the run cannot approve it as factually correct.',
+    'compensation.unknownPayout': 'This payout does not exist in the run.',
+    'compensation.payoutDone': 'This payout is already marked as paid out.',
   },
 };
 

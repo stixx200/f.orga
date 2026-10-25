@@ -22,8 +22,9 @@ export function NoticesPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [overdue, setOverdue] = useState(false);
+  const [refund, setRefund] = useState(false);
   const [confirm, setConfirm] = useState(false);
-  const filter: ListFilter = { year: year ? Number(year) : undefined, status: status ?? undefined, q: q.trim() || undefined, overdue: overdue ? 'true' : undefined };
+  const filter: ListFilter = { year: year ? Number(year) : undefined, status: status ?? undefined, q: q.trim() || undefined, overdue: overdue ? 'true' : undefined, refund: refund ? 'true' : undefined };
   const { data = [], isLoading } = useNotices(filter);
   const format = t(`settings.handoverFormats.${settings?.handover?.format ?? 'xlsx'}`);
   const exportFile = useAction(() => download('GET', 'cost-recovery/export', filter));
@@ -51,6 +52,7 @@ export function NoticesPage() {
         <Select label={t('notices.year')} placeholder={t('notices.all')} data={[0, 1, 2, 3].map((n) => String(thisYear - n))} value={year} onChange={setYear} clearable w={120} />
         <Select label={t('fields.status')} placeholder={t('notices.all')} data={STATUSES.map((s) => ({ value: s, label: t(`status.${s}`) }))} value={status} onChange={setStatus} clearable />
         <Switch label={t('notices.onlyOverdue')} checked={overdue} onChange={(e) => setOverdue(e.currentTarget.checked)} mb={8} />
+        <Switch label={t('notices.onlyRefund')} checked={refund} onChange={(e) => setRefund(e.currentTarget.checked)} mb={8} />
       </Group>
       <DataTable<Notice>
         rows={data}
@@ -62,9 +64,9 @@ export function NoticesPage() {
           { key: 'incident', header: t('fields.incident'), render: (n) => <><Text size="sm">{n.alarmKeyword} · {n.dispatchNumber}</Text><Text size="xs" c="dimmed">{formatDate(n.alarmedAt, i18n.language)} · {offense(n.offenseKey)}</Text></> },
           { key: 'debtors', header: t('fields.debtors'), render: (n) => n.debtors.map((d) => d.name).join('; ') },
           { key: 'total', header: t('fields.total'), align: 'right', render: (n) => formatMoney(n.total, i18n.language) },
-          { key: 'open', header: t('fields.balance'), align: 'right', render: (n) => (n.issuedAt ? formatMoney(n.balance, i18n.language) : '') },
+          { key: 'open', header: t('fields.balance'), align: 'right', render: (n) => (n.issuedAt ? <Text size="sm" c={n.balance < 0 ? 'red.8' : undefined}>{formatMoney(n.balance, i18n.language)}</Text> : '') },
           { key: 'due', header: t('fields.dueOn'), render: (n) => formatDate(n.dueOn, i18n.language) },
-          { key: 'status', header: t('fields.status'), render: (n) => <NoticeStatusBadge status={n.status} overdue={n.overdue} /> },
+          { key: 'status', header: t('fields.status'), render: (n) => <NoticeStatusBadge status={n.status} overdue={n.overdue} refund={n.refundDue > 0} /> },
         ]}
       />
       <ConfirmDialog

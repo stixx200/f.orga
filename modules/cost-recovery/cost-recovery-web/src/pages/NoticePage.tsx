@@ -4,10 +4,10 @@ import { IconTrash } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { type Debtor, expectedAmount, type Notice, type NoticeIncident, OPEN_STATUSES, type Payment, type Position, round2, totalOf, vehicleRateOn } from '@forga/cost-recovery-contracts';
+import { type Debtor, expectedAmount, IN_EFFECT_STATUSES, type Notice, type NoticeIncident, type Payment, type Position, round2, totalOf, vehicleRateOn } from '@forga/cost-recovery-contracts';
 import { api, apiUrl, can, formatDate, formatDateTime, formatMoney, localDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ActionBar, ConfirmDialog, DataTable, EmptyState, Notice as Hint, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
-import { ISSUE, keys, useAddressBook, useCostSettings, useNotice, WRITE } from '../api';
+import { ISSUE, keys, REFUND, useAddressBook, useCostSettings, useNotice, WRITE } from '../api';
 import { NoticeStatusBadge } from '../parts';
 import { IncidentDrawer } from './IncidentDrawer';
 
@@ -163,6 +163,27 @@ function PaymentDialog({ notice, onClose }: { notice: Notice; onClose: () => voi
   );
 }
 
+/** Refund of an overpayment, at most the amount due; recorded as a negative payment. */
+function RefundDialog({ notice, onClose }: { notice: Notice; onClose: () => void }) {
+  const { t, i18n } = useTranslation('cost-recovery');
+  const { t: common } = useTranslation('common');
+  const [form, setForm] = useState(() => ({ date: localDate(), amount: notice.refundDue as number | '', note: '' }));
+  const save = useAction(() => send('POST', `cost-recovery/notices/${notice.id}/refunds`, { ...form, amount: Number(form.amount) }), { invalidate: [keys.all], success: t('refund.saved'), onSuccess: onClose });
+  return (
+    <ResponsiveDialog
+      opened
+      onClose={onClose}
+      title={t('refund.add')}
+      actions={<Group justify="flex-end"><Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button><Button loading={save.isPending} disabled={!form.amount || !form.date} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button></Group>}
+    >
+      <Text size="sm">{t('refund.due', { amount: formatMoney(notice.refundDue, i18n.language) })}</Text>
+      <DateInput label={t('refund.date')} value={form.date} onChange={(v) => v && setForm({ ...form, date: v })} valueFormat="DD.MM.YYYY" maxDate={localDate()} />
+      <NumberInput label={t('payments.amount')} value={form.amount} onChange={(v) => setForm({ ...form, amount: v === '' ? '' : Number(v) })} min={0.01} max={notice.refundDue} decimalScale={2} fixedDecimalScale suffix=" €" />
+      <TextInput label={t('payments.note')} value={form.note} onChange={(e) => setForm({ ...form, note: e.currentTarget.value })} />
+    </ResponsiveDialog>
+  );
+}
+
 function Payments({ notice, writable }: { notice: Notice; writable: boolean }) {
   const { t, i18n } = useTranslation('cost-recovery');
   const [reverse, setReverse] = useState<Payment | null>(null);
@@ -177,7 +198,7 @@ function Payments({ notice, writable }: { notice: Notice; writable: boolean }) {
         columns={[
           { key: 'date', header: t('payments.date'), render: (p) => formatDate(p.date, i18n.language) },
           { key: 'amount', header: t('payments.amount'), align: 'right', render: (p) => <Text size="sm" td={p.reversal ? 'line-through' : undefined}>{formatMoney(p.amount, i18n.language)}</Text> },
-          { key: 'note', header: t('payments.note'), render: (p) => (p.reversal ? t('payments.reversed', { date: formatDate(p.reversal.date, i18n.language), reason: p.reversal.reason, by: p.reversal.by }) : [p.note, p.recordedBy].filter(Boolean).join(' · ')) },
+          { key: 'note', header: t('payments.note'), render: (p) => (p.reversal ? t('payments.reversed', { date: formatDate(p.reversal.date, i18n.language), reason: p.reversal.reason, by: p.reversal.by }) : [p.amount < 0 ? t('refund.entry') : '', p.note, p.recordedBy].filter(Boolean).join(' · ')) },
           { key: 'action', header: '', align: 'right', render: (p) => writable && !p.reversal && <Button size="compact-xs" variant="default" onClick={() => setReverse(p)}>{t('payments.reverse')}</Button> },
         ]}
       />
@@ -196,7 +217,7 @@ function NoticeView({ notice, showIncident, onToggleIncident }: { notice: Notice
   const id = notice.id;
   const [form, setForm] = useState<Form>(() => formOf(notice));
   const [confirm, setConfirm] = useState<Action | null>(null);
-  const [dialog, setDialog] = useState<'objection' | 'cancel' | 'discard' | 'paid' | 'remind' | null>(null);
+  const [dialog, setDialog] = useState<'objection' | 'cancel' | 'discard' | 'paid' | 'remind' | 'refund' | null>(null);
   const [discardReason, setDiscardReason] = useState('');
   const editable = (notice.status === 'draft' || notice.status === 'review') && can(session, WRITE);
   const dirty = editable && JSON.stringify(form) !== JSON.stringify(formOf(notice));
@@ -228,13 +249,17 @@ function NoticeView({ notice, showIncident, onToggleIncident }: { notice: Notice
   });
   const navigate = useNavigate();
   const amend = useAction(() => send<Notice>('POST', `cost-recovery/notices/${id}/amend`), { invalidate: [keys.all], success: t('notice.amendCreated'), onSuccess: (created) => navigate(`/cost-recovery/notices/${created.id}`) });
-  const open = OPEN_STATUSES.includes(notice.status);
+  // In effect, also when paid: objection, amendment and cancellation apply (an overpayment is refunded).
+  const inEffect = IN_EFFECT_STATUSES.includes(notice.status);
   // Before the issue: is the incident still chargeable, and are all reports released for billing?
   const beforeIssue = notice.status === 'draft' || notice.status === 'review';
   const { data: incident } = useQuery({ queryKey: [...keys.notice(id), 'incident'], queryFn: () => api<NoticeIncident>(`cost-recovery/notices/${id}/incident`), enabled: beforeIssue });
-  const ownSubmission = Boolean(settings?.fourEyes) && notice.submittedById !== null && notice.submittedById === session?.user.id;
+  const ownSubmission = Boolean(settings?.fourEyes) && session?.user.id !== undefined && (notice.submittedById === session.user.id || notice.lastEditedById === session.user.id);
+  // Reasoned deviations of calculated positions: kept by "Neu berechnen" only where the calculation is unchanged.
+  const deviations = notice.positions.filter((p) => p.computedAmount !== null && differs(p));
   const confirmText = (action: Action) => {
     if (action === 'submit') return t(settings?.fourEyes ? 'confirm.submit.textFourEyes' : 'confirm.submit.text');
+    if (action === 'recalculate' && deviations.length) return `${t('confirm.recalculate.text')} ${t('confirm.recalculate.deviations', { positions: deviations.map((p) => p.label).join(', ') })}`;
     return t(`confirm.${action}.text`);
   };
 
@@ -243,7 +268,7 @@ function NoticeView({ notice, showIncident, onToggleIncident }: { notice: Notice
       <PageHeader
         breadcrumbs={[{ label: t('module') }, { label: t('notices.title'), to: '/cost-recovery/notices' }, { label: notice.number }]}
         title={t('notice.title', { number: notice.number })}
-        badges={<NoticeStatusBadge status={notice.status} overdue={notice.overdue} />}
+        badges={<NoticeStatusBadge status={notice.status} overdue={notice.overdue} refund={notice.refundDue > 0} />}
         subtitle={`${notice.alarmKeyword} · ${notice.dispatchNumber} · ${formatDateTime(notice.alarmedAt, i18n.language)}${notice.location ? ` · ${notice.location}` : ''}`}
         actions={
           <Group gap="sm">
@@ -253,26 +278,34 @@ function NoticeView({ notice, showIncident, onToggleIncident }: { notice: Notice
             {notice.status === 'draft' && can(session, WRITE) && <Button onClick={() => setConfirm('submit')}>{t('notice.submit')}</Button>}
             {notice.status === 'review' && can(session, ISSUE) && <Button variant="default" onClick={() => setConfirm('return')}>{t('notice.return')}</Button>}
             {notice.status === 'review' && can(session, ISSUE) && <Button disabled={ownSubmission} onClick={() => setConfirm('issue')}>{t('notice.issue')}</Button>}
-            {notice.status === 'issued' && can(session, WRITE) && <Button onClick={() => setConfirm('hand-over')}>{t('notice.handOver')}</Button>}
-            {(open || notice.status === 'paid') && can(session, WRITE) && (
+            {inEffect && !notice.handedOverAt && can(session, WRITE) && <Button onClick={() => setConfirm('hand-over')}>{t('notice.handOver')}</Button>}
+            {notice.refundDue > 0 && can(session, REFUND) && <Button onClick={() => setDialog('refund')}>{t('refund.add')}</Button>}
+            {inEffect && can(session, WRITE) && (
               <Menu position="bottom-end">
                 <Menu.Target><Button variant="default">{t('notice.more')}</Button></Menu.Target>
                 <Menu.Dropdown>
                   <Menu.Item onClick={() => setDialog('paid')}>{t('payments.add')}</Menu.Item>
                   {notice.overdue && <Menu.Item onClick={() => setDialog('remind')}>{t('reminder.create')}</Menu.Item>}
-                  {open && <Menu.Item onClick={() => setDialog('objection')}>{t('objection.title')}</Menu.Item>}
-                  {open && <Menu.Item onClick={() => amend.mutate(undefined)}>{t('notice.amend')}</Menu.Item>}
+                  <Menu.Item onClick={() => setDialog('objection')}>{t('objection.title')}</Menu.Item>
+                  <Menu.Item onClick={() => amend.mutate(undefined)}>{t('notice.amend')}</Menu.Item>
                 </Menu.Dropdown>
               </Menu>
             )}
             {(notice.status === 'draft' || notice.status === 'review') && can(session, WRITE) && <Button variant="default" color="red" onClick={() => setDialog('discard')}>{t('notice.discard')}</Button>}
-            {open && can(session, ISSUE) && <Button variant="default" color="red" onClick={() => setDialog('cancel')}>{t('notice.cancel')}</Button>}
+            {inEffect && can(session, ISSUE) && <Button variant="default" color="red" onClick={() => setDialog('cancel')}>{t('notice.cancel')}</Button>}
           </Group>
         }
       />
       {beforeIssue && incident && !incident.chargeable && <Hint kind="error">{t('notice.notChargeable')}</Hint>}
       {beforeIssue && incident && incident.chargeable && !incident.released && <Hint kind="warning">{t('notice.notReleased')}</Hint>}
-      {notice.submittedAt && notice.status === 'review' && <Hint kind="info">{t('notice.submittedBy', { name: notice.submittedBy, at: formatDateTime(notice.submittedAt, i18n.language) })}{ownSubmission ? ` ${t('notice.fourEyesOwn')}` : ''}</Hint>}
+      {notice.submittedAt && notice.status === 'review' && (
+        <Hint kind="info">
+          {t('notice.submittedBy', { name: notice.submittedBy, at: formatDateTime(notice.submittedAt, i18n.language) })}
+          {notice.lastEditedBy ? ` ${t('notice.editedInReview', { name: notice.lastEditedBy })}` : ''}
+          {ownSubmission ? ` ${t('notice.fourEyesOwn')}` : ''}
+        </Hint>
+      )}
+      {notice.refundDue > 0 && <Hint kind="warning">{t('refund.hint', { amount: formatMoney(notice.refundDue, i18n.language) })}</Hint>}
       {notice.issuedAt && <Hint kind="done">{t('notice.issuedBy', { name: notice.issuedBy, at: formatDateTime(notice.issuedAt, i18n.language), due: formatDate(notice.dueOn, i18n.language) })}</Hint>}
       {notice.overdue && <Hint kind="warning">{t('notice.overdueHint', { due: formatDate(notice.dueOn, i18n.language), open: formatMoney(notice.balance, i18n.language) })}</Hint>}
       {notice.reminders.length > 0 && (
@@ -308,6 +341,7 @@ function NoticeView({ notice, showIncident, onToggleIncident }: { notice: Notice
       {dialog === 'remind' && <ConfirmDialog opened onClose={() => setDialog(null)} title={t('reminder.create')} description={t('reminder.hint', { days: settings?.reminder?.days ?? 14 })} confirmLabel={t('reminder.create')} loading={remind.isPending} onConfirm={() => remind.mutate(undefined)} />}
       {dialog === 'objection' && <ObjectionDialog notice={notice} onClose={() => setDialog(null)} />}
       {dialog === 'paid' && <PaymentDialog notice={notice} onClose={() => setDialog(null)} />}
+      {dialog === 'refund' && <RefundDialog notice={notice} onClose={() => setDialog(null)} />}
     </Stack>
   );
 }

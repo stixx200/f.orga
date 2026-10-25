@@ -1,15 +1,16 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import ExcelJS from 'exceljs';
-import { addStyledSheet, type AuthenticatedUser, berlinDate, brigadeLogoDataUrl, DomainEvents, formatCell, pdfHeaderCell, PDF_TABLE_LAYOUT, renderLetterPdf, SettingsService } from '@forga/core-api';
+import { addStyledSheet, Audit, type AuthenticatedUser, berlinDate, brigadeLogoDataUrl, DomainEvents, formatCell, pdfHeaderCell, PDF_TABLE_LAYOUT, renderLetterPdf, SettingsService } from '@forga/core-api';
 import type { BrigadeSettings, Language } from '@forga/core-contracts';
-import { calendarDays, CompensationSettings, COMPENSATION_EVENTS, overlapping, sepaCreditTransfer, validIban, type PersonTotal, type Problem, round2, type Run, type RunClosedEvent, type RunDetail, RunInput } from '@forga/compensation-contracts';
+import { calendarDays, CompensationSettings, COMPENSATION_EVENTS, type ManualPayout, overlapping, sepaCreditTransfer, validIban, type PersonTotal, type Problem, round2, type Run, type RunClosedEvent, type RunDetail, RunInput } from '@forga/compensation-contracts';
 import { INCIDENTS_LOOKUP, type IncidentSettings, type IncidentsLookup } from '@forga/incidents-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PaymentDetails, type PersonDirectory } from '@forga/masterdata-contracts';
 import { ItemEntity, RunEntity } from '../compensation.entities.js';
 import { durationHours, toItemDto } from '../items/items.service.js';
 
-type Payee = { key: string; name: string; iban: string; amount: number; purpose: string };
+/** A transfer of a run: a person, or an employer receiving the assigned loss of earnings of `personIds`. */
+type Payee = { key: string; name: string; iban: string; amount: number; purpose: string; personIds: string[] };
 type ParsedRun =ReturnType<typeof RunInput.parse>;
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 const name = (p: Pick<PaymentDetails, 'firstName' | 'lastName'> | undefined) => (p ? `${p.lastName}, ${p.firstName}` : '–');
@@ -33,6 +34,16 @@ const PROBLEM_TEXT: Record<Problem['code'], { de: string; en: string }> = {
   refreshment: { de: 'Erfrischungszuschuss (ohne Betrag in der Satzung)', en: 'Refreshment allowance (no amount in the statute)' },
   'multi-day': { de: 'Mehrtägiger Einsatz: Einzelabrechnung in tatsächlicher Höhe', en: 'Multi-day incident: settle actual amounts individually' },
   'above-day-maximum': { de: 'Höchstbetrag je Tag überschritten', en: 'Maximum per day exceeded' },
+  'other-payment': { de: 'Andere Zahlungsart (beim Abschluss bestätigt, keine Bankverbindung)', en: 'Other payment method (confirmed when closing, no bank account)' },
+};
+
+const SOURCE_TEXT: Record<string, { de: string; en: string }> = {
+  incident: { de: 'Einsatz', en: 'Incident' },
+  training: { de: 'Dienst', en: 'Session' },
+  function: { de: 'Funktionspauschale', en: 'Function allowance' },
+  manual: { de: 'von Hand', en: 'Manual' },
+  duty: { de: 'Sonderdienst', en: 'Special service' },
+  course: { de: 'Lehrgang', en: 'Course' },
 };
 
 const euro = (value: number) => value.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -43,6 +54,7 @@ export class RunsService {
     private readonly em: EntityManager,
     private readonly events: DomainEvents,
     private readonly settings: SettingsService,
+    private readonly audit: Audit,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
     @Inject(ORGANIZATION) private readonly organization: Organization,
     @Optional() @Inject(INCIDENTS_LOOKUP) private readonly incidents?: IncidentsLookup,
@@ -60,6 +72,7 @@ export class RunsService {
       closedAt: iso(run.closedAt),
       closedBy: run.closedBy ?? null,
       withoutIban: run.withoutIban ?? [],
+      manualPayouts: run.manualPayouts ?? [],
       approvedAt: iso(run.approvedAt),
       approvedBy: run.approvedBy ?? null,
       handedOverAt: iso(run.handedOverAt),
@@ -172,7 +185,10 @@ export class RunsService {
         .map(({ reports, trainings, ...p }) => ({ ...p, incidents: reports.size, sessions: trainings.size }))
         .toSorted((a, b) => a.name.localeCompare(b.name)),
       departments: [...departments.values()].map((d) => ({ departmentId: d.departmentId, persons: d.persons.size, incidents: d.incidents.size, amount: d.amount })),
-      problems: [...this.problems(items, people, await this.config(), await this.paidDuringWorkingHours()), ...(run.status === 'draft' ? await this.unreleasedReports(run.from, run.to) : [])],
+      problems: [
+        ...this.problems(items, people, await this.config(), await this.paidDuringWorkingHours(), new Set((run.manualPayouts ?? []).flatMap((p) => p.personIds))),
+        ...(run.status === 'draft' ? await this.unreleasedReports(run.from, run.to) : []),
+      ],
     };
   }
 
@@ -199,8 +215,11 @@ export class RunsService {
     return CompensationSettings.parse((await this.settings.get('compensation.general')) ?? {});
   }
 
-  /** Checks before closing; only missing amounts block. Statute hints (refreshment, multi-day, day maximum) only warn. */
-  problems(items: ItemEntity[], people: Map<string, PaymentDetails>, config: CompensationSettings, paidDuringWorkingHours = false): Problem[] {
+  /**
+   * Checks before closing; only missing amounts block. Statute hints (refreshment, multi-day, day maximum) only warn.
+   * Persons confirmed without IBAN when closing (`otherPayment`) show as "andere Zahlungsart" instead of "keine Bankverbindung".
+   */
+  problems(items: ItemEntity[], people: Map<string, PaymentDetails>, config: CompensationSettings, paidDuringWorkingHours = false, otherPayment = new Set<string>()): Problem[] {
     const problems: Problem[] = [];
     const add = (code: Problem['code'], list: ItemEntity[], detail = '') =>
       problems.push({ code, blocking: code === 'amount-missing', personId: list[0]?.personId ?? null, name: name(people.get(list[0]?.personId ?? '')), itemIds: list.map((i) => i.id), detail });
@@ -240,21 +259,23 @@ export class RunsService {
         }
       }
       const total = list.reduce((s, i) => s + amountOf(i), 0);
-      if (total > 0 && !validIban(people.get(personId)?.iban ?? '')) add('no-iban', list);
+      if (total > 0 && otherPayment.has(personId)) add('other-payment', list);
+      else if (total > 0 && !validIban(people.get(personId)?.iban ?? '')) add('no-iban', list);
       if (total < 0) add('negative-total', list, String(round2(total)));
     }
     return problems;
   }
 
   /** Payees (persons, employers) of a run without valid IBAN. */
-  private async withoutValidIban(detail: RunDetail): Promise<string[]> {
+  private async withoutValidIban(detail: RunDetail): Promise<Payee[]> {
     const people = new Map((await this.directory.paymentDetails(detail.persons.map((p) => p.personId))).map((p) => [p.id, p]));
-    return this.payees(detail, people, '').filter((p) => !validIban(p.iban)).map((p) => p.name);
+    return this.payees(detail, people, '').filter((p) => !validIban(p.iban));
   }
 
   /**
    * Closes the run. Persons (or employers) without valid IBAN block it unless confirmed (`acceptMissingIban`); the
-   * confirmed names are kept and left out of the transfer files, so they are paid another way.
+   * confirmed payees are left out of the transfer files and kept as payouts another way, open (task for the treasury,
+   * "abgerechnet" for the person) until marked as paid.
    */
   async close(user: AuthenticatedUser, id: string, acceptMissingIban = false): Promise<RunDetail> {
     const detail = await this.detail(id);
@@ -262,10 +283,11 @@ export class RunsService {
     const blocking = detail.problems.filter((p) => p.blocking);
     if (blocking.length) throw new ConflictException({ code: 'compensation.problemsOpen', count: blocking.length });
     const withoutIban = await this.withoutValidIban(detail);
-    if (withoutIban.length && !acceptMissingIban) throw new ConflictException({ code: 'compensation.ibanMissing', names: withoutIban });
+    if (withoutIban.length && !acceptMissingIban) throw new ConflictException({ code: 'compensation.ibanMissing', names: withoutIban.map((p) => p.name) });
     const em = this.em.fork();
     const run = await this.load(em, id);
-    run.withoutIban = withoutIban;
+    run.withoutIban = withoutIban.map((p) => p.name);
+    run.manualPayouts = withoutIban.map((p): ManualPayout => ({ key: p.key, name: p.name, personIds: p.personIds, amount: p.amount, paidAt: null, paidBy: null }));
     // A negative total (corrections after a payout) cannot be transferred: those items stay open
     // and are offset against the person's next amounts.
     const totals = new Map<string, number>();
@@ -274,20 +296,38 @@ export class RunsService {
     run.status = 'closed';
     run.closedAt = new Date();
     run.closedBy = user.displayName;
+    run.closedById = user.id;
     await em.flush();
     const closed = await this.detail(id);
     await this.events.publish<RunClosedEvent>(COMPENSATION_EVENTS.runClosed, { runId: run.id, number: run.number, from: run.from, to: run.to, total: closed.total });
+    await this.audit.log('compensation.run-closed', { runId: run.id, number: run.number, total: closed.total, withoutIban: run.withoutIban });
     return closed;
   }
 
-  /** Factual approval ("sachlich richtig") of a closed run before it is handed over for payout. */
+  /** Factual approval ("sachlich richtig") of a closed run before it is handed over for payout; not by who closed it. */
   async approve(user: AuthenticatedUser, id: string): Promise<RunDetail> {
     const em = this.em.fork();
     const run = await this.load(em, id);
     if (run.status !== 'closed') throw new ConflictException({ code: 'compensation.invalidTransition', from: run.status });
     if (run.approvedAt) throw new ConflictException({ code: 'compensation.alreadyApproved' });
+    if (run.closedById === user.id) throw new ForbiddenException({ code: 'compensation.approverIsCloser' });
     Object.assign(run, { approvedAt: new Date(), approvedBy: user.displayName });
     await em.flush();
+    await this.audit.log('compensation.run-approved', { runId: run.id, number: run.number });
+    return this.detail(id);
+  }
+
+  /** A payout another way (payee without IBAN) is done, e.g. in cash or by a later transfer of the treasury. */
+  async markManualPayout(user: AuthenticatedUser, id: string, key: string): Promise<RunDetail> {
+    const em = this.em.fork();
+    const run = await this.load(em, id);
+    if (run.status === 'draft') throw new ConflictException({ code: 'compensation.runNotClosed' });
+    const payout = (run.manualPayouts ?? []).find((p) => p.key === key);
+    if (!payout) throw new NotFoundException({ code: 'compensation.unknownPayout' });
+    if (payout.paidAt) throw new ConflictException({ code: 'compensation.payoutDone' });
+    run.manualPayouts = run.manualPayouts.map((p) => (p.key === key ? { ...p, paidAt: new Date().toISOString(), paidBy: user.displayName } : p));
+    await em.flush();
+    await this.audit.log('compensation.manual-payout-marked', { runId: run.id, number: run.number, payee: payout.name, amount: payout.amount });
     return this.detail(id);
   }
 
@@ -301,6 +341,7 @@ export class RunsService {
     if (status === 'handed-over') run.handedOverAt = new Date();
     else run.paidAt = new Date();
     await em.flush();
+    await this.audit.log(`compensation.run-${status}`, { runId: run.id, number: run.number });
     return this.detail(id);
   }
 
@@ -330,7 +371,7 @@ export class RunsService {
       de ? ['Abteilung', 'Name', 'Beginn', 'Ende', 'Quelle', 'Bezeichnung', 'Art', 'Stunden', 'Satz (€)', 'Betrag (€)', 'Hinweis'] : ['Department', 'Name', 'Begin', 'End', 'Source', 'Label', 'Kind', 'Hours', 'Rate (€)', 'Amount (€)', 'Note'],
       detail.items.map((i) => {
         const entity = items.find((x) => x.id === i.id)!;
-        return [dep(i.departmentId), name(people.get(i.personId)), i.from ? time(entity.from) : date(i.date), time(entity.to), i.source, i.label, kind(i.kind), i.hours, i.rate, i.amount, [i.workingHours ? '(AZ)' : '', i.correction ? (de ? 'Korrektur' : 'Correction') : '', i.reason].filter(Boolean).join(' ')];
+        return [dep(i.departmentId), name(people.get(i.personId)), i.from ? time(entity.from) : date(i.date), time(entity.to), SOURCE_TEXT[i.source]?.[language] ?? i.source, i.label, kind(i.kind), i.hours, i.rate, i.amount, [i.workingHours ? '(AZ)' : '', i.correction ? (de ? 'Korrektur' : 'Correction') : '', i.reason].filter(Boolean).join(' ')];
       }),
       [22, 28, 18, 18, 10, 30, 16, 10, 10, 12, 30]);
     addStyledSheet(wb, de ? 'Hinweise' : 'Notes', de ? 'Hinweise' : 'Notes', subtitle,
@@ -356,17 +397,18 @@ export class RunsService {
       if (!from) return 0;
       return round2(detail.items.filter((i) => i.personId === personId && i.kind === 'loss-of-earnings' && i.date >= from).reduce((sum, i) => sum + (i.amount ?? 0), 0));
     };
-    const result: { key: string; name: string; iban: string; amount: number; purpose: string }[] = [];
-    const employers = new Map<string, { key: string; name: string; iban: string; amount: number; purpose: string }>();
+    const result: Payee[] = [];
+    const employers = new Map<string, Payee>();
     for (const p of detail.persons.filter((x) => x.amount > 0)) {
       const details = people.get(p.personId);
       const toEmployer = Math.min(assigned(p.personId), p.amount);
       const own = round2(p.amount - toEmployer);
-      if (own > 0) result.push({ key: p.personId, name: details?.accountHolder || `${details?.firstName ?? ''} ${details?.lastName ?? ''}`.trim() || p.name, iban: details?.iban ?? '', amount: own, purpose });
+      if (own > 0) result.push({ key: p.personId, name: details?.accountHolder || `${details?.firstName ?? ''} ${details?.lastName ?? ''}`.trim() || p.name, iban: details?.iban ?? '', amount: own, purpose, personIds: [p.personId] });
       if (toEmployer > 0) {
         const iban = details?.employerIban ?? '';
-        const employer = employers.get(iban || p.personId) ?? { key: `employer-${iban || p.personId}`, name: details?.employerName || p.name, iban, amount: 0, purpose: `${purpose} – Verdienstausfall` };
+        const employer = employers.get(iban || p.personId) ?? { key: `employer-${iban || p.personId}`, name: details?.employerName || p.name, iban, amount: 0, purpose: `${purpose} – Verdienstausfall`, personIds: [] };
         employer.amount = round2(employer.amount + toEmployer);
+        employer.personIds.push(p.personId);
         employers.set(iban || p.personId, employer);
       }
     }
@@ -395,6 +437,8 @@ export class RunsService {
     if (!persons.length) throw new NotFoundException({ code: 'compensation.noStatements' });
     const people = new Map((await this.directory.paymentDetails(persons.map((p) => p.personId))).map((p) => [p.id, p]));
     const departments = new Map((await this.organization.departments()).map((d) => [d.id, d.name]));
+    const otherPayment = new Set((detail.manualPayouts ?? []).flatMap((p) => p.personIds));
+    const kindText: Record<string, string> = { 'loss-of-earnings': 'Verdienstausfall', expenses: 'Auslagen' };
     const content = persons.flatMap((person, index) => {
       const details = people.get(person.personId);
       const items = detail.items.filter((i) => i.personId === person.personId);
@@ -411,7 +455,7 @@ export class RunsService {
               [pdfHeaderCell('Datum'), pdfHeaderCell('Bezeichnung'), pdfHeaderCell('Std.', 'right'), pdfHeaderCell('Satz', 'right'), pdfHeaderCell('Betrag', 'right')],
               ...items.map((i) => [
                 germanDate(i.date),
-                `${i.label}${i.workingHours ? ' (AZ)' : ''}${i.correction ? ' (Korrektur)' : ''}`,
+                `${i.label}${kindText[i.kind] && !i.label.includes(kindText[i.kind]!) ? ` – ${kindText[i.kind]}` : ''}${i.workingHours ? ' (AZ)' : ''}${i.correction ? ' (Korrektur)' : ''}`,
                 { text: i.hours === null ? '' : String(i.hours).replace('.', ','), alignment: 'right' },
                 { text: i.rate === null ? '' : euro(i.rate), alignment: 'right' },
                 { text: i.amount === null ? 'offen' : euro(i.amount), alignment: 'right' },
@@ -422,7 +466,14 @@ export class RunsService {
           layout: PDF_TABLE_LAYOUT,
           margin: [0, 10, 0, 0],
         },
-        { text: person.amount > 0 && iban ? `Der Betrag wird auf das Konto ${iban} überwiesen.` : person.amount > 0 ? 'Für die Überweisung fehlt eine Bankverbindung.' : 'Es ergibt sich keine Auszahlung.', margin: [0, 12, 0, 0] },
+        {
+          text:
+            person.amount <= 0 ? 'Es ergibt sich keine Auszahlung.'
+            : otherPayment.has(person.personId) ? 'Ohne Bankverbindung wird der Betrag auf anderem Weg ausgezahlt.'
+            : iban ? `Der Betrag wird auf das Konto ${iban} überwiesen.`
+            : 'Für die Überweisung fehlt eine Bankverbindung.',
+          margin: [0, 12, 0, 0],
+        },
         ...(details?.lossOfEarningsAssignedFrom && items.some((i) => i.kind === 'loss-of-earnings' && i.date >= details.lossOfEarningsAssignedFrom!)
           ? [{ text: `Der Verdienstausfall ist an ${details.employerName || 'den Arbeitgeber'} abgetreten und wird dorthin überwiesen.`, margin: [0, 4, 0, 0] }]
           : []),
@@ -440,9 +491,14 @@ export class RunsService {
   private async transfers(id: string, purposeTemplate: string): Promise<{ detail: RunDetail; payees: Payee[] }> {
     const detail = await this.detail(id);
     if (detail.status === 'draft') throw new ConflictException({ code: 'compensation.runNotClosed' });
+    // With the factual approval in the settings, transfers only exist after it.
+    if ((await this.config()).factualApproval && !detail.approvedAt) throw new ConflictException({ code: 'compensation.approvalMissing' });
     const people = new Map((await this.directory.paymentDetails(detail.persons.map((p) => p.personId))).map((p) => [p.id, p]));
     const purpose = purposeTemplate.replace('{period}', `${germanDate(detail.from)}–${germanDate(detail.to)}`);
-    const payees = this.payees(detail, people, purpose).filter((p) => validIban(p.iban) || !detail.withoutIban.includes(p.name));
+    // Amounts of persons confirmed without IBAN are paid another way, even if an account or an assignment to the
+    // employer was added since (no double payout).
+    const confirmed = new Set(detail.manualPayouts.flatMap((p) => p.personIds));
+    const payees = this.payees(detail, people, purpose).filter((p) => !p.personIds.some((personId) => confirmed.has(personId)) && (validIban(p.iban) || !detail.withoutIban.includes(p.name)));
     const invalid = payees.filter((p) => !validIban(p.iban)).map((p) => p.name);
     if (invalid.length) throw new ConflictException({ code: 'compensation.invalidIban', names: invalid.join(', ') });
     return { detail, payees };

@@ -7,13 +7,14 @@ const TONES: Record<NoticeStatus, Tone> = {
   draft: 'neutral', review: 'warning', issued: 'primary', 'handed-over': 'primary', paid: 'done', objection: 'error', cancelled: 'neutral', amended: 'neutral', discarded: 'neutral',
 };
 
-/** Status of a notice, with "überfällig" when it is past due and not paid in full. */
-export function NoticeStatusBadge({ status, overdue = false }: { status: NoticeStatus; overdue?: boolean }) {
+/** Status of a notice, with "überfällig" when it is past due and not paid in full, and "Erstattung" when overpaid. */
+export function NoticeStatusBadge({ status, overdue = false, refund = false }: { status: NoticeStatus; overdue?: boolean; refund?: boolean }) {
   const { t } = useTranslation('cost-recovery');
   return (
     <Group gap={4} wrap="nowrap">
       <StatusBadge tone={TONES[status]}>{t(`status.${status}`)}</StatusBadge>
       {overdue && <StatusBadge tone="error">{t('notices.overdue')}</StatusBadge>}
+      {refund && <StatusBadge tone="warning">{t('notices.refund')}</StatusBadge>}
     </Group>
   );
 }

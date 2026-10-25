@@ -567,7 +567,8 @@ async function compensation(persons: PersonRef[]): Promise<void> {
   }
   // The statute values are taken over explicitly from the sample statute (example values).
   const statute = (await call<Record<string, unknown> | null>('GET', 'core/settings/compensation.general')) ?? {};
-  await call('PUT', 'core/settings/compensation.general', { ...statute, ...SAMPLE_STATUTE });
+  // The payer account of the SEPA file is an example (test IBAN), so the payout run demo has transfer files.
+  await call('PUT', 'core/settings/compensation.general', { ...statute, ...SAMPLE_STATUTE, payer: { name: 'Stadt Musterstadt (Beispiel)', iban: 'DE02120300000000202051', bic: '' } });
   for (const y of [year - 1, year]) {
     await call('POST', 'incidents/reports/republish', { from: `${y}-01-01`, to: `${y}-12-31` });
     await call('POST', 'training/sessions/republish', { from: `${y}-01-01`, to: `${y}-12-31` });
@@ -580,10 +581,10 @@ async function compensation(persons: PersonRef[]): Promise<void> {
   }
   await call('POST', 'compensation/functions/generate', { year: year - 1 });
   // A closed and paid run for the previous year; the current year stays open.
-  const run = await call<{ id: string; items: { id: string; amount: number | null }[] }>('POST', 'compensation/runs', { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` });
+  const run = await call<{ id: string; items: { id: string; amount: number | null }[]; problems: { code: string }[] }>('POST', 'compensation/runs', { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` });
   for (const item of run.items.filter((i) => i.amount === null)) await call('PUT', `compensation/items/${item.id}/amount`, { amount: between(40, 180), reason: 'Bescheinigung Arbeitgeber' });
-  // Demo persons without bank account are confirmed explicitly; they are left out of the transfer files.
-  await call('POST', `compensation/runs/${run.id}/close`, { acceptMissingIban: true });
+  // Only if demo persons still lack a valid bank account, they are confirmed explicitly (paid another way).
+  await call('POST', `compensation/runs/${run.id}/close`, { acceptMissingIban: run.problems.some((p) => p.code === 'no-iban') });
   await call('POST', `compensation/runs/${run.id}/hand-over`, {});
   await call('POST', `compensation/runs/${run.id}/paid`, {});
   const open = await call<unknown[]>('GET', 'compensation/items?open=true');
