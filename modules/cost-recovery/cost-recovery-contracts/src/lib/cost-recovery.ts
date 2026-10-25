@@ -5,12 +5,13 @@ const date = z.iso.date();
 const text = z.string().trim().default('');
 const money = z.number().multipleOf(0.01);
 
-/** Legal ground of the charge (§ 34 FwG BW); a catalog, so new grounds need no code change. */
+/** Legal ground of the charge from the state's fire brigade law; a catalog, so new grounds need no code change. */
 export const Offense = z.object({ key: z.string().regex(/^[a-z0-9][a-z0-9-]*$/), name: LocalizedText, legalBasis: z.string() });
 export type Offense = z.infer<typeof Offense>;
 
 const o = (key: string, de: string, en: string, legalBasis: string): Offense => ({ key, name: { de, en }, legalBasis });
 
+/** Legal grounds of § 34 FwG Baden-Württemberg; part of the Baden-Württemberg template, never applied on its own. */
 export const BW_OFFENSES: Offense[] = [
   o('intent', 'Vorsätzliche oder grob fahrlässige Verursachung', 'Caused intentionally or by gross negligence', '§ 34 Abs. 1 Satz 2 Nr. 1 FwG'),
   o('vehicle', 'Betrieb eines Fahrzeugs (Halter)', 'Operation of a vehicle (keeper)', '§ 34 Abs. 1 Satz 2 Nr. 2 FwG'),
@@ -68,9 +69,25 @@ export const HandoverFormat = z.object({
 });
 export type HandoverFormat = z.infer<typeof HandoverFormat>;
 
+const REMINDER_TEXT =
+  'Mit dem Kostenbescheid {number} vom {issuedOn} wurden Kosten von {total} festgesetzt, fällig am {dueOn}. Bis heute ist ein Betrag von {open} offen. Bitte überweisen Sie den offenen Betrag bis zum {newDueOn}. Sollten Sie inzwischen gezahlt haben, betrachten Sie dieses Schreiben bitte als gegenstandslos.';
+
+/** Payment reminder letter; placeholders `{number}`, `{issuedOn}`, `{total}`, `{open}`, `{dueOn}`, `{newDueOn}`. */
+export const ReminderSettings = z.object({
+  title: z.string().trim().min(1).default('Zahlungserinnerung'),
+  text: z.string().default(REMINDER_TEXT),
+  /** Payment term set by the reminder. */
+  days: z.number().int().min(1).max(90).default(14),
+});
+export type ReminderSettings = z.infer<typeof ReminderSettings>;
+
+/**
+ * Settings section `cost-recovery.general`. Everything state-specific (legal grounds, vehicle rates, legal basis,
+ * regulation, legal remedy) starts empty and is taken over explicitly, e.g. from the Baden-Württemberg template.
+ */
 export const CostRecoverySettings = z.object({
-  offenses: z.array(Offense).default(BW_OFFENSES),
-  vehicleRates: z.array(VehicleRate).default(VOKEFW_VEHICLE_RATES),
+  offenses: z.array(Offense).default([]),
+  vehicleRates: z.array(VehicleRate).default([]),
   /** Hourly rates per person from the local statute; empty until entered. */
   personnelRates: z.array(PersonnelRate).default([]),
   materials: z.array(Material).default([]),
@@ -81,32 +98,66 @@ export const CostRecoverySettings = z.object({
   vehicleRounding: CostRounding.nullable().default(null),
   /** Standby at the station is charged like personnel on the scene. */
   chargeStandby: z.boolean().default(false),
+  /** Guests (personnel without person file): `none` = not charged, noted on the notice; `volunteer` = at the volunteer rate. */
+  guests: z.enum(['none', 'volunteer']).default('none'),
   /** Authority issuing the notice, e.g. "Stadt Musterstadt – Bürgermeisteramt". */
   authority: text,
   authorityAddress: text,
   /** Local statute cited in the notice, e.g. "Feuerwehr-Kostenersatzsatzung vom …". */
   statute: text,
-  /** Legal basis when the offense names none. */
-  defaultLegalBasis: z.string().default('§ 34 FwG'),
-  /** State regulation on the rates, cited after the legal basis; empty = not cited. */
-  regulation: z.string().default('Verordnung des Innenministeriums über den Kostenersatz für Einsätze der Feuerwehr (VOKeFw)'),
+  /** Legal basis when the offense names none; needed before notices can be created. */
+  defaultLegalBasis: text,
+  /** State regulation or statute on the rates, cited after the legal basis; needed before notices can be created. */
+  regulation: text,
   /** Note for several debtors; empty = none. */
-  jointLiability: z.string().default('Die Kostenschuldner haften als Gesamtschuldner (§ 34 Abs. 3 FwG).'),
+  jointLiability: text,
   bankAccount: text,
   budgetAccount: text,
   dueDays: z.number().int().min(1).max(180).default(30),
+  /** Notices are only issued with the cash reference of the treasury. */
+  cashReferenceRequired: z.boolean().default(false),
+  /** Four-eyes principle: whoever submitted a notice for review cannot issue it. */
+  fourEyes: z.boolean().default(false),
   /** Format of the handover to the treasury. */
   handover: HandoverFormat.default({ format: 'xlsx', columns: ['number', 'cashReference', 'debtors', 'address', 'amount', 'dueOn', 'budgetAccount', 'incident'] }),
+  /** Function below the name of the issuing person, e.g. "Im Auftrag – Ordnungsamt". */
   signer: text,
-  reasoning: z.string().default('Die Feuerwehr wurde am {date} zu einem Einsatz in {location} gerufen. Der Einsatz ist nach {basis} kostenersatzpflichtig. Gründe, auf den Kostenersatz ganz oder teilweise zu verzichten (unbillige Härte, öffentliches Interesse), sind nicht ersichtlich.'),
-  remedy: z.string().default('Gegen diesen Bescheid kann innerhalb eines Monats nach Bekanntgabe Widerspruch erhoben werden. Der Widerspruch ist schriftlich oder zur Niederschrift bei der oben genannten Behörde einzulegen.'),
+  reasoning: z.string().default('Die Feuerwehr wurde am {date} zu einem Einsatz in {location} gerufen. Der Einsatz ist nach {basis} kostenersatzpflichtig.'),
+  /** Information on legal remedies; needed before notices can be created. */
+  remedy: text,
+  reminder: ReminderSettings.default({ title: 'Zahlungserinnerung', text: REMINDER_TEXT, days: 14 }),
 });
 export type CostRecoverySettings = z.infer<typeof CostRecoverySettings>;
 
 export const COST_RECOVERY_SETTINGS = { 'cost-recovery.general': CostRecoverySettings } as const;
 
+/**
+ * Template Baden-Württemberg (§ 34 FwG, VOKeFw 2016 and 2024, objection as legal remedy). Only applied when the
+ * administration takes it over in the settings; the values have to be checked against the local statute.
+ */
+export const BW_TEMPLATE = {
+  offenses: BW_OFFENSES,
+  vehicleRates: VOKEFW_VEHICLE_RATES,
+  defaultLegalBasis: '§ 34 FwG',
+  regulation: 'Verordnung des Innenministeriums über den Kostenersatz für Einsätze der Feuerwehr (VOKeFw)',
+  jointLiability: 'Die Kostenschuldner haften als Gesamtschuldner (§ 34 Abs. 3 FwG).',
+  reasoning:
+    'Die Feuerwehr wurde am {date} zu einem Einsatz in {location} gerufen. Der Einsatz ist nach {basis} kostenersatzpflichtig. Gründe, auf den Kostenersatz ganz oder teilweise zu verzichten (unbillige Härte, öffentliches Interesse), sind nicht ersichtlich.',
+  remedy:
+    'Gegen diesen Bescheid kann innerhalb eines Monats nach Bekanntgabe Widerspruch erhoben werden. Der Widerspruch ist schriftlich oder zur Niederschrift bei der oben genannten Behörde einzulegen.',
+} satisfies Partial<CostRecoverySettings>;
+
+/** Parts of the settings needed before notices can be created: legal grounds, legal basis, regulation, legal remedy. */
+export const CONFIGURATION_PARTS = ['offenses', 'defaultLegalBasis', 'regulation', 'remedy'] as const;
+export type ConfigurationPart = (typeof CONFIGURATION_PARTS)[number];
+export function missingConfiguration(config: Pick<CostRecoverySettings, ConfigurationPart>): ConfigurationPart[] {
+  return CONFIGURATION_PARTS.filter((part) => (part === 'offenses' ? !config.offenses.length : !config[part].trim()));
+}
+
 export const Debtor = z.object({ name: z.string().trim().min(1), street: text, postalCode: text, city: text, role: text });
 export type Debtor = z.infer<typeof Debtor>;
+/** A debtor while the notice is a draft: the name may still be missing; submitting checks it. */
+export const DraftDebtor = Debtor.extend({ name: text });
 
 export const PositionKind = z.enum(['personnel', 'vehicle', 'material', 'third-party', 'other-brigade', 'flat-rate', 'other']);
 export type PositionKind = z.infer<typeof PositionKind>;
@@ -118,31 +169,59 @@ export const Position = z.object({
   quantity: z.number().min(0),
   unit: z.string().default('h'),
   rate: money.min(0),
-  amount: money,
+  /** Never negative; a reduction is a lower amount with a reason. */
+  amount: money.min(0),
   /** As calculated; `null` for positions added by hand. */
   computedAmount: money.nullable().default(null),
-  /** Needed when `amount` differs from `computedAmount`. */
+  /** Needed when `amount` differs from `computedAmount` (positions added by hand: from quantity × rate). */
   reason: text,
   /** Vehicle cost category used (can be switched, e.g. to MTW). */
   category: z.string().nullable().default(null),
   vehicleId: z.string().nullable().default(null),
+  /** Personnel: number of persons, and their hours each when all have the same (else `null`), for "2 × 1,5 h". */
+  persons: z.number().int().min(0).nullable().default(null),
+  hoursEach: z.number().min(0).nullable().default(null),
 });
 export type Position = z.infer<typeof Position>;
 
-/** `amended`: replaced by an issued amendment notice (Änderungsbescheid). */
-export const NoticeStatus = z.enum(['draft', 'review', 'issued', 'handed-over', 'paid', 'objection', 'cancelled', 'amended']);
+/**
+ * `amended`: replaced by an issued amendment notice (Änderungsbescheid); `cancelled`: an issued notice lifted
+ * (Aufhebung); `discarded`: a draft or a notice in review that was never issued (verworfen).
+ */
+export const NoticeStatus = z.enum(['draft', 'review', 'issued', 'handed-over', 'paid', 'objection', 'cancelled', 'amended', 'discarded']);
 export type NoticeStatus = z.infer<typeof NoticeStatus>;
 
+/** Issued and not settled: payments, reminders, objection and amendment apply. */
+export const OPEN_STATUSES: NoticeStatus[] = ['issued', 'handed-over', 'objection'];
+/** No longer in effect; a new notice for the incident is possible. */
+export const ENDED_STATUSES: NoticeStatus[] = ['cancelled', 'amended', 'discarded'];
+
+/** Drafts can be saved without debtor; submitting for review checks the debtors. */
 export const NoticeInput = z.object({
   version: z.number().int().optional(),
   offenseKey: z.string().min(1),
-  debtors: z.array(Debtor).min(1),
+  debtors: z.array(DraftDebtor),
   positions: z.array(Position),
   reasoning: z.string(),
   remedy: z.string(),
   cashReference: text,
 });
 export type NoticeInput = z.input<typeof NoticeInput>;
+
+/** A payment received (also partial); a reversal keeps it, with reason. */
+export const Payment = z.object({
+  id: z.string(),
+  date: z.string(),
+  amount: z.number(),
+  note: z.string(),
+  recordedBy: z.string(),
+  reversal: z.object({ date: z.string(), reason: z.string(), by: z.string() }).nullable(),
+});
+export type Payment = z.infer<typeof Payment>;
+
+/** A payment reminder sent (letter as PDF), with its new payment term. */
+export const Reminder = z.object({ date: z.string(), dueOn: z.string(), by: z.string() });
+export type Reminder = z.infer<typeof Reminder>;
 
 export const Notice = z.object({
   id: z.uuid(),
@@ -153,20 +232,36 @@ export const Notice = z.object({
   alarmedAt: z.string(),
   location: z.string(),
   offenseKey: z.string(),
-  debtors: z.array(Debtor),
+  debtors: z.array(DraftDebtor),
   positions: z.array(Position),
   total: z.number(),
   reasoning: z.string(),
   remedy: z.string(),
   cashReference: z.string(),
   status: NoticeStatus,
+  /** Who submitted the notice for review (four-eyes principle). */
+  submittedAt: z.string().nullable(),
+  submittedBy: z.string().nullable(),
+  submittedById: z.string().nullable(),
   issuedAt: z.string().nullable(),
   issuedBy: z.string().nullable(),
   dueOn: z.string().nullable(),
+  handedOverAt: z.string().nullable(),
   hasPdf: z.boolean(),
   objection: z.object({ date: z.string(), result: z.enum(['pending', 'upheld', 'rejected']), note: z.string() }).nullable(),
   cancellation: z.object({ date: z.string(), reason: z.string() }).nullable(),
+  /** Day on which the notice was paid in full. */
   paidOn: z.string().nullable(),
+  payments: z.array(Payment),
+  /** Sum of the payments not reversed. */
+  paid: z.number(),
+  /** Total minus paid; negative = overpaid. */
+  balance: z.number(),
+  /** Open, past due and not paid in full. */
+  overdue: z.boolean(),
+  reminders: z.array(Reminder),
+  /** Guests of the reports not charged (setting `guests`). */
+  guestsNotCharged: z.number(),
   /** The notice this amendment changes, and the amendment that replaced this notice. */
   amends: z.object({ id: z.uuid(), number: z.string() }).nullable(),
   amendedBy: z.object({ id: z.uuid(), number: z.string() }).nullable(),
@@ -178,8 +273,25 @@ export const ObjectionInput = z.object({ date, result: z.enum(['pending', 'uphel
 export type ObjectionInput = z.input<typeof ObjectionInput>;
 export const CancellationInput = z.object({ reason: z.string().trim().min(3) });
 export type CancellationInput = z.input<typeof CancellationInput>;
-export const PaymentInput = z.object({ paidOn: date });
+/** Discarding a draft or a notice in review; the reason is optional. */
+export const DiscardInput = z.object({ reason: text });
+export type DiscardInput = z.input<typeof DiscardInput>;
+export const PaymentInput = z.object({ date, amount: money.positive(), note: text });
 export type PaymentInput = z.input<typeof PaymentInput>;
+export const PaymentReversalInput = z.object({ reason: z.string().trim().min(3) });
+export type PaymentReversalInput = z.input<typeof PaymentReversalInput>;
+
+/** Filter of the notice list, also used by the treasury export. */
+export const NoticeFilter = z.object({
+  status: z.string().optional(),
+  year: z.coerce.number().int().optional(),
+  /** Words of file number, debtor, dispatch number, cash reference or location. */
+  q: z.string().optional(),
+  overdue: z.enum(['true', 'false']).optional(),
+  /** Comma-separated IDs (export of selected notices). */
+  ids: z.string().optional(),
+});
+export type NoticeFilter = z.infer<typeof NoticeFilter>;
 
 export const AddressBookInput = Debtor.extend({ notes: text });
 export type AddressBookInput = z.input<typeof AddressBookInput>;
@@ -196,6 +308,9 @@ export const NoticeIncident = z.object({
   location: z.string(),
   chargeableReason: z.string(),
   notes: z.string(),
+  /** The incident is still marked chargeable, and all its reports are released for billing. */
+  chargeable: z.boolean(),
+  released: z.boolean(),
   reports: z.array(
     z.object({
       reportId: z.uuid(),
@@ -227,12 +342,17 @@ export const Candidate = z.object({
   object: z.string(),
   /** Reason from the costs of the incident. */
   chargeableReason: z.string(),
+  /** All reports released for billing. */
   released: z.boolean(),
   suggestedOffense: z.string().nullable(),
   noticeId: z.uuid().nullable(),
   noticeStatus: NoticeStatus.nullable(),
 });
 export type Candidate = z.infer<typeof Candidate>;
+
+/** A notice of an incident for the incident page (`GET /cost-recovery/incidents/:incidentId/notices`). */
+export const IncidentNotice = z.object({ id: z.uuid(), number: z.string(), status: NoticeStatus, total: z.number(), issuedAt: z.string().nullable() });
+export type IncidentNotice = z.infer<typeof IncidentNotice>;
 
 export const COST_RECOVERY_EVENTS = { noticeIssued: 'cost-recovery.notice.issued' } as const;
 export interface NoticeIssuedEvent {

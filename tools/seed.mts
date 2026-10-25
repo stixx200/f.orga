@@ -13,6 +13,8 @@
  */
 import ExcelJS from 'exceljs';
 import { VWV_2022_RULES } from '@forga/promotions-contracts';
+import { BW_TEMPLATE } from '@forga/cost-recovery-contracts';
+import { SAMPLE_STATUTE } from '@forga/compensation-contracts';
 
 const BASE = (process.env['FORGA_URL'] ?? 'http://localhost:3000').replace(/\/$/, '');
 const ADMIN = { username: process.env['FORGA_ADMIN_USER'] ?? 'admin', password: process.env['FORGA_ADMIN_PASSWORD'] ?? 'sehr-geheim-123' };
@@ -556,6 +558,9 @@ async function compensation(persons: PersonRef[]): Promise<void> {
     console.log('  Auszahlungsläufe vorhanden');
     return;
   }
+  // The statute values are taken over explicitly from the sample statute (example values).
+  const statute = (await call<Record<string, unknown> | null>('GET', 'core/settings/compensation.general')) ?? {};
+  await call('PUT', 'core/settings/compensation.general', { ...statute, ...SAMPLE_STATUTE });
   for (const y of [year - 1, year]) {
     await call('POST', 'incidents/reports/republish', { from: `${y}-01-01`, to: `${y}-12-31` });
     await call('POST', 'training/sessions/republish', { from: `${y}-01-01`, to: `${y}-12-31` });
@@ -570,7 +575,8 @@ async function compensation(persons: PersonRef[]): Promise<void> {
   // A closed and paid run for the previous year; the current year stays open.
   const run = await call<{ id: string; items: { id: string; amount: number | null }[] }>('POST', 'compensation/runs', { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` });
   for (const item of run.items.filter((i) => i.amount === null)) await call('PUT', `compensation/items/${item.id}/amount`, { amount: between(40, 180), reason: 'Bescheinigung Arbeitgeber' });
-  await call('POST', `compensation/runs/${run.id}/close`, {});
+  // Demo persons without bank account are confirmed explicitly; they are left out of the transfer files.
+  await call('POST', `compensation/runs/${run.id}/close`, { acceptMissingIban: true });
   await call('POST', `compensation/runs/${run.id}/hand-over`, {});
   await call('POST', `compensation/runs/${run.id}/paid`, {});
   const open = await call<unknown[]>('GET', 'compensation/items?open=true');
@@ -788,6 +794,8 @@ async function costRecovery(): Promise<void> {
   const general = (await call<Record<string, unknown> | null>('GET', 'core/settings/cost-recovery.general')) ?? {};
   await call('PUT', 'core/settings/cost-recovery.general', {
     ...general,
+    // State-specific values are a template the brigade takes over explicitly (here: Baden-Württemberg).
+    ...BW_TEMPLATE,
     authority: 'Stadt Musterstadt – Bürgermeisteramt',
     authorityAddress: 'Feuerwehrstraße 1, 12345 Musterstadt',
     bankAccount: 'IBAN DE00 0000 0000 0000 0000 00 (Beispiel)',
@@ -816,10 +824,11 @@ async function costRecovery(): Promise<void> {
     // Costs apply to the whole incident.
     await call('PUT', `incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Fehlalarm der Brandmeldeanlage', notes: 'Betreiber über Kostenpflicht informiert' });
   }
-  const candidates = await call<{ incidentId: string }[]>('GET', `cost-recovery/candidates?from=${year - 1}-01-01&to=${year}-12-31`);
+  // Notices can only be issued for incidents whose reports are released for billing: those first.
+  const candidates = (await call<{ incidentId: string; released: boolean }[]>('GET', `cost-recovery/candidates?from=${year - 1}-01-01&to=${year}-12-31`)).toSorted((a, b) => Number(b.released) - Number(a.released));
   for (const [index, candidate] of candidates.slice(0, 2).entries()) {
     const notice = await call<{ id: string }>('POST', 'cost-recovery/notices', { incidentId: candidate.incidentId });
-    if (index === 0) {
+    if (index === 0 && candidate.released) {
       await call('POST', `cost-recovery/notices/${notice.id}/submit`, {});
       await call('POST', `cost-recovery/notices/${notice.id}/issue`, {});
     }

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DEFAULT_FUNCTION_ALLOWANCES } from '@forga/compensation-contracts';
+import { CompensationSettings, DEFAULT_FUNCTION_ALLOWANCES, SAMPLE_STATUTE } from '@forga/compensation-contracts';
 import { EntityManager } from '@mikro-orm/core';
 import { DomainEvents } from '@forga/core-api';
 import { MASTERDATA_EVENTS } from '@forga/masterdata-contracts';
@@ -9,6 +9,7 @@ import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
 let test: TestApp;
 let admin: string;
 let reader: string;
+let commander: string;
 const ids: Record<string, string> = {};
 
 const post = (path: string, body: unknown, cookie = admin) => test.http.post(`/api${path}`).set('Cookie', cookie).set(UI).send(body as object);
@@ -41,8 +42,15 @@ beforeAll(async () => {
 
   const roles = (await get('/core/roles')).body as { id: string; templateKey: string }[];
   const role = roles.find((r) => r.templateKey === 'department-commander')!.id;
-  await post('/core/users', { username: 'abtkdt', displayName: 'Abt.-Kdt. Ahornfeld', password: 'auch-sehr-geheim', roles: [{ roleId: role, departmentId: ids.ahornfeld }] }).expect(201);
+  await post('/core/users', { username: 'abtkdt', displayName: 'Abt.-Kdt. Ahornfeld', password: 'auch-sehr-geheim', personId: ids.lena, roles: [{ roleId: role, departmentId: ids.ahornfeld }] }).expect(201);
   reader = await test.login({ username: 'abtkdt', password: 'auch-sehr-geheim' });
+  await post('/core/users', { username: 'kdt', displayName: 'Kommandant', password: 'auch-sehr-geheim', roles: [{ roleId: roles.find((r) => r.templateKey === 'commander')!.id, departmentId: null }] }).expect(201);
+  commander = await test.login({ username: 'kdt', password: 'auch-sehr-geheim' });
+
+  // No statute values out of the box; the sample statute is taken over explicitly.
+  const empty = CompensationSettings.parse((await get('/core/settings/compensation.general').expect(200)).body ?? {});
+  expect(empty).toMatchObject({ trainingRates: [], incidentRates: [], householdRates: [], courseAllowances: [], functionAllowances: [] });
+  await put('/core/settings/compensation.general', { ...empty, ...SAMPLE_STATUTE }).expect(200);
 });
 
 afterAll(() => test?.app.close());
@@ -97,8 +105,11 @@ describe('compensation', () => {
     const loss = run.items.find((i: { kind: string }) => i.kind === 'loss-of-earnings');
     await put(`/compensation/items/${loss.id}/amount`, { amount: 80, reason: 'Bescheinigung Arbeitgeber' }).expect(200);
 
-    const closed = (await post(`/compensation/runs/${run.id}/close`, {}).expect(200)).body;
-    expect(closed).toMatchObject({ status: 'closed', total: 215 });
+    // Max has no IBAN: closing needs an explicit confirmation; the transfer files are only for closed runs.
+    await get(`/compensation/runs/${run.id}/transfer.csv`).expect(409);
+    expect((await post(`/compensation/runs/${run.id}/close`, {}).expect(409)).body).toMatchObject({ code: 'compensation.ibanMissing', names: ['Max Test'] });
+    const closed = (await post(`/compensation/runs/${run.id}/close`, { acceptMissingIban: true }).expect(200)).body;
+    expect(closed).toMatchObject({ status: 'closed', total: 215, withoutIban: ['Max Test'] });
     expect(closed.persons.find((p: { personId: string }) => p.personId === ids.jonas)).toMatchObject({ incidents: 1, sessions: 1, amount: 90 });
     await put(`/compensation/items/${loss.id}/amount`, { amount: 90 }).expect(409);
     await post(`/compensation/runs/${run.id}/paid`, {}).expect(409);
@@ -110,7 +121,9 @@ describe('compensation', () => {
     expect((await get(`/compensation/runs/${run.id}/transfer.xml`).expect(400)).body.code).toBe('compensation.payerMissing');
     const config = (await get('/core/settings/compensation.general').expect(200)).body ?? {};
     await put('/core/settings/compensation.general', { ...config, payer: { name: 'Stadt Musterstadt', iban: 'DE02500105170137075030', bic: '' } }).expect(200);
-    expect((await get(`/compensation/runs/${run.id}/transfer.xml`).expect(409)).body).toMatchObject({ code: 'compensation.invalidIban', names: 'Max Test' });
+    // Max was confirmed without IBAN: he is left out of the files.
+    expect((await get(`/compensation/runs/${run.id}/transfer.xml`).expect(200)).text).not.toContain('Max');
+    expect((await get(`/compensation/runs/${run.id}/transfer.csv`).expect(200)).text).not.toContain('Max');
     // Max gets an account and assigns his loss of earnings to the employer: two transfers.
     const max = (await get(`/masterdata/persons/${ids.max}`).expect(200)).body;
     const { id: _id, version, sensitiveHidden: _h, anonymizedAt: _a, memberships: _m, qualifications: _q, ranks: _r, honors: _o, offices: _f, restPeriods: _p, status: _s, ...fields } = max;
@@ -283,5 +296,51 @@ describe('compensation', () => {
     await sql.execute(`update compensation.item set run_id = '${runId}' where id = '${item.id}'`);
     await bus.publish(MASTERDATA_EVENTS.courseRevoked, { personId: ids.lena, course: 'squad-leader', attendanceId: squadLeader.id });
     expect((await courseItems()).map((i) => [i.amount, i.correction])).toEqual(expect.arrayContaining([[70, false], [-70, true]]));
+  });
+
+  it('defers open amounts to the next run, enters several amounts at once, and lets the commander approve the run', async () => {
+    await test.app.get(DomainEvents).publish(INCIDENTS_EVENTS.reportReleased, {
+      ...released([{ personId: ids.jonas, amount: 30, lossOfEarnings: true, from: '2026-12-05T08:00:00Z', to: '2026-12-05T10:00:00Z' }, { personId: ids.lena, amount: 30, lossOfEarnings: true, from: '2026-12-05T08:00:00Z', to: '2026-12-05T10:00:00Z' }]),
+      reportId: '01a16846-0000-7000-8000-00000000f001', dispatchNumber: '2026-999',
+    });
+    // The commander reads runs, but does not prepare them.
+    await post('/compensation/runs', { from: '2026-12-01', to: '2026-12-31' }, commander).expect(403);
+    const run = (await post('/compensation/runs', { from: '2026-12-01', to: '2026-12-31' }).expect(201)).body;
+    expect((await get('/compensation/runs', commander).expect(200)).body.map((r: { id: string }) => r.id)).toContain(run.id);
+    const missing = (run.items as { id: string; personId: string; amount: number | null }[]).filter((i) => i.amount === null);
+    const jonas = missing.find((i) => i.personId === ids.jonas)!;
+    const others = missing.filter((i) => i.id !== jonas.id).map((i) => i.id);
+    // Several amounts at once; the rest goes to the next run and no longer blocks this one.
+    await put('/compensation/items/amounts', [{ id: jonas.id, amount: 55 }]).expect(200);
+    const deferred = (await post(`/compensation/runs/${run.id}/defer`, { itemIds: others }).expect(200)).body;
+    expect(deferred.problems.filter((p: { blocking: boolean }) => p.blocking)).toEqual([]);
+    expect(deferred.deferred.map((i: { id: string }) => i.id).toSorted()).toEqual(others.toSorted());
+    // Taking over new items does not bring them back; taking them back does.
+    expect((await post(`/compensation/runs/${run.id}/refresh`, {}).expect(200)).body.deferred).toHaveLength(others.length);
+    expect((await post(`/compensation/runs/${run.id}/undefer`, { itemIds: others }).expect(200)).body.deferred).toHaveLength(0);
+    await post(`/compensation/runs/${run.id}/defer`, { itemIds: others }).expect(200);
+    await post(`/compensation/runs/${run.id}/close`, { acceptMissingIban: true }).expect(200);
+
+    // Factual approval by the commander before the handover.
+    const config = (await get('/core/settings/compensation.general').expect(200)).body;
+    await put('/core/settings/compensation.general', { ...config, factualApproval: true }).expect(200);
+    expect((await post(`/compensation/runs/${run.id}/hand-over`, {}).expect(409)).body.code).toBe('compensation.approvalMissing');
+    await post(`/compensation/runs/${run.id}/approve`, {}, reader).expect(403);
+    expect((await post(`/compensation/runs/${run.id}/approve`, {}, commander).expect(200)).body).toMatchObject({ approvedBy: 'Kommandant' });
+    await post(`/compensation/runs/${run.id}/hand-over`, {}).expect(200);
+    await put('/core/settings/compensation.general', { ...config, factualApproval: false }).expect(200);
+
+    // The deferred items wait for the next run.
+    const open = (await get('/compensation/items?open=true').expect(200)).body as { id: string; runId: string | null }[];
+    expect(others.every((id) => open.some((i) => i.id === id && i.runId === null))).toBe(true);
+  });
+
+  it('shows the own compensation in "My area"', async () => {
+    const mine = (await get('/compensation/me?year=2026', reader).expect(200)).body as { items: { personId: string; paidOut: boolean }[]; open: number; paid: number };
+    expect(mine.items.length).toBeGreaterThan(0);
+    expect(mine.items.every((i) => i.personId === ids.lena)).toBe(true);
+    expect(mine.items.some((i) => i.paidOut)).toBe(true);
+    // Without a linked person there is nothing to show.
+    await get('/compensation/me', commander).expect(404);
   });
 });

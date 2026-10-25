@@ -14,6 +14,7 @@ const SUBJECT_ROUTES: Record<string, (id: string) => string> = {
   'clothing.item': (id) => `/clothing/items/${id}`,
   'training.session': (id) => `/training/sessions/${id}`,
   'compensation.item': () => '/compensation/items',
+  'cost-recovery.notice': (id) => `/cost-recovery/notices/${id}`,
   'core.audit': () => '/admin/audit',
   'core.me': () => '/me',
 };

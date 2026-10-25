@@ -14,6 +14,11 @@ export const RunSchema = defineEntity({
     status: p.string().$type<RunStatus>().default('draft'),
     closedAt: p.datetime().nullable(),
     closedBy: p.string().nullable(),
+    /** Names of persons without valid IBAN confirmed when closing (left out of the transfer files). */
+    withoutIban: p.json<string[]>().defaultRaw("'[]'::jsonb"),
+    /** Factual approval ("sachlich richtig") by the commander, when the setting asks for it. */
+    approvedAt: p.datetime().nullable(),
+    approvedBy: p.string().nullable(),
     handedOverAt: p.datetime().nullable(),
     paidAt: p.datetime().nullable(),
     createdAt: p.datetime().onCreate(() => new Date()),
@@ -48,6 +53,8 @@ export const ItemSchema = defineEntity({
     correction: p.boolean().default(false),
     reason: p.text().default(''),
     run: () => p.manyToOne(RunEntity).nullable().deleteRule('set null'),
+    /** Deferred from this draft run to the next one: the draft does not take it over again. */
+    deferredFrom: p.string().nullable(),
     createdAt: p.datetime().onCreate(() => new Date()),
     version: p.integer().version(),
   },

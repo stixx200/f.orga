@@ -2,9 +2,9 @@ import { ActionIcon, Button, Group, MultiSelect, NumberInput, Select, SimpleGrid
 import { DateInput } from '@mantine/dates';
 import { IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
-import { CostRecoverySettings, type FlatRate, HandoverColumn, type Material, PersonnelKind, type PersonnelRate, type VehicleRate } from '@forga/cost-recovery-contracts';
+import { BW_TEMPLATE, CostRecoverySettings, type FlatRate, HandoverColumn, type Material, missingConfiguration, type Offense, PersonnelKind, type PersonnelRate, type VehicleRate } from '@forga/cost-recovery-contracts';
 import { send, useTranslation } from '@forga/web-sdk';
-import { PageHeader, Panel, useAction } from '@forga/web-ui';
+import { ConfirmDialog, Notice as Hint, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { keys, useCostSettings } from '../api';
 
 const update = <T,>(list: T[], index: number, change: Partial<T>) => list.map((x, i) => (i === index ? { ...x, ...change } : x));
@@ -13,12 +13,20 @@ function Form({ value }: { value: CostRecoverySettings }) {
   const { t } = useTranslation('cost-recovery');
   const { t: common } = useTranslation('common');
   const [form, setForm] = useState(value);
+  const [template, setTemplate] = useState(false);
   const set = <K extends keyof CostRecoverySettings>(key: K, v: CostRecoverySettings[K]) => setForm((f) => ({ ...f, [key]: v }));
   const save = useAction((v: CostRecoverySettings) => send('PUT', 'core/settings/cost-recovery.general', v), { success: t('settings.saved'), invalidate: [keys.settings] });
   const remove = (onClick: () => void) => <ActionIcon variant="subtle" color="red" aria-label={t('notice.remove')} onClick={onClick}><IconTrash size={16} /></ActionIcon>;
 
+  const missing = missingConfiguration(form);
+
   return (
     <Stack gap="md">
+      <Group justify="flex-end">
+        <Button size="xs" variant="default" onClick={() => setTemplate(true)}>{t('settings.template')}</Button>
+      </Group>
+      {missing.length > 0 && <Hint kind="warning">{t('settings.missing', { parts: missing.map((p) => t(`settings.parts.${p}`)).join(', ') })}</Hint>}
+      <ConfirmDialog opened={template} onClose={() => setTemplate(false)} title={t('settings.template')} description={t('settings.templateHint')} confirmLabel={t('settings.templateApply')} onConfirm={() => { setForm((f) => ({ ...f, ...BW_TEMPLATE })); setTemplate(false); }} />
       <Tabs defaultValue="rates">
         <Tabs.List mb="md">
           <Tabs.Tab value="rates">{t('settings.rates')}</Tabs.Tab>
@@ -70,6 +78,7 @@ function Form({ value }: { value: CostRecoverySettings }) {
                 />
               </Group>
               <Switch mt="sm" label={t('settings.chargeStandby')} checked={form.chargeStandby} onChange={(e) => set('chargeStandby', e.currentTarget.checked)} />
+              <Select mt="sm" label={t('settings.guests')} description={t('settings.guestsHint')} data={(['none', 'volunteer'] as const).map((g) => ({ value: g, label: t(`settings.guestModes.${g}`) }))} value={form.guests} onChange={(v) => v && set('guests', v as CostRecoverySettings['guests'])} allowDeselect={false} w={360} />
             </Panel>
           </Stack>
         </Tabs.Panel>
@@ -110,13 +119,30 @@ function Form({ value }: { value: CostRecoverySettings }) {
           </Panel>
         </Tabs.Panel>
         <Tabs.Panel value="notice">
+          <Panel title={t('settings.offenses')} mb="md">
+            <Table>
+              <Table.Thead><Table.Tr><Table.Th>{t('settings.key')}</Table.Th><Table.Th>{t('settings.nameDe')}</Table.Th><Table.Th>{t('settings.nameEn')}</Table.Th><Table.Th>{t('settings.legalBasis')}</Table.Th><Table.Th /></Table.Tr></Table.Thead>
+              <Table.Tbody>
+                {form.offenses.map((o, i) => (
+                  <Table.Tr key={i}>
+                    <Table.Td><TextInput aria-label={t('settings.key')} w={140} value={o.key} onChange={(e) => set('offenses', update<Offense>(form.offenses, i, { key: e.currentTarget.value }))} /></Table.Td>
+                    <Table.Td><TextInput aria-label={t('settings.nameDe')} value={o.name.de} onChange={(e) => set('offenses', update<Offense>(form.offenses, i, { name: { ...o.name, de: e.currentTarget.value } }))} /></Table.Td>
+                    <Table.Td><TextInput aria-label={t('settings.nameEn')} value={o.name.en} onChange={(e) => set('offenses', update<Offense>(form.offenses, i, { name: { ...o.name, en: e.currentTarget.value } }))} /></Table.Td>
+                    <Table.Td><TextInput aria-label={t('settings.legalBasis')} value={o.legalBasis} onChange={(e) => set('offenses', update<Offense>(form.offenses, i, { legalBasis: e.currentTarget.value }))} /></Table.Td>
+                    <Table.Td>{remove(() => set('offenses', form.offenses.filter((_, x) => x !== i)))}</Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+            <Group mt="xs"><Button size="xs" variant="default" onClick={() => set('offenses', [...form.offenses, { key: `offense-${form.offenses.length + 1}`, name: { de: '', en: '' }, legalBasis: '' }])}>{t('settings.addOffense')}</Button></Group>
+          </Panel>
           <Panel title={t('settings.notice')}>
             <SimpleGrid cols={{ base: 1, sm: 2 }}>
               <TextInput label={t('settings.authority')} value={form.authority} onChange={(e) => set('authority', e.currentTarget.value)} />
               <TextInput label={t('settings.authorityAddress')} value={form.authorityAddress} onChange={(e) => set('authorityAddress', e.currentTarget.value)} />
               <TextInput label={t('settings.statute')} description={t('settings.statuteHint')} value={form.statute} onChange={(e) => set('statute', e.currentTarget.value)} />
-              <TextInput label={t('settings.defaultLegalBasis')} value={form.defaultLegalBasis} onChange={(e) => set('defaultLegalBasis', e.currentTarget.value)} />
-              <TextInput label={t('settings.regulation')} description={t('settings.emptyOmitted')} value={form.regulation} onChange={(e) => set('regulation', e.currentTarget.value)} />
+              <TextInput label={t('settings.defaultLegalBasis')} description={t('settings.required')} value={form.defaultLegalBasis} onChange={(e) => set('defaultLegalBasis', e.currentTarget.value)} />
+              <TextInput label={t('settings.regulation')} description={t('settings.required')} value={form.regulation} onChange={(e) => set('regulation', e.currentTarget.value)} />
               <TextInput label={t('settings.jointLiability')} description={t('settings.emptyOmitted')} value={form.jointLiability} onChange={(e) => set('jointLiability', e.currentTarget.value)} />
               <TextInput label={t('settings.bankAccount')} value={form.bankAccount} onChange={(e) => set('bankAccount', e.currentTarget.value)} />
               <TextInput label={t('settings.budgetAccount')} value={form.budgetAccount} onChange={(e) => set('budgetAccount', e.currentTarget.value)} />
@@ -133,9 +159,18 @@ function Form({ value }: { value: CostRecoverySettings }) {
               onChange={(v) => v.length && set('handover', { ...form.handover, columns: v as HandoverColumn[] })}
             />
             <Stack gap="sm" mt="sm">
+              <Switch label={t('settings.cashReferenceRequired')} checked={form.cashReferenceRequired} onChange={(e) => set('cashReferenceRequired', e.currentTarget.checked)} />
+              <Switch label={t('settings.fourEyes')} description={t('settings.fourEyesHint')} checked={form.fourEyes} onChange={(e) => set('fourEyes', e.currentTarget.checked)} />
               <Textarea label={t('notice.reasoning')} description={t('settings.placeholders')} value={form.reasoning} onChange={(e) => set('reasoning', e.currentTarget.value)} autosize minRows={3} />
-              <Textarea label={t('notice.remedy')} value={form.remedy} onChange={(e) => set('remedy', e.currentTarget.value)} autosize minRows={2} />
+              <Textarea label={t('notice.remedy')} description={t('settings.required')} value={form.remedy} onChange={(e) => set('remedy', e.currentTarget.value)} autosize minRows={2} />
             </Stack>
+          </Panel>
+          <Panel title={t('settings.reminder')} mt="md">
+            <SimpleGrid cols={{ base: 1, sm: 2 }}>
+              <TextInput label={t('settings.reminderTitle')} value={form.reminder.title} onChange={(e) => set('reminder', { ...form.reminder, title: e.currentTarget.value })} />
+              <NumberInput label={t('settings.reminderDays')} value={form.reminder.days} onChange={(v) => set('reminder', { ...form.reminder, days: Number(v) || 14 })} min={1} max={90} />
+            </SimpleGrid>
+            <Textarea mt="sm" label={t('settings.reminderText')} description={t('settings.reminderPlaceholders')} value={form.reminder.text} onChange={(e) => set('reminder', { ...form.reminder, text: e.currentTarget.value })} autosize minRows={3} />
           </Panel>
         </Tabs.Panel>
       </Tabs>
@@ -144,7 +179,7 @@ function Form({ value }: { value: CostRecoverySettings }) {
   );
 }
 
-/** Administration: rate tables (VOKeFw, statute), materials, authority and text blocks of the notice. */
+/** Administration: legal grounds, rate tables (state regulation, statute), materials, authority and text blocks; template Baden-Württemberg. */
 export function SettingsPage() {
   const { t } = useTranslation('cost-recovery');
   const { data, isSuccess } = useCostSettings();

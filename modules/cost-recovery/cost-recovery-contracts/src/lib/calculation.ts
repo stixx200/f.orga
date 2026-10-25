@@ -1,4 +1,4 @@
-import type { CostRounding, PersonnelKind, PersonnelRate, Position, VehicleRate } from './cost-recovery.js';
+import type { CostRounding, Payment, PersonnelKind, PersonnelRate, Position, VehicleRate } from './cost-recovery.js';
 
 const MINUTE = 60_000;
 
@@ -26,5 +26,27 @@ export const round2 = (value: number) => Math.round(value * 100) / 100;
 /** Total of the positions. */
 export const totalOf = (positions: Pick<Position, 'amount'>[]) => round2(positions.reduce((s, p) => s + p.amount, 0));
 
-/** Positions whose amount differs from the calculated one need a reason. */
-export const missingReasons = (positions: Position[]) => positions.filter((p) => p.computedAmount !== null && round2(p.amount) !== round2(p.computedAmount) && !p.reason.trim());
+/** The amount a position should have: as calculated, or quantity × rate for positions added by hand. */
+export const expectedAmount = (p: Pick<Position, 'computedAmount' | 'quantity' | 'rate'>) => (p.computedAmount !== null ? p.computedAmount : round2(p.quantity * p.rate));
+
+/** Positions whose amount differs from the calculated one (or from quantity × rate) need a reason. */
+export const missingReasons = <P extends Pick<Position, 'amount' | 'computedAmount' | 'quantity' | 'rate' | 'reason'>>(positions: P[]) =>
+  positions.filter((p) => round2(p.amount) !== round2(expectedAmount(p)) && !p.reason.trim());
+
+/** Sum of the payments not reversed. */
+export const paidOf = (payments: Pick<Payment, 'amount' | 'reversal'>[]) => round2(payments.filter((p) => !p.reversal).reduce((s, p) => s + p.amount, 0));
+
+/**
+ * Removes repeated parts of a location text, e.g. "Hauptstraße 1, 12345 Musterstadt, Musterstadt" (district equal
+ * to the city) becomes "Hauptstraße 1, 12345 Musterstadt".
+ */
+export function cleanLocation(location: string): string {
+  const parts = location.split(',').map((p) => p.trim()).filter(Boolean);
+  const kept: string[] = [];
+  for (const part of parts) {
+    const lower = part.toLocaleLowerCase('de');
+    if (kept.some((k) => k.toLocaleLowerCase('de') === lower || k.toLocaleLowerCase('de').endsWith(` ${lower}`))) continue;
+    kept.push(part);
+  }
+  return kept.join(', ');
+}

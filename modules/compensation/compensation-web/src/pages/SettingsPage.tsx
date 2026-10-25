@@ -1,10 +1,10 @@
-import { ActionIcon, Button, Group, MultiSelect, NumberInput, Select, SimpleGrid, Stack, Table, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Group, MultiSelect, NumberInput, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
-import { CompensationSettings, type CourseAllowance, type FunctionAllowance, type Rounding, validIban } from '@forga/compensation-contracts';
+import { CompensationSettings, type CourseAllowance, type FunctionAllowance, type Rounding, SAMPLE_STATUTE, statuteMissing, validIban } from '@forga/compensation-contracts';
 import { send, useLocalized, useTranslation } from '@forga/web-sdk';
-import { PageHeader, Panel, useAction } from '@forga/web-ui';
+import { ConfirmDialog, Notice, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { keys, useCompensationSettings, useCourses, useDepartments, useOffices } from '../api';
 import { PreviewPanel } from './PreviewPanel';
 
@@ -35,7 +35,7 @@ function Rates<K extends string>(props: { title: string; kinds: K[]; kindLabel: 
           </Table.Tbody>
         </Table>
         <Group>
-          <Button variant="default" size="xs" onClick={() => onRates([...rates, { kind: kinds[0], validFrom: `${new Date().getFullYear() + 1}-01-01`, amount: 15 }])}>{t('settings.addRate')}</Button>
+          <Button variant="default" size="xs" onClick={() => onRates([...rates, { kind: kinds[0], validFrom: `${new Date().getFullYear()}-01-01`, amount: 0 }])}>{t('settings.addRate')}</Button>
           <Select label={t('settings.rounding')} data={(['started-hour', 'started-half-hour', 'exact-minutes'] as const).map((r) => ({ value: r, label: t(`settings.roundings.${r}`) }))} value={rounding} onChange={(v) => v && onRounding(v as Rounding)} allowDeselect={false} />
         </Group>
       </Stack>
@@ -47,6 +47,7 @@ function Form({ value }: { value: CompensationSettings }) {
   const { t } = useTranslation('compensation');
   const { t: common } = useTranslation('common');
   const [form, setForm] = useState(value);
+  const [template, setTemplate] = useState(false);
   const localized = useLocalized();
   const { data: offices = [] } = useOffices();
   const { data: departments = [] } = useDepartments();
@@ -58,6 +59,9 @@ function Form({ value }: { value: CompensationSettings }) {
 
   return (
     <Stack gap="md">
+      <Group justify="flex-end"><Button size="xs" variant="default" onClick={() => setTemplate(true)}>{t('settings.template')}</Button></Group>
+      {statuteMissing(form) && <Notice kind="warning">{t('settings.statuteMissing')}</Notice>}
+      <ConfirmDialog opened={template} onClose={() => setTemplate(false)} title={t('settings.template')} description={t('settings.templateHint')} confirmLabel={t('settings.templateApply')} onConfirm={() => { setForm((f) => ({ ...f, ...SAMPLE_STATUTE })); setTemplate(false); }} />
       <Rates
         title={t('settings.trainingRates')}
         kinds={['training', 'fire-watch']}
@@ -151,6 +155,7 @@ function Form({ value }: { value: CompensationSettings }) {
             <TextInput label={t('settings.payerBic')} value={form.payer.bic} onChange={(e) => set('payer', { ...form.payer, bic: e.currentTarget.value })} />
           </SimpleGrid>
         </SimpleGrid>
+        <Switch mt="md" label={t('settings.factualApproval')} description={t('settings.factualApprovalHint')} checked={form.factualApproval} onChange={(e) => set('factualApproval', e.currentTarget.checked)} />
       </Panel>
       <Group justify="flex-end"><Button loading={save.isPending} onClick={() => save.mutate(form)}>{common('actions.save')}</Button></Group>
     </Stack>
