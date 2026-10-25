@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Finding, IncidentStatisticsInput, Report, ReportInput } from '@forga/incidents-contracts';
-import { api, ApiError, send } from '@forga/web-sdk';
+import { api, ApiError, send, useSession } from '@forga/web-sdk';
 import { notifyError } from '@forga/web-ui';
 import { keys } from '../api';
 
@@ -53,7 +53,33 @@ const notifySaveError = (error: unknown) => {
   if (!(error instanceof ApiError && error.code === 'conflict.stale')) notifyError(error);
 };
 
-const storageKey = (reportId: string) => `forga.incidents.report.${reportId}`;
+/** Buffers and reasons are kept per user, so nobody else working in the same browser gets them offered. */
+const BUFFER_PREFIXES = ['forga.incidents.report.', 'forga.incidents.reasons.'];
+const storageKey = (userId: string, reportId: string) => `${BUFFER_PREFIXES[0]}${userId}.${reportId}`;
+const reasonsKey = (userId: string, reportId: string) => `${BUFFER_PREFIXES[1]}${userId}.${reportId}`;
+
+/** Removes buffered report content and reasons of other users (and of older versions without a user) from the browser. */
+export function removeForeignBuffers(userId: string): void {
+  try {
+    const own = BUFFER_PREFIXES.map((prefix) => `${prefix}${userId}.`);
+    const foreign: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && BUFFER_PREFIXES.some((p) => key.startsWith(p)) && !own.some((p) => key.startsWith(p))) foreign.push(key);
+    }
+    for (const key of foreign) window.localStorage.removeItem(key);
+  } catch {
+    // Browser storage unavailable: nothing is buffered either.
+  }
+}
+
+/** Once a user is logged in, the buffers of other users in this browser are removed. */
+export function useForeignBufferCleanup(): void {
+  const userId = useSession().data?.user.id;
+  useEffect(() => {
+    if (userId) removeForeignBuffers(userId);
+  }, [userId]);
+}
 
 /** Browser storage may be unavailable (private mode, blocked site data): then nothing is buffered. */
 function readStorage<T>(key: string): T | null {
@@ -75,8 +101,8 @@ function writeStorage(key: string, value: unknown): void {
 }
 
 /** Reasons for warnings typed on the check step; they survive a reload until the report is submitted. */
-export function useStoredReasons(reportId: string) {
-  const key = `forga.incidents.reasons.${reportId}`;
+export function useStoredReasons(userId: string, reportId: string) {
+  const key = reasonsKey(userId, reportId);
   const [reasons, setReasons] = useState<Record<string, string>>(() => readStorage<Record<string, string>>(key) ?? {});
   const set = useCallback(
     (findingKey: string, value: string) =>
@@ -100,12 +126,14 @@ export function useStoredReasons(reportId: string) {
  *   in the query cache,
  * - the version sent is the one of the last own save (never taken from a background refetch), so changes of
  *   others are not overwritten silently: the server refuses with `conflict.stale` and the user decides,
- * - unsaved changes are kept in the browser and offered again after a reload,
+ * - unsaved changes are kept in the browser (per user) and offered again after a reload; if the report was saved
+ *   by someone else since, restoring them leads to the conflict dialog instead of overwriting the newer state,
+ * - a newer state of the server (e.g. after a return or an unlock) replaces the content while nothing is pending,
  * - leaving or hiding the page saves at once; failed saves are retried in the background.
  */
-export function useReportEditor(report: Report) {
+export function useReportEditor(report: Report, userId: string) {
   const queryClient = useQueryClient();
-  const key = storageKey(report.id);
+  const key = storageKey(userId, report.id);
   const [content, setContent] = useState<Content>(() => toContent(report));
   const [saveState, setSaveState] = useState<SaveState>({ status: 'idle', savedAt: null });
   // Unsaved content of an earlier visit, offered for restoring.
@@ -120,6 +148,7 @@ export function useReportEditor(report: Report) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const retry = useRef<{ timer?: ReturnType<typeof setTimeout>; attempt: number }>({ attempt: 0 });
   const running = useRef<Promise<void>>(Promise.resolve());
+  const saving = useRef(false);
   // The latest `flush`, for the retries it schedules itself.
   const flushLater = useRef<() => Promise<void>>(() => Promise.resolve());
 
@@ -137,6 +166,7 @@ export function useReportEditor(report: Report) {
       const body = pending.current;
       if (!body || conflict.current) return;
       pending.current = null;
+      saving.current = true;
       setSaveState((s) => ({ ...s, status: 'saving' }));
       try {
         const saved = await send<Report>('PUT', `incidents/reports/${report.id}`, { ...body, version: version.current });
@@ -161,6 +191,8 @@ export function useReportEditor(report: Report) {
           }
         }
         throw error;
+      } finally {
+        saving.current = false;
       }
     });
     running.current = run.catch(() => undefined);
@@ -213,11 +245,28 @@ export function useReportEditor(report: Report) {
     await flush();
   }, [flush, report.id]);
 
-  /** Takes over the content buffered in the browser by an earlier visit. */
+  /**
+   * Takes over the content buffered in the browser by an earlier visit. Made on an older version, it is not saved
+   * over the newer state: the conflict dialog lets the user decide.
+   */
   const restoreLocal = useCallback(() => {
-    if (restorable) update(() => restorable.content);
+    if (restorable && restorable.version !== version.current) {
+      clearTimeout(timer.current);
+      current.current = restorable.content;
+      pending.current = restorable.content;
+      conflict.current = true;
+      setContent(restorable.content);
+      setSaveState((s) => ({ ...s, status: 'conflict' }));
+    } else if (restorable) {
+      update(() => restorable.content);
+    }
     setRestorable(null);
   }, [restorable, update]);
+
+  // A newer state on the server (saved elsewhere, returned, unlocked) replaces the content while nothing is pending.
+  useEffect(() => {
+    if (report.version > version.current && !pending.current && !conflict.current && !saving.current) reset(report);
+  }, [report, reset]);
   const discardLocal = useCallback(() => {
     buffer(null);
     setRestorable(null);

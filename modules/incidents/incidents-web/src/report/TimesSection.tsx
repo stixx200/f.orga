@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import type { Incident } from '@forga/incidents-contracts';
 import { formatDateTime, fromLocalInput, toLocalInput, useLocalized, useTranslation } from '@forga/web-sdk';
 import { Notice, Panel } from '@forga/web-ui';
-import { personName, useKeywords, usePersons } from '../api';
+import { personName, useAuthors, useKeywords, usePersons } from '../api';
 import { locationLabel } from '../parts';
 import type { Content } from './editor';
 
@@ -44,7 +44,11 @@ export function TimesSection({ content, incident, departmentId, update, disabled
       disabled={disabled}
     />
   );
-  const authors = persons.filter((p) => p.departmentIds.includes(departmentId) || p.id === content.authorPersonId);
+  // Only persons who can write the report (account with permission) are offered; others would never see it.
+  const { data: writers } = useAuthors(disabled ? null : departmentId);
+  const candidates = writers ? new Set(writers) : null;
+  const authors = persons.filter((p) => (candidates ? candidates.has(p.id) : p.departmentIds.includes(departmentId)) || p.id === content.authorPersonId);
+  const authorCannotWrite = Boolean(candidates && content.authorPersonId && !candidates.has(content.authorPersonId));
 
   return (
     <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
@@ -82,6 +86,7 @@ export function TimesSection({ content, incident, departmentId, update, disabled
             searchable
             clearable
             disabled={disabled}
+            error={authorCannotWrite ? t('report.authorCannotWrite') : undefined}
           />
         </Stack>
       </Panel>

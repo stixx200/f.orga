@@ -60,6 +60,7 @@ beforeAll(async () => {
   ids.incident = incident.id;
   ids.report = incident.reports[0].id;
   await put(`/incidents/reports/${ids.report}`, {
+    version: 1,
     times: { alarmedAt: T('10:00'), departedAt: T('10:04'), returnedAt: T('11:10') },
     situation: 'BMA ausgelöst, Täuschungsalarm',
     actions: 'Erkundung, Rückstellung der BMA',
@@ -207,6 +208,7 @@ describe('cost recovery', () => {
     const incident = (await post('/incidents/incidents', { dispatchNumber: '2026-778', alarmKeyword: 'B-BMA', alarmedAt: T('14:00'), departmentIds: [ids.musterstadt] }).expect(201)).body;
     ids.careerReport = incident.reports[0].id;
     await put(`/incidents/reports/${ids.careerReport}`, {
+      version: 1,
       times: { alarmedAt: T('14:00'), departedAt: T('14:04'), returnedAt: T('14:50') },
       situation: 'BMA', actions: 'Erkundung', incidentCommander: 'Jonas Test',
       personnel: [{ personId: ids.jonas, vehicleId: ids.lf }, { personId: carla, vehicleId: ids.lf }],
@@ -308,6 +310,7 @@ describe('cost recovery', () => {
     const owner = { role: 'owner', name: 'Muster GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' };
     // The crew sits on the LF, but the report lists no vehicles (as imports and the API used to leave it).
     const saved = await put(`/incidents/reports/${own.id}`, {
+      version: 1,
       times: { alarmedAt: T('14:00'), departedAt: T('14:10'), returnedAt: T('14:40') },
       situation: 'BMA', actions: 'Erkundung',
       personnel: [{ personId: ids.jonas, vehicleId: ids.lf }],
@@ -317,6 +320,7 @@ describe('cost recovery', () => {
     expect(saved.body.vehicles).toEqual([expect.objectContaining({ vehicleId: ids.lf, departedAt: null, returnedAt: null })]);
     // The other department's report lists the same LF with own, longer times, and the same owner.
     await put(`/incidents/reports/${support.id}`, {
+      version: 1,
       times: { alarmedAt: T('14:00'), departedAt: T('14:05'), returnedAt: T('15:20') },
       situation: 'Unterstützung', actions: 'Bereitstellung',
       vehicles: [{ vehicleId: ids.lf, departedAt: T('14:05'), returnedAt: T('15:20') }],

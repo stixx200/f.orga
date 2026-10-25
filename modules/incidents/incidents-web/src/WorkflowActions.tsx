@@ -25,8 +25,9 @@ export function WorkflowActions({ report, onDone, framed }: { report: Report; on
   const twoSteps = settings?.compensationRelease ?? true;
   const mayRelease = can(session, RELEASE, report.departmentId);
   const mayUnlock = can(session, UNLOCK, report.departmentId);
-  // Department commanders pre-review: they return reports of their department, but do not release.
-  const mayReturn = mayRelease || can(session, REVIEW, report.departmentId);
+  // Department commanders pre-review: they return reports of their department, but do not release. A report
+  // locked by a releaser is returned only by releasers.
+  const mayReturn = mayRelease || (can(session, REVIEW, report.departmentId) && !report.locked);
   const invalidate = [keys.report(report.id), keys.incidents];
   const done = () => {
     setDialog(null);

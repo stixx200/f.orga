@@ -3,10 +3,10 @@ import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import type { Incident, ReleaseManyResult, Report, ReportStatus } from '@forga/incidents-contracts';
-import { api, formatDateTime, formatMoney, send, translateCode, useTranslation } from '@forga/web-sdk';
-import { ActionBar, ConfirmDialog, DataTable, EmptyState, Notice, notifySuccess, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
-import { keys, useIncidents, useNames, useSettings } from '../api';
-import { DepartmentBadge, keywordLabel, ReportStatusBadge } from '../parts';
+import { api, can, formatDateTime, formatMoney, send, useSession, useTranslation } from '@forga/web-sdk';
+import { ActionBar, ConfirmDialog, DataTable, EmptyState, Notice, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
+import { keys, RELEASE, REVIEW, useIncidents, useNames, useSettings } from '../api';
+import { DepartmentBadge, keywordLabel, notifyReleaseResult, ReportStatusBadge } from '../parts';
 import { findingText, mergeFindings } from '../report/findings';
 import { WorkflowActions } from '../WorkflowActions';
 
@@ -41,15 +41,22 @@ function Detail({ row, onDone }: { row: Row; onDone: () => void }) {
   );
 }
 
-/** Submitted reports waiting for release, and reports released for compensation waiting for billing. */
+/**
+ * Submitted reports waiting for release, and reports released for compensation waiting for billing. Pre-reviewers
+ * (`incidents.reports.review`) see the submitted reports of their departments and return them or remind authors.
+ */
 export function ReviewPage() {
   const { t, i18n } = useTranslation('incidents');
   const names = useNames();
+  const session = useSession().data;
+  const releaser = can(session, RELEASE);
   const [params] = useSearchParams();
-  const [status, setStatus] = useState<ReportStatus>(() => (params.get('status') === 'released-compensation' ? 'released-compensation' : 'review'));
+  const [status, setStatus] = useState<ReportStatus>(() => (releaser && params.get('status') === 'released-compensation' ? 'released-compensation' : 'review'));
   const [selected, setSelected] = useState<string | null>(null);
   const { data: incidents = [], isLoading } = useIncidents({ status });
-  const summaries = incidents.flatMap((incident) => incident.reports.filter((r) => r.status === status).map((summary) => ({ incident, summary })));
+  const summaries = incidents.flatMap((incident) =>
+    incident.reports.filter((r) => r.status === status && (releaser || can(session, REVIEW, r.departmentId))).map((summary) => ({ incident, summary })),
+  );
   const details = useQueries({
     queries: summaries.map(({ summary }) => ({ queryKey: keys.report(summary.id), queryFn: () => api<Report>(`incidents/reports/${summary.id}`) })),
   });
@@ -67,29 +74,37 @@ export function ReviewPage() {
     onSuccess: (result) => {
       setConfirming(false);
       setChosen([]);
-      notifySuccess([t('review.releasedMany', { count: result.released.length }), ...result.failed.map((f) => `${t('review.notReleased')}: ${translateCode(f.code)}`)].join(' '));
+      notifyReleaseResult(result, (reportId) => {
+        const row = rows.find((r) => r.summary.id === reportId);
+        return row ? `${keywordLabel(row.incident)} · ${names.department(row.summary.departmentId)} ${row.summary.number}` : reportId;
+      }, t);
     },
   });
 
   return (
     <Stack gap="lg">
       <PageHeader breadcrumbs={[{ label: t('module') }, { label: t('review.title') }]} title={t('review.title')} />
-      <Chip.Group value={status} onChange={(value) => { setStatus(value as ReportStatus); setSelected(null); setChosen([]); }}>
-        <Group gap="xs">
-          <Chip value="review" radius="xs">{t('review.views.review')}</Chip>
-          <Chip value="released-compensation" radius="xs">{t('review.views.compensation')}</Chip>
-        </Group>
-      </Chip.Group>
+      {releaser && (
+        <Chip.Group value={status} onChange={(value) => { setStatus(value as ReportStatus); setSelected(null); setChosen([]); }}>
+          <Group gap="xs">
+            <Chip value="review" radius="xs">{t('review.views.review')}</Chip>
+            <Chip value="released-compensation" radius="xs">{t('review.views.compensation')}</Chip>
+          </Group>
+        </Chip.Group>
+      )}
+      {!releaser && <Text size="sm" c="dimmed">{t('review.preReviewHint')}</Text>}
       {!isLoading && !rows.length ? (
         <EmptyState title={t(status === 'review' ? 'review.empty' : 'review.emptyCompensation')} text={status === 'review' ? t('review.emptyText') : undefined} />
       ) : (
         <Grid gap="lg">
           <Grid.Col span={{ base: 12, lg: 7 }}>
-            <Group justify="flex-end" mb="xs">
-              <Button size="xs" variant="subtle" disabled={!rows.some(releasable)} onClick={() => setChosen(rows.filter(releasable).map((r) => r.summary.id))}>
-                {t('review.chooseAll')}
-              </Button>
-            </Group>
+            {releaser && (
+              <Group justify="flex-end" mb="xs">
+                <Button size="xs" variant="subtle" disabled={!rows.some(releasable)} onClick={() => setChosen(rows.filter(releasable).map((r) => r.summary.id))}>
+                  {t('review.chooseAll')}
+                </Button>
+              </Group>
+            )}
             <DataTable<Row>
               rows={rows}
               rowKey={(r) => r.summary.id}
@@ -99,7 +114,7 @@ export function ReviewPage() {
                 {
                   key: 'choose',
                   header: '',
-                  render: (r) => (
+                  render: (r) => releaser && (
                     <Checkbox
                       aria-label={t('review.choose')}
                       disabled={!releasable(r)}
@@ -147,7 +162,7 @@ export function ReviewPage() {
           </Grid.Col>
         </Grid>
       )}
-      {picked.length > 0 && (
+      {releaser && picked.length > 0 && (
         <ActionBar info={t('review.chosen', { count: picked.length })}>
           <Button onClick={() => setConfirming(true)}>{t(level === 'compensation' ? 'review.releaseChosenCompensation' : 'review.releaseChosenBilling', { count: picked.length })}</Button>
         </ActionBar>

@@ -14,8 +14,8 @@ export interface DeadlineInput {
   leadDays: number;
   /** Departments of the subject; empty = only brigade-wide grants see it. */
   departmentIds: string[];
-  /** Users with this permission in one of the departments are responsible. */
-  permission: string;
+  /** Users with this permission (or one of these permissions) in one of the departments are responsible. */
+  permission: string | readonly string[];
   /** If set, only the users linked to one of these persons are responsible (e.g. the author of a report). */
   personIds?: string[];
   /** Heading in the weekly e-mail, e.g. category and vehicle of an item. */
@@ -60,9 +60,10 @@ export class DeadlineRegistry {
     for (const provider of this.providers) {
       for (const input of await provider.deadlines(asOf)) {
         if (addDays(input.dueOn, -input.leadDays) > asOf) continue;
-        const permitted = input.departmentIds.length
-          ? input.departmentIds.some((id) => user.can(input.permission, id))
-          : user.grant(input.permission) === 'brigade';
+        const permissions = typeof input.permission === 'string' ? [input.permission] : input.permission;
+        const permitted = permissions.some((permission) =>
+          input.departmentIds.length ? input.departmentIds.some((id) => user.can(permission, id)) : user.grant(permission) === 'brigade',
+        );
         const responsible = permitted && (!input.personIds || (user.personId !== null && input.personIds.includes(user.personId)));
         if (!responsible) continue;
         result.push({

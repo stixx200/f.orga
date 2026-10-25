@@ -1,7 +1,8 @@
-import { Group } from '@mantine/core';
+import { Group, Stack, Text } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { IconLock } from '@tabler/icons-react';
-import type { Incident, ReportStatus } from '@forga/incidents-contracts';
-import { useTranslation } from '@forga/web-sdk';
+import type { Incident, ReleaseManyResult, ReportStatus } from '@forga/incidents-contracts';
+import { translateCode, useTranslation } from '@forga/web-sdk';
 import { StatusBadge, type Tone } from '@forga/web-ui';
 
 const TONES: Record<ReportStatus, Tone> = {
@@ -44,3 +45,24 @@ export const locationLabel = (incident: Pick<Incident, 'location'>) => {
   const { street, houseNumber, district, city } = incident.location;
   return [[city, district && district !== city ? district : ''].filter(Boolean).join('-'), [street, houseNumber].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 };
+
+/**
+ * Result of releasing several reports: the number released and every report that was not released with its
+ * reason; shown as a warning as soon as one failed.
+ */
+export function notifyReleaseResult(result: ReleaseManyResult, label: (reportId: string) => string, t: (key: string, options?: Record<string, unknown>) => string): void {
+  const failed = result.failed.length > 0;
+  notifications.show({
+    color: failed ? 'orange' : 'green',
+    autoClose: failed ? false : undefined,
+    title: failed ? t('review.notAllReleased', { count: result.failed.length }) : undefined,
+    message: (
+      <Stack gap={2}>
+        <Text size="sm">{t('review.releasedMany', { count: result.released.length })}</Text>
+        {result.failed.map((f) => (
+          <Text key={f.reportId} size="sm">{`${label(f.reportId)}: ${translateCode(f.code)}`}</Text>
+        ))}
+      </Stack>
+    ),
+  });
+}

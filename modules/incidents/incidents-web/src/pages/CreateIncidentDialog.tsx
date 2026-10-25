@@ -9,8 +9,9 @@ import { keys, RELEASE, useDepartments, useKeywords, useNames, WRITE } from '../
 
 /**
  * New incident with a draft report for each chosen department; opens the report of the first department.
- * Existing incidents with the same dispatch number (or keyword within two hours) are offered first, so a
- * department joins a joint incident with its own report instead of creating a duplicate.
+ * Existing incidents with the same dispatch number, or within two hours the same keyword or location, are offered
+ * first, so a department joins a joint incident with its own report (or opens the report it already has) instead of
+ * creating a duplicate.
  */
 export function CreateIncidentDialog({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const { t, i18n } = useTranslation('incidents');
@@ -37,11 +38,26 @@ export function CreateIncidentDialog({ opened, onClose }: { opened: boolean; onC
   const names = useNames();
   const alarmedAt = form.alarmedAt ? fromLocalInput(form.alarmedAt) : null;
   const dispatchNumber = form.dispatchNumber.trim();
+  const street = form.street.trim();
+  const city = form.city.trim();
   const { data: matches = [] } = useQuery({
-    queryKey: ['incidents', 'matches', dispatchNumber, form.alarmKeyword, alarmedAt],
-    queryFn: () => api<IncidentMatch[]>(withQuery('incidents/incidents/matches', { dispatchNumber: dispatchNumber || undefined, alarmKeyword: form.alarmKeyword ?? undefined, alarmedAt: alarmedAt ?? undefined })),
-    enabled: Boolean(alarmedAt) && Boolean(dispatchNumber || form.alarmKeyword),
+    queryKey: ['incidents', 'matches', dispatchNumber, form.alarmKeyword, alarmedAt, street, city],
+    queryFn: () =>
+      api<IncidentMatch[]>(
+        withQuery('incidents/incidents/matches', {
+          dispatchNumber: dispatchNumber || undefined,
+          alarmKeyword: form.alarmKeyword ?? undefined,
+          alarmedAt: alarmedAt ?? undefined,
+          street: street || undefined,
+          city: city || undefined,
+        }),
+      ),
+    enabled: Boolean(alarmedAt) && Boolean(dispatchNumber || form.alarmKeyword || street || city),
   });
+  const openReport = (reportId: string) => {
+    onClose();
+    navigate(`/incidents/reports/${reportId}`);
+  };
   const join = useAction(
     ({ incidentId, departmentId }: { incidentId: string; departmentId: string }) => send<Report>('POST', `incidents/incidents/${incidentId}/reports`, { departmentId }),
     {
@@ -118,6 +134,8 @@ export function CreateIncidentDialog({ opened, onClose }: { opened: boolean; onC
               <Stack gap="xs">
                 <Text size="sm" fw={700}>{t('create.matches')}</Text>
                 {matches.map((m) => {
+                  // A department of the user that already has a report there opens it; otherwise it joins.
+                  const existing = m.ownReports.find((r) => writable.some((d) => d.id === r.departmentId) && (!departmentIds.length || departmentIds.includes(r.departmentId)));
                   const own = writable.find((d) => (departmentIds.includes(d.id) || writable.length === 1) && !m.departmentIds.includes(d.id));
                   return (
                     <Group key={m.id} justify="space-between" wrap="nowrap" gap="sm">
@@ -126,7 +144,11 @@ export function CreateIncidentDialog({ opened, onClose }: { opened: boolean; onC
                         {[m.street, m.city].some(Boolean) ? ` · ${[m.street, m.city].filter(Boolean).join(', ')}` : ''}
                         <Text span size="xs" c="dimmed">{` (${m.departmentIds.map((d) => names.department(d)).join(', ')})`}</Text>
                       </Text>
-                      {own ? (
+                      {existing ? (
+                        <Button size="xs" variant="outline" onClick={() => openReport(existing.reportId)}>
+                          {t('create.openReport', { department: names.department(existing.departmentId) })}
+                        </Button>
+                      ) : own ? (
                         <Button size="xs" variant="outline" loading={join.isPending} onClick={() => join.mutate({ incidentId: m.id, departmentId: own.id })}>
                           {t('create.join', { department: own.name })}
                         </Button>

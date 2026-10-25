@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import type { IncidentStatisticsInput, Report } from '@forga/incidents-contracts';
 import { apiUrl, can, extensionsOf, formatDateTime, formatMoney, formatTime, send, useSession, useTranslation } from '@forga/web-sdk';
-import { ActionBar, Attachments, ConfirmDialog, DataTable, EmptyState, HistoryTimeline, Notice, notifyError, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { ActionBar, Attachments, ConfirmDialog, DataTable, EmptyState, HistoryTimeline, Notice, notifyError, notifySuccess, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, RELEASE, useIncident, useNames, useReport, useRevisions, WRITE } from '../api';
 import { DepartmentBadge, ReportStatusBadge } from '../parts';
 import { WorkflowActions } from '../WorkflowActions';
@@ -41,16 +41,16 @@ function stepState(step: StepId, content: Content, report: Report, statisticsInc
   }
 }
 
-function Editor({ report }: { report: Report }) {
+function Editor({ report, userId }: { report: Report; userId: string }) {
   const { t, i18n } = useTranslation('incidents');
   const queryClient = useQueryClient();
   const session = useSession().data;
   const names = useNames();
   const { data: incident } = useIncident(report.incidentId);
-  const { content, update, flush, reset, saveState, restorable, restoreLocal, discardLocal, loadServer, keepMine } = useReportEditor(report);
+  const { content, update, flush, reset, saveState, restorable, restoreLocal, discardLocal, loadServer, keepMine } = useReportEditor(report, userId);
   const [step, setStep] = useState<StepId>('times');
   const [statisticsDraft, setStatisticsDraft] = useState<IncidentStatisticsInput | null>(null);
-  const { reasons, setReason, clearReasons } = useStoredReasons(report.id);
+  const { reasons, setReason, clearReasons } = useStoredReasons(userId, report.id);
   const [dialog, setDialog] = useState<'submit' | 'versions' | 'history' | 'takeOver' | null>(null);
   // Releasers read drafts of authors; editing one locks it for the author, so it needs a confirmation.
   const [takenOver, setTakenOver] = useState(false);
@@ -58,7 +58,9 @@ function Editor({ report }: { report: Report }) {
 
   const releaser = session?.permissions[RELEASE] === 'brigade';
   const writer = can(session, WRITE, report.departmentId);
-  const draftOfAuthor = releaser && report.status === 'draft' && !report.locked && !takenOver;
+  // The own draft of a releaser is not someone else's.
+  const ownDraft = Boolean(session?.user.personId) && report.authorPersonId === session?.user.personId;
+  const draftOfAuthor = releaser && report.status === 'draft' && !report.locked && !takenOver && !ownDraft;
   const editable = releaser ? !report.status.startsWith('released') && !draftOfAuthor : writer && report.status === 'draft' && !report.locked;
   // Releasers complete the statistics of a released primary report without releasing it again.
   const statisticsSeparately = releaser && report.primary && report.status.startsWith('released');
@@ -74,13 +76,23 @@ function Editor({ report }: { report: Report }) {
   const submit = useAction(
     async () => {
       await flush();
-      const acknowledgements = warnings.map((f) => ({ rule: f.rule, subject: f.subject, reason: reasons[findingKey(f)].trim() }));
+      // The last save may have changed the findings: submit with the warnings of the saved state.
+      const saved = queryClient.getQueryData<Report>(keys.report(report.id)) ?? report;
+      const open = openWarnings(mergeFindings(saved.findings));
+      if (blocking(mergeFindings(saved.findings)).length || open.some((f) => !reasons[findingKey(f)]?.trim())) {
+        setDialog(null);
+        goTo('check');
+        notifications.show({ color: 'brand', message: t('editor.findingsChanged') });
+        return null;
+      }
+      const acknowledgements = open.map((f) => ({ rule: f.rule, subject: f.subject, reason: reasons[findingKey(f)].trim() }));
       return send<Report>('POST', `incidents/reports/${report.id}/submit`, { acknowledgements });
     },
     {
-      success: t('editor.submitted'),
       invalidate: [keys.incidents],
       onSuccess: (saved) => {
+        if (!saved) return;
+        notifySuccess(t('editor.submitted'));
         queryClient.setQueryData(keys.report(report.id), saved);
         clearReasons();
         setDialog(null);
@@ -98,7 +110,7 @@ function Editor({ report }: { report: Report }) {
     },
   });
   const saveStatistics = useAction(
-    (statistics: IncidentStatisticsInput) => send<Report>('PUT', `incidents/reports/${report.id}/statistics`, { statistics, version: report.version }),
+    (statistics: IncidentStatisticsInput | null) => send<Report>('PUT', `incidents/reports/${report.id}/statistics`, { statistics, version: report.version }),
     {
       success: t('statistics.saved'),
       invalidate: [keys.incidents],
@@ -336,9 +348,11 @@ function Editor({ report }: { report: Report }) {
 export function ReportPage() {
   const { id = '' } = useParams();
   const { t } = useTranslation('incidents');
-  const { data: report, error } = useReport(id);
+  const userId = useSession().data?.user.id;
+  const { data: report, error, isFetchedAfterMount } = useReport(id);
   if (error) return <EmptyState title={t('editor.notFound')} />;
-  if (!report) return null;
+  // The editor starts from the current state of the server, not from an older copy in the cache.
+  if (!report || !isFetchedAfterMount || !userId) return null;
   // The editor keeps its own copy of the content; a different report gets a new editor.
-  return <Editor key={report.id} report={report} />;
+  return <Editor key={report.id} report={report} userId={userId} />;
 }

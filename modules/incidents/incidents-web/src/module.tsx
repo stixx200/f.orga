@@ -32,7 +32,8 @@ export default defineWebModule({
     { path: '*', element: <Pending /> },
   ],
   dashboard: [
-    { id: 'review', area: 'kpi', permission: RELEASE, order: 10, component: ReviewTile },
+    // Releasers and pre-reviewers; the tile checks both.
+    { id: 'review', area: 'kpi', order: 10, component: ReviewTile },
     { id: 'billing', area: 'kpi', permission: RELEASE, order: 15, component: BillingTile },
     { id: 'my-open', area: 'kpi', permission: WRITE, order: 20, component: MyOpenTile },
     { id: 'recent', area: 'main', order: 10, component: RecentIncidents },
