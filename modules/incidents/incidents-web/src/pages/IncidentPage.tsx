@@ -3,10 +3,10 @@ import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { Incident, ReleaseManyResult, Report } from '@forga/incidents-contracts';
-import { api, apiUrl, can, extensionsOf, formatDateTime, formatMoney, fromLocalInput, send, toLocalInput, translateCode, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, EmptyState, Notice, notifySuccess, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
+import { api, apiUrl, can, extensionsOf, formatDateTime, formatMoney, fromLocalInput, send, toLocalInput, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
+import { ConfirmDialog, EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { COSTS, keys, READ, RELEASE, useDepartments, useIncident, useKeywords, useNames, useSettings, WRITE } from '../api';
-import { DepartmentBadge, keywordLabel, locationLabel, ReportStatusBadge } from '../parts';
+import { DepartmentBadge, keywordLabel, locationLabel, notifyReleaseResult, ReportStatusBadge } from '../parts';
 
 function EditIncidentDialog({ incident, onClose }: { incident: Incident; onClose: () => void }) {
   const { t } = useTranslation('incidents');
@@ -191,9 +191,10 @@ export function IncidentPage() {
       invalidate: [keys.incidents, ['incidents', 'reports']],
       onSuccess: (result) => {
         setReleasingAll(false);
-        notifySuccess(
-          [t('review.releasedMany', { count: result.released.length }), ...result.failed.map((f) => `${t('review.notReleased')}: ${translateCode(f.code)}`)].join(' '),
-        );
+        notifyReleaseResult(result, (reportId) => {
+          const summary = incident?.reports.find((r) => r.id === reportId);
+          return summary ? `${names.department(summary.departmentId)} ${summary.number}` : reportId;
+        }, t);
       },
     },
   );
@@ -208,13 +209,20 @@ export function IncidentPage() {
   const primary = incident.reports.find((r) => r.primary);
   const target = incident.reports.find((r) => r.id === primaryFor);
   const forReview = incident.reports.filter((r) => r.status === 'review');
+  // The incident data belong to the writers of the primary report while all reports are unlocked drafts; releasers
+  // change them until a report is released.
+  const owner = primary ?? incident.reports[0];
+  const editable =
+    Boolean(owner) &&
+    canWrite(owner.departmentId) &&
+    (releaser ? !incident.reports.some((r) => r.status.startsWith('released')) : incident.reports.every((r) => r.status === 'draft' && !r.locked));
 
   return (
     <Stack gap="lg">
       <PageHeader
         breadcrumbs={[{ label: t('module') }, { label: t('incidents.title'), to: '/incidents/incidents' }, { label: incident.dispatchNumber }]}
         title={keywordLabel(incident)}
-        actions={(() => { const owner = incident.reports.find((r) => r.primary) ?? incident.reports[0]; return owner && canWrite(owner.departmentId); })() && <Button variant="default" onClick={() => setEditing(true)}>{t('incident.edit')}</Button>}
+        actions={editable && <Button variant="default" onClick={() => setEditing(true)}>{t('incident.edit')}</Button>}
       />
       <Panel>
         <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }}>
@@ -238,7 +246,7 @@ export function IncidentPage() {
             summary={summary}
             report={reports[index]?.data}
             readable={readable(summary.departmentId)}
-            onMakePrimary={!summary.primary && canWrite(summary.departmentId) && !summary.locked ? () => setPrimaryFor(summary.id) : undefined}
+            onMakePrimary={!summary.primary && canWrite(summary.departmentId) && !summary.locked && !summary.status.startsWith('released') && !primary?.status.startsWith('released') ? () => setPrimaryFor(summary.id) : undefined}
           />
         ))}
       </SimpleGrid>

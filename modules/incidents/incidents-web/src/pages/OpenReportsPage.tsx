@@ -3,7 +3,7 @@ import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import type { Incident, RemindResult, Report } from '@forga/incidents-contracts';
-import { api, apiUrl, can, formatDate, send, useSession, useTranslation } from '@forga/web-sdk';
+import { api, apiUrl, can, formatDate, send, useSession, useTranslation, withQuery } from '@forga/web-sdk';
 import { ActionBar, ConfirmDialog, DataTable, EmptyState, KpiTile, notifySuccess, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, personName, RELEASE, REVIEW, useIncidents, useNames, usePersons, WRITE } from '../api';
 import { blocking, findingText, mergeFindings, openWarnings } from '../report/findings';
@@ -35,6 +35,20 @@ export function OpenReportsPage() {
   const releaser = can(session, RELEASE);
   // Releasers remind all authors, pre-reviewers (department commanders) the authors of their departments.
   const reminder = releaser || can(session, REVIEW);
+  // Only persons who can write the report (account with permission) are offered as authors.
+  const assignable = [...new Set(rows.map((r) => r.summary.departmentId))].filter((d) => releaser || can(session, WRITE, d));
+  const writerQueries = useQueries({
+    queries: assignable.map((departmentId) => ({
+      queryKey: ['incidents', 'authors', departmentId],
+      queryFn: () => api<string[]>(withQuery('incidents/authors', { departmentId })),
+      staleTime: 5 * 60_000,
+    })),
+  });
+  const writersOf = new Map(assignable.map((d, i) => [d, writerQueries[i]?.data]));
+  const cannotWrite = (r: Row) => {
+    const writers = writersOf.get(r.summary.departmentId);
+    return Boolean(writers && r.summary.authorPersonId && !writers.includes(r.summary.authorPersonId));
+  };
 
   const assign = useAction(({ reportId, personId }: { reportId: string; personId: string }) => send<Report>('POST', `incidents/reports/${reportId}/author`, { authorPersonId: personId }), {
     success: t('open.assigned'),
@@ -72,7 +86,8 @@ export function OpenReportsPage() {
             if (!r.report) return '…';
             const open = [...blocking(mergeFindings(r.report.findings)), ...openWarnings(mergeFindings(r.report.findings))];
             const returned = r.report.returnComment ? `${t('open.returned')}: ${r.report.returnComment}` : '';
-            return open.length || returned ? <Text size="xs">{[returned, ...open.slice(0, 3).map((f) => findingText(f, t))].filter(Boolean).join(' · ')}</Text> : <StatusBadge tone="done">{t('open.ready')}</StatusBadge>;
+            const author = cannotWrite(r) ? t('report.authorCannotWrite') : '';
+            return open.length || returned || author ? <Text size="xs">{[author, returned, ...open.slice(0, 3).map((f) => findingText(f, t))].filter(Boolean).join(' · ')}</Text> : <StatusBadge tone="done">{t('open.ready')}</StatusBadge>;
           },
         },
         {
@@ -85,7 +100,11 @@ export function OpenReportsPage() {
                 aria-label={t(r.summary.authorPersonId ? 'open.change' : 'open.assign')}
                 placeholder={t(r.summary.authorPersonId ? 'open.change' : 'open.assign')}
                 data={persons
-                  .filter((p) => p.departmentIds.includes(r.summary.departmentId) && p.status !== 'left' && p.id !== r.summary.authorPersonId)
+                  .filter((p) => {
+                    const writers = writersOf.get(r.summary.departmentId);
+                    const member = writers ? writers.includes(p.id) : p.departmentIds.includes(r.summary.departmentId);
+                    return member && p.status !== 'left' && p.id !== r.summary.authorPersonId;
+                  })
                   .map((p) => ({ value: p.id, label: personName(p) }))}
                 value={null}
                 onChange={(v) => v && assign.mutate({ reportId: r.summary.id, personId: v })}

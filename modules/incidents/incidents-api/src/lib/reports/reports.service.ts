@@ -27,6 +27,7 @@ import {
   ReportPersonnelEntity,
   ReportRevisionEntity,
   ReportVehicleEntity,
+  type StoredAcknowledgement,
 } from '../incidents.entities.js';
 import { type ReportContext, ReportContextLoader } from './report-context.js';
 
@@ -159,8 +160,13 @@ export class ReportsService {
     return user.grant(RELEASE) === 'brigade' || user.can(REVIEW, departmentId);
   }
 
-  /** Writers of the department may edit unless the report is locked; releasers may always edit. */
+  /**
+   * Released reports are changed by nobody (only their statistics, see `setStatistics`): they are unlocked first, so
+   * the receivers of the release learn about the change. Otherwise releasers may edit; writers of the department
+   * only drafts that are not locked.
+   */
   assertWrite(user: AuthenticatedUser, report: ReportEntity): void {
+    if (report.status.startsWith('released')) throw new ForbiddenException({ code: 'incidents.reportReleased' });
     if (user.grant(RELEASE) === 'brigade') return;
     if (!user.can(WRITE, report.departmentId)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
     if (report.locked) throw new ForbiddenException({ code: 'incidents.reportLocked', lockedBy: report.lockedBy ?? '' });
@@ -352,7 +358,8 @@ export class ReportsService {
 
   // ----- Findings and DTO -----
 
-  async findings(em: EntityManager, report: ReportEntity, context: ReportContext): Promise<Finding[]> {
+  /** Findings of the report; `acknowledgements` replaces the stored ones (e.g. those sent with a submit). */
+  async findings(em: EntityManager, report: ReportEntity, context: ReportContext, acknowledgements = report.acknowledgements ?? []): Promise<Finding[]> {
     const incident = report.incident;
     const keyword = context.keywords.get(incident.alarmKeyword);
     const kind = keyword?.compensationKind ?? 'incident';
@@ -435,7 +442,7 @@ export class ReportsService {
       },
       context.settings,
     );
-    const reasons = new Map((report.acknowledgements ?? []).map((a) => [`${a.rule}|${a.subject ?? ''}`, a.reason]));
+    const reasons = new Map(acknowledgements.map((a) => [`${a.rule}|${a.subject ?? ''}`, a.reason]));
     return raw.map((f) => {
       const reason = f.level === 'warning' ? (reasons.get(`${f.rule}|${f.subject ?? ''}`) ?? null) : null;
       return { ...f, acknowledged: reason !== null, reason };
@@ -547,9 +554,12 @@ export class ReportsService {
     report.lockedAt = new Date();
   }
 
-  async setPrimary(em: EntityManager, report: ReportEntity): Promise<void> {
+  /** Makes the report primary; `imported` data of another system may also move the primary role of released reports. */
+  async setPrimary(em: EntityManager, report: ReportEntity, imported = false): Promise<void> {
     if (report.primary) return;
     const current = await em.findOne(ReportEntity, { incident: report.incident, primary: true });
+    // The statistics of a released primary report do not move away: it is unlocked first.
+    if (!imported && current?.status.startsWith('released')) throw new ForbiddenException({ code: 'incidents.reportReleased' });
     if (current) {
       current.primary = false;
       // Secondary reports carry no statistics; keep them on the new primary report if it has none.
@@ -564,23 +574,33 @@ export class ReportsService {
   /** Author reports the report as finished. Errors block; warnings need an acknowledgement with reason. */
   async submit(em: EntityManager, report: ReportEntity, user: AuthenticatedUser, acknowledgements: Acknowledgement[]): Promise<void> {
     if (report.status !== 'draft') throw new ConflictException({ code: 'incidents.invalidTransition', from: report.status });
-    this.addAcknowledgements(report, user, acknowledgements);
-    const findings = await this.findings(em, report, await this.contextFor(report));
+    // The acknowledgements are stored only if the report is submitted: a refused submit changes nothing.
+    const acknowledged = this.withAcknowledgements(report, user, acknowledgements);
+    const findings = await this.findings(em, report, await this.contextFor(report), acknowledged);
     const blocking = findings.filter((f) => f.level === 'error' && f.rule !== 'primary-missing');
     if (blocking.length) throw new BadRequestException({ code: 'incidents.findingsOpen', findings: blocking });
     const open = findings.filter((f) => f.level === 'warning' && !f.acknowledged);
     if (open.length) throw new BadRequestException({ code: 'incidents.warningsNotAcknowledged', findings: open });
+    report.acknowledgements = acknowledged;
     report.status = 'review';
     report.returnComment = null;
   }
 
-  returnToAuthor(report: ReportEntity, comment: string): void {
+  /**
+   * Gives a submitted report back to its author. A report locked by a releaser is returned only by releasers; the
+   * lock is lifted only with the permission to unlock, otherwise it stays (the releasers complete the draft).
+   */
+  async returnToAuthor(report: ReportEntity, comment: string, user: AuthenticatedUser): Promise<void> {
     if (report.status !== 'review') throw new ConflictException({ code: 'incidents.invalidTransition', from: report.status });
+    if (report.locked && user.grant(RELEASE) !== 'brigade') throw new ForbiddenException({ code: 'incidents.reportLocked', lockedBy: report.lockedBy ?? '' });
     report.status = 'draft';
     report.returnComment = comment;
-    report.locked = false;
-    report.lockedBy = null;
-    report.lockedAt = null;
+    if (user.grant(UNLOCK) === 'brigade') {
+      report.locked = false;
+      report.lockedBy = null;
+      report.lockedAt = null;
+    }
+    await this.audit.log('incidents.report-returned', { reportId: report.id, reportNumber: report.number, dispatchNumber: report.incident.dispatchNumber, comment });
   }
 
   /**
@@ -609,6 +629,7 @@ export class ReportsService {
     report.status = target;
     this.lockBy(report, user);
     await em.flush();
+    await this.audit.log('incidents.report-released', { reportId: report.id, reportNumber: report.number, dispatchNumber: report.incident.dispatchNumber, level });
     await this.publishReleased(em, report, level);
   }
 
@@ -677,21 +698,30 @@ export class ReportsService {
     report.lockedAt = null;
     report.status = toStatus;
     await em.flush();
-    await this.audit.log('incidents.report-unlocked', { reportId: report.id, reason, toStatus });
-    await this.events.publish<ReportUnlockedEvent>(INCIDENTS_EVENTS.reportUnlocked, {
-      reportId: report.id,
-      incidentId: report.incident.id,
-      reason,
-    });
+    await this.audit.log('incidents.report-unlocked', { reportId: report.id, reportNumber: report.number, dispatchNumber: report.incident.dispatchNumber, reason, toStatus });
+    await this.publishUnlocked(report, reason);
   }
 
   /**
-   * Statistics of a primary report changed by a releaser, also after the release: no new release, no lock and
-   * no events (compensation and respiratory protection do not depend on them).
+   * Tells the receivers of the release (compensation, respiratory protection) to withdraw what they took from the
+   * report: after unlocking it and after deleting it (a deleted draft may have been released before).
    */
-  setStatistics(report: ReportEntity, statistics: IncidentStatistics, version: number): void {
+  async publishUnlocked(report: Pick<ReportEntity, 'id' | 'incident'>, reason: string): Promise<void> {
+    await this.events.publish<ReportUnlockedEvent>(INCIDENTS_EVENTS.reportUnlocked, { reportId: report.id, incidentId: report.incident.id, reason });
+  }
+
+  /**
+   * Statistics of a primary report changed or removed (`null`) by a releaser, also after the release: no new
+   * release, no lock and no events (compensation and respiratory protection do not depend on them). Only keywords
+   * counted in the statistics (with a main type) carry statistics.
+   */
+  async setStatistics(em: EntityManager, report: ReportEntity, statistics: IncidentStatistics | null, version: number): Promise<void> {
     assertVersion(report, version);
     if (!report.primary) throw new BadRequestException({ code: 'incidents.notPrimary' });
+    if (statistics) {
+      const keyword = await em.findOne(AlarmKeywordEntity, { key: report.incident.alarmKeyword });
+      if (!keyword?.mainType) throw new BadRequestException({ code: 'incidents.statisticsNotCounted', keyword: report.incident.alarmKeyword });
+    }
     report.statistics = statistics;
   }
 
@@ -712,12 +742,18 @@ export class ReportsService {
     }
   }
 
-  private addAcknowledgements(report: ReportEntity, user: AuthenticatedUser, acknowledgements: Acknowledgement[]): void {
+  /** The stored acknowledgements plus the new ones (the first reason of a warning counts); changes nothing. */
+  private withAcknowledgements(report: ReportEntity, user: AuthenticatedUser, acknowledgements: Acknowledgement[]): StoredAcknowledgement[] {
     const existing = report.acknowledgements ?? [];
     const keys = new Set(existing.map((a) => `${a.rule}|${a.subject ?? ''}`));
     const added = acknowledgements
       .filter((a) => !keys.has(`${a.rule}|${a.subject ?? ''}`))
       .map((a) => ({ rule: a.rule, subject: a.subject ?? null, reason: a.reason, userId: user.id, at: new Date().toISOString() }));
-    if (added.length) report.acknowledgements = [...existing, ...added];
+    return added.length ? [...existing, ...added] : existing;
+  }
+
+  private addAcknowledgements(report: ReportEntity, user: AuthenticatedUser, acknowledgements: Acknowledgement[]): void {
+    const next = this.withAcknowledgements(report, user, acknowledgements);
+    if (next !== report.acknowledgements) report.acknowledgements = next;
   }
 }

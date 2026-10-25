@@ -145,6 +145,8 @@ export class StatisticsController {
     ]);
     const reports = await em.find(ReportEntity, { alarmedAt: { $gte: start, $lt: end } }, { populate: ['personnel', 'incident'] });
     const typeOf = new Map(departments.map((d) => [d.id, d.type]));
+    // Only keywords counted in the statistics (with a main type) count, not e.g. statistics left on a fire watch.
+    const counted = new Set(keywords.map((k) => k.key));
 
     const computed = computeAnnualStatistics({
       referenceDate,
@@ -153,7 +155,7 @@ export class StatisticsController {
       permanentlyStaffedStations: stations.filter((s) => s.permanentlyStaffed).length,
       members,
       vehicles,
-      primaryReports: reports.filter((r) => r.primary && r.statistics).map((r) => r.statistics!),
+      primaryReports: reports.filter((r) => r.primary && r.statistics && counted.has(r.incident.alarmKeyword)).map((r) => r.statistics!),
       ownCasualties: reports.flatMap((r) =>
         r.personnel
           .getItems()
@@ -183,7 +185,6 @@ export class StatisticsController {
 
     const primary = reports.filter((r) => r.primary);
     // Only keywords counted in the statistics need statistics (not e.g. fire watch).
-    const counted = new Set(keywords.map((k) => k.key));
     const withoutStatistics = primary.filter((r) => !r.statistics && counted.has(r.incident.alarmKeyword));
     const checks = [
       ...checkAnnualStatistics((key) => lookup.get(key) ?? 0),

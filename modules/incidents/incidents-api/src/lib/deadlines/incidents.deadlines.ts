@@ -5,7 +5,8 @@ import type { ReportStatus } from '@forga/incidents-contracts';
 import { localDate } from '../domain/compensation.js';
 import { ReportEntity } from '../incidents.entities.js';
 import { ReportContextLoader } from '../reports/report-context.js';
-import { RELEASE, WRITE } from '../reports/reports.service.js';
+import { ReportWriters } from '../reports/report-writers.js';
+import { RELEASE, REVIEW, WRITE } from '../reports/reports.service.js';
 
 const DAY = 86_400_000;
 
@@ -13,7 +14,9 @@ const DAY = 86_400_000;
  * Work items of the report workflow as deadlines:
  * - drafts for their author (one week after the alarm); a draft locked by a releaser for the releasers instead,
  *   because the author can no longer write it,
- * - reports for review for the releasers,
+ * - drafts without an author, with an author who cannot write it (no account or no permission) and overdue
+ *   drafts for the writers of the department and the releasers,
+ * - reports for review for the releasers and the pre-reviewers of the department,
  * - with the two-step release, reports released for compensation for the releasers (release for billing).
  */
 @Injectable()
@@ -23,13 +26,15 @@ export class IncidentsDeadlines implements DeadlineProvider {
   constructor(
     private readonly em: EntityManager,
     private readonly contexts: ReportContextLoader,
+    private readonly writers: ReportWriters,
   ) {}
 
-  async deadlines(): Promise<DeadlineInput[]> {
+  async deadlines(asOf: string): Promise<DeadlineInput[]> {
     const twoSteps = (await this.contexts.settingsOnly()).compensationRelease;
     const statuses: ReportStatus[] = twoSteps ? ['draft', 'review', 'released-compensation'] : ['draft', 'review'];
     const reports = await this.em.fork().find(ReportEntity, { status: { $in: statuses } }, { populate: ['incident'] });
-    return reports.map((report) => {
+    const writers = await this.writers.index();
+    return reports.map((report): DeadlineInput => {
       const subject = {
         type: 'incidents.report',
         id: report.id,
@@ -56,7 +61,8 @@ export class IncidentsDeadlines implements DeadlineProvider {
           subject,
           dueOn: due(14),
           leadDays: 14,
-          ...releasers,
+          departmentIds: [report.departmentId],
+          permission: [RELEASE, REVIEW],
         };
       }
       if (report.locked) {
@@ -70,8 +76,9 @@ export class IncidentsDeadlines implements DeadlineProvider {
           ...releasers,
         };
       }
-      if (!report.authorPersonId) {
-        // Without an author the writers of the department and the releasers are asked to assign one.
+      // Writers of the department and releasers take over drafts nobody else would write.
+      const department = { departmentIds: [report.departmentId], permission: [WRITE, RELEASE] };
+      if (!report.authorPersonId || !writers.of(report.departmentId).has(report.authorPersonId)) {
         return {
           id: `report-open:${report.id}`,
           kind: 'report-no-author',
@@ -79,8 +86,18 @@ export class IncidentsDeadlines implements DeadlineProvider {
           subject,
           dueOn: due(7),
           leadDays: 7,
-          departmentIds: [report.departmentId],
-          permission: WRITE,
+          ...department,
+        };
+      }
+      if (due(7) < asOf) {
+        return {
+          id: `report-open:${report.id}`,
+          kind: 'report-overdue',
+          title: { de: 'Überfälligen Einsatzbericht fertigstellen lassen', en: 'Have overdue incident report completed' },
+          subject,
+          dueOn: due(7),
+          leadDays: 7,
+          ...department,
         };
       }
       return {

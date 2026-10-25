@@ -37,8 +37,9 @@ export const CreateIncident = IncidentInput.extend({ departmentIds: z.array(z.uu
 export type CreateIncident = z.input<typeof CreateIncident>;
 
 /**
- * An existing incident that may be the same as one about to be created (same dispatch number, or same keyword
- * within two hours). Minimal data only, so writers of other departments can join it with their own report.
+ * An existing incident that may be the same as one about to be created (same dispatch number, or within two hours
+ * the same keyword or location). Minimal data only, so writers of other departments can join it with their own
+ * report.
  */
 export const IncidentMatch = z.object({
   id: z.uuid(),
@@ -49,7 +50,9 @@ export const IncidentMatch = z.object({
   street: z.string(),
   /** Departments that already have a report. */
   departmentIds: z.array(z.uuid()),
-  /** `true` if the dispatch number is the same. */
+  /** Reports of the incident the user may read (e.g. of his own department), so he opens them instead of joining. */
+  ownReports: z.array(z.object({ reportId: z.uuid(), departmentId: z.uuid() })),
+  /** `true` if the dispatch number is the same (ignoring case and spaces). */
   sameDispatchNumber: z.boolean(),
 });
 export type IncidentMatch = z.infer<typeof IncidentMatch>;
@@ -167,6 +170,10 @@ export const ReportInput = z.object({
 });
 export type ReportInput = z.input<typeof ReportInput>;
 
+/** Saving a report (`PUT incidents/reports/:id`) needs the version the client loaded. */
+export const ReportUpdate = ReportInput.extend({ version: z.number().int() });
+export type ReportUpdate = z.input<typeof ReportUpdate>;
+
 export const NewReportInput = ReportInput.partial({ times: true }).extend({ departmentId: z.uuid() });
 export type NewReportInput = z.input<typeof NewReportInput>;
 
@@ -212,8 +219,8 @@ export type ReleaseManyResult = z.infer<typeof ReleaseManyResult>;
 export const Unlock = z.object({ reason: z.string().trim().min(1), toStatus: z.enum(['draft', 'review']).default('review') });
 export type Unlock = z.input<typeof Unlock>;
 
-/** Statistics of a primary report, changed by a releaser without a new release (also after the release). */
-export const StatisticsUpdate = z.object({ statistics: IncidentStatistics, version: z.number().int() });
+/** Statistics of a primary report, changed or removed (`null`) by a releaser without a new release (also after the release). */
+export const StatisticsUpdate = z.object({ statistics: IncidentStatistics.nullable(), version: z.number().int() });
 export type StatisticsUpdate = z.input<typeof StatisticsUpdate>;
 
 /** Pre-filled statistics from keyword, location and personnel; the author confirms or corrects them. */
