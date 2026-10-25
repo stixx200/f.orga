@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import { berlinDate, type DeadlineInput, type DeadlineProvider } from '@forga/core-api';
+import { berlinDate, type DeadlineInput, type DeadlineProvider, HistoryEntry } from '@forga/core-api';
 import type { LocalizedText } from '@forga/core-contracts';
 import type { ConditionKey } from '@forga/respiratory-protection-contracts';
 import { EvidenceEntity, StatusEntity } from '../respiratory-protection.entities.js';
@@ -81,5 +81,20 @@ export class RespiratoryProtectionData implements DeadlineProvider {
 
   async exportPerson(personId: string): Promise<Record<string, unknown>> {
     return { evidence: (await this.em.fork().find(EvidenceEntity, { personId }, { orderBy: { date: 'asc' } })).map((e) => wrap(e).toObject()) };
+  }
+
+  /**
+   * Anonymised persons: medical examinations (health data) are deleted; other evidence keeps date and kind for the
+   * statistics but loses examiner, facility, restrictions and notes. Their history and the stored status go as well.
+   */
+  async anonymize(personIds: readonly string[]): Promise<void> {
+    const em = this.em.fork();
+    const evidence = await em.find(EvidenceEntity, { personId: { $in: [...personIds] } });
+    if (evidence.length) {
+      await em.nativeDelete(HistoryEntry, { entity: 'respiratory_protection.evidence', entityId: { $in: evidence.map((e) => e.id) } });
+      await em.nativeDelete(EvidenceEntity, { personId: { $in: [...personIds] }, kind: 'examination' });
+      await em.nativeUpdate(EvidenceEntity, { personId: { $in: [...personIds] } }, { examiner: '', facility: '', restrictions: '', note: '' });
+    }
+    await em.nativeDelete(StatusEntity, { personId: { $in: [...personIds] } });
   }
 }

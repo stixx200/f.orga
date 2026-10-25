@@ -42,7 +42,7 @@ export class EquipmentModule implements OnModuleInit {
     this.deadlines.register(this.data);
     this.search.register('equipment', (user, query) => this.data.search(user, query));
     this.codes.register('equipment', (user, code) => this.data.code(user, code));
-    this.exports.register('equipment', { all: () => this.data.exportAll() });
+    this.exports.register('equipment', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
     this.imports.register('equipment', this.inventory.profile());
     this.historyAccess.register('equipment.item', async (user, id) => {
       const item = await this.em.fork().findOne(EquipmentItemEntity, id);

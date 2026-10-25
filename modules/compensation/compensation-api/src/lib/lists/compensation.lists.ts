@@ -35,8 +35,19 @@ export class CompensationLists {
       description: { de: 'Posten je Person eines Auszahlungslaufs oder Jahres', en: 'Items per person of a payout run or year' },
       permission: READ,
       parameters: [
-        { key: 'runId', label: { de: 'Lauf (ID)', en: 'Run (ID)' }, type: 'text' },
-        { key: 'personId', label: { de: 'Person (ID)', en: 'Person (ID)' }, type: 'text' },
+        {
+          key: 'runId',
+          label: { de: 'Auszahlungslauf', en: 'Payout run' },
+          type: 'choice',
+          // Runs hold no personal data; the rows still only show the items the user may see.
+          choices: async (_user, query) => {
+            const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+            return (await this.em.fork().find(RunEntity, {}, { orderBy: { from: 'desc' }, limit: 200 }))
+              .filter((r) => words.every((w) => r.number.toLowerCase().includes(w)))
+              .map((r) => ({ value: r.id, label: r.number, description: `${r.from} – ${r.to}` }));
+          },
+        },
+        { key: 'personId', label: { de: 'Person', en: 'Person' }, type: 'person' },
         { key: 'year', label: { de: 'Jahr', en: 'Year' }, type: 'year' },
       ],
       schema: StatementParams,
