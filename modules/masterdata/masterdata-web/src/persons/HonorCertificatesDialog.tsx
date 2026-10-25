@@ -3,8 +3,8 @@ import { DateInput } from '@mantine/dates';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { CertificateSettings } from '@forga/masterdata-contracts';
-import { api, apiUrl, can, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { ResponsiveDialog, useAction } from '@forga/web-ui';
+import { api, apiUrl, can, send, useLocalized, useSession, translateCode, useTranslation, withQuery } from '@forga/web-sdk';
+import { Notice, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { useCatalog } from '../api';
 
 const SETTINGS_KEY = ['core', 'settings', 'masterdata.certificates'] as const;
@@ -37,6 +37,13 @@ export function HonorCertificatesDialog({ onClose }: { onClose: () => void }) {
   const [to, setTo] = useState<string | null>(`${year}-12-31`);
   const [honor, setHonor] = useState<string | null>(null);
   const admin = can(session, 'core.settings.manage');
+  // Counted beforehand, so an empty period shows a message instead of opening an error in a new tab.
+  const query = { from: from ?? undefined, to: to ?? undefined, honor: honor ?? undefined };
+  const { data: count } = useQuery({
+    queryKey: ['masterdata', 'honor-certificates', query],
+    queryFn: () => api<{ count: number }>(withQuery('masterdata/persons/honors/certificates', query)).then((r) => r.count),
+    enabled: Boolean(from && to),
+  });
   const { data: settings } = useQuery({ queryKey: SETTINGS_KEY, queryFn: () => api<CertificateSettings | null>('core/settings/masterdata.certificates'), enabled: admin });
   return (
     <ResponsiveDialog
@@ -46,7 +53,7 @@ export function HonorCertificatesDialog({ onClose }: { onClose: () => void }) {
       actions={
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{common('actions.close')}</Button>
-          <Button component="a" href={apiUrl('masterdata/persons/honors/certificates.pdf', { from: from ?? undefined, to: to ?? undefined, honor: honor ?? undefined, lang: i18n.language })} target="_blank" disabled={!from || !to}>{t('certificates.print')}</Button>
+          <Button component="a" href={apiUrl('masterdata/persons/honors/certificates.pdf', { from: from ?? undefined, to: to ?? undefined, honor: honor ?? undefined, lang: i18n.language })} target="_blank" disabled={!from || !to || !count}>{t('certificates.print', { count: count ?? 0 })}</Button>
         </Group>
       }
     >
@@ -54,6 +61,7 @@ export function HonorCertificatesDialog({ onClose }: { onClose: () => void }) {
         <DateInput label={t('certificates.from')} value={from} onChange={setFrom} valueFormat="DD.MM.YYYY" />
         <DateInput label={t('certificates.to')} value={to} onChange={setTo} valueFormat="DD.MM.YYYY" />
       </Group>
+      {count === 0 && <Notice kind="info">{translateCode('masterdata.noHonors')}</Notice>}
       <Select label={t('entries.honor.name')} placeholder={t('certificates.allHonors')} data={honors.map((h) => ({ value: h.key, label: localized(h.name) }))} value={honor} onChange={setHonor} clearable />
       {admin && settings !== undefined && <Texts value={CertificateSettings.parse(settings ?? {})} />}
     </ResponsiveDialog>

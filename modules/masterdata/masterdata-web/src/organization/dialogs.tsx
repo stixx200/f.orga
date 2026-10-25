@@ -1,8 +1,9 @@
-import { Button, Group, MultiSelect, NumberInput, Select, SimpleGrid, Stack, Switch, Textarea, TextInput } from '@mantine/core';
+import { Button, Group, MultiSelect, NumberInput, Select, SimpleGrid, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useState } from 'react';
 import {
   type Department,
+  type DepartmentGroup,
   type DepartmentInput,
   DepartmentType,
   SpecialTask,
@@ -13,9 +14,9 @@ import {
   type VehicleInput,
   VehicleStatus,
 } from '@forga/masterdata-contracts';
-import { send, useLocalized, useTranslation } from '@forga/web-sdk';
+import { send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, ResponsiveDialog, useAction } from '@forga/web-ui';
-import { keys, personName, useCatalog, useDepartments, usePersons, useStations } from '../api';
+import { keys, MANAGE, personName, useCatalog, useDepartments, usePersons, useStations } from '../api';
 
 function Actions({ onClose, form, loading, onDelete }: { onClose: () => void; form: string; loading: boolean; onDelete?: () => void }) {
   const { t } = useTranslation('common');
@@ -76,6 +77,8 @@ export function DepartmentDialog({ department, parentId, onClose }: { department
   const { t } = useTranslation('masterdata');
   const { data: departments = [] } = useDepartments();
   const { data: members = [] } = usePersons(department?.id);
+  // Type, parent, special tasks, statistics and population concern the whole brigade (`masterdata.organization.manage` brigade-wide).
+  const structure = useSession().data?.permissions[MANAGE] === 'brigade';
   const [form, setForm] = useState<Required<DepartmentInput>>(() => ({
     name: department?.name ?? '',
     shortName: department?.shortName ?? '',
@@ -101,7 +104,7 @@ export function DepartmentDialog({ department, parentId, onClose }: { department
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
             <TextInput label={t('department.name')} value={form.name} onChange={(e) => set('name', e.currentTarget.value)} required placeholder={t('organization.namePlaceholder')} />
             <TextInput label={t('department.shortName')} value={form.shortName} onChange={(e) => set('shortName', e.currentTarget.value)} required />
-            <Select label={t('department.type')} data={DepartmentType.options.map((v) => ({ value: v, label: t(`departmentType.${v}`) }))} value={form.type} onChange={(v) => v && set('type', v as Department['type'])} allowDeselect={false} />
+            <Select label={t('department.type')} data={DepartmentType.options.map((v) => ({ value: v, label: t(`departmentType.${v}`) }))} value={form.type} onChange={(v) => v && set('type', v as Department['type'])} allowDeselect={false} disabled={!structure} />
             <Select
               label={t('department.parent')}
               description={t('organization.parentHint')}
@@ -109,6 +112,7 @@ export function DepartmentDialog({ department, parentId, onClose }: { department
               value={form.parentId}
               onChange={(v) => set('parentId', v)}
               clearable
+              disabled={!structure}
             />
           </SimpleGrid>
           {department && (
@@ -123,6 +127,7 @@ export function DepartmentDialog({ department, parentId, onClose }: { department
             data={SpecialTask.options.map((v) => ({ value: v, label: t(`specialTask.${v}`) }))}
             value={form.specialTasks}
             onChange={(v) => set('specialTasks', v as Department['specialTasks'])}
+            disabled={!structure}
           />
           <NumberInput
             label={t('department.population')}
@@ -133,6 +138,7 @@ export function DepartmentDialog({ department, parentId, onClose }: { department
             thousandSeparator="."
             decimalSeparator=","
             maw={260}
+            disabled={!structure}
           />
           <Select
             label={t('department.statistics')}
@@ -144,7 +150,9 @@ export function DepartmentDialog({ department, parentId, onClose }: { department
             value={form.statisticsRelevant === null ? 'default' : String(form.statisticsRelevant)}
             onChange={(v) => set('statisticsRelevant', v === 'default' || !v ? null : v === 'true')}
             allowDeselect={false}
+            disabled={!structure}
           />
+          {!structure && <Text size="xs" c="dimmed">{t('organization.structureHint')}</Text>}
         </Stack>
       </form>
     </ResponsiveDialog>
@@ -281,6 +289,47 @@ export function VehicleDialog({ vehicle, departmentId, onClose }: { vehicle?: Ve
           <DateInput label={t('vehicle.decommissionedOn')} value={form.decommissionedOn} onChange={(v) => set('decommissionedOn', v)} valueFormat="DD.MM.YYYY" clearable />
         </SimpleGrid>
         <Textarea label={t('vehicle.notes')} value={form.notes} onChange={(e) => set('notes', e.currentTarget.value)} autosize minRows={2} mt="sm" />
+      </form>
+    </ResponsiveDialog>
+  );
+}
+
+/** Create or edit a group of a department: name, group leader and members (members of the department only). */
+export function GroupDialog({ group, departmentId, onClose }: { group?: DepartmentGroup; departmentId: string; onClose: () => void }) {
+  const { t } = useTranslation('masterdata');
+  const { data: members = [] } = usePersons(departmentId);
+  const [form, setForm] = useState(() => ({ name: group?.name ?? '', leaderId: group?.leaderId ?? null, memberIds: group?.memberIds ?? [] }));
+  const [deleting, setDeleting] = useState(false);
+  const invalidate = [['masterdata', 'groups']] as const;
+  const save = useAction(
+    () => {
+      const body = { departmentId, ...form };
+      return group ? send('PUT', `masterdata/groups/${group.id}`, body) : send('POST', 'masterdata/groups', body);
+    },
+    { success: t('organization.saved'), invalidate, onSuccess: () => onClose() },
+  );
+  const people = members.filter((p) => p.status !== 'left').map((p) => ({ value: p.id, label: `${p.lastName}, ${p.firstName}` }));
+  if (deleting && group) {
+    return (
+      <DeleteConfirm
+        opened
+        title={t('groups.deleteTitle', { name: group.name })}
+        text={t('groups.deleteText')}
+        path={`masterdata/groups/${group.id}`}
+        invalidate={invalidate}
+        onClose={() => setDeleting(false)}
+        onDeleted={onClose}
+      />
+    );
+  }
+  return (
+    <ResponsiveDialog opened onClose={onClose} title={group ? t('groups.edit') : t('groups.new')} actions={<Actions onClose={onClose} form="group" loading={save.isPending} onDelete={group ? () => setDeleting(true) : undefined} />}>
+      <form id="group" onSubmit={(e) => { e.preventDefault(); save.mutate(undefined); }}>
+        <Stack gap="sm">
+          <TextInput label={t('groups.name')} placeholder={t('groups.namePlaceholder')} value={form.name} onChange={(e) => setForm({ ...form, name: e.currentTarget.value })} required />
+          <Select label={t('groups.leader')} data={people} value={form.leaderId} onChange={(v) => setForm({ ...form, leaderId: v })} searchable clearable />
+          <MultiSelect label={t('groups.members')} description={t('organization.membersOnly')} data={people.filter((p) => p.value !== form.leaderId)} value={form.memberIds} onChange={(v) => setForm({ ...form, memberIds: v })} searchable />
+        </Stack>
       </form>
     </ResponsiveDialog>
   );

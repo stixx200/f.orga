@@ -3,17 +3,18 @@ import { IconPencil, IconTrash, IconUserMinus } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import type { BrigadeSettings } from '@forga/core-contracts';
-import type { Department, MembershipInput, Station, Vehicle } from '@forga/masterdata-contracts';
+import type { Department, DepartmentGroup, MembershipInput, Station, Vehicle } from '@forga/masterdata-contracts';
 import { api, can, send, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, EmptyState, KpiTile, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
-import { keys, loadPerson, MANAGE, PERSONS_WRITE, personName, useDepartments, usePersons, useStations, useVehicles } from '../api';
-import { DeleteDepartment, DepartmentDialog, StationDialog, VehicleDialog } from './dialogs';
+import { keys, loadPerson, MANAGE, PERSONS_WRITE, personName, READ, useDepartments, useGroups, usePersons, useStations, useVehicles } from '../api';
+import { DeleteDepartment, DepartmentDialog, GroupDialog, StationDialog, VehicleDialog } from './dialogs';
 
 type Editing =
   | { kind: 'department'; department?: Department; parentId?: string | null }
   | { kind: 'station'; station?: Station; departmentId: string }
   | { kind: 'vehicle'; vehicle?: Vehicle; departmentId: string }
   | { kind: 'delete'; department: Department }
+  | { kind: 'group'; group?: DepartmentGroup; departmentId: string }
   | null;
 
 /** Today in Europe/Berlin as `YYYY-MM-DD`. */
@@ -149,6 +150,33 @@ function Members({ department, canEdit }: { department: Department; canEdit: boo
   );
 }
 
+/** Groups of the department with leader and members; department commanders maintain them. */
+function Groups({ department, canEdit, edit }: { department: Department; canEdit: boolean; edit: (editing: Editing) => void }) {
+  const { t } = useTranslation('masterdata');
+  const { data: groups = [] } = useGroups();
+  const { data: members = [] } = usePersons(department.id);
+  const name = (id: string | null) => {
+    const person = members.find((m) => m.id === id);
+    return person ? personName(person) : '';
+  };
+  const own = groups.filter((g) => g.departmentId === department.id);
+  return (
+    <Panel title={t('groups.title')} aside={canEdit && <Button size="xs" variant="outline" onClick={() => edit({ kind: 'group', departmentId: department.id })}>{t('groups.add')}</Button>}>
+      <DataTable
+        rows={own}
+        rowKey={(g) => g.id}
+        empty={t('groups.empty')}
+        onRowClick={canEdit ? (g) => edit({ kind: 'group', group: g, departmentId: department.id }) : undefined}
+        columns={[
+          { key: 'name', header: t('groups.name'), render: (g) => <Text fw={700} size="sm">{g.name}</Text> },
+          { key: 'leader', header: t('groups.leader'), render: (g) => name(g.leaderId) },
+          { key: 'members', header: t('groups.members'), render: (g) => g.memberIds.map(name).filter(Boolean).join(', ') },
+        ]}
+      />
+    </Panel>
+  );
+}
+
 function Detail({ department, edit }: { department: Department; edit: (editing: Editing) => void }) {
   const { t, i18n } = useTranslation('masterdata');
   const session = useSession().data;
@@ -231,6 +259,7 @@ function Detail({ department, edit }: { department: Department; edit: (editing: 
           ]}
         />
       </Panel>
+      {(canManage || can(session, READ, department.id)) && <Groups department={department} canEdit={canManage} edit={edit} />}
       <Members department={department} canEdit={canMembers} />
     </Stack>
   );
@@ -289,6 +318,7 @@ export function OrganizationPage() {
           }}
         />
       )}
+      {editing?.kind === 'group' && <GroupDialog group={editing.group} departmentId={editing.departmentId} onClose={() => setEditing(null)} />}
       {editing?.kind === 'station' && <StationDialog station={editing.station} departmentId={editing.departmentId} onClose={() => setEditing(null)} />}
       {editing?.kind === 'vehicle' && <VehicleDialog vehicle={editing.vehicle} departmentId={editing.departmentId} onClose={() => setEditing(null)} />}
     </Stack>

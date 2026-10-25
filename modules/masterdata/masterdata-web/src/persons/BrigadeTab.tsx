@@ -3,8 +3,10 @@ import { DateInput } from '@mantine/dates';
 import { IconTrash } from '@tabler/icons-react';
 import { type Dispatch, type ReactNode, type SetStateAction, useState } from 'react';
 import type { MembershipInput, Person } from '@forga/masterdata-contracts';
-import { formatDate, send, useLocalized, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { useQuery } from '@tanstack/react-query';
+import type { ActiveModule } from '@forga/core-contracts';
+import { api, ApiError, formatDate, send, useLocalized, useTranslation } from '@forga/web-sdk';
+import { ConfirmDialog, DataTable, Notice, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { probationEnd, today, useCatalog, useCatalogNames, useDepartments, useMembershipRules } from '../api';
 import type { PersonForm } from './PersonPage';
 
@@ -55,6 +57,21 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
     setDialog(d);
   };
   const close = () => setDialog(null);
+  // Leaving and the transfer to the veterans are refused while other modules count items held; the message names them.
+  const { data: modules = [] } = useQuery({ queryKey: ['core', 'modules'], queryFn: () => api<ActiveModule[]>('core/modules'), staleTime: 5 * 60_000 });
+  const namingModules = async (run: () => Promise<Person>) => {
+    try {
+      return await run();
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.code !== 'masterdata.personHoldsItems') throw error;
+      const ids = Array.isArray(error.body?.['modules']) ? (error.body['modules'] as string[]) : [];
+      const names = ids.map((id) => {
+        const module = modules.find((m) => m.id === id);
+        return module ? localized(module.name) : id;
+      });
+      throw new ApiError(error.status, { ...error.body, modules: names });
+    }
+  };
   const set = <K extends keyof PersonForm>(key: K, v: PersonForm[K]) => setForm((f) => ({ ...f, [key]: v }));
   const done = (p: Person) => {
     onChanged(p);
@@ -62,9 +79,15 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
   };
 
   const probation = usePersonAction(() => send<Person>('PUT', `masterdata/persons/${person.id}/probation`, { probationEndsOn: value('date', person.probationEndsOn ?? today()), reason: value('reason'), decidedOn: value('decidedOn') || null }), done);
-  const admission = usePersonAction(() => send<Person>('POST', `masterdata/persons/${person.id}/admission`, { decidedOn: value('date', today()) }), done);
+  const admission = usePersonAction(() => send<Person>('POST', `masterdata/persons/${person.id}/admission`, { decidedOn: value('date', today()), reason: value('reason') }), done);
+  // An admission before the end of the probation or without its qualifications needs a reason (statute).
+  const admissionDate = value('date', today());
+  const missingQualifications = (rules?.probationQualifications ?? []).filter((q) => !person.qualifications.some((x) => x.qualification === q && x.acquiredOn <= admissionDate));
+  const earlyAdmission = Boolean(person.probationEndsOn && admissionDate < person.probationEndsOn);
+  const admissionBeforeJoining = Boolean(person.joinedOn && admissionDate < person.joinedOn);
+  const qualificationName = useCatalogNames('qualification');
   const status = usePersonAction(() => send<Person>('POST', `masterdata/persons/${person.id}/status`, { status: value('status', person.status === 'left' || person.status === 'probation' ? 'active' : person.status), effectiveOn: value('date', today()) }), done);
-  const leave = usePersonAction(() => send<Person>('POST', `masterdata/persons/${person.id}/leave`, { leftOn: value('date', today()), exitReason: value('reason') }), done);
+  const leave = usePersonAction(() => namingModules(() => send<Person>('POST', `masterdata/persons/${person.id}/leave`, { leftOn: value('date', today()), exitReason: value('reason') })), done);
   const memberships = usePersonAction((list: MembershipInput[]) => send<Person>('PUT', `masterdata/persons/${person.id}/memberships`, list), done);
   const addRank = usePersonAction(() => send<Person>('POST', `masterdata/persons/${person.id}/ranks`, { rank: value('rank'), since: value('date', today()) }), done);
   const deleteRank = usePersonAction((id: string) => send<Person>('DELETE', `masterdata/persons/${person.id}/ranks/${id}`), done);
@@ -93,7 +116,7 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
     done,
   );
   const toVeterans = usePersonAction(
-    () => send<Person>('POST', `masterdata/persons/${person.id}/transfer-to-veterans`, { departmentId: value('department', defaultVeterans), on: value('date', today()), decidedOn: value('decidedOn') || null }),
+    () => namingModules(() => send<Person>('POST', `masterdata/persons/${person.id}/transfer-to-veterans`, { departmentId: value('department', defaultVeterans), on: value('date', today()), decidedOn: value('decidedOn') || null })),
     done,
   );
 
@@ -212,10 +235,21 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
         </ResponsiveDialog>
       )}
       {dialog === 'admission' && (
-        <ResponsiveDialog opened onClose={close} title={t('brigade.admit')} actions={dialogActions(() => admission.mutate(undefined), admission.isPending)}>
+        <ResponsiveDialog
+          opened
+          onClose={close}
+          title={t('brigade.admit')}
+          actions={dialogActions(() => admission.mutate(undefined), admission.isPending, !admissionBeforeJoining && (!(earlyAdmission || missingQualifications.length) || Boolean(value('reason').trim())))}
+        >
           <Stack gap="sm">
             <Text size="sm">{t('brigade.admitText', { name: `${person.firstName} ${person.lastName}` })}</Text>
             {date(decidedLabel)}
+            {admissionBeforeJoining && <Notice kind="warning">{t('brigade.admissionBeforeJoining', { date: formatDate(person.joinedOn, i18n.language) })}</Notice>}
+            {earlyAdmission && <Notice kind="warning">{t('brigade.admissionEarly', { date: formatDate(person.probationEndsOn, i18n.language) })}</Notice>}
+            {missingQualifications.length > 0 && <Notice kind="warning">{t('brigade.admissionMissing', { list: missingQualifications.map((q) => qualificationName(q, i18n.language)).join(', ') })}</Notice>}
+            {(earlyAdmission || missingQualifications.length > 0) && (
+              <TextInput label={t('brigade.admissionReason')} description={t('brigade.admissionReasonHint')} value={value('reason')} onChange={(e) => setValue('reason', e.currentTarget.value)} required />
+            )}
           </Stack>
         </ResponsiveDialog>
       )}
