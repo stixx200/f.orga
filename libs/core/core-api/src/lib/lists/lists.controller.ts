@@ -9,10 +9,12 @@ import {
   type ListData,
   type ListFormat,
   type ListInfo,
+  type ListOption,
 } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { CurrentUser } from '../security/decorators.js';
+import { OrganizationDirectory } from '../security/organization-directory.js';
 import { brigadeLogoDataUrl } from '../settings/assets.js';
 import { SettingsService } from '../settings/settings.js';
 import { ZodPipe } from '../zod.pipe.js';
@@ -25,6 +27,8 @@ const CONTENT_TYPES: Record<ListFormat, string> = {
   csv: 'text/csv; charset=utf-8',
 };
 
+const MAX_OPTIONS = 50;
+
 /** Query parameters of the list; `lang` selects the output language (default: the user's language). */
 type Query = Record<string, string | undefined> & { lang?: string };
 
@@ -35,11 +39,25 @@ export class ListsController {
     private readonly settings: SettingsService,
     private readonly audit: Audit,
     private readonly em: EntityManager,
+    private readonly organization: OrganizationDirectory,
   ) {}
 
   @Get()
   available(@CurrentUser() user: AuthenticatedUser): ListInfo[] {
     return this.registry.available(user);
+  }
+
+  /** Choices of a `person` or `choice` parameter matching the typed text `q` (at most 50). */
+  @Get(':id/parameters/:key/options')
+  async options(@Param('id') id: string, @Param('key') key: string, @Query('q') query: string | undefined, @CurrentUser() user: AuthenticatedUser): Promise<ListOption[]> {
+    const entry = this.registry.get(id);
+    if (!entry || !user.can(entry.definition.permission)) throw new NotFoundException();
+    const parameter = entry.definition.parameters?.find((p) => p.key === key);
+    if (!parameter || (parameter.type !== 'person' && parameter.type !== 'choice')) throw new NotFoundException();
+    const q = (query ?? '').trim().slice(0, 100);
+    if (parameter.choices) return (await parameter.choices(user, q, user.language)).slice(0, MAX_OPTIONS);
+    if (parameter.type !== 'person' || q.length < 2) return [];
+    return (await this.organization.searchPersons(user, q, MAX_OPTIONS)).map((p) => ({ value: p.id, label: p.label }));
   }
 
   /** The list content for the preview in the UI. */

@@ -10,8 +10,17 @@ export const ListColumn = z.object({
 });
 export type ListColumn = z.infer<typeof ListColumn>;
 
-export const ListParameterType = z.enum(['text', 'date', 'year', 'department', 'select', 'boolean']);
+/**
+ * `person`: a person picked by name (search of the master data); `choice`: an entry picked from the choices the module
+ * offers (e.g. sessions, payout runs, promotion lists), both loaded from
+ * `GET /core/lists/<id>/parameters/<key>/options?q=…`. The value is the ID in both cases.
+ */
+export const ListParameterType = z.enum(['text', 'date', 'year', 'department', 'select', 'boolean', 'person', 'choice']);
 export type ListParameterType = z.infer<typeof ListParameterType>;
+
+/** A choice for a `person` or `choice` parameter; the label comes from the data (e.g. a session title). */
+export const ListOption = z.object({ value: z.string(), label: z.string(), description: z.string().optional() });
+export type ListOption = z.infer<typeof ListOption>;
 
 export const ListParameter = z.object({
   key: z.string(),

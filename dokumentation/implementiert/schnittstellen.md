@@ -31,23 +31,24 @@ Alle Pfade liegen unter `/api`.
 | `POST` | `/core/login` | offen | Anmelden (`Login`), setzt das Cookie. Fehler: `auth.invalidCredentials` (`401`), `auth.locked` (`429`) |
 | `POST` | `/core/logout` | offen | Sitzung beenden, Cookie löschen (`204`) |
 | `GET` | `/core/session` | angemeldet | Benutzer (mit `language`, `email`, `receiveDigest`) und wirksame Berechtigungen (`brigade` oder Liste von Abteilungs-IDs) |
-| `PUT` | `/core/profile` | angemeldet | Eigene Sprache, Sammel-E-Mail und E-Mail-Adresse ändern (`UpdateProfile`: `language`, `receiveDigest`, optional `email`) |
+| `PUT` | `/core/profile` | angemeldet | Eigene Sprache, Sammel-E-Mail, ausgeblendete Aufgaben und E-Mail-Adresse ändern (`UpdateProfile`: `language`, `receiveDigest`, optional `hiddenTasks`, `email` mit `currentPassword`). Antwort `{ ok, confirmationSent }`; eine neue Adresse gilt erst nach Bestätigung. Fehler: `auth.passwordRequired` (`401`), `auth.emailTaken` (`409`) |
+| `POST` | `/core/email-confirmation` | öffentlich | Neue E-Mail-Adresse bestätigen (`ConfirmEmail`: `token`). Fehler: `auth.emailLinkInvalid`, `auth.emailTaken` |
 | `PUT` | `/core/password` | angemeldet | Eigenes Passwort ändern (`ChangePassword`) |
 | `GET` | `/core/users` | `core.users.manage` | Benutzer ohne technische Benutzer |
 | `GET` | `/core/users/:id` | `core.users.manage` | Ein Benutzer |
-| `POST` | `/core/users` | `core.users.manage` | Benutzer anlegen (`UserInput`, Passwort nötig). Fehler: `users.roleWider`, `users.unknownDepartment`, `users.unknownPerson`, `users.personTaken`, `users.usernameTaken` |
-| `PUT` | `/core/users/:id` | `core.users.manage` | Benutzer ändern, Rollen setzen, Passwort optional zurücksetzen. Nur für Benutzer ohne Rechte, die dem Verwalter fehlen (`users.targetWider`). Man kann sich nicht selbst deaktivieren; ein aktiver Administrator muss bleiben (`users.lastAdministrator`). |
-| `POST` | `/core/users/invitations` | `core.users.manage` | Person einladen (`UserInvitation`: `personId`, optional `username`, `language`, `roles`); Antwort der neue Benutzer. Fehler: `users.personWithoutEmail`, `users.personTaken`, `auth.resetNotConfigured`, `mail.*` |
-| `POST` | `/core/users/invitations/bulk` | `core.users.manage` | Mehrere Personen einladen (`BulkUserInvitation`); Antwort `{ invited, skipped }` |
+| `POST` | `/core/users` | `core.users.manage` | Benutzer anlegen (`UserInput`, Passwort nötig). Fehler: `users.roleWider`, `users.unknownDepartment`, `users.unknownPerson`, `users.personTaken`, `users.personForbidden`, `users.emailTaken`, `users.usernameTaken` |
+| `PUT` | `/core/users/:id` | `core.users.manage` | Benutzer ändern, Rollen setzen, Passwort optional zurücksetzen. Nur für Benutzer ohne Rechte, die dem Verwalter fehlen (`users.targetWider`). Man kann sich nicht selbst deaktivieren und die Person des eigenen Benutzers nicht ändern (`users.cannotRelinkSelf`); eine Person verknüpfen braucht `masterdata.persons.sensitive` in ihrer Abteilung oder für die Gesamtwehr (`users.personForbidden`); ein aktiver Administrator muss bleiben (`users.lastAdministrator`). |
+| `POST` | `/core/users/invitations` | `core.users.manage` | Person einladen (`UserInvitation`: `personId`, optional `username`, `language`, `roles`); Antwort der neue Benutzer. Fehler: `users.personWithoutEmail`, `users.personTaken`, `users.personForbidden`, `users.emailTaken`, `auth.resetNotConfigured`, `mail.notConfigured`, `mail.*` (dann wird nichts angelegt) |
+| `POST` | `/core/users/invitations/bulk` | `core.users.manage` | Mehrere Personen einladen (`BulkUserInvitation`); Antwort `{ invited, skipped }`, `skipped` je Person mit `reason` (`unknownPerson`, `hasUser`, `noEmail`, `emailTaken`, `usernameTaken`, `forbidden`, `mailFailed` mit `code`) |
 | `POST` | `/core/users/:id/invitation` | `core.users.manage` | Einladung erneut senden, solange kein Passwort gesetzt ist (`users.alreadyActivated`) |
 | `DELETE` | `/core/users/:id/oidc` | `core.users.manage` | Verknüpfung mit dem Konto der Gemeinde lösen (`users.targetWider` wie beim Ändern) |
 | `POST` | `/core/users/:id/impersonate` | `core.users.impersonate` | Als dieser Benutzer anmelden (`{ reason }`), höchstens 60 Minuten. Fehler: `auth.impersonationSelf`, `auth.impersonationWider`, `auth.impersonationNested`, `auth.impersonationUnknownUser` |
 | `POST` | `/core/impersonation/end` | angemeldet | Impersonation beenden, eigene Sitzung wiederherstellen |
 | `GET` | `/core/permissions` | `core.roles.manage` oder `core.tokens.manage` | Alle Berechtigungen von Core und Modulen (`name` als `{ de, en }`) |
-| `GET` | `/core/roles` | angemeldet | Rollen (mit `templateKey`, falls aus einer Vorlage) |
+| `GET` | `/core/roles` | angemeldet | Rollen (mit `templateKey`, falls aus einer Vorlage; `name` und `description` als `{ de, en }`) |
 | `GET` | `/core/roles/templates` | `core.roles.manage` | Zusammengeführte Rollenvorlagen von Core und Modulen (`key`, `name`, `description`, `permissions`) |
 | `POST` | `/core/roles/templates` | `core.roles.manage` | Fehlende Standardrollen in der Sprache des Benutzers anlegen. Antwort `{ created, skipped }` (Schlüssel) |
-| `POST` | `/core/roles` | `core.roles.manage` | Rolle anlegen (`RoleInput`). Unbekannte Muster ergeben `roles.unknownPermissions`. |
+| `POST` | `/core/roles` | `core.roles.manage` | Rolle anlegen (`RoleInput`, `name` und `description` als `{ de, en }` oder ein Text für beide). Unbekannte Muster ergeben `roles.unknownPermissions`, ein vergebener Name `roles.nameTaken`. |
 | `PUT` | `/core/roles/:id` | `core.roles.manage` | Rolle ändern. Hinzugefügte Rechte muss der Verwalter selbst haben (`users.roleWider`); ein aktiver Administrator muss bleiben (`users.lastAdministrator`) |
 | `POST` | `/core/roles/:id/apply-template` | `core.roles.manage` | Standardrolle auf ihre Vorlage zurücksetzen; gleiche Prüfungen wie beim Ändern |
 | `DELETE` | `/core/roles/:id` | `core.roles.manage` | Rolle löschen, nur innerhalb der eigenen Rechte. Ein aktiver Administrator muss bleiben (`users.lastAdministrator`). |
@@ -67,11 +68,14 @@ Alle Pfade liegen unter `/api`.
 | `GET` | `/core/audit?from=&to=&userId=&action=&q=&limit=` | `core.audit.read` | Audit-Einträge, neueste zuerst (höchstens 1000), mit `userName` und `impersonatorName`. `action` mit `.` am Ende filtert nach Präfix |
 | `GET` | `/core/audit/filters` | `core.audit.read` | `{ actions, users }` für die Filter |
 | `GET` | `/core/export` | `core.data.export` | Module mit Vollexport, einschließlich `core` |
+| `GET` | `/core/export/:module` | `core.data.export` | Vollexport eines Moduls (JSON-Datei); bei `core` Abschnitte und Felder nur für Verwalter nur für diese |
+| `GET` | `/core/export/person/:personId` | `core.data.export` | Auskunft zu einer Person über alle Module (JSON-Datei). Fehler: `data.invalidPersonId` (`400`), `data.unknownPerson` (`404`) |
 | `POST` | `/core/retention/run` | `core.settings.manage` | Aufbewahrungsregeln anwenden (`RetentionRun`: `dryRun`, nur im Probelauf `settings` mit anderen Werten). Antwort `{ dryRun, counts }` |
 | `GET` | `/core/lists` | angemeldet | Listenvorlagen, für die der Benutzer das Recht hat (`ListInfo` mit `departments`: `brigade` oder die erlaubten Abteilungen) |
 | `GET` | `/core/lists/:id?<parameter>&lang=` | Recht der Liste | Listeninhalt für die Vorschau (`ListData`: Titel, Untertitel, Spalten, Zeilen). Ungültige Parameter `400`, unbekannte oder nicht erlaubte Liste `404` |
+| `GET` | `/core/lists/:id/parameters/:key/options?q=` | Recht der Liste | Auswahl für Parameter vom Typ `person` (Namenssuche ab 2 Zeichen) oder `choice` (Einträge des Moduls), höchstens 50 (`ListOption[]`) |
 | `GET` | `/core/lists/:id/export/:format?<parameter>&lang=` | Recht der Liste | Datei als `pdf`, `xlsx` oder `csv` (Download). Unbekanntes Format: `lists.unknownFormat` |
-| `GET` | `/core/tasks?asOf=` | angemeldet | Fristen, für die der Benutzer zuständig ist (`Deadline[]`, optional mit Link `to`), früheste zuerst. `asOf` (`JJJJ-MM-TT`) für eine Vorschau, sonst heute |
+| `GET` | `/core/tasks?asOf=&all=` | angemeldet | Fristen, für die der Benutzer zuständig ist (`Deadline[]`, optional mit Link `to`), früheste zuerst, ohne die im Profil ausgeblendeten (`all=true`: alle). `asOf` (`JJJJ-MM-TT`) für eine Vorschau, sonst heute |
 | `POST` | `/core/tasks/digest` | `core.settings.manage` | Sammel-E-Mail sofort verschicken, Antwort `{ sent }`. Ohne SMTP: `mail.notConfigured` |
 | `GET` | `/core/imports/profiles` | angemeldet | Importprofile, für die der Benutzer das Recht hat (`ImportProfileInfo`, `transfer` = Profil liest auch MP-Feuer-Transferdateien) |
 | `POST` | `/core/imports` | Recht eines Importprofils | Datei hochladen (`multipart/form-data`, Feld `file`, `.xlsx`/`.csv`/`.txt`/`.ics`, höchstens 10 MB). Antwort `ImportUpload` mit Überschriften, Beispielzeilen und vorgeschlagener Zuordnung je Profil. Fehler: `imports.fileMissing`, `imports.unsupportedFormat`, `imports.empty` |

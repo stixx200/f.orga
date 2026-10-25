@@ -5,9 +5,13 @@ import { ADMIN, SETUP_TOKEN, startTestApp, type TestApp, UI } from './testing/te
 
 let test: TestApp;
 let http: TestApp['http'];
+/** As sent by the reverse proxy in front of f.orga. */
+const from = (address: string) => ({ 'X-Forwarded-For': address });
 const login = (credentials: { username: string; password: string }) => test.login(credentials);
 
 beforeAll(async () => {
+  // As behind a reverse proxy on the same machine: the client address comes from X-Forwarded-For.
+  process.env.FORGA_TRUST_PROXY = 'loopback';
   test = await startTestApp();
   http = test.http;
 });
@@ -33,9 +37,9 @@ describe('setup and login', () => {
     expect(session.body.permissions['core.users.manage']).toBe('brigade');
     expect(session.body.permissions['incidents.reports.release']).toBe('brigade');
 
-    // The setup creates the standard roles in the chosen language, merged from all modules.
-    const roles = (await http.get('/api/core/roles').set('Cookie', cookie.split(';')[0])).body as { templateKey: string; name: string; permissions: string[] }[];
-    expect(roles.find((r) => r.templateKey === 'course-coordinator')).toMatchObject({ name: 'Course coordinator' });
+    // The setup creates the standard roles with names in all languages, merged from all modules.
+    const roles = (await http.get('/api/core/roles').set('Cookie', cookie.split(';')[0])).body as { templateKey: string; name: { de: string; en: string }; permissions: string[] }[];
+    expect(roles.find((r) => r.templateKey === 'course-coordinator')).toMatchObject({ name: { de: 'Lehrgangsbeauftragter', en: 'Course coordinator' } });
     expect(roles.find((r) => r.templateKey === 'course-coordinator')?.permissions).toEqual(expect.arrayContaining(['masterdata.persons.read', 'masterdata.courses.plan']));
     expect(roles.find((r) => r.templateKey === 'group-leader')?.permissions).toEqual(
       expect.arrayContaining(['masterdata.persons.read', 'incidents.reports.read', 'incidents.reports.write', 'training.read', 'training.attendance']),
@@ -47,6 +51,13 @@ describe('setup and login', () => {
 
   it('rejects wrong passwords', async () => {
     await http.post('/api/core/login').send({ ...ADMIN, password: 'falsch-falsch' }).expect(401);
+  });
+
+  it('locks a username after failed logins only for the address they came from', async () => {
+    for (let i = 0; i < 5; i++) await http.post('/api/core/login').set(from('203.0.113.7')).send({ ...ADMIN, password: 'geraten-123' }).expect(401);
+    expect((await http.post('/api/core/login').set(from('203.0.113.7')).send(ADMIN).expect(429)).body.code).toBe('auth.locked');
+    // The owner of the account logs in from elsewhere; a guesser cannot lock him out.
+    await http.post('/api/core/login').set(from('198.51.100.20')).send(ADMIN).expect(200);
   });
 
   it('requires the CSRF header for changes made with a session cookie', async () => {
@@ -85,7 +96,7 @@ describe('roles scoped to departments', () => {
       .post('/api/core/roles')
       .set('Cookie', admin)
       .set(UI)
-      .send({ name: 'Abteilungskommandant', permissions: ['masterdata.*'] })
+      .send({ name: 'Abteilungsleitung', permissions: ['masterdata.*'] })
       .expect(201);
     await http
       .post('/api/core/roles')

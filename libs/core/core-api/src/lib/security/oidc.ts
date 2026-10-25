@@ -18,7 +18,7 @@ import {
 import { EntityManager } from '@mikro-orm/core';
 import type { Request, Response } from 'express';
 import * as client from 'openid-client';
-import type { BrigadeSettings, OidcSettings } from '@forga/core-contracts';
+import type { BrigadeSettings, Grant, OidcSettings } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
 import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
 import { SettingsService } from '../settings/settings.js';
@@ -48,9 +48,17 @@ export class OidcDiscoveryError extends Error {}
 const isLocal = (url: URL) => url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
 
 /**
+ * Accounts that are only linked manually: administration of f.orga (`*`, `core.*`) and brigade-wide management of a
+ * module (`….manage`), counting deactivated modules as well.
+ */
+export function isPrivileged(grants: ReadonlyMap<string, Grant>): boolean {
+  return [...grants].some(([permission, grant]) => permission.startsWith('core.') || (permission.endsWith('.manage') && grant === 'brigade'));
+}
+
+/**
  * Sign-in with an OpenID Connect provider: authorization code flow with PKCE, state and nonce.
- * Only existing, active users can sign in. The first sign-in links the account by verified e-mail address or username,
- * except for accounts with administrative permissions (`core.*`): they link manually from their profile.
+ * Only existing, active users can sign in. The first sign-in links the account by verified e-mail address, except for
+ * privileged accounts (`isPrivileged`) and with `matchBy: username`: these accounts are linked manually from the profile.
  */
 @Injectable()
 export class OidcService {
@@ -164,25 +172,19 @@ export class OidcService {
       return { user: own, linked: true };
     }
     if (!user) {
+      // The username at the provider (`preferred_username`) is neither unique nor verified: with `matchBy: username`
+      // accounts are only linked manually from the profile.
+      if (setup.settings.matchBy !== 'email') return { error: 'auth.oidcLinkManually' };
       // Only addresses the provider has verified, otherwise anybody could claim the address of an f.orga user.
       const email = typeof claims['email'] === 'string' && claims['email_verified'] === true ? claims['email'].toLowerCase() : null;
-      const username = typeof claims['preferred_username'] === 'string' ? claims['preferred_username'] : null;
-      const candidates =
-        setup.settings.matchBy === 'email'
-          ? email
-            ? (await em.find(User, { oidcSubject: null, technical: false })).filter((u) => u.email?.toLowerCase() === email)
-            : []
-          : username
-            ? await em.find(User, { username, oidcSubject: null, technical: false })
-            : [];
+      const candidates = email ? (await em.find(User, { oidcSubject: null, technical: false })).filter((u) => u.email?.toLowerCase() === email) : [];
       // Ambiguous e-mail addresses are not linked.
       if (candidates.length !== 1) return { error: 'auth.oidcUnknownUser' };
       const candidate = candidates[0];
       if (!candidate.active) return { error: 'auth.oidcUnknownUser' };
-      // Administrative accounts are never linked automatically: a matching e-mail address or username at the provider
-      // must not be enough to take them over. Their owners link them from the profile.
-      const grants = (await this.auth.load(em, candidate, 'session')).grants;
-      if ([...grants.keys()].some((permission) => permission.startsWith('core.'))) return { error: 'auth.oidcLinkManually' };
+      // Privileged accounts are never linked automatically: a matching e-mail address at the provider must not be
+      // enough to take them over. Their owners link them from the profile.
+      if (isPrivileged(await this.auth.allGrantsOfUser(em, candidate))) return { error: 'auth.oidcLinkManually' };
       user = candidate;
       user.oidcSubject = subject;
       await em.flush();

@@ -16,8 +16,8 @@ import { DigestService } from './tasks/digest.service.js';
 import { MailService } from './tasks/mail.service.js';
 import { Notifications } from './tasks/notifications.js';
 import { CoreExport } from './data/core-export.js';
-import { CodeRegistry, DataController, ExportRegistry, RetentionRegistry, RetentionService, SearchRegistry } from './data/data.js';
-import { PasswordReset, PasswordResetController, PasswordResetService } from './security/password-reset.js';
+import { CodeRegistry, DataController, ExportRegistry, PersonDataRegistry, RetentionRegistry, RetentionService, SearchRegistry } from './data/data.js';
+import { EmailConfirmationController, PasswordReset, PasswordResetController, PasswordResetService } from './security/password-reset.js';
 import { AttachmentEntity, Attachments, AttachmentsController } from './attachments/attachments.js';
 import { BrigadeAsset, BrigadeAssetsController } from './settings/assets.js';
 import { TasksController } from './tasks/tasks.controller.js';
@@ -94,10 +94,12 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
     private readonly historyAccess: HistoryAccessRegistry,
     private readonly exports: ExportRegistry,
     private readonly coreExport: CoreExport,
+    private readonly personData: PersonDataRegistry,
   ) {}
 
   onModuleInit(): void {
-    this.exports.register('core', { all: () => this.coreExport.all(), person: (id) => this.coreExport.person(id) });
+    this.exports.register('core', { all: (user) => this.coreExport.all(user), person: (id) => this.coreExport.person(id) });
+    this.personData.register('core', { anonymize: (ids) => this.coreExport.anonymize(ids) });
     this.historyAccess.registerPermission('core.user', 'core.users.manage');
     this.historyAccess.registerPermission('core.role', 'core.roles.manage');
     // Settings of a module: also for the managers of that module's settings.
@@ -127,6 +129,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         TransfersController,
         ImportsController,
         PasswordResetController,
+        EmailConfirmationController,
         BrigadeAssetsController,
         AttachmentsController,
         DataController,
@@ -162,6 +165,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         CodeRegistry,
         ExportRegistry,
         RetentionRegistry,
+        PersonDataRegistry,
         RetentionService,
         CoreExport,
       ],
@@ -185,6 +189,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         CodeRegistry,
         ExportRegistry,
         RetentionRegistry,
+        PersonDataRegistry,
       ],
     };
   }

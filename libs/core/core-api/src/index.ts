@@ -1,5 +1,6 @@
 export * from './lib/core.module.js';
 export * from './lib/options.js';
+export * from './lib/trust-proxy.js';
 export * from './lib/user-context.js';
 export * from './lib/zod.pipe.js';
 export * from './lib/module/forga-module.js';

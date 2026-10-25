@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { z } from 'zod';
-import type { Language, ListCell, ListColumn, ListInfo, ListParameter } from '@forga/core-contracts';
+import type { Language, ListCell, ListColumn, ListInfo, ListOption, ListParameter } from '@forga/core-contracts';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 
 export interface ListContent {
@@ -11,6 +11,14 @@ export interface ListContent {
   subtitle?: string;
 }
 
+/**
+ * A parameter of a list template. `choice` parameters provide their choices (only what the user may see, filtered by
+ * the typed text); `person` parameters search the master data unless they provide their own.
+ */
+export type ListParameterDefinition = ListParameter & {
+  choices?: (user: AuthenticatedUser, query: string, language: Language) => Promise<ListOption[]>;
+};
+
 /** A list template a module offers. Rows must respect the user's permissions (e.g. departments). */
 export interface ListDefinition<P = Record<string, unknown>> {
   id: string;
@@ -18,7 +26,7 @@ export interface ListDefinition<P = Record<string, unknown>> {
   description?: ListInfo['description'];
   /** Needed in at least one department to see and run the list. */
   permission: string;
-  parameters?: ListParameter[];
+  parameters?: ListParameterDefinition[];
   /** Validates the query parameters (all values arrive as strings). */
   schema: z.ZodType<P>;
   columns: ListColumn[];
@@ -56,7 +64,8 @@ export function toInfo(module: string, definition: ListDefinition<never> | ListD
     module,
     name: definition.name,
     description: definition.description,
-    parameters: (definition.parameters ?? []).map((p) => ({ required: false, ...p })),
+    // The functions providing choices stay on the server.
+    parameters: (definition.parameters ?? []).map(({ choices: _choices, ...p }) => ({ required: false, ...p })),
     signatureColumn: definition.signatureColumn ?? false,
     orientation: definition.orientation ?? 'portrait',
     departments,

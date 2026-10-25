@@ -19,13 +19,22 @@ export interface Mail {
 @Injectable()
 export class MailService {
   readonly sent: Mail[] = [];
+  /** Memory transport only: sending fails with this `mail.*` code while set (tests of the error handling). */
+  failWith: string | null = null;
   private readonly logger = new Logger('Mail');
 
   constructor(private readonly settings: SettingsService) {}
 
+  /** Throws `mail.notConfigured` unless SMTP server and sender are set (also with the memory transport). */
+  async assertConfigured(): Promise<void> {
+    const smtp = await this.settings.get<SmtpSettings>('smtp');
+    if (!smtp?.host || !smtp.sender) throw new BadRequestException({ code: 'mail.notConfigured' });
+  }
+
   /** Throws `mail.notConfigured`, or a `mail.*` code with status 502 if the SMTP server refuses or cannot be reached. */
   async send(mail: Mail): Promise<void> {
     if (process.env.FORGA_MAIL_TRANSPORT === 'memory') {
+      if (this.failWith) throw new HttpException({ code: this.failWith }, HttpStatus.BAD_GATEWAY);
       this.sent.push(mail);
       return;
     }

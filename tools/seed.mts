@@ -459,7 +459,7 @@ async function careers(planned: PlannedPerson[], persons: PersonRef[]): Promise<
 
 /** One user per standard role; the department roles apply to Abteilung Musterstadt. */
 async function users(persons: PersonRef[], departments: Map<string, string>): Promise<void> {
-  const roles = await call<{ id: string; name: string; templateKey: string | null }[]>('GET', 'core/roles');
+  const roles = await call<{ id: string; name: { de: string; en: string }; templateKey: string | null }[]>('GET', 'core/roles');
   const existing = new Set((await call<{ username: string }[]>('GET', 'core/users')).map((u) => u.username));
   const departmentRoles = new Set(['department-commander', 'group-leader', 'member']);
   const musterstadt = departments.get('Abteilung Musterstadt')!;
@@ -478,7 +478,7 @@ async function users(persons: PersonRef[], departments: Map<string, string>): Pr
     taken.add(person.id);
     await call('POST', 'core/users', {
       username,
-      displayName: `${person.firstName} ${person.lastName} (${role.name})`,
+      displayName: `${person.firstName} ${person.lastName} (${role.name.de})`,
       email: null,
       personId: person.id,
       password: USER_PASSWORD,
@@ -487,7 +487,7 @@ async function users(persons: PersonRef[], departments: Map<string, string>): Pr
     created++;
   }
   console.log(`  ${created} Benutzer angelegt (Passwort: ${USER_PASSWORD})`);
-  for (const role of roles.filter((r) => r.templateKey)) console.log(`    ${role.templateKey!.padEnd(30)} ${role.name}`);
+  for (const role of roles.filter((r) => r.templateKey)) console.log(`    ${role.templateKey!.padEnd(30)} ${role.name.de}`);
 }
 
 /** Training sessions every second week per department this year; past ones with attendance, older ones closed. */

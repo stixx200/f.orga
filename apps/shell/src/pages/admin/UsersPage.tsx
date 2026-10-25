@@ -1,8 +1,8 @@
-import { ActionIcon, Button, Grid, Group, MultiSelect, PasswordInput, Select, Stack, Switch, Text, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Button, Grid, Group, MultiSelect, PasswordInput, Select, Stack, Switch, Table, Text, TextInput, Title } from '@mantine/core';
 import { IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
-import type { BulkUserInvitationResult, Role, User, UserInput } from '@forga/core-contracts';
-import { can, currentLanguage, formatDateTime, send, useSession, useTranslation } from '@forga/web-sdk';
+import type { BulkUserInvitationResult, LocalizedText, Role, User, UserInput } from '@forga/core-contracts';
+import { can, currentLanguage, formatDateTime, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, matchesSearch, notifySuccess, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { type DepartmentOption, personLabel, USERS_KEY, useDepartments, usePersons, useRoles, useUsers } from './data';
 
@@ -32,8 +32,9 @@ const toDraft = (user: User): Draft => ({
   password: '',
 });
 
-function assignmentLabel(roleId: string, departmentId: string | null, roles: Role[], departments: DepartmentOption[], brigade: string) {
-  const role = roles.find((r) => r.id === roleId)?.name ?? roleId;
+function assignmentLabel(roleId: string, departmentId: string | null, roles: Role[], departments: DepartmentOption[], brigade: string, localized: (text: LocalizedText) => string) {
+  const name = roles.find((r) => r.id === roleId)?.name;
+  const role = name ? localized(name) : roleId;
   const area = departmentId ? (departments.find((d) => d.id === departmentId)?.name ?? departmentId) : brigade;
   return `${role} (${area})`;
 }
@@ -41,11 +42,16 @@ function assignmentLabel(roleId: string, departmentId: string | null, roles: Rol
 function UserEditor({ user, onDone }: { user: User | null; onDone: (id: string | null) => void }) {
   const { t } = useTranslation('shell');
   const { t: common } = useTranslation('common');
+  const localized = useLocalized();
   const session = useSession().data;
   const { data: roles = [] } = useRoles();
   const { data: departments = [] } = useDepartments();
   const { data: persons = [] } = usePersons();
+  const { data: users = [] } = useUsers();
+  // A person belongs to at most one user: only persons without a user (and the own one) are offered.
+  const linkedElsewhere = new Set(users.flatMap((u) => (u.personId && u.id !== user?.id ? [u.personId] : [])));
   const [draft, setDraft] = useState<Draft>(() => (user ? toDraft(user) : emptyDraft()));
+  const isSelf = user?.id === session?.user.id;
   const [roleId, setRoleId] = useState<string | null>(null);
   const [departmentId, setDepartmentId] = useState<string>('');
   const [locking, setLocking] = useState(false);
@@ -74,7 +80,6 @@ function UserEditor({ user, onDone }: { user: User | null; onDone: (id: string |
   );
 
   const departmentOptions = [{ value: '', label: t('users.brigade') }, ...departments.map((d) => ({ value: d.id, label: d.name }))];
-  const isSelf = user?.id === session?.user.id;
 
   return (
     <Panel
@@ -94,12 +99,13 @@ function UserEditor({ user, onDone }: { user: User | null; onDone: (id: string |
           <Select
             label={t('users.person')}
             description={t('users.personHint')}
-            data={persons.map((p) => ({ value: p.id, label: personLabel(p) }))}
+            data={persons.filter((p) => !linkedElsewhere.has(p.id)).map((p) => ({ value: p.id, label: personLabel(p) }))}
             value={draft.personId}
             onChange={(value) => set('personId', value)}
             searchable
             clearable
-            disabled={!persons.length}
+            // Nobody changes the person of his own account (it opens that person's data).
+            disabled={!persons.length || isSelf}
           />
           <Select
             label={t('users.language')}
@@ -124,7 +130,7 @@ function UserEditor({ user, onDone }: { user: User | null; onDone: (id: string |
           {draft.roles.length === 0 && <Text size="sm" c="dimmed">{t('users.noRoles')}</Text>}
           {draft.roles.map((assignment, index) => (
             <Group key={`${assignment.roleId}-${assignment.departmentId}`} justify="space-between" wrap="nowrap">
-              <Text size="sm">{assignmentLabel(assignment.roleId, assignment.departmentId ?? null, roles, departments, t('users.brigade'))}</Text>
+              <Text size="sm">{assignmentLabel(assignment.roleId, assignment.departmentId ?? null, roles, departments, t('users.brigade'), localized)}</Text>
               <ActionIcon
                 aria-label={t('users.removeRole')}
                 onClick={() => set('roles', draft.roles.filter((_, i) => i !== index))}
@@ -134,7 +140,7 @@ function UserEditor({ user, onDone }: { user: User | null; onDone: (id: string |
             </Group>
           ))}
           <Group align="end" gap="xs" wrap="nowrap">
-            <Select label={t('users.role')} data={roles.map((r) => ({ value: r.id, label: r.name }))} value={roleId} onChange={setRoleId} style={{ flex: 1 }} />
+            <Select label={t('users.role')} data={roles.map((r) => ({ value: r.id, label: localized(r.name) }))} value={roleId} onChange={setRoleId} style={{ flex: 1 }} />
             <Select label={t('users.area')} data={departmentOptions} value={departmentId} onChange={(value) => setDepartmentId(value ?? '')} allowDeselect={false} style={{ flex: 1 }} />
           </Group>
           <Button
@@ -191,6 +197,7 @@ function UserEditor({ user, onDone }: { user: User | null; onDone: (id: string |
 /** Users with their roles; the editor opens next to the list. */
 export function UsersPage() {
   const { t, i18n } = useTranslation('shell');
+  const localized = useLocalized();
   const { data: users = [] } = useUsers();
   const { data: roles = [] } = useRoles();
   const { data: departments = [] } = useDepartments();
@@ -234,7 +241,7 @@ export function UsersPage() {
           <Stack gap="md">
             <Group grow align="end">
               <TextInput label={t('users.search')} placeholder={t('users.searchPlaceholder')} value={query} onChange={(e) => setQuery(e.currentTarget.value)} type="search" />
-              <Select label={t('users.role')} placeholder={t('users.allRoles')} data={roles.map((r) => ({ value: r.id, label: r.name }))} value={roleFilter} onChange={setRoleFilter} clearable />
+              <Select label={t('users.role')} placeholder={t('users.allRoles')} data={roles.map((r) => ({ value: r.id, label: localized(r.name) }))} value={roleFilter} onChange={setRoleFilter} clearable />
               <Select
                 label={t('users.status')}
                 data={[{ value: 'active', label: t('users.active') }, { value: 'locked', label: t('users.locked') }, { value: 'all', label: t('users.all') }]}
@@ -251,7 +258,7 @@ export function UsersPage() {
               columns={[
                 { key: 'username', header: t('users.username'), render: (u) => <Text fw={700} size="sm">{u.username}</Text> },
                 { key: 'person', header: t('users.personColumn'), render: (u) => (u.technical ? <Text size="sm" c="dimmed">{t('users.technical')}</Text> : (person(u.personId) ? personLabel(person(u.personId)!) : u.displayName)) },
-                { key: 'roles', header: t('users.roles'), render: (u) => u.roles.map((r) => assignmentLabel(r.roleId, r.departmentId, roles, departments, t('users.brigade'))).join(' · ') },
+                { key: 'roles', header: t('users.roles'), render: (u) => u.roles.map((r) => assignmentLabel(r.roleId, r.departmentId, roles, departments, t('users.brigade'), localized)).join(' · ') },
                 { key: 'lastLogin', header: t('users.lastLogin'), render: (u) => formatDateTime(u.lastLogin, i18n.language) },
                 {
                   key: 'status',
@@ -280,6 +287,8 @@ export function UsersPage() {
 function InviteDialog({ many, linked, onClose }: { many: boolean; linked: Set<string>; onClose: (createdId?: string) => void }) {
   const { t } = useTranslation('shell');
   const { t: common } = useTranslation('common');
+  const localized = useLocalized();
+  const [result, setResult] = useState<BulkUserInvitationResult | null>(null);
   const { data: roles = [] } = useRoles();
   const { data: departments = [] } = useDepartments();
   const { data: persons = [] } = usePersons();
@@ -297,12 +306,49 @@ function InviteDialog({ many, linked, onClose }: { many: boolean; linked: Set<st
   });
   const bulk = useAction(() => send<BulkUserInvitationResult>('POST', 'core/users/invitations/bulk', { personIds, ...body() }), {
     invalidate: [USERS_KEY],
-    onSuccess: (result) => {
-      notifySuccess(t('users.bulkResult', { invited: result.invited.length, skipped: result.skipped.length }));
-      onClose();
+    onSuccess: (outcome) => {
+      notifySuccess(t('users.bulkResult', { invited: outcome.invited.length, skipped: outcome.skipped.length }));
+      // Who was skipped and why stays visible until the dialog is closed.
+      if (outcome.skipped.length) setResult(outcome);
+      else onClose();
     },
   });
   const action = many ? bulk : one;
+  const name = (personId: string) => {
+    const person = persons.find((p) => p.id === personId);
+    return person ? personLabel(person) : personId;
+  };
+  if (result) {
+    return (
+      <ResponsiveDialog
+        opened
+        onClose={() => onClose()}
+        title={t('users.bulkResultTitle')}
+        actions={<Button onClick={() => onClose()}>{common('actions.close')}</Button>}
+      >
+        <Text size="sm">{t('users.bulkResult', { invited: result.invited.length, skipped: result.skipped.length })}</Text>
+        <Table>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>{t('users.personColumn')}</Table.Th>
+              <Table.Th>{t('users.skippedReason')}</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {result.skipped.map((s) => (
+              <Table.Tr key={s.personId}>
+                <Table.Td>{name(s.personId)}</Table.Td>
+                <Table.Td>
+                  {t(`users.skipped.${s.reason}`)}
+                  {s.code && <Text size="xs" c="dimmed">{common(`errors.${s.code}`)}</Text>}
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </ResponsiveDialog>
+    );
+  }
   return (
     <ResponsiveDialog
       opened
@@ -324,7 +370,7 @@ function InviteDialog({ many, linked, onClose }: { many: boolean; linked: Set<st
         <Select label={t('users.invitePerson')} data={options} value={personIds[0] ?? null} onChange={(value) => setPersonIds(value ? [value] : [])} searchable required />
       )}
       <Group grow align="end">
-        <Select label={t('users.roleOptional')} data={roles.map((r) => ({ value: r.id, label: r.name }))} value={roleId} onChange={setRoleId} clearable />
+        <Select label={t('users.roleOptional')} data={roles.map((r) => ({ value: r.id, label: localized(r.name) }))} value={roleId} onChange={setRoleId} clearable />
         <Select label={t('users.area')} data={[{ value: '', label: t('users.brigade') }, ...departments.map((d) => ({ value: d.id, label: d.name }))]} value={departmentId} onChange={(value) => setDepartmentId(value ?? '')} allowDeselect={false} />
       </Group>
     </ResponsiveDialog>

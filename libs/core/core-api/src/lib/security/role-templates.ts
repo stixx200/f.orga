@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { CORE_ROLE_TEMPLATES, type Language, type LocalizedText } from '@forga/core-contracts';
+import { CORE_ROLE_TEMPLATES, LANGUAGES, type LocalizedText } from '@forga/core-contracts';
 import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
 import { Role } from './security.entities.js';
 
@@ -11,6 +11,9 @@ export interface MergedRoleTemplate {
   permissions: string[];
   permissionsAllDepartments: string[];
 }
+
+/** The names of a role in all languages, in lower case, for the uniqueness check. */
+export const roleNames = (name: LocalizedText): string[] => [...new Set(LANGUAGES.map((language) => name[language].trim().toLowerCase()))];
 
 /** Standard roles of core and modules, merged by key. */
 @Injectable()
@@ -40,26 +43,26 @@ export class RoleTemplates {
   }
 
   /**
-   * Creates the roles of all templates that do not exist yet (by template key).
-   * Names are taken in the given language; a name already used by another role is skipped.
+   * Creates the roles of all templates that do not exist yet (by template key), with names and descriptions in all
+   * languages; a template whose name is already used by another role is skipped.
    */
-  async createMissing(em: EntityManager, language: Language): Promise<{ created: string[]; skipped: string[] }> {
+  async createMissing(em: EntityManager): Promise<{ created: string[]; skipped: string[] }> {
     const existing = await em.find(Role, {});
     const keys = new Set(existing.map((r) => r.templateKey).filter(Boolean));
-    const names = new Set(existing.map((r) => r.name.toLowerCase()));
+    const names = new Set(existing.flatMap((r) => roleNames(r.name)));
     const created: string[] = [];
     const skipped: string[] = [];
     for (const template of this.all) {
       if (keys.has(template.key)) continue;
-      const name = template.name[language];
-      if (names.has(name.toLowerCase())) {
+      if (roleNames(template.name).some((n) => names.has(n))) {
         skipped.push(template.key);
         continue;
       }
+      roleNames(template.name).forEach((n) => names.add(n));
       em.create(Role, {
-        name,
+        name: template.name,
         templateKey: template.key,
-        description: template.description?.[language] ?? '',
+        description: { de: template.description?.de ?? '', en: template.description?.en ?? '' },
         permissions: template.permissions,
         permissionsAllDepartments: template.permissionsAllDepartments,
       });

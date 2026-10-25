@@ -1,24 +1,30 @@
 import { Button, Grid, Group, NavLink, SegmentedControl, Stack, Switch, Table, Text, TextInput, Title } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { Permission, Role, RoleInput } from '@forga/core-contracts';
+import type { LocalizedText, Permission, Role } from '@forga/core-contracts';
 import { api, can, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, Notice, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
 import type { LoadedModule } from '../../modules';
 import { ROLES_KEY, useRoles, useUsers } from './data';
 
-type Draft = Required<RoleInput>;
+/** Name and description in both languages. */
+interface Draft {
+  name: LocalizedText;
+  description: Role['description'];
+  permissions: string[];
+  permissionsAllDepartments: string[];
+}
 type Area = 'none' | 'assigned' | 'all';
 
 const moduleOf = (permission: string) => permission.split('.')[0];
 
 function RoleEditor({ role, permissions, modules, onDone }: { role: Role | null; permissions: Permission[]; modules: LoadedModule[]; onDone: (id: string | null) => void }) {
-  const { t } = useTranslation('shell');
+  const { t, i18n } = useTranslation('shell');
   const { t: common } = useTranslation('common');
   const localized = useLocalized();
   const [draft, setDraft] = useState<Draft>(() => ({
-    name: role?.name ?? '',
-    description: role?.description ?? '',
+    name: role?.name ?? { de: '', en: '' },
+    description: role?.description ?? { de: '', en: '' },
     permissions: role?.permissions ?? [],
     permissionsAllDepartments: role?.permissionsAllDepartments ?? [],
   }));
@@ -79,7 +85,7 @@ function RoleEditor({ role, permissions, modules, onDone }: { role: Role | null;
   };
 
   return (
-    <Panel title={role ? t('roles.editTitle', { name: role.name }) : t('roles.new')}>
+    <Panel title={role ? t('roles.editTitle', { name: localized(role.name) }) : t('roles.new')}>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -88,8 +94,12 @@ function RoleEditor({ role, permissions, modules, onDone }: { role: Role | null;
       >
         <Stack gap="md">
           <Group grow align="start">
-            <TextInput label={t('roles.name')} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.currentTarget.value })} required />
-            <TextInput label={t('roles.description')} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.currentTarget.value })} />
+            <TextInput label={t('roles.nameDe')} value={draft.name.de} onChange={(e) => setDraft({ ...draft, name: { ...draft.name, de: e.currentTarget.value } })} required />
+            <TextInput label={t('roles.nameEn')} value={draft.name.en} onChange={(e) => setDraft({ ...draft, name: { ...draft.name, en: e.currentTarget.value } })} required />
+          </Group>
+          <Group grow align="start">
+            <TextInput label={t('roles.descriptionDe')} value={draft.description.de} onChange={(e) => setDraft({ ...draft, description: { ...draft.description, de: e.currentTarget.value } })} />
+            <TextInput label={t('roles.descriptionEn')} value={draft.description.en} onChange={(e) => setDraft({ ...draft, description: { ...draft.description, en: e.currentTarget.value } })} />
           </Group>
           <Switch label={t('roles.all')} checked={all} onChange={(e) => setDraft({ ...draft, permissions: e.currentTarget.checked ? ['*'] : [], permissionsAllDepartments: [] })} />
           {!all && <Text size="sm" c="dimmed">{t('roles.areasHint')}</Text>}
@@ -129,7 +139,16 @@ function RoleEditor({ role, permissions, modules, onDone }: { role: Role | null;
             )}
             {role && <Button variant="default" onClick={() => setDeleting(true)}>{common('actions.delete')}</Button>}
             {role && (
-              <Button variant="default" loading={copy.isPending} onClick={() => copy.mutate({ ...draft, name: t('roles.copyName', { name: draft.name }) })}>
+              <Button
+                variant="default"
+                loading={copy.isPending}
+                onClick={() =>
+                  copy.mutate({
+                    ...draft,
+                    name: { de: i18n.getFixedT('de', 'shell')('roles.copyName', { name: draft.name.de }), en: i18n.getFixedT('en', 'shell')('roles.copyName', { name: draft.name.en }) },
+                  })
+                }
+              >
                 {t('roles.copy')}
               </Button>
             )}
@@ -140,7 +159,7 @@ function RoleEditor({ role, permissions, modules, onDone }: { role: Role | null;
       <ConfirmDialog
         opened={deleting}
         onClose={() => setDeleting(false)}
-        title={t('roles.deleteTitle', { name: role?.name })}
+        title={t('roles.deleteTitle', { name: role ? localized(role.name) : '' })}
         description={t('roles.deleteText')}
         confirmLabel={common('actions.delete')}
         loading={remove.isPending}
@@ -156,6 +175,7 @@ function RoleEditor({ role, permissions, modules, onDone }: { role: Role | null;
 /** Roles with their permissions; the area (brigade or department) is chosen when assigning a role to a user. */
 export function RolesPage({ modules }: { modules: LoadedModule[] }) {
   const { t } = useTranslation('shell');
+  const localized = useLocalized();
   const session = useSession().data;
   const { data: roles = [] } = useRoles();
   const { data: users = [] } = useUsers(can(session, 'core.users.manage'));
@@ -167,7 +187,7 @@ export function RolesPage({ modules }: { modules: LoadedModule[] }) {
     success: t('roles.templatesCreated'),
   });
 
-  const sorted = roles.toSorted((a, b) => a.name.localeCompare(b.name));
+  const sorted = roles.toSorted((a, b) => localized(a.name).localeCompare(localized(b.name)));
   const current = selected && selected !== 'new' ? (roles.find((r) => r.id === selected) ?? null) : null;
   const missing = templates.filter((tpl) => !roles.some((r) => r.templateKey === tpl.key)).length;
   const count = (role: Role) => users.filter((u) => u.roles.some((r) => r.roleId === role.id)).length;
@@ -192,8 +212,8 @@ export function RolesPage({ modules }: { modules: LoadedModule[] }) {
                 key={role.id}
                 active={role.id === selected}
                 onClick={() => setSelected(role.id)}
-                label={<Text fw={700} size="sm">{role.name}</Text>}
-                description={role.description}
+                label={<Text fw={700} size="sm">{localized(role.name)}</Text>}
+                description={localized(role.description)}
                 rightSection={users.length ? <StatusBadge>{count(role)}</StatusBadge> : undefined}
               />
             ))}
