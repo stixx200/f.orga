@@ -16,6 +16,7 @@ export function taskLink(deadline: Deadline): string | undefined {
   if (deadline.subject.type === 'masterdata.person') return `/masterdata/persons/${deadline.subject.id}`;
   if (deadline.subject.type === 'incidents.report') return `/incidents/reports/${deadline.subject.id}`;
   if (deadline.subject.type === 'core.me') return '/me';
+  if (deadline.subject.type === 'cost-recovery.notice') return `/cost-recovery/notices/${deadline.subject.id}`;
   return undefined;
 }
 

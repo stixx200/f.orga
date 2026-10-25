@@ -1,5 +1,5 @@
-import { VOKEFW_VEHICLE_RATES } from './cost-recovery.js';
-import { billableHours, missingReasons, totalOf, vehicleRateOn } from './calculation.js';
+import { BW_TEMPLATE, CostRecoverySettings, missingConfiguration, VOKEFW_VEHICLE_RATES } from './cost-recovery.js';
+import { billableHours, cleanLocation, missingReasons, paidOf, totalOf, vehicleRateOn } from './calculation.js';
 
 const t = (minutes: number) => new Date(Date.UTC(2026, 0, 1, 10, minutes)).toISOString();
 
@@ -19,10 +19,31 @@ describe('cost recovery calculation', () => {
     expect(vehicleRateOn(VOKEFW_VEHICLE_RATES, 'mzb', '2026-01-01')).toBeNull();
   });
 
-  it('needs a reason for changed amounts', () => {
-    const base = { kind: 'vehicle' as const, label: 'LF 20', quantity: 2, unit: 'h', rate: 205, category: 'lf-20', vehicleId: null };
+  it('needs a reason for changed amounts, also for positions added by hand', () => {
+    const base = { kind: 'vehicle' as const, label: 'LF 20', quantity: 2, unit: 'h', rate: 205, category: 'lf-20', vehicleId: null, persons: null, hoursEach: null };
     expect(missingReasons([{ ...base, amount: 410, computedAmount: 410, reason: '' }])).toHaveLength(0);
     expect(missingReasons([{ ...base, amount: 300, computedAmount: 410, reason: '' }])).toHaveLength(1);
+    // By hand: the amount has to be quantity × rate unless a reason is given.
+    const manual = { ...base, kind: 'material' as const, quantity: 3, rate: 18.5, computedAmount: null };
+    expect(missingReasons([{ ...manual, amount: 55.5, reason: '' }])).toHaveLength(0);
+    expect(missingReasons([{ ...manual, amount: 100, reason: '' }])).toHaveLength(1);
+    expect(missingReasons([{ ...manual, amount: 100, reason: 'Entsorgung inklusive' }])).toHaveLength(0);
     expect(totalOf([{ amount: 10.1 }, { amount: 0.2 }])).toBe(10.3);
+  });
+
+  it('sums payments without the reversed ones', () => {
+    expect(paidOf([{ amount: 100, reversal: null }, { amount: 50.5, reversal: null }, { amount: 30, reversal: { date: '2026-01-01', reason: 'Fehlbuchung', by: 'Admin' } }])).toBe(150.5);
+  });
+
+  it('removes repeated parts of the location', () => {
+    expect(cleanLocation('Hauptstraße 1, 12345 Musterstadt, Musterstadt')).toBe('Hauptstraße 1, 12345 Musterstadt');
+    expect(cleanLocation('Hauptstraße 1, 12345 Musterstadt, Ahornfeld')).toBe('Hauptstraße 1, 12345 Musterstadt, Ahornfeld');
+  });
+
+  it('starts without state-specific values and names what is missing', () => {
+    const empty = CostRecoverySettings.parse({});
+    expect(empty).toMatchObject({ offenses: [], vehicleRates: [], defaultLegalBasis: '', regulation: '', remedy: '' });
+    expect(missingConfiguration(empty)).toEqual(['offenses', 'defaultLegalBasis', 'regulation', 'remedy']);
+    expect(missingConfiguration(CostRecoverySettings.parse(BW_TEMPLATE))).toEqual([]);
   });
 });

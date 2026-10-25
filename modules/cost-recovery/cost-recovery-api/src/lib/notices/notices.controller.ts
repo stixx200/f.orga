@@ -1,11 +1,25 @@
 import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Put, Query, Res } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import type { Response } from 'express';
-import ExcelJS from 'exceljs';
 import { z } from 'zod';
-import { addStyledSheet, type AuthenticatedUser, berlinDate, CurrentUser, RequirePermissions, ZodPipe } from '@forga/core-api';
-import { type AddressBookEntry, AddressBookInput, type Candidate, CancellationInput, type CostRecoverySettings, type HandoverColumn, type Notice, type NoticeIncident, NoticeInput, ObjectionInput, PaymentInput, totalOf } from '@forga/cost-recovery-contracts';
-import { AddressBookEntity, NoticeEntity } from '../cost-recovery.entities.js';
+import { type AuthenticatedUser, berlinDate, CurrentUser, RequirePermissions, ZodPipe } from '@forga/core-api';
+import {
+  type AddressBookEntry,
+  AddressBookInput,
+  type Candidate,
+  CancellationInput,
+  DiscardInput,
+  type IncidentNotice,
+  type Notice,
+  NoticeFilter,
+  type NoticeIncident,
+  NoticeInput,
+  ObjectionInput,
+  PaymentInput,
+  PaymentReversalInput,
+} from '@forga/cost-recovery-contracts';
+import { AddressBookEntity } from '../cost-recovery.entities.js';
+import { type HandoverFile, TreasuryHandover } from './handover.js';
 import { NoticesService, toNoticeDto } from './notices.service.js';
 
 type Parsed<T extends z.ZodType> = z.infer<T>;
@@ -13,30 +27,23 @@ const READ = 'cost-recovery.read';
 const WRITE = 'cost-recovery.write';
 const ISSUE = 'cost-recovery.issue';
 const Create = z.object({ incidentId: z.uuid() });
+const OffenseChoice = z.object({ offenseKey: z.string().min(1).nullable() });
 
 const toEntry = (e: AddressBookEntity): AddressBookEntry => ({ id: e.id, name: e.name, street: e.street, postalCode: e.postalCode, city: e.city, role: e.role, notes: e.notes, version: e.version });
 
-/** CSV cell for German spreadsheet programs: decimal comma, quoted when needed. */
-const OffenseChoice = z.object({ offenseKey: z.string().min(1).nullable() });
-
-const csvCell = (v: string | number) => (typeof v === 'number' ? v.toFixed(2).replace('.', ',') : /[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-
-const HANDOVER_COLUMNS: Record<HandoverColumn, { label: string; width: number; value: (n: NoticeEntity, config: CostRecoverySettings) => string | number }> = {
-  number: { label: 'Aktenzeichen', width: 16, value: (n) => n.number },
-  cashReference: { label: 'Kassenzeichen', width: 16, value: (n) => n.cashReference },
-  debtors: { label: 'Kostenschuldner', width: 30, value: (n) => n.debtors.map((d) => d.name).join('; ') },
-  address: { label: 'Anschrift', width: 40, value: (n) => n.debtors.map((d) => [d.street, `${d.postalCode} ${d.city}`.trim()].filter(Boolean).join(', ')).join('; ') },
-  amount: { label: 'Betrag (€)', width: 12, value: (n) => totalOf(n.positions) },
-  dueOn: { label: 'Fällig am', width: 12, value: (n) => n.dueOn ?? '' },
-  issuedOn: { label: 'Erlassen am', width: 12, value: (n) => (n.issuedAt ? berlinDate(n.issuedAt) : '') },
-  budgetAccount: { label: 'Haushaltsstelle', width: 16, value: (_n, config) => config.budgetAccount },
-  incident: { label: 'Einsatz', width: 22, value: (n) => `${n.dispatchNumber} ${n.alarmKeyword}` },
+const sendFile = (res: Response, file: HandoverFile) => {
+  res.setHeader('Content-Type', file.contentType);
+  res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+  res.setHeader('X-Handed-Over', String(file.handedOver));
+  res.setHeader('X-Changes', String(file.changes));
+  res.send(file.body);
 };
 
 @Controller('cost-recovery')
 export class NoticesController {
   constructor(
     private readonly notices: NoticesService,
+    private readonly handover: TreasuryHandover,
     private readonly em: EntityManager,
   ) {}
 
@@ -48,10 +55,11 @@ export class NoticesController {
     return this.notices.candidates(from ?? `${Number(year) - 1}-01-01`, to ?? `${year}-12-31`);
   }
 
+  /** Notices of the filter: `status`, `year`, `q` (file number, debtor, dispatch number, cash reference), `overdue=true`. */
   @Get('notices')
   @RequirePermissions(READ)
-  list(@Query('status') status?: string, @Query('year') year?: string): Promise<Notice[]> {
-    return this.notices.list({ status, year: year ? Number(year) : undefined });
+  list(@Query(new ZodPipe(NoticeFilter)) filter: Parsed<typeof NoticeFilter>): Promise<Notice[]> {
+    return this.notices.list(filter);
   }
 
   @Post('notices')
@@ -89,8 +97,8 @@ export class NoticesController {
   @Post('notices/:id/submit')
   @HttpCode(200)
   @RequirePermissions(WRITE)
-  submit(@Param('id') id: string): Promise<Notice> {
-    return this.notices.submit(id);
+  submit(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Notice> {
+    return this.notices.submit(user, id);
   }
 
   @Post('notices/:id/return')
@@ -121,11 +129,36 @@ export class NoticesController {
     return this.notices.amend(id);
   }
 
-  @Post('notices/:id/paid')
+  /** A payment received, also partial (`{ date, amount, note }`). */
+  @Post('notices/:id/payments')
   @HttpCode(200)
   @RequirePermissions(WRITE)
-  paid(@Param('id') id: string, @Body(new ZodPipe(PaymentInput)) input: Parsed<typeof PaymentInput>): Promise<Notice> {
-    return this.notices.markPaid(id, input.paidOn);
+  pay(@Param('id') id: string, @Body(new ZodPipe(PaymentInput)) input: Parsed<typeof PaymentInput>, @CurrentUser() user: AuthenticatedUser): Promise<Notice> {
+    return this.notices.addPayment(user, id, input);
+  }
+
+  @Post('notices/:id/payments/:paymentId/reverse')
+  @HttpCode(200)
+  @RequirePermissions(WRITE)
+  reverse(@Param('id') id: string, @Param('paymentId') paymentId: string, @Body(new ZodPipe(PaymentReversalInput)) input: Parsed<typeof PaymentReversalInput>, @CurrentUser() user: AuthenticatedUser): Promise<Notice> {
+    return this.notices.reversePayment(user, id, paymentId, input.reason);
+  }
+
+  /** Records a payment reminder for an overdue notice; the letter is `GET …/reminders/:index/pdf`. */
+  @Post('notices/:id/reminders')
+  @HttpCode(200)
+  @RequirePermissions(WRITE)
+  remind(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Notice> {
+    return this.notices.remind(user, id);
+  }
+
+  @Get('notices/:id/reminders/:index/pdf')
+  @RequirePermissions(READ)
+  async reminderPdf(@Param('id') id: string, @Param('index') index: string, @Res() res: Response): Promise<void> {
+    const { number, data } = await this.notices.reminderPdf(id, Number(index));
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="Zahlungserinnerung_${number}.pdf"`);
+    res.send(data);
   }
 
   @Post('notices/:id/objection')
@@ -135,6 +168,15 @@ export class NoticesController {
     return this.notices.objection(id, input);
   }
 
+  /** Discards a draft or a notice in review (never issued). */
+  @Post('notices/:id/discard')
+  @HttpCode(200)
+  @RequirePermissions(WRITE)
+  discard(@Param('id') id: string, @Body(new ZodPipe(DiscardInput)) input: Parsed<typeof DiscardInput>): Promise<Notice> {
+    return this.notices.discard(id, input.reason);
+  }
+
+  /** Lifts an issued notice (Aufhebung). */
   @Post('notices/:id/cancel')
   @HttpCode(200)
   @RequirePermissions(ISSUE)
@@ -153,32 +195,24 @@ export class NoticesController {
   }
 
   /**
-   * Handover to the treasury (Sollstellung) in the format of the settings: columns and Excel or CSV
-   * (issued notices, or the given ones).
+   * Handover file for the treasury (Sollstellung) in the format of the settings, for the filter of the list (or `ids`).
+   * Without status: the issued notices not handed over yet and the cancellations not yet reported. Marks nothing.
    */
   @Get('export')
   @RequirePermissions(READ)
-  async export(@Query('ids') ids: string | undefined, @Res() res: Response): Promise<void> {
-    const config = await this.notices.config();
-    const where = ids ? { id: { $in: ids.split(',') } } : { status: 'issued' as const };
-    const notices = await this.em.fork().find(NoticeEntity, where, { orderBy: { number: 'asc' } });
-    const columns = config.handover.columns.map((c) => HANDOVER_COLUMNS[c]);
-    const rows = notices.map((n) => columns.map((c) => c.value(n, config)));
-    if (config.handover.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', 'attachment; filename="Kostenersatz_Sollstellung.csv"');
-      res.send(`\uFEFF${[columns.map((c) => c.label), ...rows].map((r) => r.map(csvCell).join(';')).join('\r\n')}\r\n`);
-      return;
-    }
-    const wb = new ExcelJS.Workbook();
-    wb.creator = 'f.orga';
-    addStyledSheet(wb, 'Sollstellung', 'Kostenbescheide – Übergabe an die Kämmerei', `${config.authority} · ${berlinDate()}`, columns.map((c) => c.label), rows, columns.map((c) => c.width));
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="Kostenersatz_Sollstellung.xlsx"');
-    res.send(Buffer.from(await wb.xlsx.writeBuffer()));
+  async export(@Query(new ZodPipe(NoticeFilter)) filter: Parsed<typeof NoticeFilter>, @Res() res: Response): Promise<void> {
+    sendFile(res, await this.handover.export(filter, false));
   }
 
-  // ----- Legal ground from the incident report -----
+  /** The same file, and the notices in it count as handed over (one step), so the next handover does not repeat them. */
+  @Post('export/hand-over')
+  @HttpCode(200)
+  @RequirePermissions(WRITE)
+  async exportAndHandOver(@Query(new ZodPipe(NoticeFilter)) filter: Parsed<typeof NoticeFilter>, @Res() res: Response): Promise<void> {
+    sendFile(res, await this.handover.export(filter, true));
+  }
+
+  // ----- Incident page -----
 
   /** Readable for everyone who reads the incident; the card on the incident shows it. */
   @Get('incidents/:incidentId/offense')
@@ -191,6 +225,13 @@ export class NoticesController {
     // Like the costs of the incident: the commander, or whoever edits cost notices.
     if (!['incidents.costs', 'cost-recovery.write'].some((p) => user.can(p))) throw new ForbiddenException({ code: 'auth.forbidden', permissions: ['incidents.costs'] });
     return { offenseKey: await this.notices.setOffense(user, incidentId, input.offenseKey) };
+  }
+
+  /** Notices of the incident with status, for the card on the incident. */
+  @Get('incidents/:incidentId/notices')
+  @RequirePermissions(READ)
+  ofIncident(@Param('incidentId') incidentId: string): Promise<IncidentNotice[]> {
+    return this.notices.ofIncident(incidentId);
   }
 
   // ----- Address book -----

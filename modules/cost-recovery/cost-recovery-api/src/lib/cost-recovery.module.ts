@@ -1,17 +1,19 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
-import { defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry } from '@forga/core-api';
+import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
 import { COST_RECOVERY_MANIFEST, COST_RECOVERY_SETTINGS } from '@forga/cost-recovery-contracts';
 import { EntityManager, wrap } from '@mikro-orm/core';
 import { COST_RECOVERY_MIGRATIONS } from '../migrations/index.js';
 import { AddressBookEntity, IncidentOffenseEntity, NoticeEntity } from './cost-recovery.entities.js';
 import { PaymentsImport } from './imports/payments.import.js';
 import { CostRecoveryLists } from './lists/cost-recovery.lists.js';
+import { TreasuryHandover } from './notices/handover.js';
 import { NoticesController } from './notices/notices.controller.js';
 import { NoticesService } from './notices/notices.service.js';
+import { OverdueNotices } from './notices/overdue.deadlines.js';
 
 @Module({
   controllers: [NoticesController],
-  providers: [NoticesService, CostRecoveryLists, PaymentsImport],
+  providers: [NoticesService, TreasuryHandover, OverdueNotices, CostRecoveryLists, PaymentsImport],
 })
 export class CostRecoveryModule implements OnModuleInit {
   constructor(
@@ -22,6 +24,10 @@ export class CostRecoveryModule implements OnModuleInit {
     private readonly historyAccess: HistoryAccessRegistry,
     private readonly imports: ImportRegistry,
     private readonly payments: PaymentsImport,
+    private readonly search: SearchRegistry,
+    private readonly notices: NoticesService,
+    private readonly deadlines: DeadlineRegistry,
+    private readonly overdue: OverdueNotices,
   ) {}
 
   onModuleInit(): void {
@@ -30,6 +36,8 @@ export class CostRecoveryModule implements OnModuleInit {
     this.imports.register('cost-recovery', this.payments.profile());
     this.historyAccess.registerPermission('cost_recovery.address_book', 'cost-recovery.write');
     this.historyAccess.registerPermission('cost_recovery.incident_offense', 'cost-recovery.read');
+    this.search.register('cost-recovery', (user, query) => this.notices.search(user, query));
+    this.deadlines.register(this.overdue);
     this.exports.register('cost-recovery', {
       all: async () => {
         const em = this.em.fork();
