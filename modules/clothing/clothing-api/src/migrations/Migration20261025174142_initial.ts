@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261025154305_initial extends Migration {
+export class Migration20261025174142_initial extends Migration {
 
-  override name = 'Migration20261025154305_initial';
+  override name = 'Migration20261025174142_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"clothing\";");
@@ -17,7 +17,7 @@ export class Migration20261025154305_initial extends Migration {
     this.addSql("create index \"item_holder_id_index\" on \"clothing\".\"item\" (\"holder_id\");");
     this.addSql("create table \"clothing\".\"inspection\" (\"id\" uuid not null, \"item_id\" uuid not null, \"date\" varchar(10) not null, \"passed\" boolean not null, \"inspector\" varchar(255) not null default '', \"notes\" text not null default '', \"recorded_by\" varchar(255) not null, \"recorded_by_id\" varchar(255) null, \"cancelled_at\" timestamptz null, \"cancelled_by\" varchar(255) null, \"cancel_reason\" text not null default '', primary key (\"id\"));");
     this.addSql("create table \"clothing\".\"care\" (\"id\" uuid not null, \"item_id\" uuid not null, \"kind\" varchar(255) not null, \"date\" varchar(10) not null, \"place\" varchar(255) not null default '', \"notes\" text not null default '', \"recorded_by\" varchar(255) not null, \"recorded_by_id\" varchar(255) null, \"cancelled_at\" timestamptz null, \"cancelled_by\" varchar(255) null, \"cancel_reason\" text not null default '', primary key (\"id\"));");
-    this.addSql("create table \"clothing\".\"consumable_receipt\" (\"id\" uuid not null, \"article_key\" varchar(255) not null, \"size\" varchar(255) not null default '', \"quantity\" int not null, \"date\" varchar(10) not null, \"notes\" text not null default '', \"recorded_by\" varchar(255) not null, \"recorded_at\" timestamptz not null, primary key (\"id\"));");
+    this.addSql("create table \"clothing\".\"consumable_receipt\" (\"id\" uuid not null, \"article_key\" varchar(255) not null, \"size\" varchar(255) not null default '', \"quantity\" int not null, \"counted\" int null, \"date\" varchar(10) not null, \"notes\" text not null default '', \"recorded_by\" varchar(255) not null, \"recorded_at\" timestamptz not null, primary key (\"id\"));");
     this.addSql("create index \"consumable_receipt_article_key_index\" on \"clothing\".\"consumable_receipt\" (\"article_key\");");
     this.addSql("create table \"clothing\".\"issue\" (\"id\" uuid not null, \"person_id\" varchar(255) not null, \"kind\" varchar(255) not null, \"article_key\" varchar(255) not null, \"item_id\" varchar(255) null, \"inventory_number\" varchar(255) null, \"size\" varchar(255) not null default '', \"quantity\" int not null default 1, \"date\" varchar(10) not null, \"notes\" text not null default '', \"retire\" boolean not null default false, \"laundry\" boolean not null default false, \"recorded_by\" varchar(255) not null, \"recorded_by_id\" varchar(255) null, \"cancelled_at\" timestamptz null, \"cancelled_by\" varchar(255) null, \"cancel_reason\" text not null default '', \"recorded_at\" timestamptz not null, primary key (\"id\"));");
     this.addSql("create index \"issue_person_id_index\" on \"clothing\".\"issue\" (\"person_id\");");

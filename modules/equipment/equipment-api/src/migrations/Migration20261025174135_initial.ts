@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261025154258_initial extends Migration {
+export class Migration20261025174135_initial extends Migration {
 
-  override name = 'Migration20261025154258_initial';
+  override name = 'Migration20261025174135_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"equipment\";");
@@ -16,11 +16,12 @@ export class Migration20261025154258_initial extends Migration {
     this.addSql("create index \"item_department_id_index\" on \"equipment\".\"item\" (\"department_id\");");
     this.addSql("create index \"item_vehicle_id_index\" on \"equipment\".\"item\" (\"vehicle_id\");");
     this.addSql("alter table \"equipment\".\"item\" add constraint \"item_for_vehicle_id_unique\" unique (\"for_vehicle_id\");");
-    this.addSql("create table \"equipment\".\"defect\" (\"id\" uuid not null, \"item_id\" uuid not null, \"description\" text not null, \"status\" varchar(255) not null default 'reported', \"resolution\" text not null default '', \"reported_by\" varchar(255) not null, \"reported_by_user_id\" varchar(255) null, \"reported_at\" timestamptz not null, \"resolved_at\" timestamptz null, \"version\" int not null default 1, primary key (\"id\"));");
+    this.addSql("create table \"equipment\".\"defect\" (\"id\" uuid not null, \"item_id\" uuid not null, \"description\" text not null, \"inspection_id\" varchar(255) null, \"finding_name\" jsonb null, \"finding_result\" varchar(255) null, \"status\" varchar(255) not null default 'reported', \"resolution\" text not null default '', \"reported_by\" varchar(255) not null, \"reported_by_user_id\" varchar(255) null, \"reported_at\" timestamptz not null, \"resolved_at\" timestamptz null, \"version\" int not null default 1, primary key (\"id\"));");
+    this.addSql("create index \"defect_inspection_id_index\" on \"equipment\".\"defect\" (\"inspection_id\");");
     this.addSql("create index \"defect_reported_by_user_id_index\" on \"equipment\".\"defect\" (\"reported_by_user_id\");");
     this.addSql("create table \"equipment\".\"equipment_type\" (\"id\" uuid not null, \"key\" varchar(255) not null, \"name\" jsonb not null, \"category_key\" varchar(255) not null, \"manufacturer\" varchar(255) not null default '', \"model\" varchar(255) not null default '', \"inspections\" jsonb not null default '[]', \"properties\" jsonb not null default '[]', \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"equipment\".\"equipment_type\" add constraint \"equipment_type_key_unique\" unique (\"key\");");
-    this.addSql("create table \"equipment\".\"inspection\" (\"id\" uuid not null, \"item_id\" uuid not null, \"inspection_key\" varchar(255) not null, \"date\" varchar(10) not null, \"inspector_person_id\" varchar(255) null, \"inspector_company\" varchar(255) not null default '', \"result\" varchar(255) not null, \"checklist\" jsonb not null default '[]', \"measurements\" text not null default '', \"next_due_on\" varchar(10) null, \"notes\" text not null default '', \"recorded_by\" varchar(255) not null, \"qualification_warning\" boolean not null default false, \"cancelled\" boolean not null default false, \"change_reason\" text not null default '', primary key (\"id\"));");
+    this.addSql("create table \"equipment\".\"inspection\" (\"id\" uuid not null, \"item_id\" uuid not null, \"inspection_key\" varchar(255) not null, \"date\" varchar(10) not null, \"inspector_person_id\" varchar(255) null, \"inspector_company\" varchar(255) not null default '', \"result\" varchar(255) not null, \"checklist\" jsonb not null default '[]', \"measurements\" text not null default '', \"next_due_on\" varchar(10) null, \"notes\" text not null default '', \"recorded_by\" varchar(255) not null, \"qualification_warning\" boolean not null default false, \"cancelled\" boolean not null default false, \"change_reason\" text not null default '', \"cleared_trigger\" varchar(10) null, primary key (\"id\"));");
     this.addSql("create index \"inspection_date_index\" on \"equipment\".\"inspection\" (\"date\");");
     this.addSql("create table \"equipment\".\"usage\" (\"id\" uuid not null, \"report_id\" varchar(255) not null, \"source\" varchar(255) not null default 'incidents', \"item_id\" uuid not null, \"quantity\" int not null default 1, \"inspect_after\" boolean not null default false, primary key (\"id\"));");
     this.addSql("create index \"usage_report_id_index\" on \"equipment\".\"usage\" (\"report_id\");");

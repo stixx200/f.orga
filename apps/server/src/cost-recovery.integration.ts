@@ -362,7 +362,7 @@ describe('cost recovery', () => {
     const incident = (await post('/incidents/incidents', { dispatchNumber: '2026-780', alarmKeyword: 'B-BMA', alarmedAt: T('16:00'), departmentIds: [ids.musterstadt] }).expect(201)).body;
     ids.fourEyesReport = incident.reports[0].id;
     await put(`/incidents/reports/${ids.fourEyesReport}`, {
-      version: incident.reports[0].version,
+      version: (await get(`/incidents/reports/${ids.fourEyesReport}`).expect(200)).body.version,
       times: { alarmedAt: T('16:00'), departedAt: T('16:04'), returnedAt: T('16:50') },
       situation: 'BMA', actions: 'Erkundung', incidentCommander: 'Jonas Test',
       personnel: [{ guestName: 'Gast Nachbarwehr', vehicleId: ids.lf }],

@@ -420,7 +420,7 @@ describe('compensation', () => {
 
   it('pays training only for the statuses of the statute, a guest for the primary department', async () => {
     const person = async (firstName: string, status: string, departmentId: string) =>
-      (await post('/masterdata/persons', { firstName, lastName: 'Test', status, birthDate: status === 'youth' ? '2012-01-01' : '1990-01-01', memberships: [{ departmentId, from: '2020-01-01', primary: true }] }).expect(201)).body.id as string;
+      (await post('/masterdata/persons', { firstName, lastName: 'Test', status, birthDate: status === 'youth' ? '2012-01-01' : '1990-01-01', memberships: [{ departmentId, from: '2024-01-01', primary: true }] }).expect(201)).body.id as string;
     const youth = (await post('/masterdata/departments', { name: 'Jugendfeuerwehr Musterstadt', shortName: 'JF', type: 'youth' }).expect(201)).body.id as string;
     const tim = await person('Tim', 'youth', youth);
     const gina = await person('Gina', 'active', ids.ahornfeld);

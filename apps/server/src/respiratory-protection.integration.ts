@@ -40,7 +40,8 @@ beforeAll(async () => {
   ids.max = await person('Max', ids.musterstadt, '1990-07-15', false);
   ids.lena = await person('Lena', ids.ahornfeld, '1970-01-20');
   // A veteran with the qualification does not count as wearer.
-  ids.vera = (await post('/masterdata/persons', { firstName: 'Vera', lastName: 'Test', status: 'veterans', birthDate: '1960-05-05', memberships: [{ departmentId: ids.musterstadt, from: '2000-01-01', primary: true }] }).expect(201)).body.id;
+  const veterans = (await post('/masterdata/departments', { name: 'Altersabteilung Musterstadt', shortName: 'Alters Musterstadt', type: 'veterans', parentId: ids.musterstadt }).expect(201)).body.id;
+  ids.vera = (await post('/masterdata/persons', { firstName: 'Vera', lastName: 'Test', status: 'veterans', birthDate: '1960-05-05', memberships: [{ departmentId: veterans, from: '2000-01-01', primary: true }] }).expect(201)).body.id;
   await post(`/masterdata/persons/${ids.vera}/qualifications`, { qualification: 'breathing-apparatus', acquiredOn: '2000-06-01' }).expect(201);
 
   const roles = (await get('/core/roles')).body as { id: string; templateKey: string }[];
