@@ -771,6 +771,13 @@ describe('review fixes', () => {
     expect(valueOf(reopened, 'F28:D')).toBeGreaterThan(1);
   });
 
+  it('offers the crew of the vehicle from the last incident of the department', async () => {
+    const incident = (await post('/incidents/incidents', { dispatchNumber: '2026-900008', alarmKeyword: 'B1', alarmedAt: '2026-09-16T08:00:00+02:00', departmentIds: [ids.musterstadt] }).expect(201)).body;
+    const crew = (await get(`/incidents/reports/${incident.reports[0].id}/previous-crew?vehicleId=${ids.lf}`, writer).expect(200)).body;
+    expect(crew).toMatchObject({ alarmedAt: expect.stringContaining('2026-09-15'), personnel: expect.arrayContaining([{ personId: ids.max, function: null }]) });
+    expect((await get(`/incidents/reports/${incident.reports[0].id}/previous-crew?vehicleId=${ids.tsf}`, writer).expect(200)).body.personnel).toEqual([]);
+  });
+
   it('starts without compensation rates; the example rates are a template', async () => {
     expect((await get('/core/settings/incidents.general').expect(200)).body.rates).toEqual([]);
   });

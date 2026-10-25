@@ -416,6 +416,15 @@ export const RemindResult = z.object({
 });
 export type RemindResult = z.infer<typeof RemindResult>;
 
+/** Crew of a vehicle in the latest earlier report of the same department, to take it over into a new report. */
+export const PreviousCrew = z.object({
+  reportId: z.uuid().nullable(),
+  dispatchNumber: z.string().nullable(),
+  alarmedAt: z.string().nullable(),
+  personnel: z.array(z.object({ personId: z.uuid(), function: z.string().nullable() })),
+});
+export type PreviousCrew = z.infer<typeof PreviousCrew>;
+
 /** "My area": own assignments of a year (only the person linked to the user). */
 export const MyIncidents = z.object({
   year: z.number().int(),

@@ -3,7 +3,7 @@ import { type ReactNode, useState } from 'react';
 import type { Report } from '@forga/incidents-contracts';
 import { can, formatMoney, send, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, Panel, useAction } from '@forga/web-ui';
-import { keys, RELEASE, UNLOCK, useNames, useSettings } from './api';
+import { keys, RELEASE, REVIEW, UNLOCK, useNames, useSettings } from './api';
 
 /** Long labels wrap in narrow panels instead of being cut off. */
 const WRAP = { root: { height: 'auto', minHeight: 36, paddingBlock: 8 }, label: { whiteSpace: 'normal' as const } };
@@ -20,10 +20,13 @@ export function WorkflowActions({ report, onDone, framed }: { report: Report; on
   const names = useNames();
   const { data: settings } = useSettings();
   const [dialog, setDialog] = useState<Dialog>(null);
-  const [toStatus, setToStatus] = useState<'review' | 'draft'>('review');
+  // A locked draft was never submitted: it can only go back to the author.
+  const [toStatus, setToStatus] = useState<'review' | 'draft'>(report.status === 'draft' ? 'draft' : 'review');
   const twoSteps = settings?.compensationRelease ?? true;
   const mayRelease = can(session, RELEASE, report.departmentId);
   const mayUnlock = can(session, UNLOCK, report.departmentId);
+  // Department commanders pre-review: they return reports of their department, but do not release.
+  const mayReturn = mayRelease || can(session, REVIEW, report.departmentId);
   const invalidate = [keys.report(report.id), keys.incidents];
   const done = () => {
     setDialog(null);
@@ -54,8 +57,10 @@ export function WorkflowActions({ report, onDone, framed }: { report: Report; on
       <Button key="release" size="md" disabled={errors > 0} styles={WRAP} onClick={() => setDialog(twoSteps ? 'compensation' : 'billing')}>
         {t(twoSteps ? 'workflow.releaseCompensation' : 'workflow.releaseBilling')}
       </Button>,
-      <Button key="return" variant="default" onClick={() => setDialog('return')}>{t('workflow.return')}</Button>,
     );
+  }
+  if (mayReturn && report.status === 'review') {
+    buttons.push(<Button key="return" variant="default" onClick={() => setDialog('return')}>{t('workflow.return')}</Button>);
   }
   if (mayRelease && report.status === 'released-compensation') {
     buttons.push(<Button key="billing" variant="outline" onClick={() => setDialog('billing')}>{t('workflow.releaseBilling')}</Button>);
@@ -108,7 +113,7 @@ export function WorkflowActions({ report, onDone, framed }: { report: Report; on
         >
           <Radio.Group label={t('workflow.unlockTo')} value={toStatus} onChange={(v) => setToStatus(v as 'review' | 'draft')} my="sm">
             <Stack gap={6} mt={4}>
-              <Radio value="review" label={t('workflow.unlockToReview')} />
+              <Radio value="review" label={t('workflow.unlockToReview')} disabled={report.status === 'draft'} />
               <Radio value="draft" label={t('workflow.unlockToDraft')} />
             </Stack>
           </Radio.Group>

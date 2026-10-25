@@ -1,14 +1,19 @@
-import { Button, Group, MultiSelect, Select, SimpleGrid, Stack, TextInput } from '@mantine/core';
+import { Button, Group, MultiSelect, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import type { Incident } from '@forga/incidents-contracts';
-import { can, fromLocalInput, send, toLocalInput, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { ResponsiveDialog, useAction } from '@forga/web-ui';
-import { keys, RELEASE, useDepartments, useKeywords, WRITE } from '../api';
+import type { Incident, IncidentMatch, Report } from '@forga/incidents-contracts';
+import { api, can, formatDateTime, fromLocalInput, send, toLocalInput, useLocalized, useSession, useTranslation, withQuery } from '@forga/web-sdk';
+import { Notice, ResponsiveDialog, useAction } from '@forga/web-ui';
+import { keys, RELEASE, useDepartments, useKeywords, useNames, WRITE } from '../api';
 
-/** New incident with a draft report for each chosen department; opens the report of the first department. */
+/**
+ * New incident with a draft report for each chosen department; opens the report of the first department.
+ * Existing incidents with the same dispatch number (or keyword within two hours) are offered first, so a
+ * department joins a joint incident with its own report instead of creating a duplicate.
+ */
 export function CreateIncidentDialog({ opened, onClose }: { opened: boolean; onClose: () => void }) {
-  const { t } = useTranslation('incidents');
+  const { t, i18n } = useTranslation('incidents');
   const { t: common } = useTranslation('common');
   const localized = useLocalized();
   const navigate = useNavigate();
@@ -29,6 +34,24 @@ export function CreateIncidentDialog({ opened, onClose }: { opened: boolean; onC
   }));
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
   const departmentIds = form.departmentIds.length ? form.departmentIds : writable.length === 1 ? [writable[0].id] : [];
+  const names = useNames();
+  const alarmedAt = form.alarmedAt ? fromLocalInput(form.alarmedAt) : null;
+  const dispatchNumber = form.dispatchNumber.trim();
+  const { data: matches = [] } = useQuery({
+    queryKey: ['incidents', 'matches', dispatchNumber, form.alarmKeyword, alarmedAt],
+    queryFn: () => api<IncidentMatch[]>(withQuery('incidents/incidents/matches', { dispatchNumber: dispatchNumber || undefined, alarmKeyword: form.alarmKeyword ?? undefined, alarmedAt: alarmedAt ?? undefined })),
+    enabled: Boolean(alarmedAt) && Boolean(dispatchNumber || form.alarmKeyword),
+  });
+  const join = useAction(
+    ({ incidentId, departmentId }: { incidentId: string; departmentId: string }) => send<Report>('POST', `incidents/incidents/${incidentId}/reports`, { departmentId }),
+    {
+      invalidate: [keys.incidents],
+      onSuccess: (report) => {
+        onClose();
+        navigate(`/incidents/reports/${report.id}`);
+      },
+    },
+  );
 
   const create = useAction(
     () =>
@@ -90,6 +113,33 @@ export function CreateIncidentDialog({ opened, onClose }: { opened: boolean; onC
             <TextInput label={t('fields.city')} value={form.city} onChange={(e) => set('city', e.currentTarget.value)} />
             <TextInput label={t('fields.district')} value={form.district} onChange={(e) => set('district', e.currentTarget.value)} />
           </SimpleGrid>
+          {matches.length > 0 && (
+            <Notice kind="warning">
+              <Stack gap="xs">
+                <Text size="sm" fw={700}>{t('create.matches')}</Text>
+                {matches.map((m) => {
+                  const own = writable.find((d) => (departmentIds.includes(d.id) || writable.length === 1) && !m.departmentIds.includes(d.id));
+                  return (
+                    <Group key={m.id} justify="space-between" wrap="nowrap" gap="sm">
+                      <Text size="sm">
+                        {`${m.alarmKeyword} · ${m.dispatchNumber} · ${formatDateTime(m.alarmedAt, i18n.language)}`}
+                        {[m.street, m.city].some(Boolean) ? ` · ${[m.street, m.city].filter(Boolean).join(', ')}` : ''}
+                        <Text span size="xs" c="dimmed">{` (${m.departmentIds.map((d) => names.department(d)).join(', ')})`}</Text>
+                      </Text>
+                      {own ? (
+                        <Button size="xs" variant="outline" loading={join.isPending} onClick={() => join.mutate({ incidentId: m.id, departmentId: own.id })}>
+                          {t('create.join', { department: own.name })}
+                        </Button>
+                      ) : (
+                        <Text size="xs" c="dimmed">{t('create.chooseDepartment')}</Text>
+                      )}
+                    </Group>
+                  );
+                })}
+                <Text size="xs" c="dimmed">{t('create.matchesHint')}</Text>
+              </Stack>
+            </Notice>
+          )}
           <MultiSelect
             label={t('create.departments')}
             description={t('create.departmentsHint')}

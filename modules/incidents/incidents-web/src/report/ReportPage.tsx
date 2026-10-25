@@ -4,13 +4,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import type { IncidentStatisticsInput, Report } from '@forga/incidents-contracts';
-import { can, extensionsOf, formatDateTime, formatMoney, formatTime, send, useSession, useTranslation } from '@forga/web-sdk';
-import { ActionBar, Attachments, ConfirmDialog, DataTable, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { apiUrl, can, extensionsOf, formatDateTime, formatMoney, formatTime, send, useSession, useTranslation } from '@forga/web-sdk';
+import { ActionBar, Attachments, ConfirmDialog, DataTable, EmptyState, HistoryTimeline, Notice, notifyError, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, RELEASE, useIncident, useNames, useReport, useRevisions, WRITE } from '../api';
 import { DepartmentBadge, ReportStatusBadge } from '../parts';
 import { WorkflowActions } from '../WorkflowActions';
 import { CheckSection } from './CheckSection';
-import { type Content, STEPS, type StepId, stepOf, useReportEditor } from './editor';
+import { completeStatistics, type Content, STEPS, type StepId, stepOf, useReportEditor, useStoredReasons } from './editor';
 import { blocking, findingKey, mergeFindings, openWarnings } from './findings';
 import { NarrativeSection } from './NarrativeSection';
 import { OtherSection } from './OtherSection';
@@ -19,7 +19,9 @@ import classes from './report.module.css';
 import { StatisticsSection } from './StatisticsSection';
 import { TimesSection } from './TimesSection';
 
-function stepState(step: StepId, content: Content, report: Report): { state: 'done' | 'error' | 'open'; text: string; count?: number } {
+function stepState(step: StepId, content: Content, report: Report, statisticsIncomplete: boolean): { state: 'done' | 'error' | 'open'; text: string; count?: number } {
+  // Unfinished statistics are not saved yet: the step must not look complete.
+  if (step === 'statistics' && statisticsIncomplete) return { state: 'error', text: 'incomplete' };
   const errors = blocking(mergeFindings(report.findings)).filter((f) => stepOf(f) === step).length;
   const warnings = openWarnings(mergeFindings(report.findings)).filter((f) => stepOf(f) === step).length;
   if (step === 'check') return { state: errors || warnings ? 'open' : 'done', text: '' };
@@ -45,16 +47,22 @@ function Editor({ report }: { report: Report }) {
   const session = useSession().data;
   const names = useNames();
   const { data: incident } = useIncident(report.incidentId);
-  const { content, update, flush, reset, saveState } = useReportEditor(report);
+  const { content, update, flush, reset, saveState, restorable, restoreLocal, discardLocal, loadServer, keepMine } = useReportEditor(report);
   const [step, setStep] = useState<StepId>('times');
   const [statisticsDraft, setStatisticsDraft] = useState<IncidentStatisticsInput | null>(null);
-  const [reasons, setReasons] = useState<Record<string, string>>({});
-  const [dialog, setDialog] = useState<'submit' | 'versions' | 'history' | null>(null);
+  const { reasons, setReason, clearReasons } = useStoredReasons(report.id);
+  const [dialog, setDialog] = useState<'submit' | 'versions' | 'history' | 'takeOver' | null>(null);
+  // Releasers read drafts of authors; editing one locks it for the author, so it needs a confirmation.
+  const [takenOver, setTakenOver] = useState(false);
   const { data: revisions = [] } = useRevisions(report.id, dialog === 'versions');
 
   const releaser = session?.permissions[RELEASE] === 'brigade';
   const writer = can(session, WRITE, report.departmentId);
-  const editable = releaser ? !report.status.startsWith('released') : writer && report.status === 'draft' && !report.locked;
+  const draftOfAuthor = releaser && report.status === 'draft' && !report.locked && !takenOver;
+  const editable = releaser ? !report.status.startsWith('released') && !draftOfAuthor : writer && report.status === 'draft' && !report.locked;
+  // Releasers complete the statistics of a released primary report without releasing it again.
+  const statisticsSeparately = releaser && report.primary && report.status.startsWith('released');
+  const statisticsIncomplete = Boolean(statisticsDraft) && !completeStatistics(statisticsDraft);
   const errors = blocking(mergeFindings(report.findings));
   const warnings = openWarnings(mergeFindings(report.findings));
   const missingReasons = warnings.filter((f) => !reasons[findingKey(f)]?.trim());
@@ -74,6 +82,7 @@ function Editor({ report }: { report: Report }) {
       invalidate: [keys.incidents],
       onSuccess: (saved) => {
         queryClient.setQueryData(keys.report(report.id), saved);
+        clearReasons();
         setDialog(null);
       },
     },
@@ -88,7 +97,24 @@ function Editor({ report }: { report: Report }) {
       setDialog(null);
     },
   });
+  const saveStatistics = useAction(
+    (statistics: IncidentStatisticsInput) => send<Report>('PUT', `incidents/reports/${report.id}/statistics`, { statistics, version: report.version }),
+    {
+      success: t('statistics.saved'),
+      invalidate: [keys.incidents],
+      onSuccess: (saved) => {
+        queryClient.setQueryData(keys.report(report.id), saved);
+        reset(saved);
+        setStatisticsDraft(null);
+      },
+    },
+  );
   const askSubmit = () => {
+    if (statisticsIncomplete) {
+      goTo('statistics');
+      notifications.show({ color: 'brand', message: t('statistics.incomplete') });
+      return;
+    }
     if (errors.length || missingReasons.length) {
       goTo('check');
       notifications.show({ color: 'brand', message: t(errors.length ? 'editor.fixErrorsFirst' : 'editor.reasonsMissing') });
@@ -100,8 +126,10 @@ function Editor({ report }: { report: Report }) {
   const saveText =
     saveState.status === 'saving' || saveState.status === 'pending'
       ? t('editor.saving')
-      : saveState.status === 'failed'
-        ? t('editor.saveFailed')
+      : saveState.status === 'conflict'
+        ? t('editor.conflict')
+        : saveState.status === 'failed'
+          ? t('editor.saveFailed')
         : saveState.savedAt
           ? t('editor.savedAt', { time: formatTime(saveState.savedAt.toISOString(), i18n.language) })
           : t('editor.upToDate');
@@ -127,6 +155,24 @@ function Editor({ report }: { report: Report }) {
           </Group>
         }
       />
+      {restorable && (
+        <Notice
+          kind="warning"
+          action={
+            <Group gap="xs">
+              <Button size="xs" onClick={restoreLocal} disabled={!editable}>{t('editor.restoreLocal')}</Button>
+              <Button size="xs" variant="default" onClick={discardLocal}>{t('editor.discardLocal')}</Button>
+            </Group>
+          }
+        >
+          {t('editor.unsavedFound', { at: formatDateTime(restorable.at, i18n.language) })}
+        </Notice>
+      )}
+      {draftOfAuthor && (
+        <Notice kind="info" action={<Button size="xs" variant="outline" onClick={() => setDialog('takeOver')}>{t('editor.takeOver')}</Button>}>
+          {t('editor.readOnlyDraft')}
+        </Notice>
+      )}
       {report.status === 'draft' && report.returnComment && <Notice kind="warning">{t('editor.returned', { comment: report.returnComment })}</Notice>}
       {report.status === 'review' && !releaser && <Notice kind="info">{t('editor.inReview')}</Notice>}
       {report.locked && <Notice kind="info">{t('editor.lockedBy', { by: report.lockedBy ?? '', at: formatDateTime(report.lockedAt, i18n.language) })}</Notice>}
@@ -134,7 +180,7 @@ function Editor({ report }: { report: Report }) {
 
       <ol className={classes.steps} aria-label={t('editor.sections')}>
         {STEPS.map((s, index) => {
-          const state = stepState(s, content, report);
+          const state = stepState(s, content, report, statisticsIncomplete);
           return (
             <li key={s}>
               <button type="button" className={classes.step} data-state={state.state} aria-current={s === step ? 'step' : undefined} onClick={() => setStep(s)}>
@@ -153,7 +199,17 @@ function Editor({ report }: { report: Report }) {
       {step === 'personnel' && <PersonnelSection content={content} report={report} update={update} disabled={!editable} findings={report.findings} />}
       {step === 'narrative' && <NarrativeSection content={content} update={update} disabled={!editable} />}
       {step === 'statistics' && (
-        <StatisticsSection content={content} report={report} draft={statisticsDraft} setDraft={setStatisticsDraft} update={update} disabled={!editable} primaryReportId={primaryReport?.id} />
+        <StatisticsSection
+          content={content}
+          report={report}
+          draft={statisticsDraft}
+          setDraft={setStatisticsDraft}
+          update={update}
+          disabled={!editable && !statisticsSeparately}
+          primaryReportId={primaryReport?.id}
+          onSaveSeparately={statisticsSeparately ? (statistics) => saveStatistics.mutate(statistics) : undefined}
+          saving={saveStatistics.isPending}
+        />
       )}
       {step === 'other' && <OtherSection content={content} update={update} disabled={!editable} />}
       {step === 'other' && (
@@ -181,7 +237,7 @@ function Editor({ report }: { report: Report }) {
             />
           ))}
       {step === 'check' && (
-        <CheckSection findings={report.findings} reasons={reasons} setReason={(key, value) => setReasons((r) => ({ ...r, [key]: value }))} goTo={goTo} editable={editable && report.status === 'draft'} />
+        <CheckSection findings={report.findings} reasons={reasons} setReason={setReason} goTo={goTo} editable={editable && report.status === 'draft'} statisticsIncomplete={statisticsIncomplete} />
       )}
 
       <Group justify="space-between">
@@ -198,6 +254,7 @@ function Editor({ report }: { report: Report }) {
           </Text>
         }
       >
+        <Button component="a" href={apiUrl(`incidents/reports/${report.id}/pdf`, { lang: i18n.language })} target="_blank" variant="subtle">{t('editor.pdf')}</Button>
         <Button variant="subtle" onClick={() => setDialog('history')}>{t('editor.history')}</Button>
         <Button variant="subtle" onClick={() => setDialog('versions')}>{t('editor.versions')}</Button>
         {editable && report.status === 'draft' && <Button onClick={askSubmit}>{t('editor.submit')}</Button>}
@@ -216,6 +273,34 @@ function Editor({ report }: { report: Report }) {
           <Text size="sm" fw={700} mt="xs">{t('workflow.summary', { count: report.personnel.length, amount: formatMoney(report.compensationTotal, i18n.language) })}</Text>
           {warnings.length > 0 && <Text size="sm" mt="xs">{t('editor.submitWarnings', { count: warnings.length })}</Text>}
         </ConfirmDialog>
+      )}
+      {dialog === 'takeOver' && (
+        <ConfirmDialog
+          opened
+          onClose={() => setDialog(null)}
+          title={t('editor.takeOverTitle')}
+          description={t('editor.takeOverText', { author: names.person(report.authorPersonId) || t('workflow.theAuthor') })}
+          confirmLabel={t('editor.takeOver')}
+          onConfirm={() => {
+            setTakenOver(true);
+            setDialog(null);
+          }}
+        />
+      )}
+      {saveState.status === 'conflict' && (
+        <ResponsiveDialog
+          opened
+          onClose={() => undefined}
+          title={t('editor.conflictTitle')}
+          actions={
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => void loadServer().catch(notifyError)}>{t('editor.loadServer')}</Button>
+              <Button onClick={() => void keepMine().catch(notifyError)}>{t('editor.keepMine')}</Button>
+            </Group>
+          }
+        >
+          <Text size="sm">{t('editor.conflictText')}</Text>
+        </ResponsiveDialog>
       )}
       {dialog === 'versions' && (
         <ResponsiveDialog opened onClose={() => setDialog(null)} title={t('editor.versionsTitle')} size="lg">

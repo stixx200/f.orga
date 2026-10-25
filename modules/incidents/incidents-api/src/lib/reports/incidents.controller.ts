@@ -29,6 +29,7 @@ import {
   IncidentCosts,
   type IncidentMatch,
   IncidentUpdate,
+  type PreviousCrew,
   NewReportInput,
   Release,
   ReleaseMany,
@@ -43,7 +44,7 @@ import {
   Submit,
   Unlock,
 } from '@forga/incidents-contracts';
-import { AlarmKeywordEntity, IncidentEntity, ReportEntity, ReportRevisionEntity } from '../incidents.entities.js';
+import { AlarmKeywordEntity, IncidentEntity, ReportEntity, ReportPersonnelEntity, ReportRevisionEntity } from '../incidents.entities.js';
 import { DutyEvents } from '../duty/duty.js';
 import { ReportPdf } from './report-pdf.js';
 import { COSTS, READ, RELEASE, REPORT_POPULATE, ReportsService, REVIEW, UNLOCK, WRITE } from './reports.service.js';
@@ -370,6 +371,32 @@ export class IncidentsController {
     await em.flush();
     await this.audit.log('incidents.statistics-changed', { reportId: report.id });
     return this.reports.toDto(em, report);
+  }
+
+  /**
+   * Crew of the vehicle in the latest earlier report of the same department (persons and functions, no guests),
+   * so the author takes it over with one click instead of adding everybody again.
+   */
+  @Get('reports/:id/previous-crew')
+  @RequirePermissions(READ)
+  async previousCrew(@Param('id') id: string, @Query('vehicleId') vehicleId: string | undefined, @CurrentUser() user: AuthenticatedUser): Promise<PreviousCrew> {
+    const em = this.em.fork();
+    const report = await this.reports.load(em, id, user);
+    const none: PreviousCrew = { reportId: null, dispatchNumber: null, alarmedAt: null, personnel: [] };
+    if (!vehicleId) return none;
+    const [latest] = await em.find(
+      ReportPersonnelEntity,
+      { vehicleId, personId: { $ne: null }, report: { departmentId: report.departmentId, id: { $ne: report.id }, alarmedAt: { $lt: report.alarmedAt } } },
+      { populate: ['report.incident'], orderBy: { report: { alarmedAt: 'desc' } }, limit: 1 },
+    );
+    if (!latest) return none;
+    const crew = await em.find(ReportPersonnelEntity, { report: latest.report, vehicleId, personId: { $ne: null } });
+    return {
+      reportId: latest.report.id,
+      dispatchNumber: latest.report.incident.dispatchNumber,
+      alarmedAt: latest.report.alarmedAt.toISOString(),
+      personnel: crew.map((p) => ({ personId: p.personId as string, function: p.function ?? null })),
+    };
   }
 
   /** Saved states of the report for undo, newest first. */

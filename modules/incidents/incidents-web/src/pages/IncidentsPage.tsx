@@ -1,26 +1,31 @@
 import { Button, Chip, Group, Select, Stack, Text, TextInput } from '@mantine/core';
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import type { Incident, ReportStatus } from '@forga/incidents-contracts';
 import { can, formatDateTime, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, matchesSearch, PageHeader } from '@forga/web-ui';
-import { type IncidentFilter, useIncidents, useNames, WRITE } from '../api';
+import { type IncidentFilter, READ, RELEASE, useDepartments, useIncidents, useNames, WRITE } from '../api';
 import { CreateIncidentDialog } from './CreateIncidentDialog';
 import { DepartmentBadge, incidentStatus, keywordLabel, locationLabel, ReportStatusBadge } from '../parts';
 
-type View = 'all' | 'mine' | 'draft' | 'review' | 'released';
+type View = 'all' | 'mine' | 'draft' | 'review' | 'released' | 'withoutStatistics';
 
+const VIEWS: View[] = ['all', 'mine', 'draft', 'review', 'released', 'withoutStatistics'];
 const STATUS_OF_VIEW: Partial<Record<View, ReportStatus>> = { draft: 'draft', review: 'review' };
 
-/** Incidents of the chosen year with their reports; search over number, keyword and location. */
+/**
+ * Incidents of the chosen year with their reports; search over number, keyword and location.
+ * `?view=…&year=…` opens a view directly, e.g. the incidents without statistics from the annual statistics.
+ */
 export function IncidentsPage() {
   const { t, i18n } = useTranslation('incidents');
   const navigate = useNavigate();
   const session = useSession().data;
   const names = useNames();
-  const [view, setView] = useState<View>('all');
+  const [params] = useSearchParams();
+  const [view, setView] = useState<View>(() => (VIEWS.includes(params.get('view') as View) ? (params.get('view') as View) : 'all'));
   const [thisYear] = useState(() => String(new Date().getFullYear()));
-  const [year, setYear] = useState(thisYear);
+  const [year, setYear] = useState(() => params.get('year') ?? thisYear);
   const [departmentId, setDepartmentId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
@@ -30,6 +35,7 @@ export function IncidentsPage() {
     departmentId: departmentId ?? undefined,
     status: STATUS_OF_VIEW[view],
     mine: view === 'mine',
+    withoutStatistics: view === 'withoutStatistics',
   };
   const { data: incidents = [], isLoading } = useIncidents(filter);
   const writable = can(session, WRITE) || can(session, 'incidents.reports.release');
@@ -41,8 +47,11 @@ export function IncidentsPage() {
       .filter((i) => matchesSearch([i.dispatchNumber, i.alarmKeyword, i.alarmMessage, locationLabel(i)], q));
   }, [incidents, query, view]);
   const years = Array.from({ length: 4 }, (_, i) => String(Number(thisYear) - i));
-  const { departmentName } = names;
-  const departmentOptions = [...new Set(incidents.flatMap((i) => i.reports.map((r) => r.departmentId)))].map((id) => ({ value: id, label: departmentName(id) }));
+  // All departments the user may read, not only those of the incidents already filtered.
+  const { data: departments = [] } = useDepartments();
+  const departmentOptions = departments
+    .filter((d) => session?.permissions[RELEASE] === 'brigade' || can(session, READ, d.id))
+    .map((d) => ({ value: d.id, label: d.name }));
 
   return (
     <Stack gap="lg">
@@ -53,7 +62,7 @@ export function IncidentsPage() {
       />
       <Chip.Group value={view} onChange={(value) => setView(value as View)}>
         <Group gap="xs">
-          {(['all', 'mine', 'draft', 'review', 'released'] as const).map((v) => (
+          {VIEWS.map((v) => (
             <Chip key={v} value={v} radius="xs">{t(`incidents.views.${v}`)}</Chip>
           ))}
         </Group>
