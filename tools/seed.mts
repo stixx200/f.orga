@@ -535,7 +535,9 @@ async function training(members: Map<string, PersonRef[]>, departments: Map<stri
 /** Evidence of the breathing apparatus wearers: most are fit, some expire soon, a few are not fit. */
 async function respiratoryProtection(persons: PersonRef[]): Promise<void> {
   reseed(112);
-  const wearers = persons.filter((p) => p.status !== 'left' && p.qualifications.includes('breathing-apparatus'));
+  await qualifyUser(persons, 'breathing-apparatus-officer', 'breathing-apparatus-officer');
+  // Wearers count only as active members or on probation (`WEARER_STATUSES`).
+  const wearers = persons.filter((p) => (p.status === 'active' || p.status === 'probation') && p.qualifications.includes('breathing-apparatus'));
   const existing = await call<{ evidence: unknown[] }>('GET', `respiratory-protection/persons/${wearers[0]?.id}`).catch(() => ({ evidence: [1] }));
   if (!wearers.length || existing.evidence.length) {
     console.log('  Nachweise vorhanden');
@@ -590,11 +592,33 @@ async function compensation(persons: PersonRef[]): Promise<void> {
   console.log(`  Lauf ${year - 1} mit ${run.items.length} Posten ausgezahlt, ${open.length} offene Posten`);
 }
 
+/**
+ * The person of the user of a role (`users`: user name = role template) gets the qualification of its office, e.g. the
+ * equipment officer `equipment-officer`, so inspections recorded by them carry no qualification warning.
+ */
+async function qualifyUser(persons: PersonRef[], username: string, qualification: string): Promise<void> {
+  const user = (await call<{ username: string; personId: string | null }[]>('GET', 'core/users')).find((u) => u.username === username);
+  const person = persons.find((p) => p.id === user?.personId);
+  if (!person || person.qualifications.includes(qualification)) return;
+  await call('POST', `masterdata/persons/${person.id}/qualifications`, { qualification, acquiredOn: daysAgo(730) });
+  person.qualifications.push(qualification);
+  console.log(`  ${person.firstName} ${person.lastName} (${username}) hat die Qualifikation ${qualification}`);
+}
+
 /** Equipment: DGUV template, vehicles, typical equipment per vehicle with past inspections, some defects. */
 async function equipment(persons: PersonRef[]): Promise<void> {
   reseed(305);
+  await qualifyUser(persons, 'equipment-officer', 'equipment-officer');
   await call('POST', 'equipment/templates/dguv', {});
   await call('POST', 'equipment/vehicles/sync', {});
+  // Vehicles are taken over without dates ("not recorded yet"): the last inspections as from the vehicle papers.
+  const synced = await call<{ id: string; dues: { key: string; notRecorded: boolean }[]; inspections: { key: string; intervalMonths: number | null; inspector: string }[] }[]>('GET', 'equipment/items?categoryKey=vehicles');
+  for (const vehicle of synced) {
+    for (const inspection of vehicle.inspections.filter((i) => i.intervalMonths && vehicle.dues.some((d) => d.key === i.key && d.notRecorded))) {
+      const date = daysAgo(between(10, inspection.intervalMonths! * 30 - 10));
+      await call('POST', `equipment/items/${vehicle.id}/inspections`, { inspectionKey: inspection.key, date, inspectorCompany: inspection.inspector === 'expert' ? 'Prüfstelle (Beispiel)' : '', result: 'passed' });
+    }
+  }
   const existing = await call<unknown[]>('GET', 'equipment/items?categoryKey=breathing');
   if (existing.length) {
     console.log('  Geräte vorhanden');

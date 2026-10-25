@@ -6,7 +6,7 @@ import { type AuthenticatedUser, berlinDate, type ListDefinition, SettingsServic
 import { EquipmentSettings, type Item } from '@forga/equipment-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { CategoryEntity, InspectionEntity } from '../equipment.entities.js';
-import { ItemsService, READ } from '../items/items.service.js';
+import { defectText, ItemsService, READ, RESULT_NAMES as RESULT } from '../items/items.service.js';
 
 const col = (key: string, de: string, en: string, width?: number, align?: ListColumn['align']): ListColumn => ({ key, label: { de, en }, ...(width ? { width } : {}), ...(align ? { align } : {}) });
 const department = { key: 'departmentId', label: { de: 'Abteilung', en: 'Department' }, type: 'department' as const };
@@ -15,7 +15,6 @@ type Filter = z.infer<typeof Filter>;
 const STATUS = { ready: { de: 'einsatzbereit', en: 'ready' }, 'in-inspection': { de: 'in Prüfung', en: 'in inspection' }, defective: { de: 'defekt', en: 'defective' }, 'in-repair': { de: 'in Reparatur', en: 'in repair' }, retired: { de: 'ausgesondert', en: 'retired' } } as const;
 const ReportParams = z.object({ inspectionId: z.uuid().optional(), date: z.iso.date().optional(), departmentId: z.uuid().optional() });
 const BLOCKED = { de: 'gesperrt (Prüfung überfällig)', en: 'blocked (inspection overdue)' } as const;
-const RESULT = { passed: { de: 'bestanden', en: 'passed' }, 'passed-with-defects': { de: 'mit Mängeln', en: 'with defects' }, failed: { de: 'nicht bestanden', en: 'failed' } } as const;
 
 /** List templates of the equipment module. */
 @Injectable()
@@ -193,9 +192,9 @@ export class EquipmentLists {
       parameters: [department],
       schema: Filter,
       columns: [col('date', 'Gemeldet', 'Reported'), col('number', 'Inventar-Nr.', 'Inventory no.'), col('name', 'Gerät', 'Item', 1.5), col('description', 'Mangel', 'Defect', 2.5), col('by', 'Von', 'By')],
-      rows: async (user, params) => {
+      rows: async (user, params, language) => {
         const defects = (await this.items.defects(user, { open: true })).filter((d) => !params.departmentId || d.departmentId === params.departmentId);
-        return { rows: defects.map((d) => ({ date: d.reportedAt.slice(0, 10), number: d.inventoryNumber, name: d.itemName, description: d.description, by: d.reportedBy })) };
+        return { rows: defects.map((d) => ({ date: d.reportedAt.slice(0, 10), number: d.inventoryNumber, name: d.itemName, description: defectText(d, language), by: d.reportedBy })) };
       },
     };
   }

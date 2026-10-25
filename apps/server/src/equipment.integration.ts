@@ -28,6 +28,7 @@ beforeAll(async () => {
   ids.musterstadt = (await post('/masterdata/departments', { name: 'Abteilung Musterstadt', shortName: 'Musterstadt', type: 'operational' }).expect(201)).body.id;
   ids.ahornfeld = (await post('/masterdata/departments', { name: 'Abteilung Ahornfeld', shortName: 'Ahornfeld', type: 'operational' }).expect(201)).body.id;
   ids.lf = (await post('/masterdata/vehicles', { designation: 'LF 10', radioCallSign: 'Florian Musterstadt 1/44', vehicleType: 'lf-10', departmentId: ids.musterstadt }).expect(201)).body.id;
+  ids.tsf = (await post('/masterdata/vehicles', { designation: 'TSF', radioCallSign: 'Florian Musterstadt 1/47', vehicleType: 'tsf', departmentId: ids.musterstadt }).expect(201)).body.id;
   ids.gw = (await post('/masterdata/persons', { firstName: 'Gerd', lastName: 'Wart', status: 'active', memberships: [{ departmentId: ids.musterstadt, from: '2020-01-01', primary: true }] }).expect(201)).body.id;
   await post(`/masterdata/persons/${ids.gw}/qualifications`, { qualification: 'equipment-officer', acquiredOn: '2020-01-01' }).expect(201);
   ids.max = (await post('/masterdata/persons', { firstName: 'Max', lastName: 'Muster', status: 'active', memberships: [{ departmentId: ids.musterstadt, from: '2020-01-01', primary: true }] }).expect(201)).body.id;
@@ -55,14 +56,31 @@ describe('equipment', () => {
     const scba = ((await get('/equipment/types').expect(200)).body as { key: string; inspections: { key: string; intervalMonths: number | null }[] }[]).find((t) => t.key === 'scba')!;
     expect(scba.inspections.map((i) => [i.key, i.intervalMonths])).toEqual([['scba-check', 6], ['scba-overhaul', 72], ['scba-after-use', null]]);
 
-    expect((await post('/equipment/vehicles/sync', {}).expect(200)).body).toEqual({ created: 1 });
+    expect((await post('/equipment/vehicles/sync', {}).expect(200)).body).toEqual({ created: 2 });
     expect((await post('/equipment/vehicles/sync', {}).expect(200)).body).toEqual({ created: 0 });
-    const vehicle = ((await get('/equipment/items?categoryKey=vehicles').expect(200)).body as { forVehicleId: string; dues: { key: string; overdue: boolean }[] }[])[0];
-    expect(vehicle.forVehicleId).toBe(ids.lf);
-    // Annual inspection once (DGUV regulation 70 and principle 305-002), roadworthiness test and safety inspection over 3.5 t.
+    type VehicleItem = { id: string; typeKey: string; forVehicleId: string; nextDue: string | null; dues: { key: string; dueOn: string | null; overdue: boolean; notRecorded: boolean }[] };
+    const synced = (await get('/equipment/items?categoryKey=vehicles').expect(200)).body as VehicleItem[];
+    const vehicle = synced.find((v) => v.forVehicleId === ids.lf)!;
+    ids.lfItem = vehicle.id;
+    // Over 7.5 t: annual inspection once (DGUV regulation 70 and principle 305-002), roadworthiness test and safety inspection.
+    expect(vehicle).toMatchObject({ typeKey: 'fire-vehicle', nextDue: null });
     expect(vehicle.dues.map((d) => d.key)).toEqual(['vehicle-annual', 'vehicle-hu', 'vehicle-safety']);
-    const light = ((await get('/equipment/types').expect(200)).body as { key: string; inspections: { key: string; intervalMonths: number | null }[] }[]).find((t) => t.key === 'fire-vehicle-light')!;
+    // Taken over without dates: "not recorded yet" instead of due today.
+    expect(vehicle.dues.every((d) => d.dueOn === null && !d.overdue && d.notRecorded)).toBe(true);
+    // TSF (3.5 to 7.5 t): no safety inspection.
+    const tsf = synced.find((v) => v.forVehicleId === ids.tsf)!;
+    expect(tsf.typeKey).toBe('fire-vehicle-medium');
+    expect(tsf.dues.map((d) => d.key)).toEqual(['vehicle-annual', 'vehicle-hu']);
+    ids.tsfItem = tsf.id;
+    const types = (await get('/equipment/types').expect(200)).body as { key: string; name: { de: string }; inspections: { key: string; intervalMonths: number | null }[] }[];
+    const light = types.find((t) => t.key === 'fire-vehicle-light')!;
     expect(light.inspections.map((i) => [i.key, i.intervalMonths])).toEqual([['vehicle-annual', 12], ['vehicle-hu', 24]]);
+    // The vehicle classes are marked as template values.
+    expect(types.filter((t) => t.key.startsWith('fire-vehicle')).every((t) => t.name.de.includes('Vorlagewerte'))).toBe(true);
+    // An entered inspection replaces "not recorded yet".
+    await post(`/equipment/items/${ids.tsfItem}/inspections`, { inspectionKey: 'vehicle-hu', date: '2026-03-01', inspectorCompany: 'Prüfstelle', result: 'passed' }).expect(201);
+    const hu = ((await get(`/equipment/items/${ids.tsfItem}`).expect(200)).body as VehicleItem).dues.find((d) => d.key === 'vehicle-hu');
+    expect(hu).toMatchObject({ dueOn: '2027-03-01', notRecorded: false });
     // Hoses are single items by default.
     expect(((await get('/equipment/categories')).body as { key: string; tracking: string }[]).find((c) => c.key === 'hoses')?.tracking).toBe('item');
   });
@@ -85,7 +103,11 @@ describe('equipment', () => {
     await put(`/equipment/items/${ids.scba}`, item, member).expect(403);
     // A member who may only report defects gets the item without price, serial number and inspections.
     const summary = (await get(`/equipment/items/${ids.scba}`, reporter).expect(200)).body;
-    expect(summary).toEqual({ id: ids.scba, inventoryNumber: 'AS-PA-0001', name: 'Pressluftatmer 1', departmentId: ids.musterstadt, status: 'ready', reportOnly: true });
+    expect(summary).toEqual({ id: ids.scba, inventoryNumber: 'AS-PA-0001', name: 'Pressluftatmer 1', departmentId: ids.musterstadt, status: 'ready', blocked: false, reportOnly: true });
+    // "My area": hits name vehicle and loading place, also for a scanned code.
+    expect((await get('/equipment/me/items?q=Pressluftatmer', reporter).expect(200)).body).toEqual([{ id: ids.scba, inventoryNumber: 'AS-PA-0001', name: 'Pressluftatmer 1', place: 'Florian Musterstadt 1/44 · G1' }]);
+    expect(((await get('/equipment/me/items?code=as-pa-0001', reporter).expect(200)).body as { id: string }[]).map((i) => i.id)).toEqual([ids.scba]);
+    expect(((await get(`/equipment/me/items?code=${encodeURIComponent(`https://forga.example.org/equipment/items/${ids.scba}`)}`, reporter).expect(200)).body as { id: string }[]).map((i) => i.id)).toEqual([ids.scba]);
     await get(`/equipment/items/${ids.scba}/inspections`, reporter).expect(403);
   });
 
@@ -177,6 +199,11 @@ describe('equipment', () => {
     expect(failed.nextDueOn).toBeNull();
     let scba = (await get(`/equipment/items/${ids.scba}`, officer)).body;
     expect(scba).toMatchObject({ status: 'defective', openDefects: 1 });
+    // The defect of the inspection names inspection type and result (translated by the client), the notes as text.
+    const finding = ((await get(`/equipment/defects?itemId=${ids.scba}`, officer)).body as { description: string; finding: unknown }[])[0];
+    expect(finding).toMatchObject({ description: 'Warnsignal ohne Funktion', finding: { inspectionId: failed.id, name: { de: 'Sicht- und Funktionsprüfung', en: 'Visual and function check' }, result: 'failed' } });
+    // A reporter who may only report defects sees the status of the item.
+    expect((await get(`/equipment/items/${ids.scba}`, reporter)).body).toMatchObject({ status: 'defective', reportOnly: true });
     expect(scba.dues.find((d: { key: string }) => d.key === 'scba-check')).toMatchObject({ dueOn: today, overdue: true });
 
     // Every member may report a defect, e.g. via QR code.
@@ -207,6 +234,99 @@ describe('equipment', () => {
     expect((await get(`/equipment/items/${ids.ladder}`, officer)).body).toMatchObject({ status: 'ready', openDefects: 1 });
   });
 
+  it('keeps an item defective until no defect is open and the latest inspection of every type is not failed', async () => {
+    const ladder = (await post('/equipment/items', { inventoryNumber: 'L-0200', name: 'Schiebleiter', typeKey: 'portable-ladder', categoryKey: 'ladders', departmentId: ids.musterstadt }, officer).expect(201)).body.id as string;
+    const status = async () => (await get(`/equipment/items/${ladder}`, officer)).body.status as string;
+    await post(`/equipment/items/${ladder}/inspections`, { inspectionKey: 'ladder-load', date: today, result: 'failed' }, officer).expect(201);
+    expect(await status()).toBe('defective');
+    // Without notes the defect only names inspection type and result (no German text stored).
+    const [defect] = (await get(`/equipment/defects?itemId=${ladder}`, officer)).body as { id: string; description: string; finding: { result: string; name: { en: string } } }[];
+    expect(defect).toMatchObject({ description: '', finding: { result: 'failed', name: { en: 'Load test' } } });
+    // A passed inspection of another type does not make it ready (open defect, load test failed).
+    await post(`/equipment/items/${ladder}/inspections`, { inspectionKey: 'ladder-visual', date: today, result: 'passed' }, officer).expect(201);
+    expect(await status()).toBe('defective');
+    await put(`/equipment/defects/${defect.id}`, { status: 'fixed', resolution: 'Holm getauscht' }, officer).expect(200);
+    expect(await status()).toBe('in-inspection');
+    // The load test is still failed: another type passing does not release it.
+    await post(`/equipment/items/${ladder}/inspections`, { inspectionKey: 'ladder-visual', date: today, result: 'passed' }, officer).expect(201);
+    expect(await status()).toBe('defective');
+    await post(`/equipment/items/${ladder}/inspections`, { inspectionKey: 'ladder-load', date: today, result: 'passed' }, officer).expect(201);
+    expect(await status()).toBe('ready');
+    ids.ladder2 = ladder;
+  });
+
+  it('gives corrections and cancellations the consequences of the result', async () => {
+    const ladder = ids.ladder2;
+    const item = async () => (await get(`/equipment/items/${ladder}`, officer)).body as { status: string; openDefects: number };
+    const passed = (await post(`/equipment/items/${ladder}/inspections`, { inspectionKey: 'ladder-visual', date: today, result: 'passed' }, officer).expect(201)).body.id as string;
+    // Corrected to "failed": defect and status as for a new failed inspection.
+    await put(`/equipment/inspections/${passed}`, { date: today, result: 'failed', notes: 'Sprosse gebrochen', reason: 'Ergebnis vertauscht' }, officer).expect(200);
+    expect(await item()).toMatchObject({ status: 'defective', openDefects: 1 });
+    // Corrected back to "passed": the defect of the inspection is withdrawn, the item is ready again.
+    await put(`/equipment/inspections/${passed}`, { date: today, result: 'passed', reason: 'Doch bestanden' }, officer).expect(200);
+    expect(await item()).toMatchObject({ status: 'ready', openDefects: 0 });
+    const withdrawn = ((await get(`/equipment/defects?itemId=${ladder}`, officer)).body as { status: string; resolution: string }[]).find((d) => d.status === 'withdrawn');
+    expect(withdrawn).toMatchObject({ resolution: 'Doch bestanden' });
+    // Cancelling a failed inspection withdraws its defect and settles the status.
+    const failed = (await post(`/equipment/items/${ladder}/inspections`, { inspectionKey: 'ladder-load', date: today, result: 'failed' }, officer).expect(201)).body.id as string;
+    expect(await item()).toMatchObject({ status: 'defective', openDefects: 1 });
+    await post(`/equipment/inspections/${failed}/cancel`, { reason: 'Falsches Gerät' }, officer).expect(200);
+    expect(await item()).toMatchObject({ status: 'ready', openDefects: 0 });
+  });
+
+  it('makes a settled trigger due again when its inspection is cancelled', async () => {
+    const hose = (await post('/equipment/items', { inventoryNumber: 'S-B-0002', name: 'B-Schlauch', typeKey: 'pressure-hose-b', categoryKey: 'hoses', departmentId: ids.musterstadt }, officer).expect(201)).body.id as string;
+    await post(`/equipment/items/${hose}/trigger`, { inspectionKey: 'hose-washing' }, officer).expect(200);
+    const inspection = (await post(`/equipment/items/${hose}/inspections`, { inspectionKey: 'hose-washing', date: today, result: 'passed' }, officer).expect(201)).body.id as string;
+    expect((await get(`/equipment/items/${hose}`, officer)).body.dues[0].dueOn).toBeNull();
+    await post(`/equipment/inspections/${inspection}/cancel`, { reason: 'Falscher Schlauch' }, officer).expect(200);
+    expect((await get(`/equipment/items/${hose}`, officer)).body.dues[0]).toMatchObject({ dueOn: today, overdue: true });
+    ids.hose2 = hose;
+  });
+
+  it('records bulk inspections all or nothing, without e-mails on failure', async () => {
+    const mails = test.app.get(MailService).sent.length;
+    const before = events.length;
+    const count = async (id: string) => ((await get(`/equipment/items/${id}/inspections`, officer)).body as unknown[]).length;
+    const counts = async () => [await count(ids.hose2), await count(ids.scba), await count(ids.ladder2)];
+    const initial = await counts();
+    // The breathing apparatus officer may inspect the breathing apparatus but not the ladder: nothing is written.
+    await post('/equipment/inspections/bulk', { itemIds: [ids.scba, ids.ladder2], inspectionKey: 'scba-check', date: today, result: 'failed' }, agw).expect(403);
+    // The ladder has no inspection type "after washing": nothing is written, not even the hose.
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose2, ids.ladder2], inspectionKey: 'hose-washing', date: today, result: 'failed' }, officer).expect(400)).body.code).toBe('equipment.unknownInspection');
+    expect(await counts()).toEqual(initial);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(test.app.get(MailService).sent.length).toBe(mails);
+    expect(events.length).toBe(before);
+  });
+
+  it('lets the breathing apparatus officer maintain breathing apparatus items only', async () => {
+    const mask = { inventoryNumber: 'AS-M-0001', name: 'Vollmaske 1', typeKey: 'full-face-mask', categoryKey: 'breathing', departmentId: ids.musterstadt };
+    const created = (await post('/equipment/items', mask, agw).expect(201)).body;
+    const updated = (await put(`/equipment/items/${created.id}`, { ...mask, name: 'Vollmaske 1 (Gr. M)', version: created.version }, agw).expect(200)).body;
+    // Not into another category, and no items of other categories.
+    await put(`/equipment/items/${created.id}`, { ...mask, typeKey: null, categoryKey: 'ladders', version: updated.version }, agw).expect(403);
+    await post('/equipment/items', { inventoryNumber: 'L-0300', name: 'Leiter', typeKey: 'portable-ladder', categoryKey: 'ladders', departmentId: ids.musterstadt }, agw).expect(403);
+    await post(`/equipment/items/${ids.ladder2}/retire`, { date: today, reason: 'Test' }, agw).expect(403);
+    await post(`/equipment/items/${created.id}/retire`, { date: today, reason: 'Test' }, agw).expect(200);
+  });
+
+  it('checks dates and releases items without inspection types when the defect is fixed', async () => {
+    const binder = { inventoryNumber: 'OB-0001', name: 'Ölbinder', typeKey: 'oil-binder', categoryKey: 'consumables', departmentId: ids.musterstadt };
+    expect((await post('/equipment/items', { ...binder, purchasedOn: '2099-01-01' }, officer).expect(400)).body.code).toBe('equipment.purchaseInFuture');
+    const id = (await post('/equipment/items', binder, officer).expect(201)).body.id as string;
+    const defect = (await post(`/equipment/items/${id}/defects`, { description: 'Sack gerissen' }, officer).expect(201)).body.id as string;
+    await put(`/equipment/defects/${defect}`, { status: 'in-progress' }, officer).expect(200);
+    await put(`/equipment/defects/${defect}`, { status: 'fixed', resolution: 'Umgefüllt' }, officer).expect(200);
+    // Nothing to inspect: ready right away instead of "in inspection" forever.
+    expect((await get(`/equipment/items/${id}`, officer)).body.status).toBe('ready');
+
+    const ladder = (await post('/equipment/items', { inventoryNumber: 'L-0400', name: 'Leiter', typeKey: 'portable-ladder', categoryKey: 'ladders', departmentId: ids.musterstadt, purchasedOn: '2026-01-15' }, officer).expect(201)).body.id as string;
+    expect((await post(`/equipment/items/${ladder}/inspections`, { inspectionKey: 'ladder-visual', date: '2026-01-14', result: 'passed' }, officer).expect(400)).body.code).toBe('equipment.inspectionBeforePurchase');
+    expect((await post('/equipment/items', { inventoryNumber: 'L-0401', name: 'Leiter', typeKey: 'portable-ladder', categoryKey: 'ladders', departmentId: ids.musterstadt, initialInspections: [{ inspectionKey: 'ladder-visual', date: '1899-12-31' }] }, officer).expect(400)).body.code).toBe('equipment.dateTooEarly');
+    await post(`/equipment/items/${ladder}/retire`, { date: today, reason: 'Test' }, officer).expect(200);
+  });
+
   it('sends defects and deadlines of breathing apparatus to the breathing apparatus officer', async () => {
     const mail = test.app.get(MailService);
     const sent = mail.sent.length;
@@ -224,6 +344,11 @@ describe('equipment', () => {
     const ofOfficer = await subjects(officer);
     expect(ofOfficer).toContain(ids.ladder);
     expect(ofOfficer).not.toContain(ids.scba);
+    // Vehicles taken over without dates make no deadlines; deadlines open the page where they are done.
+    expect(ofOfficer).not.toContain(ids.lfItem);
+    const tasks = (await get(`/core/tasks?asOf=${today}`, officer).expect(200)).body as { kind: string; subject: { id: string }; to?: string }[];
+    expect(tasks.find((t) => t.kind === 'equipment-inspection' && t.subject.id === ids.ladder)?.to).toBe(`/equipment/items/${ids.ladder}?tab=inspections`);
+    expect(tasks.find((t) => t.kind === 'equipment-defect' && t.subject.id === ids.ladder)?.to).toBe(`/equipment/items/${ids.ladder}?tab=defects`);
     // Lead times come from the settings.
     expect((await put('/core/settings/equipment.settings', { inspectionLeadDays: 0, expiryLeadDays: 10, dueSoonDays: 14 }).expect(200)).body).toMatchObject({ dueSoonDays: 14 });
     await put('/core/settings/equipment.settings', {}).expect(200);
@@ -305,7 +430,7 @@ describe('equipment', () => {
     const retired = (await post(`/equipment/items/${ids.hose}/retire`, { date: today, reason: 'Kupplung defekt', disposition: 'Entsorgt' }, officer).expect(200)).body;
     expect(retired).toMatchObject({ status: 'retired', dues: [], retirement: { reason: 'Kupplung defekt' } });
     expect(((await get('/equipment/defects?open=true', officer)).body as { itemId: string }[]).filter((d) => d.itemId === ids.hose)).toHaveLength(0);
-    expect(((await get('/equipment/items', officer)).body as unknown[]).length).toBe(4);
+    expect(((await get('/equipment/items', officer)).body as { id: string }[]).map((i) => i.id)).toEqual(expect.arrayContaining([ids.scba, ids.ladder, ids.tsfItem]));
 
     await del(`/masterdata/vehicles/${ids.lf}`).expect(409);
 
@@ -327,5 +452,19 @@ describe('equipment', () => {
     expect(ladder.vehicleId).toBe(ids.lf);
     expect(ladder.dues.find((d) => d.key === 'ladder-visual')?.lastDate).toBe('2026-03-01');
     expect(ladder.dues.find((d) => d.key === 'ladder-load')?.lastDate).toBe('2025-02-01');
+
+    // A file with only some columns keeps the other fields; a "last inspection" without inspection type is reported.
+    const partial = 'Inventar-Nr.;Bezeichnung;Abteilung;letzte Prüfung\nL-0001;Steckleiter;Musterstadt;01.04.2026\nOB-0001;Ölbinder;Musterstadt;01.04.2026\n';
+    const second = await test.http.post('/api/core/imports').set('Cookie', officer).set(UI).attach('file', Buffer.from(partial, 'utf8'), 'teil.csv').expect(201);
+    const partialMapping = second.body.suggestions['equipment.inventory'];
+    const preview = await post(`/core/imports/${second.body.id}/preview`, { profile: 'equipment.inventory', mapping: partialMapping }, officer).expect(200);
+    const discarded = (preview.body.rows as { label: string; messages: { code: string }[] }[]).find((r) => r.label.startsWith('OB-0001'));
+    expect(discarded?.messages).toEqual([{ code: 'equipment.import.inspectionDiscarded', params: { date: '2026-04-01' } }]);
+    const appliedPartial = await post(`/core/imports/${second.body.id}/apply`, { profile: 'equipment.inventory', mapping: partialMapping }, officer).expect(200);
+    expect(appliedPartial.body.counts).toMatchObject({ update: 2, error: 0 });
+    expect((appliedPartial.body.rows as { messages: { code: string }[] }[]).flatMap((r) => r.messages.map((m) => m.code))).toEqual(['equipment.import.inspectionDiscarded']);
+    const kept = ((await get('/equipment/items?q=L-0001', officer)).body as { name: string; typeKey: string; vehicleId: string; loadingPlace: string; dues: { key: string; lastDate: string | null }[] }[])[0];
+    expect(kept).toMatchObject({ name: 'Steckleiter', typeKey: 'portable-ladder', vehicleId: ids.lf, loadingPlace: 'Dach' });
+    expect(kept.dues.find((d) => d.key === 'ladder-visual')?.lastDate).toBe('2026-04-01');
   });
 });

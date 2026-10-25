@@ -79,6 +79,7 @@ const de = {
     resultConcerns: 'Mit „Bedenken“ ist die Person ab diesem Datum nicht einsatzbereit.',
     minimum: 'Mindestens {{kilojoules}} kJ',
     belowMinimum: 'Unter der Mindestarbeit von {{kilojoules}} kJ: zählt nicht als bestanden.',
+    kilojoulesRequired: 'Bitte die gemessene Arbeit eintragen – oder in der Bemerkung begründen, warum ohne Messung (z. B. „ohne Messung: Anlage defekt“).',
     openSource: 'öffnen',
     validUntilShort: 'gültig bis {{date}}',
     examiner: 'Arzt / Stelle',
@@ -109,6 +110,8 @@ const de = {
     selectAll: 'Alle auswählen',
     selectNone: 'Auswahl aufheben',
     belowMinimum_one: '{{count}} Person liegt unter der Mindestarbeit und wird als nicht bestanden gespeichert.',
+    kilojoulesRequired_one: 'Für {{count}} Person mit „bestanden“ fehlt die Arbeit in kJ.',
+    kilojoulesRequired_other: 'Für {{count}} Personen mit „bestanden“ fehlt die Arbeit in kJ.',
     belowMinimum_other: '{{count}} Personen liegen unter der Mindestarbeit und werden als nicht bestanden gespeichert.',
   },
   settings: {
@@ -166,6 +169,8 @@ const de = {
     'respiratory-protection.validUntilNotAfterDate': '„Gültig bis“ muss nach dem Untersuchungsdatum liegen.',
     'respiratory-protection.validUntilTooLate': '„Gültig bis“ liegt nach dem Intervall der Regel (spätestens {{max}}).',
     'respiratory-protection.belowMinimum': '{{name}}: unter der Mindestarbeit von {{minimum}} kJ – nicht als bestanden speicherbar.',
+    'respiratory-protection.kilojoulesRequired': '{{name}}: Bitte die Arbeit in kJ eintragen (ohne Messung nur mit Begründung in der Bemerkung).',
+    'respiratory-protection.dateInFuture': 'Ein Nachweis kann nicht in der Zukunft liegen.',
   },
 };
 
@@ -248,6 +253,7 @@ const en: typeof de = {
     resultConcerns: 'With "concerns" the person is not fit from this date on.',
     minimum: 'At least {{kilojoules}} kJ',
     belowMinimum: 'Below the minimum work of {{kilojoules}} kJ: does not count as passed.',
+    kilojoulesRequired: 'Please enter the measured work – or give the reason in the note why without measurement (e.g. "not measured: facility out of order").',
     openSource: 'open',
     validUntilShort: 'valid until {{date}}',
     examiner: 'Doctor / office',
@@ -278,6 +284,8 @@ const en: typeof de = {
     selectAll: 'Select all',
     selectNone: 'Clear selection',
     belowMinimum_one: '{{count}} person is below the minimum work and is saved as not passed.',
+    kilojoulesRequired_one: 'The work in kJ is missing for {{count}} person marked as passed.',
+    kilojoulesRequired_other: 'The work in kJ is missing for {{count}} persons marked as passed.',
     belowMinimum_other: '{{count}} persons are below the minimum work and are saved as not passed.',
   },
   settings: {
@@ -335,6 +343,8 @@ const en: typeof de = {
     'respiratory-protection.validUntilNotAfterDate': '"Valid until" must be after the examination date.',
     'respiratory-protection.validUntilTooLate': '"Valid until" is beyond the interval of the rule (at the latest {{max}}).',
     'respiratory-protection.belowMinimum': '{{name}}: below the minimum work of {{minimum}} kJ – cannot be saved as passed.',
+    'respiratory-protection.kilojoulesRequired': '{{name}}: please enter the work in kJ (without measurement only with a reason in the note).',
+    'respiratory-protection.dateInFuture': 'Evidence cannot lie in the future.',
   },
 };
 

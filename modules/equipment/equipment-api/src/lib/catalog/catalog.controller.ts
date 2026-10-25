@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Inject, N
 import { EntityManager } from '@mikro-orm/core';
 import type { z } from 'zod';
 import { RequirePermissions, ZodPipe } from '@forga/core-api';
-import { type Category, CategoryInput, DGUV_CATEGORIES, DGUV_TYPES, type EquipmentType, EquipmentTypeInput, LIGHT_VEHICLE_TYPES, TemplateOptions } from '@forga/equipment-contracts';
+import { type Category, CategoryInput, DGUV_CATEGORIES, DGUV_TYPES, type EquipmentType, EquipmentTypeInput, TemplateOptions, vehicleTemplateType } from '@forga/equipment-contracts';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
 import { CategoryEntity, EquipmentItemEntity, EquipmentTypeEntity } from '../equipment.entities.js';
 
@@ -100,21 +100,22 @@ export class CatalogController {
   }
 
   /**
-   * Creates an item of type "fire vehicle" for every vehicle of the master data that has none, so its inspections are
-   * tracked; command cars and crew vans (`LIGHT_VEHICLE_TYPES`) get the type for vehicles up to 3.5 t, if it exists.
+   * Creates an item for every vehicle of the master data that has none, so its inspections are tracked, with the
+   * template type of its weight class (`vehicleTemplateType`; a missing class falls back to `fire-vehicle`). The items
+   * have no dates yet: their periodic inspections are "not recorded yet" until the last inspections are entered.
    */
   @Post('vehicles/sync')
   @HttpCode(200)
   @RequirePermissions(SETTINGS)
   async syncVehicles(): Promise<{ created: number }> {
     const em = this.em.fork();
-    const heavy = await em.findOne(EquipmentTypeEntity, { key: 'fire-vehicle' });
+    const types = new Map((await em.find(EquipmentTypeEntity, { key: { $in: ['fire-vehicle', 'fire-vehicle-medium', 'fire-vehicle-light'] } })).map((t) => [t.key, t]));
+    const heavy = types.get('fire-vehicle');
     if (!heavy) throw new BadRequestException({ code: 'equipment.vehicleTypeMissing' });
-    const light = (await em.findOne(EquipmentTypeEntity, { key: 'fire-vehicle-light' })) ?? heavy;
     const existing = new Set((await em.find(EquipmentItemEntity, { forVehicleId: { $ne: null } })).map((i) => i.forVehicleId));
     const vehicles = (await this.organization.vehicles()).filter((v) => !existing.has(v.id));
     for (const v of vehicles) {
-      const type = LIGHT_VEHICLE_TYPES.includes(v.vehicleType) ? light : heavy;
+      const type = types.get(vehicleTemplateType(v.vehicleType)) ?? heavy;
       em.create(EquipmentItemEntity, {
         inventoryNumber: `FZ-${v.radioCallSign || v.designation}`.replaceAll(' ', '-'),
         name: [v.designation, v.radioCallSign].filter(Boolean).join(' · '),

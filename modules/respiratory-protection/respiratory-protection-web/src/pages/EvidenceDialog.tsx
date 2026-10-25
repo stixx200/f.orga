@@ -36,13 +36,16 @@ export function EvidenceDialog({ personId, evidence, kinds, minimumKilojoules, o
     device: evidence?.device ?? null,
     facility: evidence?.facility ?? '',
     kilojoules: evidence?.kilojoules ?? null,
-    passed: evidence?.passed ?? (evidence ? null : true),
+    // No default: passing is ticked explicitly.
+    passed: evidence?.passed ?? (evidence ? null : false),
     minutes: evidence?.minutes ?? null,
     note: evidence?.note ?? '',
   }));
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
   const below = form.kind === 'stress-exercise' && form.kilojoules !== null && form.kilojoules < minimumKilojoules;
   const body = { ...form, passed: below ? false : form.passed };
+  // A stress exercise without kJ counts only with a reason in the note (e.g. "ohne Messung: Anlage defekt").
+  const unmeasured = form.kind === 'stress-exercise' && form.passed !== false && form.kilojoules === null && !form.note.trim();
   const save = useAction(() => (evidence ? send('PUT', `respiratory-protection/evidence/${evidence.id}`, body) : send('POST', 'respiratory-protection/evidence', body)), {
     success: t('evidence.saved'),
     invalidate: [keys.all],
@@ -61,7 +64,7 @@ export function EvidenceDialog({ personId, evidence, kinds, minimumKilojoules, o
       actions={
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button>
-          <Button loading={save.isPending} disabled={!form.date || (examination && (!form.result || (form.result === 'no-concerns-limited' && !form.validUntil)))} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
+          <Button loading={save.isPending} disabled={!form.date || unmeasured || (examination && (!form.result || (form.result === 'no-concerns-limited' && !form.validUntil)))} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
         </Group>
       }
     >
@@ -90,7 +93,7 @@ export function EvidenceDialog({ personId, evidence, kinds, minimumKilojoules, o
         {stress && (
           <>
             <TextInput label={t('evidence.facility')} value={form.facility} onChange={(e) => set('facility', e.currentTarget.value)} />
-            <NumberInput label={t('evidence.kilojoules')} description={t('evidence.minimum', { kilojoules: minimumKilojoules })} value={form.kilojoules ?? ''} onChange={(v) => set('kilojoules', v === '' ? null : Number(v))} min={0} error={below ? t('evidence.belowMinimum', { kilojoules: minimumKilojoules }) : undefined} />
+            <NumberInput label={t('evidence.kilojoules')} description={t('evidence.minimum', { kilojoules: minimumKilojoules })} value={form.kilojoules ?? ''} onChange={(v) => set('kilojoules', v === '' ? null : Number(v))} min={0} error={below ? t('evidence.belowMinimum', { kilojoules: minimumKilojoules }) : unmeasured ? t('evidence.kilojoulesRequired') : undefined} />
             <Checkbox label={t('evidence.passed')} checked={below ? false : (form.passed ?? false)} disabled={below} onChange={(e) => set('passed', e.currentTarget.checked)} mt="xl" />
           </>
         )}

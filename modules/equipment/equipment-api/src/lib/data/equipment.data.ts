@@ -58,6 +58,7 @@ export class EquipmentData implements DeadlineProvider {
           departmentIds: [item.departmentId],
           permission: inspect(item.categoryKey),
           group: group(item.categoryKey, item.vehicleId),
+          to: `/equipment/items/${item.id}?tab=inspections`,
         });
       }
       if (item.expiresOn) {
@@ -71,6 +72,7 @@ export class EquipmentData implements DeadlineProvider {
           departmentIds: [item.departmentId],
           permission: write(item.categoryKey),
           group: group(item.categoryKey, item.vehicleId),
+          to: `/equipment/items/${item.id}`,
         });
       }
     }
@@ -79,11 +81,13 @@ export class EquipmentData implements DeadlineProvider {
         id: `defect:${defect.id}`,
         kind: 'equipment-defect',
         title: { de: 'Mangel bearbeiten', en: 'Handle defect' },
-        subject: { type: 'equipment.item', id: defect.item.id, label: `${defect.item.inventoryNumber} ${defect.item.name}: ${defect.description}` },
+        // The label names the reported text; a finding of an inspection without notes only names the item.
+        subject: { type: 'equipment.item', id: defect.item.id, label: [`${defect.item.inventoryNumber} ${defect.item.name}`, defect.description].filter(Boolean).join(': ') },
         dueOn: berlinDate(defect.reportedAt),
         leadDays: 0,
         departmentIds: [defect.item.departmentId],
         permission: write(defect.item.categoryKey),
+        to: `/equipment/items/${defect.item.id}?tab=defects`,
       });
     }
     return deadlines;

@@ -110,6 +110,8 @@ export const Due = z.object({
   dueOn: z.string().nullable(),
   /** Overdue or due today. */
   overdue: z.boolean(),
+  /** Never inspected and no date to measure from (vehicles taken over from the master data): "not recorded yet". */
+  notRecorded: z.boolean(),
 });
 export type Due = z.infer<typeof Due>;
 
@@ -160,6 +162,8 @@ export const ItemSummary = z.object({
   name: z.string(),
   departmentId: z.uuid(),
   status: ItemStatus,
+  /** An inspection is overdue and the category locks such items: not ready. */
+  blocked: z.boolean(),
   reportOnly: z.literal(true),
 });
 export type ItemSummary = z.infer<typeof ItemSummary>;
@@ -214,14 +218,18 @@ export type InspectionCorrection = z.input<typeof InspectionCorrection>;
 export const InspectionCancellation = z.object({ reason: z.string().trim().min(3) });
 export type InspectionCancellation = z.input<typeof InspectionCancellation>;
 
-export const DefectStatus = z.enum(['reported', 'in-progress', 'fixed', 'retired']);
+/** `withdrawn`: the inspection that recorded the defect was cancelled or corrected to "passed". */
+export const DefectStatus = z.enum(['reported', 'in-progress', 'fixed', 'retired', 'withdrawn']);
 export type DefectStatus = z.infer<typeof DefectStatus>;
 
 export const DefectInput = z.object({ description: z.string().trim().min(3) });
 export type DefectInput = z.input<typeof DefectInput>;
 
-export const DefectUpdate = z.object({ status: DefectStatus, resolution: text });
+export const DefectUpdate = z.object({ status: DefectStatus.exclude(['withdrawn']), resolution: text });
 export type DefectUpdate = z.input<typeof DefectUpdate>;
+
+/** Defects that still count (open). */
+export const OPEN_DEFECT: readonly DefectStatus[] = ['reported', 'in-progress'];
 
 export const Defect = z.object({
   id: z.uuid(),
@@ -230,7 +238,10 @@ export const Defect = z.object({
   inventoryNumber: z.string(),
   categoryKey: z.string(),
   departmentId: z.uuid(),
+  /** Text of the reporter; for a finding of an inspection its notes (may be empty). */
   description: z.string(),
+  /** Defect recorded by an inspection (failed or with defects); shown as "<inspection type>: <notes or result>". */
+  finding: z.object({ inspectionId: z.uuid(), name: LocalizedText, result: InspectionResult }).nullable(),
   status: DefectStatus,
   resolution: z.string(),
   reportedBy: z.string(),
@@ -238,6 +249,10 @@ export const Defect = z.object({
   resolvedAt: z.string().nullable(),
 });
 export type Defect = z.infer<typeof Defect>;
+
+/** Item a member may report a defect for ("My area"), with vehicle or station and loading place. */
+export const ReportableItem = z.object({ id: z.uuid(), inventoryNumber: z.string(), name: z.string(), place: z.string() });
+export type ReportableItem = z.infer<typeof ReportableItem>;
 
 /** Labels printed for these items (filter "without label"). */
 export const LabelsPrintedInput = z.object({ itemIds: z.array(z.uuid()).min(1) });

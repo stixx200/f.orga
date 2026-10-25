@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router';
 import type { InitialInspection, Item, ItemInput } from '@forga/equipment-contracts';
 import { can, localDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { CodeInput, ResponsiveDialog, useAction } from '@forga/web-ui';
-import { keys, useCategories, useDepartments, useStations, useTypes, useVehicles, WRITE } from '../api';
+import { BREATHING_WRITE, keys, useCategories, useDepartments, useStations, useTypes, useVehicles, WRITE } from '../api';
 
 type Form = Required<Omit<ItemInput, 'inspections' | 'version' | 'initialInspections'>>;
 
@@ -50,7 +50,12 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
   const [form, setForm] = useState<Form>(() => fromItem(item));
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
   const type = types.find((x) => x.key === form.typeKey);
-  const writable = departments.filter((d) => can(session, WRITE, d.id));
+  // Breathing apparatus officers (`equipment.breathing.write` only) create and edit items of breathing apparatus categories.
+  const breathing = (key: string) => Boolean(categories.find((c) => c.key === key)?.breathingApparatus);
+  const general = (departmentId: string) => can(session, WRITE, departmentId);
+  const writable = departments.filter((d) => general(d.id) || (breathing(form.categoryKey) && can(session, BREATHING_WRITE, d.id)));
+  const allowedCategories = categories.filter((c) => c.breathingApparatus || departments.some((d) => general(d.id)));
+  const allowedTypes = types.filter((x) => allowedCategories.some((c) => c.key === x.categoryKey));
   const departmentId = form.departmentId || (writable.length === 1 ? writable[0].id : '');
   const stock = categories.find((c) => c.key === form.categoryKey)?.tracking === 'stock';
   const [initial, setInitial] = useState<Record<string, { date: string | null; nextDueOn: string | null }>>({});
@@ -89,7 +94,7 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <Select
             label={t('fields.type')}
-            data={types.map((x) => ({ value: x.key, label: localized(x.name) }))}
+            data={allowedTypes.map((x) => ({ value: x.key, label: localized(x.name) }))}
             value={form.typeKey}
             onChange={(v) => {
               const chosen = types.find((x) => x.key === v);
@@ -98,7 +103,7 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
             searchable
             clearable
           />
-          <Select label={t('fields.category')} data={categories.map((c) => ({ value: c.key, label: localized(c.name) }))} value={form.categoryKey || null} onChange={(v) => set('categoryKey', v ?? '')} required />
+          <Select label={t('fields.category')} data={allowedCategories.map((c) => ({ value: c.key, label: localized(c.name) }))} value={form.categoryKey || null} onChange={(v) => set('categoryKey', v ?? '')} required />
           <TextInput label={t('fields.inventoryNumber')} value={form.inventoryNumber} onChange={(e) => set('inventoryNumber', e.currentTarget.value)} required />
           <TextInput label={t('fields.name')} value={form.name} onChange={(e) => set('name', e.currentTarget.value)} required />
           <TextInput label={t('fields.serialNumber')} value={form.serialNumber} onChange={(e) => set('serialNumber', e.currentTarget.value)} />
@@ -106,7 +111,7 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
           <CodeInput label={common('codes.rfid')} description={common('codes.rfidHint')} value={form.rfid ?? ''} onChange={(v) => set('rfid', v)} source="nfc" />
           <TextInput label={t('fields.manufacturer')} value={form.manufacturer} onChange={(e) => set('manufacturer', e.currentTarget.value)} />
           <NumberInput label={t('fields.yearBuilt')} value={form.yearBuilt ?? ''} onChange={(v) => set('yearBuilt', v === '' ? null : Number(v))} min={1900} max={2100} />
-          <DateInput label={t('fields.purchasedOn')} value={form.purchasedOn} onChange={(v) => set('purchasedOn', v)} valueFormat="DD.MM.YYYY" clearable />
+          <DateInput label={t('fields.purchasedOn')} value={form.purchasedOn} onChange={(v) => set('purchasedOn', v)} valueFormat="DD.MM.YYYY" minDate="1900-01-01" maxDate={localDate()} clearable />
           <NumberInput label={t('fields.price')} value={form.price ?? ''} onChange={(v) => set('price', v === '' ? null : Number(v))} min={0} decimalScale={2} suffix=" €" />
           <DateInput label={t('fields.expiresOn')} value={form.expiresOn} onChange={(v) => set('expiresOn', v)} valueFormat="DD.MM.YYYY" clearable />
           <Select label={t('fields.department')} data={writable.map((d) => ({ value: d.id, label: d.name }))} value={departmentId || null} onChange={(v) => set('departmentId', v ?? '')} required />
@@ -155,7 +160,7 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
                     </Table.Td>
                     {!item && (
                       <Table.Td>
-                        <DateInput aria-label={t('item.lastInspection')} w={140} value={initial[x.key]?.date ?? null} maxDate={localDate()} onChange={(v) => setInitial({ ...initial, [x.key]: { date: v, nextDueOn: initial[x.key]?.nextDueOn ?? null } })} valueFormat="DD.MM.YYYY" clearable />
+                        <DateInput aria-label={t('item.lastInspection')} w={140} value={initial[x.key]?.date ?? null} minDate={form.purchasedOn ?? '1900-01-01'} maxDate={localDate()} onChange={(v) => setInitial({ ...initial, [x.key]: { date: v, nextDueOn: initial[x.key]?.nextDueOn ?? null } })} valueFormat="DD.MM.YYYY" clearable />
                       </Table.Td>
                     )}
                     {!item && (

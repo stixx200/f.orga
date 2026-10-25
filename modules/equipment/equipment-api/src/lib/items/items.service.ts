@@ -1,7 +1,8 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, type OnModuleInit, Optional } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
+import { v7 as uuidv7 } from 'uuid';
 import { assertVersion, type AuthenticatedUser, berlinDate, DomainEvents, Notifications, wordsWhere } from '@forga/core-api';
-import { normalizeRfid } from '@forga/core-contracts';
+import { type LocalizedText, normalizeRfid } from '@forga/core-contracts';
 import {
   addMonths,
   BulkInspectionInput,
@@ -14,6 +15,7 @@ import {
   type EquipmentUsageLookup,
   type Inspection,
   InspectionCancellation,
+  type InspectionResult,
   InspectionCorrection,
   InspectionInput,
   type InspectionType,
@@ -25,13 +27,15 @@ import {
   type ItemStatusChangedEvent,
   type ItemSummary,
   type LastInspection,
+  OPEN_DEFECT,
+  type ReportableItem,
   type ReportUsage,
   ReportUsageInput,
   RetireInput,
   withIntervals,
 } from '@forga/equipment-contracts';
 import { INCIDENTS_EVENTS, INCIDENTS_LOOKUP, type IncidentsLookup, type ReportReleasedEvent } from '@forga/incidents-contracts';
-import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
+import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { type SessionClosedEvent, TRAINING_EVENTS, TRAINING_SESSIONS, type TrainingSessions } from '@forga/training-contracts';
 import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, UsageEntity } from '../equipment.entities.js';
 
@@ -56,6 +60,24 @@ type ParsedItem = ReturnType<typeof ItemInput.parse>;
 type ParsedInspection = ReturnType<typeof InspectionInput.parse>;
 type Action = 'write' | 'inspect';
 type UsageSource = 'incidents' | 'training';
+/** Events and e-mails that go out only after the transaction has been committed. */
+type AfterCommit = (() => Promise<void>)[];
+
+/** Earliest date of an inspection or purchase. */
+const EARLIEST = '1900-01-01';
+
+/** Results of inspections in both languages (defect texts in e-mails and lists). */
+export const RESULT_NAMES: Record<InspectionResult, LocalizedText> = {
+  passed: { de: 'bestanden', en: 'passed' },
+  'passed-with-defects': { de: 'mit Mängeln', en: 'with defects' },
+  failed: { de: 'nicht bestanden', en: 'failed' },
+};
+
+/** Text of a defect: as reported, or for a finding of an inspection "<inspection type>: <notes or result>". */
+export function defectText(defect: Pick<Defect, 'description' | 'finding'>, language: 'de' | 'en'): string {
+  if (!defect.finding) return defect.description;
+  return `${defect.finding.name[language] || defect.finding.name.de}: ${defect.description || RESULT_NAMES[defect.finding.result][language]}`;
+}
 
 /** Qualification an inspector person should have; other inspectors are external. */
 const INSPECTOR_QUALIFICATION: Partial<Record<InspectionType['inspector'], (breathing: boolean) => string>> = {
@@ -69,11 +91,12 @@ const toInspectionDto = (i: InspectionEntity): Inspection => ({
 });
 
 export const toDefectDto = (d: DefectEntity): Defect => ({
-  id: d.id, itemId: d.item.id, itemName: d.item.name, inventoryNumber: d.item.inventoryNumber, categoryKey: d.item.categoryKey, departmentId: d.item.departmentId, description: d.description, status: d.status,
+  id: d.id, itemId: d.item.id, itemName: d.item.name, inventoryNumber: d.item.inventoryNumber, categoryKey: d.item.categoryKey, departmentId: d.item.departmentId, description: d.description,
+  finding: d.inspectionId && d.findingName && d.findingResult ? { inspectionId: d.inspectionId, name: d.findingName, result: d.findingResult } : null, status: d.status,
   resolution: d.resolution, reportedBy: d.reportedBy, reportedAt: d.reportedAt.toISOString(), resolvedAt: d.resolvedAt ? d.resolvedAt.toISOString() : null,
 });
 
-const toSummary = (i: EquipmentItemEntity): ItemSummary => ({ id: i.id, inventoryNumber: i.inventoryNumber, name: i.name, departmentId: i.departmentId, status: i.status, reportOnly: true });
+const toSummary = (i: Item): ItemSummary => ({ id: i.id, inventoryNumber: i.inventoryNumber, name: i.name, departmentId: i.departmentId, status: i.status, blocked: i.blocked, reportOnly: true });
 
 @Injectable()
 export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
@@ -82,6 +105,7 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     private readonly events: DomainEvents,
     private readonly notifications: Notifications,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
+    @Inject(ORGANIZATION) private readonly organization: Organization,
     @Optional() @Inject(INCIDENTS_LOOKUP) private readonly incidents?: IncidentsLookup,
     @Optional() @Inject(TRAINING_SESSIONS) private readonly sessions?: TrainingSessions,
   ) {}
@@ -130,10 +154,11 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     return item;
   }
 
-  /** The item for readers; members who may only report defects get the summary (no price, serial number, inspections). */
+  /** The item for readers; members who may only report defects get the summary (status and "blocked", no price, serial number, inspections). */
   async view(user: AuthenticatedUser, id: string): Promise<Item | ItemSummary> {
     const item = await this.load(this.em.fork(), id, user);
-    return user.can(READ, item.departmentId) ? (await this.toDtos([item]))[0] : toSummary(item);
+    const [dto] = await this.toDtos([item]);
+    return user.can(READ, item.departmentId) ? dto : toSummary(dto);
   }
 
   /** E-mail to those who are to be told about new defects in the department of the item (breathing apparatus: their own permission). */
@@ -142,6 +167,7 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     const defect = await em.findOne(DefectEntity, event.defectId, { populate: ['item'] });
     if (!defect) return;
     const { item } = defect;
+    const dto = toDefectDto(defect);
     await this.notifications.notify({
       permission: (await this.isBreathing(em, item)) ? BREATHING_NOTIFY : NOTIFY_DEFECTS,
       departmentId: item.departmentId,
@@ -150,8 +176,8 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
       path: `/equipment/items/${item.id}?tab=defects`,
       compose: (language, name) =>
         language === 'de'
-          ? { subject: `Neuer Mangel: ${item.name} (${item.inventoryNumber})`, text: `Hallo ${name},\n\n${defect.reportedBy} hat einen Mangel gemeldet:\n\n${item.name} (${item.inventoryNumber})\n${defect.description}` }
-          : { subject: `New defect: ${item.name} (${item.inventoryNumber})`, text: `Hello ${name},\n\n${defect.reportedBy} reported a defect:\n\n${item.name} (${item.inventoryNumber})\n${defect.description}` },
+          ? { subject: `Neuer Mangel: ${item.name} (${item.inventoryNumber})`, text: `Hallo ${name},\n\n${defect.reportedBy} hat einen Mangel gemeldet:\n\n${item.name} (${item.inventoryNumber})\n${defectText(dto, 'de')}` }
+          : { subject: `New defect: ${item.name} (${item.inventoryNumber})`, text: `Hello ${name},\n\n${defect.reportedBy} reported a defect:\n\n${item.name} (${item.inventoryNumber})\n${defectText(dto, 'en')}` },
     });
   }
 
@@ -196,12 +222,12 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
       if (!perItem.has(i.inspectionKey)) perItem.set(i.inspectionKey, { date: i.date, nextDueOn: i.nextDueOn ?? null, result: i.result });
       last.set(i.item.id, perItem);
     }
-    const defects = await em.find(DefectEntity, { item: { $in: ids }, status: { $in: ['reported', 'in-progress'] } });
+    const defects = await em.find(DefectEntity, { item: { $in: ids }, status: { $in: [...OPEN_DEFECT] } });
     return items.map((item) => {
       const dues =
         item.status === 'retired'
           ? []
-          : computeDues(inspections.get(item.id) ?? [], last.get(item.id) ?? new Map(), item.triggered, today, { purchasedOn: item.purchasedOn ?? null, createdOn: item.createdOn });
+          : computeDues(inspections.get(item.id) ?? [], last.get(item.id) ?? new Map(), item.triggered, today, { purchasedOn: item.purchasedOn ?? null, createdOn: item.createdOn, dueFromRecording: !item.forVehicleId });
       const due = dues.map((d) => d.dueOn).filter((d): d is string => d !== null).toSorted();
       return {
         id: item.id, inventoryNumber: item.inventoryNumber, name: item.name, typeKey: item.typeKey ?? null, categoryKey: item.categoryKey, serialNumber: item.serialNumber, barcode: item.barcode ?? null, rfid: item.rfid ?? null, manufacturer: item.manufacturer,
@@ -244,23 +270,33 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     if (!(await em.count(CategoryEntity, { key: input.categoryKey }))) throw new BadRequestException({ code: 'equipment.unknownCategory', key: input.categoryKey });
     const type = input.typeKey ? await em.findOne(EquipmentTypeEntity, { key: input.typeKey }) : null;
     if (input.typeKey && !type) throw new BadRequestException({ code: 'equipment.unknownType', key: input.typeKey });
+    if (input.purchasedOn && input.purchasedOn > berlinDate()) throw new BadRequestException({ code: 'equipment.purchaseInFuture', date: input.purchasedOn });
+    if (input.purchasedOn && input.purchasedOn < EARLIEST) throw new BadRequestException({ code: 'equipment.dateTooEarly', date: input.purchasedOn });
     // Overrides and initial inspections only for inspection types of the item.
     const keys = new Set((input.inspections ?? type?.inspections ?? []).map((t) => t.key));
     for (const key of [...Object.keys(input.intervalOverrides), ...input.initialInspections.map((i) => i.inspectionKey)]) {
       if (!keys.has(key)) throw new BadRequestException({ code: 'equipment.unknownInspection', key });
     }
-    for (const initial of input.initialInspections) this.checkDates(initial.date, initial.nextDueOn);
+    for (const initial of input.initialInspections) this.checkDates(initial.date, initial.nextDueOn, input.purchasedOn);
   }
 
-  /** An inspection lies in the past (or today); its next due date after it. */
-  private checkDates(date: string, nextDueOn: string | null): void {
+  /** An inspection lies in the past (or today), not before 1900 or the purchase; its next due date after it. */
+  private checkDates(date: string, nextDueOn: string | null, purchasedOn: string | null | undefined): void {
     if (date > berlinDate()) throw new BadRequestException({ code: 'equipment.inspectionInFuture', date });
+    if (date < EARLIEST) throw new BadRequestException({ code: 'equipment.dateTooEarly', date });
+    if (purchasedOn && date < purchasedOn) throw new BadRequestException({ code: 'equipment.inspectionBeforePurchase', date, purchasedOn });
     if (nextDueOn && nextDueOn <= date) throw new BadRequestException({ code: 'equipment.nextDueNotAfterDate', date, nextDueOn });
   }
 
+  /** Whether items of the category are breathing apparatus. */
+  private async breathingCategory(em: EntityManager, categoryKey: string): Promise<boolean> {
+    return (await em.count(CategoryEntity, { key: categoryKey, breathingApparatus: true })) > 0;
+  }
+
+  /** Creating: `equipment.write` in the department, for breathing apparatus categories also `equipment.breathing.write`. */
   async create(user: AuthenticatedUser, input: ParsedItem): Promise<Item> {
-    if (!user.can(WRITE, input.departmentId)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
     const em = this.em.fork();
+    this.requireMay(user, 'write', input, await this.breathingCategory(em, input.categoryKey));
     await this.validate(em, input);
     const { version: _version, initialInspections, ...fields } = input;
     const item = em.create(EquipmentItemEntity, { ...fields, status: 'ready', triggered: {}, forVehicleId: null });
@@ -275,12 +311,13 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     return (await this.toDtos([item]))[0];
   }
 
+  /** Editing: write permission for the item as it is and as it will be (department and category, breathing apparatus included). */
   async update(user: AuthenticatedUser, id: string, input: ParsedItem): Promise<Item> {
     const em = this.em.fork();
     const item = await this.load(em, id, user);
-    this.require(user, WRITE, item);
+    this.requireMay(user, 'write', item, await this.isBreathing(em, item));
     assertVersion(item, input.version);
-    if (!user.can(WRITE, input.departmentId)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
+    this.requireMay(user, 'write', input, await this.breathingCategory(em, input.categoryKey));
     await this.validate(em, { ...input, initialInspections: [] }, id);
     const { version: _version, initialInspections: _initial, ...fields } = input;
     Object.assign(item, fields);
@@ -288,11 +325,12 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     return (await this.toDtos([item]))[0];
   }
 
-  private async setStatus(item: EquipmentItemEntity, status: ItemStatus): Promise<void> {
+  /** Sets the status; the event goes out after the commit (`after`). */
+  private setStatus(item: EquipmentItemEntity, status: ItemStatus, after: AfterCommit): void {
     if (item.status === status) return;
     const previous = item.status;
     item.status = status;
-    await this.events.publish<ItemStatusChangedEvent>(EQUIPMENT_EVENTS.statusChanged, { itemId: item.id, previous, status });
+    after.push(() => this.events.publish<ItemStatusChangedEvent>(EQUIPMENT_EVENTS.statusChanged, { itemId: item.id, previous, status }));
   }
 
   async changeStatus(user: AuthenticatedUser, id: string, status: Exclude<ItemStatus, 'retired'>): Promise<Item> {
@@ -310,14 +348,16 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
   async retire(user: AuthenticatedUser, id: string, input: ReturnType<typeof RetireInput.parse>): Promise<Item> {
     const em = this.em.fork();
     const item = await this.load(em, id, user);
-    this.require(user, WRITE, item);
+    this.requireMay(user, 'write', item, await this.isBreathing(em, item));
+    const after: AfterCommit = [];
     item.retirement = input;
-    await this.setStatus(item, 'retired');
-    for (const defect of await em.find(DefectEntity, { item, status: { $in: ['reported', 'in-progress'] } })) {
+    this.setStatus(item, 'retired', after);
+    for (const defect of await em.find(DefectEntity, { item, status: { $in: [...OPEN_DEFECT] } })) {
       defect.status = 'retired';
       defect.resolvedAt = new Date();
     }
     await em.flush();
+    for (const publish of after) await publish();
     return (await this.toDtos([item]))[0];
   }
 
@@ -356,63 +396,107 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     return input.nextDueOn ?? (type.intervalMonths ? addMonths(input.date, type.intervalMonths) : null);
   }
 
-  private async record(em: EntityManager, user: AuthenticatedUser, item: EquipmentItemEntity, input: ParsedInspection, types: InspectionType[], breathing: boolean): Promise<InspectionEntity> {
+  /** Checks an inspection before anything is written: permission, item not retired, inspection type of the item, dates. */
+  private inspectable(user: AuthenticatedUser, item: EquipmentItemEntity, input: ParsedInspection, types: InspectionType[], breathing: boolean): InspectionType {
     this.requireMay(user, 'inspect', item, breathing);
     if (item.status === 'retired') throw new ConflictException({ code: 'equipment.retired' });
     const type = types.find((t) => t.key === input.inspectionKey);
     if (!type) throw new BadRequestException({ code: 'equipment.unknownInspection', key: input.inspectionKey });
-    this.checkDates(input.date, input.result === 'failed' ? null : input.nextDueOn);
+    this.checkDates(input.date, input.result === 'failed' ? null : input.nextDueOn, item.purchasedOn);
+    return type;
+  }
+
+  /**
+   * Records a checked inspection (`inspectable`): a passed one settles a trigger ("after use" …) up to its date; a failed
+   * one makes the item defective, a failed one or one with defects records a defect; then the status follows.
+   */
+  private async record(em: EntityManager, user: AuthenticatedUser, item: EquipmentItemEntity, input: ParsedInspection, type: InspectionType, types: InspectionType[], breathing: boolean, after: AfterCommit): Promise<InspectionEntity> {
+    const trigger = item.triggered[input.inspectionKey];
+    const settles = input.result !== 'failed' && Boolean(trigger) && trigger <= input.date;
+    if (settles) {
+      const { [input.inspectionKey]: _done, ...rest } = item.triggered;
+      item.triggered = rest;
+    }
     const inspection = em.create(InspectionEntity, {
       ...input,
+      id: uuidv7(),
       item,
       nextDueOn: this.nextDue(type, input),
       recordedBy: user.displayName,
       qualificationWarning: await this.qualificationWarning(type, input.inspectorPersonId, input.date, breathing),
+      clearedTrigger: settles ? trigger : null,
     });
-    if (input.result !== 'failed' && item.triggered[input.inspectionKey] && item.triggered[input.inspectionKey] <= input.date) {
-      const { [input.inspectionKey]: _done, ...rest } = item.triggered;
-      item.triggered = rest;
-    }
-    if (input.result === 'failed') {
-      await this.setStatus(item, 'defective');
-      await this.reportFinding(em, user, item, `${type.name.de}: ${input.notes || 'nicht bestanden'}`);
-    } else if (input.result === 'passed-with-defects') {
-      // Usable with defects: the defect is recorded, the status stays.
-      await this.reportFinding(em, user, item, `${type.name.de}: ${input.notes || 'mit Mängeln'}`);
-    } else if (item.status === 'in-inspection' || item.status === 'defective') {
-      await this.setStatus(item, 'ready');
-    }
+    if (input.result !== 'passed') this.reportFinding(em, user, item, inspection, type, after);
+    if (input.result === 'failed') this.setStatus(item, 'defective', after);
+    else await this.settle(em, item, types, after, input.result === 'passed');
     return inspection;
   }
 
-  private async reportFinding(em: EntityManager, user: AuthenticatedUser, item: EquipmentItemEntity, description: string): Promise<void> {
-    const defect = em.create(DefectEntity, { item, description, status: 'reported', reportedBy: user.displayName });
+  /** Defect for a failed inspection or one with defects; the e-mail goes out after the commit. */
+  private reportFinding(em: EntityManager, user: AuthenticatedUser, item: EquipmentItemEntity, inspection: InspectionEntity, type: InspectionType, after: AfterCommit): void {
+    const defect = em.create(DefectEntity, {
+      id: uuidv7(), item, description: inspection.notes, inspectionId: inspection.id, findingName: type.name, findingResult: inspection.result, status: 'reported', reportedBy: user.displayName,
+    });
+    after.push(() => this.events.publish<DefectReportedEvent>(EQUIPMENT_EVENTS.defectReported, { defectId: defect.id, itemId: item.id, departmentId: item.departmentId, description: defect.description }));
+  }
+
+  /**
+   * Status after inspections changed: the latest valid inspection of a type failed → defective (unless in repair);
+   * otherwise, without open defects, a defective item becomes ready, one "in inspection" only with a passed inspection
+   * (`released`).
+   */
+  private async settle(em: EntityManager, item: EquipmentItemEntity, types: InspectionType[], after: AfterCommit, released: boolean): Promise<void> {
+    if (item.status === 'retired') return;
     await em.flush();
-    await this.events.publish<DefectReportedEvent>(EQUIPMENT_EVENTS.defectReported, { defectId: defect.id, itemId: item.id, departmentId: item.departmentId, description });
+    const keys = new Set(types.map((t) => t.key));
+    const latest = new Map<string, InspectionResult>();
+    for (const i of await em.find(InspectionEntity, { item, cancelled: false }, { orderBy: { date: 'desc', id: 'desc' } })) {
+      if (keys.has(i.inspectionKey) && !latest.has(i.inspectionKey)) latest.set(i.inspectionKey, i.result);
+    }
+    if ([...latest.values()].includes('failed')) {
+      if (item.status === 'ready' || item.status === 'in-inspection') this.setStatus(item, 'defective', after);
+      return;
+    }
+    if (await em.count(DefectEntity, { item, status: { $in: [...OPEN_DEFECT] } })) return;
+    if (item.status === 'defective' || (item.status === 'in-inspection' && released)) this.setStatus(item, 'ready', after);
+  }
+
+  /** Runs `work` in a transaction and publishes its events and e-mails after the commit. */
+  private async inTransaction<T>(work: (em: EntityManager, after: AfterCommit) => Promise<T>): Promise<T> {
+    const after: AfterCommit = [];
+    const result = await this.em.fork().transactional((em) => work(em, after));
+    for (const publish of after) await publish();
+    return result;
   }
 
   async inspect(user: AuthenticatedUser, id: string, input: ParsedInspection): Promise<Inspection> {
-    const em = this.em.fork();
-    const item = await this.load(em, id, user);
-    const types = (await this.inspectionsOf(em, [item])).get(item.id) ?? [];
-    const inspection = await this.record(em, user, item, input, types, await this.isBreathing(em, item));
-    await em.flush();
+    const inspection = await this.inTransaction(async (em, after) => {
+      const item = await this.load(em, id, user);
+      const types = (await this.inspectionsOf(em, [item])).get(item.id) ?? [];
+      const breathing = await this.isBreathing(em, item);
+      const type = this.inspectable(user, item, input, types, breathing);
+      return this.record(em, user, item, input, type, types, breathing, after);
+    });
     return toInspectionDto(inspection);
   }
 
+  /** All or nothing: every item is checked (permission, inspection type, dates) before the first inspection is written. */
   async bulkInspect(user: AuthenticatedUser, input: ReturnType<typeof BulkInspectionInput.parse>): Promise<{ recorded: number }> {
-    const em = this.em.fork();
-    const items = await em.find(EquipmentItemEntity, { id: { $in: input.itemIds } });
-    if (items.length !== new Set(input.itemIds).size) throw new NotFoundException();
-    const types = await this.inspectionsOf(em, items);
-    const breathing = await this.breathingCategories(em);
-    const { itemIds: _ids, ...single } = input;
-    for (const item of items) await this.record(em, user, item, { ...single, checklist: [], nextDueOn: null }, types.get(item.id) ?? [], breathing.has(item.categoryKey));
-    await em.flush();
-    return { recorded: items.length };
+    const { itemIds, ...single } = input;
+    const parsed: ParsedInspection = { ...single, checklist: [], nextDueOn: null };
+    return this.inTransaction(async (em, after) => {
+      const items = await em.find(EquipmentItemEntity, { id: { $in: itemIds } });
+      if (items.length !== new Set(itemIds).size) throw new NotFoundException();
+      const types = await this.inspectionsOf(em, items);
+      const breathing = await this.breathingCategories(em);
+      const checked = items.map((item) => ({ item, type: this.inspectable(user, item, parsed, types.get(item.id) ?? [], breathing.has(item.categoryKey)) }));
+      for (const { item, type } of checked) await this.record(em, user, item, parsed, type, types.get(item.id) ?? [], breathing.has(item.categoryKey), after);
+      await em.flush();
+      return { recorded: items.length };
+    });
   }
 
-  private async loadInspection(em: EntityManager, user: AuthenticatedUser, id: string): Promise<{ inspection: InspectionEntity; type: InspectionType; breathing: boolean }> {
+  private async loadInspection(em: EntityManager, user: AuthenticatedUser, id: string): Promise<{ inspection: InspectionEntity; type: InspectionType; types: InspectionType[]; breathing: boolean }> {
     const inspection = await em.findOne(InspectionEntity, id, { populate: ['item'] });
     if (!inspection || !user.can(READ, inspection.item.departmentId)) throw new NotFoundException();
     const breathing = await this.isBreathing(em, inspection.item);
@@ -420,33 +504,83 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     if (inspection.cancelled) throw new ConflictException({ code: 'equipment.inspectionCancelled' });
     const types = (await this.inspectionsOf(em, [inspection.item])).get(inspection.item.id) ?? [];
     const type = types.find((t) => t.key === inspection.inspectionKey) ?? { key: inspection.inspectionKey, name: { de: inspection.inspectionKey, en: inspection.inspectionKey }, intervalMonths: null, trigger: 'periodic', inspector: 'user', checklist: [] };
-    return { inspection, type, breathing };
+    return { inspection, type, types, breathing };
   }
 
-  /** Corrects a recorded inspection (typing error, wrong date or result); the reason stays with it and in the history. Status and defects stay. */
+  /** Withdraws the open defects an inspection recorded (it was cancelled or corrected to "passed"). */
+  private async withdrawFindings(em: EntityManager, inspection: InspectionEntity, reason: string): Promise<void> {
+    for (const defect of await em.find(DefectEntity, { inspectionId: inspection.id, status: { $in: [...OPEN_DEFECT] } })) {
+      defect.status = 'withdrawn';
+      defect.resolution = reason;
+      defect.resolvedAt = new Date();
+    }
+  }
+
+  /** Puts back the trigger an inspection settled, unless a later one is set. */
+  private restoreTrigger(inspection: InspectionEntity): void {
+    const { item, clearedTrigger } = inspection;
+    if (!clearedTrigger) return;
+    const current = item.triggered[inspection.inspectionKey];
+    if (!current || current < clearedTrigger) item.triggered = { ...item.triggered, [inspection.inspectionKey]: clearedTrigger };
+    inspection.clearedTrigger = null;
+  }
+
+  /**
+   * Corrects a recorded inspection (typing error, wrong date or result); the reason stays with it and in the history.
+   * The consequences follow the new result as for a new inspection: corrected to "failed" the item becomes defective
+   * with a defect, to "passed" the defects of the inspection are withdrawn; then the status is settled again.
+   */
   async correctInspection(user: AuthenticatedUser, id: string, input: ReturnType<typeof InspectionCorrection.parse>): Promise<Inspection> {
-    const em = this.em.fork();
-    const { inspection, type, breathing } = await this.loadInspection(em, user, id);
-    this.checkDates(input.date, input.result === 'failed' ? null : input.nextDueOn);
-    const { reason, ...fields } = input;
-    Object.assign(inspection, {
-      ...fields,
-      nextDueOn: this.nextDue(type, input),
-      qualificationWarning: await this.qualificationWarning(type, input.inspectorPersonId, input.date, breathing),
-      changeReason: reason,
+    const corrected = await this.inTransaction(async (em, after) => {
+      const { inspection, type, types, breathing } = await this.loadInspection(em, user, id);
+      const { item } = inspection;
+      this.checkDates(input.date, input.result === 'failed' ? null : input.nextDueOn, item.purchasedOn);
+      const previous = inspection.result;
+      const { reason, ...fields } = input;
+      Object.assign(inspection, {
+        ...fields,
+        nextDueOn: this.nextDue(type, input),
+        qualificationWarning: await this.qualificationWarning(type, input.inspectorPersonId, input.date, breathing),
+        changeReason: reason,
+      });
+      if (input.result === 'passed') await this.withdrawFindings(em, inspection, reason);
+      else if (previous === 'passed') this.reportFinding(em, user, item, inspection, type, after);
+      else {
+        for (const defect of await em.find(DefectEntity, { inspectionId: inspection.id, status: { $in: [...OPEN_DEFECT] } })) {
+          defect.findingResult = input.result;
+          defect.description = input.notes;
+        }
+      }
+      // A failed inspection does not settle a trigger; a passed one settles it up to its date.
+      const trigger = item.triggered[inspection.inspectionKey];
+      if (input.result === 'failed') this.restoreTrigger(inspection);
+      else if (trigger && trigger <= input.date) {
+        const { [inspection.inspectionKey]: _done, ...rest } = item.triggered;
+        item.triggered = rest;
+        inspection.clearedTrigger = trigger;
+      }
+      if (input.result === 'failed' && previous !== 'failed' && item.status !== 'retired') this.setStatus(item, 'defective', after);
+      else await this.settle(em, item, types, after, input.result === 'passed');
+      return inspection;
     });
-    await em.flush();
-    return toInspectionDto(inspection);
+    return toInspectionDto(corrected);
   }
 
-  /** Cancels an inspection recorded by mistake: it stays in the history, but no longer counts for the due dates. */
+  /**
+   * Cancels an inspection recorded by mistake: it stays in the history, but no longer counts for the due dates. Its open
+   * defects are withdrawn, a trigger it settled is due again, and the status follows the remaining inspections.
+   */
   async cancelInspection(user: AuthenticatedUser, id: string, input: ReturnType<typeof InspectionCancellation.parse>): Promise<Inspection> {
-    const em = this.em.fork();
-    const { inspection } = await this.loadInspection(em, user, id);
-    inspection.cancelled = true;
-    inspection.changeReason = input.reason;
-    await em.flush();
-    return toInspectionDto(inspection);
+    const cancelled = await this.inTransaction(async (em, after) => {
+      const { inspection, types } = await this.loadInspection(em, user, id);
+      inspection.cancelled = true;
+      inspection.changeReason = input.reason;
+      await this.withdrawFindings(em, inspection, input.reason);
+      this.restoreTrigger(inspection);
+      await this.settle(em, inspection.item, types, after, inspection.result !== 'passed');
+      return inspection;
+    });
+    return toInspectionDto(cancelled);
   }
 
   /** Makes an inspection of the item due now, e.g. after washing a hose. */
@@ -468,20 +602,35 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     const visible = this.visible(user);
     if (!visible) return [];
     const where: FilterQuery<DefectEntity> = { item: visible as FilterQuery<EquipmentItemEntity> };
-    if (filter.open) Object.assign(where, { status: { $in: ['reported', 'in-progress'] } });
+    if (filter.open) Object.assign(where, { status: { $in: [...OPEN_DEFECT] } });
     if (filter.itemId) Object.assign(where, { item: { ...(visible as object), id: filter.itemId } });
     return (await this.em.fork().find(DefectEntity, where, { populate: ['item'], orderBy: { reportedAt: 'desc' } })).map(toDefectDto);
   }
 
-  /** "My area": items the user may report defects for, by inventory number or name. */
-  async reportable(user: AuthenticatedUser, query: string): Promise<{ id: string; inventoryNumber: string; name: string }[]> {
+  /**
+   * "My area": items the user may report defects for, by inventory number, name, barcode or RFID chip, or by a scanned
+   * `code` (label URL, barcode, RFID chip or inventory number, exact); with vehicle or station and loading place.
+   */
+  async reportable(user: AuthenticatedUser, query: string, code = ''): Promise<ReportableItem[]> {
     const visible = this.visible(user, REPORT_DEFECTS);
     const q = query.trim();
-    if (!visible || q.length < 2) return [];
-    const words = wordsWhere(q, ['inventoryNumber', 'name', 'barcode']);
-    const match = { $or: [...(words ? [words] : []), { rfid: { $ilike: `%${normalizeRfid(q) || q}%` } }] } as FilterQuery<EquipmentItemEntity>;
+    const scanned = code.trim();
+    if (!visible || (q.length < 2 && !scanned)) return [];
+    let match: FilterQuery<EquipmentItemEntity>;
+    if (scanned) {
+      const label = /\/equipment\/items\/([0-9a-f-]{36})/i.exec(scanned);
+      const exact = scanned.replace(/[\\%_]/g, '\\$&');
+      match = label ? { id: label[1].toLowerCase() } : { $or: [{ barcode: { $ilike: exact } }, { rfid: normalizeRfid(scanned) }, { inventoryNumber: { $ilike: exact } }] };
+    } else {
+      const words = wordsWhere(q, ['inventoryNumber', 'name', 'barcode']);
+      match = { $or: [...(words ? [words] : []), { rfid: { $ilike: `%${normalizeRfid(q) || q}%` } }] } as FilterQuery<EquipmentItemEntity>;
+    }
     const items = await this.em.fork().find(EquipmentItemEntity, { $and: [visible, { status: { $ne: 'retired' } }, match] }, { limit: 20, orderBy: { inventoryNumber: 'asc' } });
-    return items.map((i) => ({ id: i.id, inventoryNumber: i.inventoryNumber, name: i.name }));
+    if (!items.length) return [];
+    const vehicles = new Map((await this.organization.vehicles({ includeRetired: true })).map((v) => [v.id, v.radioCallSign || v.designation]));
+    const stations = new Map((await this.organization.stations()).map((s) => [s.id, s.name]));
+    const place = (i: EquipmentItemEntity) => [i.vehicleId ? vehicles.get(i.vehicleId) : i.stationId ? stations.get(i.stationId) : '', i.loadingPlace].filter(Boolean).join(' · ');
+    return items.map((i) => ({ id: i.id, inventoryNumber: i.inventoryNumber, name: i.name, place: place(i) }));
   }
 
   /** Defects the user reported. */
@@ -501,25 +650,30 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
   }
 
   /**
-   * Handles a defect. "Fixed" needs a resolution; the item then waits for an inspection ("in inspection"), which
-   * sets it ready when passed, unless another defect is open.
+   * Handles a defect. "Fixed" needs a resolution; unless another defect is open, the item then waits for an inspection
+   * ("in inspection"), which sets it ready when passed. An item without inspection types is ready right away.
    */
   async updateDefect(user: AuthenticatedUser, id: string, input: ReturnType<typeof DefectUpdate.parse>): Promise<Defect> {
-    const em = this.em.fork();
-    const defect = await em.findOne(DefectEntity, id, { populate: ['item'] });
-    if (!defect || !(user.can(READ, defect.item.departmentId) || user.can(BREATHING_WRITE, defect.item.departmentId))) throw new NotFoundException();
-    this.requireMay(user, 'write', defect.item, await this.isBreathing(em, defect.item));
-    if (input.status === 'fixed' && !input.resolution) throw new BadRequestException({ code: 'equipment.resolutionRequired' });
-    defect.status = input.status;
-    defect.resolution = input.resolution;
-    defect.resolvedAt = input.status === 'fixed' || input.status === 'retired' ? new Date() : null;
-    if (input.status === 'in-progress' && defect.item.status !== 'retired') await this.setStatus(defect.item, 'in-repair');
-    if (input.status === 'fixed' && (defect.item.status === 'defective' || defect.item.status === 'in-repair')) {
-      const others = await em.count(DefectEntity, { item: defect.item, status: { $in: ['reported', 'in-progress'] }, id: { $ne: defect.id } });
-      if (!others) await this.setStatus(defect.item, 'in-inspection');
-    }
-    await em.flush();
-    return toDefectDto(defect);
+    const after: AfterCommit = [];
+    const handled = await this.em.fork().transactional(async (em) => {
+      const defect = await em.findOne(DefectEntity, id, { populate: ['item'] });
+      if (!defect || !(user.can(READ, defect.item.departmentId) || user.can(BREATHING_WRITE, defect.item.departmentId))) throw new NotFoundException();
+      const { item } = defect;
+      this.requireMay(user, 'write', item, await this.isBreathing(em, item));
+      if (input.status === 'fixed' && !input.resolution) throw new BadRequestException({ code: 'equipment.resolutionRequired' });
+      defect.status = input.status;
+      defect.resolution = input.resolution;
+      defect.resolvedAt = input.status === 'fixed' || input.status === 'retired' ? new Date() : null;
+      if (input.status === 'in-progress' && item.status !== 'retired') this.setStatus(item, 'in-repair', after);
+      if (input.status === 'fixed' && (item.status === 'defective' || item.status === 'in-repair')) {
+        const others = await em.count(DefectEntity, { item, status: { $in: [...OPEN_DEFECT] }, id: { $ne: defect.id } });
+        const toInspect = ((await this.inspectionsOf(em, [item])).get(item.id) ?? []).length > 0;
+        if (!others) this.setStatus(item, toInspect ? 'in-inspection' : 'ready', after);
+      }
+      return defect;
+    });
+    for (const publish of after) await publish();
+    return toDefectDto(handled);
   }
 
   // ----- Use in incident reports and training sessions -----

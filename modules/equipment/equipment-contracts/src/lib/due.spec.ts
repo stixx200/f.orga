@@ -15,7 +15,16 @@ describe('computeDues', () => {
     expect(computeDues(types, new Map(), {}, today, { purchasedOn: '2026-03-15', createdOn: '2026-10-01' })[0]).toMatchObject({ dueOn: '2027-03-15', overdue: false, lastDate: null });
     // Without purchase date the item is due from the day it was recorded; the date does not move with today.
     const recorded = computeDues(types, new Map(), {}, '2026-11-30', { purchasedOn: null, createdOn: '2026-10-01' })[0];
-    expect(recorded).toMatchObject({ dueOn: '2026-10-01', overdue: true });
+    expect(recorded).toMatchObject({ dueOn: '2026-10-01', overdue: true, notRecorded: false });
+  });
+
+  it('shows inspections of vehicles taken over without dates as not recorded instead of due', () => {
+    const types = [type('hu', 12), type('after-use', null, 'after-use')];
+    const dues = computeDues(types, new Map(), {}, today, { purchasedOn: null, createdOn: today, dueFromRecording: false });
+    expect(dues.map((d) => [d.dueOn, d.overdue, d.notRecorded])).toEqual([[null, false, true], [null, false, false]]);
+    // Once inspected, the interval counts as usual.
+    const inspected = computeDues(types, new Map([['hu', { date: '2026-03-01', nextDueOn: null }]]), {}, today, { purchasedOn: null, createdOn: today, dueFromRecording: false });
+    expect(inspected[0]).toMatchObject({ dueOn: '2027-03-01', notRecorded: false });
   });
 
   it('keeps a failed inspection due instead of advancing the due date', () => {

@@ -64,7 +64,7 @@ export function InspectionDialog({ item, inspectionKey, inspection, onClose }: {
       <Stack gap="sm">
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <Select label={t('inspection.type')} data={item.inspections.map((x) => ({ value: x.key, label: localized(x.name) }))} value={form.inspectionKey || null} onChange={(v) => setForm({ ...form, inspectionKey: v ?? '' })} allowDeselect={false} disabled={Boolean(inspection)} />
-          <DateInput label={t('inspection.date')} value={form.date} onChange={(v) => v && setForm({ ...form, date: v })} valueFormat="DD.MM.YYYY" maxDate={today} />
+          <DateInput label={t('inspection.date')} value={form.date} onChange={(v) => v && setForm({ ...form, date: v })} valueFormat="DD.MM.YYYY" minDate={item.purchasedOn ?? '1900-01-01'} maxDate={today} />
           <Select label={t('inspection.inspector')} description={type ? t(`inspector.${type.inspector}`) : undefined} data={persons.filter((p) => p.status !== 'left').map((p) => ({ value: p.id, label: `${p.lastName}, ${p.firstName}` }))} value={form.inspectorPersonId} onChange={(v) => setForm({ ...form, inspectorPersonId: v })} searchable clearable />
           <TextInput label={t('inspection.company')} value={form.inspectorCompany} onChange={(e) => setForm({ ...form, inspectorCompany: e.currentTarget.value })} />
         </SimpleGrid>

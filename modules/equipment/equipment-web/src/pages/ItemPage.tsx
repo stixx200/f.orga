@@ -6,8 +6,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router';
 import type { Defect, Inspection, Item, ItemIncident, ItemSummary } from '@forga/equipment-contracts';
 import { apiUrl, can, formatDate, formatMoney, localDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
-import { keys, READ, useCategoryName, useDefects, useDepartments, useInspections, useItem, useItemAccess, useItemIncidents, useLabelBase, usePersons, usePlace, WRITE } from '../api';
-import { AttachmentsDialog, DefectPhotoInput, DueDate, ItemStatusBadge, uploadDefectPhoto } from '../parts';
+import { keys, READ, useCategoryName, useDefects, useDepartments, useInspections, useItem, useItemAccess, useItemIncidents, useLabelBase, usePersons, usePlace } from '../api';
+import { AttachmentsDialog, DefectPhotoInput, DueDate, ItemStatusBadge, uploadDefectPhoto, useDefectText } from '../parts';
 import { InspectionDialog } from './InspectionDialog';
 import { ItemDialog } from './ItemDialog';
 
@@ -128,7 +128,7 @@ function InspectionsTab({ item, canInspect }: { item: Item; canInspect: boolean 
               },
             },
             { key: 'last', header: t('inspection.last'), render: (d) => formatDate(d.lastDate, i18n.language) },
-            { key: 'due', header: t('inspection.due'), render: (d) => <DueDate dueOn={d.dueOn} /> },
+            { key: 'due', header: t('inspection.due'), render: (d) => <DueDate dueOn={d.dueOn} notRecorded={d.notRecorded} /> },
             {
               key: 'actions',
               header: '',
@@ -206,6 +206,7 @@ function InspectionsTab({ item, canInspect }: { item: Item; canInspect: boolean 
 function DefectsTab({ item, canWrite }: { item: Item; canWrite: boolean }) {
   const { t, i18n } = useTranslation('equipment');
   const { data = [] } = useDefects({ itemId: item.id });
+  const text = useDefectText();
   const [files, setFiles] = useState<Defect | null>(null);
   return (
     <>
@@ -215,13 +216,13 @@ function DefectsTab({ item, canWrite }: { item: Item; canWrite: boolean }) {
         empty={t('defect.none')}
         columns={[
           { key: 'date', header: t('defect.reportedAt'), render: (d) => formatDate(d.reportedAt, i18n.language) },
-          { key: 'description', header: t('defect.description'), render: (d) => <><Text size="sm">{d.description}</Text>{d.resolution && <Text size="xs" c="dimmed">{d.resolution}</Text>}</> },
+          { key: 'description', header: t('defect.description'), render: (d) => <><Text size="sm">{text(d)}</Text>{d.resolution && <Text size="xs" c="dimmed">{d.resolution}</Text>}</> },
           { key: 'by', header: t('defect.by'), render: (d) => d.reportedBy },
-          { key: 'status', header: t('fields.status'), render: (d) => <StatusBadge tone={d.status === 'fixed' ? 'done' : d.status === 'retired' ? 'neutral' : 'error'}>{t(`defectStatus.${d.status}`)}</StatusBadge> },
+          { key: 'status', header: t('fields.status'), render: (d) => <StatusBadge tone={d.status === 'fixed' ? 'done' : d.status === 'retired' || d.status === 'withdrawn' ? 'neutral' : 'error'}>{t(`defectStatus.${d.status}`)}</StatusBadge> },
           { key: 'files', header: '', align: 'right', render: (d) => <Button size="compact-xs" variant="subtle" onClick={() => setFiles(d)}>{t('attachmentsButton')}</Button> },
         ]}
       />
-      {files && <AttachmentsDialog title={files.description} type="equipment.defect" id={files.id} editable={canWrite} onClose={() => setFiles(null)} />}
+      {files && <AttachmentsDialog title={text(files)} type="equipment.defect" id={files.id} editable={canWrite} onClose={() => setFiles(null)} />}
     </>
   );
 }
@@ -248,7 +249,7 @@ function IncidentsTab({ item }: { item: Item }) {
   );
 }
 
-/** Members who may only report defects: name, number and "report a defect" (from a scanned label). */
+/** Members who may only report defects: name, number, status (also "blocked") and "report a defect" (from a scanned label). */
 function ReportOnlyPage({ item, reporting, setReporting }: { item: ItemSummary; reporting: boolean; setReporting: (on: boolean) => void }) {
   const { t } = useTranslation('equipment');
   return (
@@ -256,9 +257,10 @@ function ReportOnlyPage({ item, reporting, setReporting }: { item: ItemSummary; 
       <PageHeader
         breadcrumbs={[{ label: t('module') }, { label: item.inventoryNumber }]}
         title={item.name}
-        badges={<StatusBadge>{item.inventoryNumber}</StatusBadge>}
+        badges={<Group gap={4}><ItemStatusBadge status={item.status} blocked={item.blocked} /><StatusBadge>{item.inventoryNumber}</StatusBadge></Group>}
         actions={item.status !== 'retired' && <Button onClick={() => setReporting(true)}>{t('defect.report')}</Button>}
       />
+      {(item.blocked || item.status === 'defective' || item.status === 'in-repair') && item.status !== 'retired' && <Notice kind="error">{t('item.notReady')}</Notice>}
       <Notice kind="info">{t('item.reportOnly')}</Notice>
       {reporting && <DefectDialog item={item} onClose={() => setReporting(false)} />}
     </Stack>
@@ -323,11 +325,11 @@ export function ItemPage() {
                 <Menu position="bottom-end">
                   <Menu.Target><Button variant="default">{t('item.more')}</Button></Menu.Target>
                   <Menu.Dropdown>
-                    {may(WRITE) && <Menu.Item onClick={() => setDialog('edit')}>{t('item.edit')}</Menu.Item>}
+                    <Menu.Item onClick={() => setDialog('edit')}>{t('item.edit')}</Menu.Item>
                     {(['ready', 'in-inspection', 'defective', 'in-repair'] as const).filter((s) => s !== item.status).map((s) => (
                       <Menu.Item key={s} onClick={() => status.mutate(s)}>{t('item.setStatus', { status: t(`status.${s}`) })}</Menu.Item>
                     ))}
-                    {may(WRITE) && <Menu.Item color="red" onClick={() => setDialog('retire')}>{t('item.retire')}</Menu.Item>}
+                    <Menu.Item color="red" onClick={() => setDialog('retire')}>{t('item.retire')}</Menu.Item>
                   </Menu.Dropdown>
                 </Menu>
               )}
