@@ -64,4 +64,7 @@ try {
 } finally {
   await onServer([`drop database if exists "${TEMPORARY}" with (force)`]);
 }
+// A watch build may have compiled the briefly emptied migration lists; without its incremental state the next build
+// compiles the new migrations again instead of keeping the empty lists in `dist`.
+for (const id of modules) rmSync(join(directory(id), 'dist/tsconfig.lib.tsbuildinfo'), { force: true });
 console.log('Done. Recreate the development database; the server applies the new migrations on its next start.');

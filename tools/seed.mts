@@ -467,10 +467,15 @@ async function users(persons: PersonRef[], departments: Map<string, string>): Pr
   // The member of "My area" is a breathing apparatus wearer of Musterstadt, so all sections have content.
   const member = available.find((p) => p.primaryDepartmentId === musterstadt && p.qualifications.includes('breathing-apparatus'));
   let created = 0;
+  // Each person belongs to at most one user; the member's person is reserved for the user "member".
+  const taken = new Set(member ? [member.id] : []);
   for (const [index, role] of roles.filter((r) => r.templateKey).entries()) {
     const username = role.templateKey!;
     if (existing.has(username) || username === ADMIN.username) continue;
-    const person = (username === 'member' && member) || available[(index * 7) % available.length];
+    let candidate = (index * 7) % available.length;
+    while (taken.has(available[candidate].id)) candidate = (candidate + 1) % available.length;
+    const person = (username === 'member' && member) || available[candidate];
+    taken.add(person.id);
     await call('POST', 'core/users', {
       username,
       displayName: `${person.firstName} ${person.lastName} (${role.name})`,
