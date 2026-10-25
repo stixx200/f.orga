@@ -18,6 +18,11 @@ export const INCIDENTS_MANIFEST = {
       name: { de: 'Einsatzberichte freigeben', en: 'Release incident reports' },
       scope: 'brigade',
     },
+    {
+      id: 'incidents.costs',
+      name: { de: 'Kosten und Bemerkungen des Einsatzes eintragen', en: 'Enter costs and notes of incidents' },
+      scope: 'brigade',
+    },
     { id: 'incidents.reports.unlock', name: { de: 'Sperre aufheben', en: 'Unlock reports' }, scope: 'brigade' },
     { id: 'incidents.statistics', name: { de: 'Jahresstatistik', en: 'Annual statistics' }, scope: 'brigade' },
     {

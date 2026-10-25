@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Group, NumberInput, Select, SimpleGrid, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Group, NumberInput, Select, SimpleGrid, Stack, Textarea, TextInput } from '@mantine/core';
 import { IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 import { PartyRole } from '@forga/incidents-contracts';
@@ -118,14 +118,6 @@ export function OtherSection({ content, update, disabled }: { content: Content; 
       </Panel>
       <Panel title={t('other.equipment')}>
         <Textarea placeholder={t('other.equipmentPlaceholder')} value={content.equipment} onChange={(e) => set('equipment', e.currentTarget.value)} autosize minRows={3} disabled={disabled} aria-label={t('other.equipment')} />
-      </Panel>
-      <Panel title={t('other.costs')}>
-        <Stack gap="sm">
-          <Switch label={t('other.chargeable')} checked={content.chargeable} onChange={(e) => set('chargeable', e.currentTarget.checked)} disabled={disabled} />
-          {content.chargeable && <TextInput label={t('other.chargeableReason')} value={content.chargeableReason} onChange={(e) => set('chargeableReason', e.currentTarget.value)} disabled={disabled} />}
-          <Textarea label={t('other.notes')} value={content.notes} onChange={(e) => set('notes', e.currentTarget.value)} autosize minRows={2} disabled={disabled} />
-          <Text size="xs" c="dimmed">{t('other.attachmentsLater')}</Text>
-        </Stack>
       </Panel>
     </SimpleGrid>
   );

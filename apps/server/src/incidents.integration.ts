@@ -113,6 +113,21 @@ describe('incidents and reports', () => {
     expect(report.body.statisticsSuggestion).toEqual({ ownMunicipality: true, mainType: 'fire', technicalCategory: null, falseAlarmType: null });
   });
 
+  it('keeps costs and notes once for the whole incident, entered by the commander', async () => {
+    const incident = (await get(`/incidents/incidents/${ids.incident}`).expect(200)).body;
+    expect(incident).toMatchObject({ chargeable: false, chargeableReason: '', notes: '' });
+    // Group leaders write reports, but the costs are the commander's.
+    await put(`/incidents/incidents/${ids.incident}/costs`, { chargeable: true }, writer).expect(403);
+    const saved = await put(`/incidents/incidents/${ids.incident}/costs`, { chargeable: true, chargeableReason: 'Verursacher bekannt', notes: 'Rechnung an Halter', version: incident.version }).expect(200);
+    expect(saved.body).toMatchObject({ chargeable: true, chargeableReason: 'Verursacher bekannt', notes: 'Rechnung an Halter' });
+    await put(`/incidents/incidents/${ids.incident}/costs`, { chargeable: false, version: incident.version }).expect(409);
+    // The reports carry no costs of their own.
+    const report = (await get(`/incidents/reports/${ids.ahornfeldReport}`, ahornfeldWriter).expect(200)).body;
+    expect(report).not.toHaveProperty('chargeable');
+    expect(report).not.toHaveProperty('notes');
+    await put(`/incidents/incidents/${ids.incident}/costs`, { chargeable: false, version: saved.body.version }).expect(200);
+  });
+
   it('computes compensation and checks personnel against the other report of the incident', async () => {
     const musterstadt = await put(`/incidents/reports/${ids.musterstadtReport}`, content(
       [

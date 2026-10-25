@@ -21,6 +21,8 @@ export interface ChargeableIncident {
   /** All reports released (for billing or compensation). */
   released: boolean;
   departmentIds: string[];
+  /** Why the incident is chargeable, from the costs of the incident. */
+  chargeableReason: string;
 }
 
 export interface IncidentForCostRecovery extends ChargeableIncident {
@@ -30,8 +32,6 @@ export interface IncidentForCostRecovery extends ChargeableIncident {
     reportId: string;
     departmentId: string;
     status: string;
-    chargeable: boolean;
-    chargeableReason: string;
     alarmedAt: string;
     returnedAt: string;
     personnel: { personId: string | null; name: string; from: string; to: string; standby: boolean }[];
@@ -82,7 +82,7 @@ export interface CompensationPreview {
 }
 
 export interface IncidentsLookup {
-  /** Incidents with at least one chargeable report in the period (alarm date, Europe/Berlin). */
+  /** Chargeable incidents in the period (alarm date, Europe/Berlin). */
   chargeable(from: string, to: string): Promise<ChargeableIncident[]>;
   forCostRecovery(incidentId: string): Promise<IncidentForCostRecovery | null>;
   /** The given reports with their incident, newest first; unknown IDs are omitted. */

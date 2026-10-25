@@ -29,6 +29,6 @@ export default defineWebModule({
   ],
   dashboard: [{ id: 'without-notice', area: 'kpi', permission: WRITE, order: 70, component: WithoutNoticeTile }],
   extensions: {
-    'incidents.report.sections': { label: { de: 'Kostenersatz', en: 'Cost recovery' }, order: 20, component: OffenseSection },
+    'incidents.incident.sections': { label: { de: 'Kostenersatz', en: 'Cost recovery' }, order: 20, component: OffenseSection },
   },
 });

@@ -6,6 +6,7 @@ import { api, withQuery } from '@forga/web-sdk';
 export const READ = 'incidents.reports.read';
 export const WRITE = 'incidents.reports.write';
 export const RELEASE = 'incidents.reports.release';
+export const COSTS = 'incidents.costs';
 export const UNLOCK = 'incidents.reports.unlock';
 
 export const keys = {

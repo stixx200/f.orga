@@ -48,13 +48,14 @@ export class IncidentsLookupService implements IncidentsLookup {
       falseAlarmType: primary?.statistics?.falseAlarmType ?? keyword?.falseAlarmType ?? null,
       released: reports.length > 0 && reports.every((r) => r.status.startsWith('released')),
       departmentIds: reports.map((r) => r.departmentId),
+      chargeableReason: incident.chargeableReason,
     };
   }
 
   async chargeable(from: string, to: string): Promise<ChargeableIncident[]> {
     const incidents = await this.em.fork().find(
       IncidentEntity,
-      { alarmedAt: { $gte: berlinDayStart(from), $lt: berlinDayAfter(to) }, reports: { chargeable: true } },
+      { alarmedAt: { $gte: berlinDayStart(from), $lt: berlinDayAfter(to) }, chargeable: true },
       { populate: ['reports'], orderBy: { alarmedAt: 'desc' } },
     );
     return Promise.all(incidents.map((i) => this.summary(i)));
@@ -130,8 +131,6 @@ export class IncidentsLookupService implements IncidentsLookup {
         reportId: r.id,
         departmentId: r.departmentId,
         status: r.status,
-        chargeable: r.chargeable,
-        chargeableReason: r.chargeableReason,
         alarmedAt: r.alarmedAt.toISOString(),
         returnedAt: r.returnedAt.toISOString(),
         personnel: r.personnel.getItems().map((p) => ({
