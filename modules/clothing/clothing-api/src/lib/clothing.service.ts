@@ -19,6 +19,7 @@ import {
   ItemIssueInput,
   ItemReturnInput,
   type PersonClothing,
+  usagePeriods,
 } from '@forga/clothing-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory, type PersonSnapshot } from '@forga/masterdata-contracts';
 import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, IssueEntity } from './clothing.entities.js';
@@ -148,10 +149,11 @@ export class ClothingService {
   async toDtos(em: EntityManager, items: ClothingItemEntity[]): Promise<Item[]> {
     if (!items.length) return [];
     const ids = items.map((i) => i.id);
-    const [articles, care, inspections] = await Promise.all([
+    const [articles, care, inspections, records] = await Promise.all([
       em.find(ArticleEntity, {}),
       em.find(CareEntity, { item: { $in: ids } }),
       em.find(ClothingInspectionEntity, { item: { $in: ids } }),
+      em.find(IssueEntity, { itemId: { $in: ids } }),
     ]);
     const byKey = new Map(articles.map((a) => [a.key, a]));
     return items.map((item) => {
@@ -161,7 +163,7 @@ export class ClothingService {
       const lastInspectedOn = latest(inspections.filter((i) => i.item.id === item.id).map((i) => i.date));
       const article = byKey.get(item.articleKey);
       const due = article && item.status !== 'retired'
-        ? dueDates({ impregnationMonths: article.impregnationMonths ?? null, inspectionMonths: article.inspectionMonths ?? null }, { purchasedOn: item.purchasedOn ?? null, createdOn: item.createdOn, lastImpregnatedOn, lastInspectedOn })
+        ? dueDates({ impregnationMonths: article.impregnationMonths ?? null, inspectionMonths: article.inspectionMonths ?? null }, { purchasedOn: item.purchasedOn ?? null, createdOn: item.createdOn, lastImpregnatedOn, lastInspectedOn, usage: item.status === 'issued' ? usagePeriods(records.filter((r) => r.itemId === item.id)) : [] })
         : { impregnationDueOn: null, inspectionDueOn: null };
       return {
         id: item.id, articleKey: item.articleKey, inventoryNumber: item.inventoryNumber, size: item.size, serialNumber: item.serialNumber,

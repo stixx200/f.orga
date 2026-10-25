@@ -875,7 +875,7 @@ Verwaltet die persönliche Schutzausrüstung (PSA). Backend `modules/clothing/cl
 
 **Ausgabe und Rücknahme** (`IssueEntity`, `issue`): Jede Ausgabe (Stück oder Verbrauchsartikel mit Größe und Anzahl) und jede Rücknahme ist ein Eintrag im Verlauf der Person mit Datum, Bemerkung und Erfasser. Ausgeben darf, wer `clothing.issue` für die Kleiderkammer des Stücks und für eine Abteilung der Person hat; an Ausgeschiedene wird nichts ausgegeben. Bei der Rücknahme kann das Stück direkt ausgesondert werden.
 
-**Wäsche** (`CareEntity`, `care`): Waschen oder Imprägnieren (schließt Waschen ein) mit Datum und Ort, für mehrere Textil-Stücke auf einmal. Fällig ist das Imprägnieren `impregnationMonths` nach dem letzten Imprägnieren, ohne eines nach der Anschaffung (sonst nach der Erfassung); Waschen dazwischen ist beliebig oft möglich und ändert die Frist nicht.
+**Wäsche** (`CareEntity`, `care`): Waschen oder Imprägnieren (schließt Waschen ein) mit Datum und Ort, für mehrere Textil-Stücke auf einmal. Imprägnieren ist nur für Stücke im Einsatz nötig: Fällig ist es, wenn das Stück `impregnationMonths` lang ausgegeben war, gezählt ab dem letzten Imprägnieren, ohne eines ab der ersten Ausgabe (`dueDates` mit den Ausgabezeiträumen aus dem Verlauf, `usagePeriods`). Zeit im Lager zählt nicht, ein Stück im Lager hat keine Frist. Waschen dazwischen ist beliebig oft möglich und ändert die Frist nicht.
 
 **Prüfungen** (`ClothingInspectionEntity`, `inspection`): Datum, bestanden, Prüfer; fällig `inspectionMonths` nach der letzten Prüfung (sonst nach der Anschaffung).
 

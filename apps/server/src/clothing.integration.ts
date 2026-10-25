@@ -47,7 +47,10 @@ describe('clothing store', () => {
   it('records pieces, issues them and keeps the history of the person', async () => {
     const piece = (inventoryNumber: string, articleKey = 'jacket', departmentId = ids.musterstadt) =>
       post('/clothing/items', { articleKey, inventoryNumber, size: '52', departmentId, purchasedOn: '2026-01-15' }, officer);
-    ids.jacket = (await piece('J-001').expect(201)).body.id;
+    const created = await piece('J-001').expect(201);
+    ids.jacket = created.body.id;
+    // In stock, a piece needs no washing or impregnation; the year counts from the issue.
+    expect(created.body).toMatchObject({ status: 'stock', impregnationDueOn: null, inspectionDueOn: '2027-01-15' });
     ids.trousers = (await piece('H-001', 'trousers').expect(201)).body.id;
     await piece('J-001').expect(409);
     // Consumables have no pieces; another department's store is not the officer's.
@@ -55,7 +58,7 @@ describe('clothing store', () => {
     await piece('J-900', 'jacket', ids.ahornfeld).expect(403);
 
     const issued = await post(`/clothing/items/${ids.jacket}/issue`, { personId: ids.anna, date: '2026-02-01' }, officer).expect(200);
-    expect(issued.body).toMatchObject({ status: 'issued', holderId: ids.anna, issuedOn: '2026-02-01', impregnationDueOn: '2027-01-15' });
+    expect(issued.body).toMatchObject({ status: 'issued', holderId: ids.anna, issuedOn: '2026-02-01', impregnationDueOn: '2027-02-01' });
     await post(`/clothing/items/${ids.jacket}/issue`, { personId: ids.anna, date: '2026-02-01' }, officer).expect(400);
     await post(`/clothing/items/${ids.trousers}/issue`, { personId: ids.anna, date: '2026-02-01' }, officer).expect(200);
     // A person of another department is not the officer's to equip.
@@ -92,7 +95,7 @@ describe('clothing store', () => {
   it('records washing and impregnation; impregnating counts as washing and restarts the interval', async () => {
     await post('/clothing/care', { itemIds: [ids.jacket, ids.trousers], kind: 'wash', date: '2026-03-01', place: 'Feuerwehrhaus' }, officer).expect(201);
     let jacket = (await get(`/clothing/items/${ids.jacket}`, officer).expect(200)).body;
-    expect(jacket).toMatchObject({ lastWashedOn: '2026-03-01', lastImpregnatedOn: null, impregnationDueOn: '2027-01-15' });
+    expect(jacket).toMatchObject({ lastWashedOn: '2026-03-01', lastImpregnatedOn: null, impregnationDueOn: '2027-02-01' });
     await post('/clothing/care', { itemIds: [ids.jacket], kind: 'impregnation', date: '2026-06-10', place: 'Wäscherei Muster' }, officer).expect(201);
     jacket = (await get(`/clothing/items/${ids.jacket}`, officer).expect(200)).body;
     expect(jacket).toMatchObject({ lastWashedOn: '2026-06-10', lastImpregnatedOn: '2026-06-10', impregnationDueOn: '2027-06-10' });
