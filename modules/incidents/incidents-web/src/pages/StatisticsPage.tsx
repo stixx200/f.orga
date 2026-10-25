@@ -1,12 +1,19 @@
 import { Button, Group, NumberInput, Select, Stack, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { type AnnualStatistics, STATISTICS_QUESTIONS, type StatisticsValue } from '@forga/incidents-contracts';
 import { api, apiUrl, formatDateTime, send, useTranslation } from '@forga/web-sdk';
 import { ActionBar, ConfirmDialog, DataTable, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 
 const COLUMNS = ['D', 'F', 'G', 'H'] as const;
 type Column = (typeof COLUMNS)[number];
+/** Checks about reports lead to the incidents concerned. */
+const CHECK_LINKS: Record<string, (year: string) => string> = {
+  'statistics.primaryReportsWithoutStatistics': (year) => `/incidents/incidents?view=withoutStatistics&year=${year}`,
+  'statistics.unreleasedPrimaryReports': () => '/incidents/review',
+};
+
 type Line = { question: string; text: string; section: string; values: Partial<Record<Column, StatisticsValue>> };
 
 /** Annual statistics for the state portal: computed values, corrections, checks, closing and export. */
@@ -22,9 +29,10 @@ export function StatisticsPage() {
   const { data: stats } = useQuery({ queryKey: key, queryFn: () => api<AnnualStatistics>(`incidents/statistics/${year}`) });
   const correct = useAction(
     (input: { question: string; column: Column; value: number | null }) => send('PUT', `incidents/statistics/${year}/corrections`, { corrections: { [`${input.question}:${input.column}`]: input.value } }),
-    { success: t('statistics.corrected'), invalidate: [key], onSuccess: () => setCorrecting(null) },
+    { success: t('annual.corrected'), invalidate: [key], onSuccess: () => setCorrecting(null) },
   );
-  const close = useAction(() => send('POST', `incidents/statistics/${year}/close`), { success: t('statistics.closedNotice'), invalidate: [key], onSuccess: () => setClosing(false) });
+  // With open checks the dialog asks first; the server needs `force` then.
+  const close = useAction((force: boolean) => send('POST', `incidents/statistics/${year}/close`, { force }), { success: t('annual.closedNotice'), invalidate: [key], onSuccess: () => setClosing(false) });
   const reopen = useAction(() => send('POST', `incidents/statistics/${year}/reopen`), { invalidate: [key] });
 
   const sections = [...new Set(Object.values(STATISTICS_QUESTIONS).map((q) => q.section))];
@@ -48,9 +56,18 @@ export function StatisticsPage() {
       </Group>
       <Notice kind="info">{t('annual.info', { date: stats?.referenceDate ?? `${year}-12-31` })}</Notice>
       {closed && <Notice kind="done">{t('annual.closedBy', { by: stats?.closedBy ?? '', at: formatDateTime(stats?.closedAt, i18n.language) })}</Notice>}
+      {closed && stats?.changedSinceClose && <Notice kind="warning">{t('annual.changedSinceClose')}</Notice>}
       <Panel title={t('annual.checks')}>
         <Stack gap="xs">
-          {failed.map((c) => <Notice key={c.code} kind="error">{t(`annual.checkCodes.${c.code}`, { ...c.params, defaultValue: c.code })}</Notice>)}
+          {failed.map((c) => (
+            <Notice
+              key={c.code}
+              kind="error"
+              action={CHECK_LINKS[c.code] && <Button component={Link} to={CHECK_LINKS[c.code](year)} size="xs" variant="outline">{t('annual.showIncidents')}</Button>}
+            >
+              {t(`annual.checkCodes.${c.code}`, { ...c.params, defaultValue: c.code })}
+            </Notice>
+          ))}
           {stats && !failed.length && <Notice kind="done">{t('annual.checksOk')}</Notice>}
         </Stack>
       </Panel>
@@ -118,7 +135,7 @@ export function StatisticsPage() {
         description={failed.length ? t('annual.closeWithChecks', { count: failed.length }) : t('annual.closeText')}
         confirmLabel={t('annual.close')}
         loading={close.isPending}
-        onConfirm={() => close.mutate(undefined)}
+        onConfirm={() => close.mutate(failed.length > 0)}
       />
     </Stack>
   );

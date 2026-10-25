@@ -131,7 +131,7 @@ describe('cost recovery', () => {
       involvedParties: [{ role: 'owner', name: 'Muster GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
       statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
     }).expect(200);
-    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true }).expect(200);
+    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Verursacher bekannt' }).expect(200);
     const settings = (await get('/core/settings/cost-recovery.general').expect(200)).body ?? {};
     const personnelRates = [...(settings.personnelRates ?? []), { kind: 'career-intermediate', validFrom: '2026-01-01', amount: 70 }];
     await put('/core/settings/cost-recovery.general', { ...settings, personnelRates }).expect(200);
@@ -192,7 +192,7 @@ describe('cost recovery', () => {
       situation: 'Unterstützung', actions: 'Bereitstellung',
       vehicles: [{ vehicleId: ids.lf, departedAt: T('14:05'), returnedAt: T('15:20') }],
     }).expect(200);
-    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true }).expect(200);
+    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Verursacher bekannt' }).expect(200);
 
     const notice = (await post('/cost-recovery/notices', { incidentId: incident.id }).expect(201)).body;
     const vehicles = (notice.positions as { kind: string; vehicleId: string; quantity: number; amount: number }[]).filter((p) => p.kind === 'vehicle');

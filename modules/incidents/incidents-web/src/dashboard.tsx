@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import type { Incident } from '@forga/incidents-contracts';
 import { can, formatDateTime, localDate, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, KpiTile, Panel } from '@forga/web-ui';
-import { RELEASE, useIncidents, useNames } from './api';
+import { RELEASE, useIncidents, useNames, useSettings } from './api';
 import { DepartmentBadge, incidentStatus, keywordLabel, locationLabel, ReportStatusBadge } from './parts';
 
 /** Number of reports in the given status among the incidents returned. */
@@ -15,6 +15,17 @@ export function ReviewTile() {
   const { data = [] } = useIncidents({ status: 'review' });
   const count = countReports(data, 'review');
   return <KpiTile value={count} label={t('dashboard.review')} hint={t('dashboard.reviewHint')} to="/incidents/review" attention={count > 0} />;
+}
+
+/** Second step of the release: reports released for compensation wait for the release for billing. */
+export function BillingTile() {
+  const { t } = useTranslation('incidents');
+  const { data: settings } = useSettings();
+  const twoSteps = settings?.compensationRelease ?? false;
+  const { data = [] } = useIncidents({ status: 'released-compensation' }, twoSteps);
+  if (!twoSteps) return null;
+  const count = countReports(data, 'released-compensation');
+  return <KpiTile value={count} label={t('dashboard.billing')} hint={t('dashboard.billingHint')} to="/incidents/review?status=released-compensation" attention={count > 0} />;
 }
 
 export function MyOpenTile() {
@@ -56,10 +67,14 @@ export function RecentIncidents() {
   );
 }
 
-/** Counter at "Zur Prüfung" in the menu for users who release reports. */
+/** Counter at "Zur Prüfung" in the menu for users who release reports: for review and, with two steps, for billing. */
 export function useNavigationBadges(): Record<string, number | undefined> {
   const session = useSession().data;
   const releaser = can(session, RELEASE);
+  const { data: settings } = useSettings();
+  const twoSteps = releaser && (settings?.compensationRelease ?? false);
   const { data = [] } = useIncidents({ status: 'review' }, releaser);
-  return { review: releaser ? countReports(data, 'review') || undefined : undefined };
+  const { data: billing = [] } = useIncidents({ status: 'released-compensation' }, twoSteps);
+  const count = countReports(data, 'review') + (twoSteps ? countReports(billing, 'released-compensation') : 0);
+  return { review: releaser ? count || undefined : undefined };
 }

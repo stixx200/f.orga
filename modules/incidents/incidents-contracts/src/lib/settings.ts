@@ -51,6 +51,14 @@ export const RULE_IDS = [
   'crew-exceeded',
   'breathing-without-qualification',
   'breathing-not-fit',
+  'end-unconfirmed',
+  'times-order',
+  'incident-time-differs',
+  'personnel-duration-long',
+  'personnel-times-outside',
+  'person-not-operational',
+  'person-not-member',
+  'person-too-young',
 ] as const;
 export type RuleId = (typeof RULE_IDS)[number];
 
@@ -71,17 +79,31 @@ export const DEFAULT_RULE_LEVELS: Record<RuleId, RuleLevel> = {
   'crew-exceeded': 'warning',
   'breathing-without-qualification': 'warning',
   'breathing-not-fit': 'warning',
+  'end-unconfirmed': 'error',
+  'times-order': 'warning',
+  'incident-time-differs': 'warning',
+  'personnel-duration-long': 'warning',
+  'personnel-times-outside': 'warning',
+  'person-not-operational': 'warning',
+  'person-not-member': 'warning',
+  'person-too-young': 'warning',
 };
 
-/** Settings section `incidents.general`. Defaults are example values of a compensation statute. */
+/**
+ * Example rates of a compensation statute. They are not applied by default: the settings offer them as a template,
+ * so nobody is compensated with sample values by accident (rule `rate-missing` reports missing rates).
+ */
+export const RATE_TEMPLATE: CompensationRate[] = [
+  { kind: 'incident', amount: 15, validFrom: '2026-01-01' },
+  { kind: 'standby', amount: 15, validFrom: '2026-01-01' },
+  { kind: 'fire-watch', amount: 15, validFrom: '2026-01-01' },
+];
+
+/** Settings section `incidents.general`. Hourly rates start empty; `RATE_TEMPLATE` holds example values. */
 export const IncidentSettings = z.object({
   /** Municipalities that count as "own municipality" for the statistics, compared with the incident city. */
   homeMunicipalities: z.array(z.string().trim().min(1)).default([]),
-  rates: z.array(CompensationRate).default([
-    { kind: 'incident', amount: 15, validFrom: '2026-01-01' },
-    { kind: 'standby', amount: 15, validFrom: '2026-01-01' },
-    { kind: 'fire-watch', amount: 15, validFrom: '2026-01-01' },
-  ]),
+  rates: z.array(CompensationRate).default([]),
   rounding: Rounding.default('started-hour'),
   /** Billable hours of an incident are at least this many (not for standby); `null`: no minimum. */
   minimumHours: z.number().min(0).max(24).nullable().default(null),

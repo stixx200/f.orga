@@ -7,10 +7,12 @@ import { completeStatistics, type Content } from './editor';
 
 type Statistics = IncidentStatisticsInput;
 
-/** Precedence: an incident with several technical categories counts with the first one (1 = rescue of persons). */
-const byPrecedence = (keys: string[]) => TechnicalCategory.options.find((c) => keys.includes(c)) ?? null;
-
-export function StatisticsSection({ content, report, draft, setDraft, update, disabled, primaryReportId }: {
+/**
+ * Statistics of the primary report. Changes are saved with the report once all required answers are given; an
+ * unfinished change is shown as an error of the step. Releasers change the statistics of a released report
+ * separately (`onSaveSeparately`), without releasing it again.
+ */
+export function StatisticsSection({ content, report, draft, setDraft, update, disabled, primaryReportId, onSaveSeparately, saving }: {
   content: Content;
   report: Report;
   draft: Statistics | null;
@@ -18,6 +20,8 @@ export function StatisticsSection({ content, report, draft, setDraft, update, di
   update: (change: (c: Content) => Content) => void;
   disabled: boolean;
   primaryReportId?: string;
+  onSaveSeparately?: (statistics: Statistics) => void;
+  saving?: boolean;
 }) {
   const { t } = useTranslation('incidents');
   if (!report.primary) {
@@ -34,7 +38,7 @@ export function StatisticsSection({ content, report, draft, setDraft, update, di
     const next = { ...base, ...patch } as Statistics;
     setDraft(next);
     const complete = completeStatistics(next);
-    if (complete) update((c) => ({ ...c, statistics: complete }));
+    if (complete && !onSaveSeparately) update((c) => ({ ...c, statistics: complete }));
   };
   const accept = () => {
     if (!suggestion) return;
@@ -48,8 +52,8 @@ export function StatisticsSection({ content, report, draft, setDraft, update, di
   const count = (key: 'rescued' | 'rescuedSmokeInhalation' | 'dead' | 'animalsRescued', hint?: string) => (
     <NumberInput label={t(`statistics.${key}`)} description={hint} value={value?.[key] ?? 0} onChange={(v) => change({ [key]: Number(v) || 0 })} min={0} disabled={disabled || !value} />
   );
-  const technical = value?.technicalCategory ? [value.technicalCategory] : [];
   const incomplete = value && !completeStatistics(value);
+  const separate = onSaveSeparately && draft && completeStatistics(draft);
 
   return (
     <Stack gap="md">
@@ -61,7 +65,12 @@ export function StatisticsSection({ content, report, draft, setDraft, update, di
           })}
         </Notice>
       )}
-      {incomplete && <Notice kind="warning">{t('statistics.incomplete')}</Notice>}
+      {incomplete && <Notice kind="error">{t('statistics.incomplete')}</Notice>}
+      {onSaveSeparately && (
+        <Notice kind="info" action={<Button size="xs" disabled={!separate} loading={saving} onClick={() => separate && onSaveSeparately(separate)}>{t('statistics.save')}</Button>}>
+          {t('statistics.separateHint')}
+        </Notice>
+      )}
       <Panel>
         <Stack gap="lg">
           <Radio.Group label={t('statistics.place')} value={value ? String(value.ownMunicipality ?? true) : ''} onChange={(v) => change({ ownMunicipality: v === 'true' })}>
@@ -85,11 +94,11 @@ export function StatisticsSection({ content, report, draft, setDraft, update, di
             </Radio.Group>
           )}
           {value?.mainType === 'technical-assistance' && (
-            <Checkbox.Group label={t('statistics.technicalCategory')} description={t('statistics.technicalHint')} value={technical} onChange={(keys) => change({ technicalCategory: byPrecedence(keys) })}>
+            <Radio.Group label={t('statistics.technicalCategory')} description={t('statistics.technicalHint')} value={value.technicalCategory ?? ''} onChange={(v) => change({ technicalCategory: v as Statistics['technicalCategory'] })}>
               <SimpleGrid cols={{ base: 1, sm: 2 }} mt={4}>
-                {TechnicalCategory.options.map((c, i) => <Checkbox key={c} value={c} label={`${i + 1} ${t(`statistics.technical.${c}`)}`} disabled={disabled} />)}
+                {TechnicalCategory.options.map((c, i) => <Radio key={c} value={c} label={`${i + 1} ${t(`statistics.technical.${c}`)}`} disabled={disabled} />)}
               </SimpleGrid>
-            </Checkbox.Group>
+            </Radio.Group>
           )}
           {value?.mainType === 'false-alarm' && (
             <Radio.Group label={t('statistics.falseAlarmType')} value={value.falseAlarmType ?? ''} onChange={(v) => change({ falseAlarmType: v as Statistics['falseAlarmType'] })}>

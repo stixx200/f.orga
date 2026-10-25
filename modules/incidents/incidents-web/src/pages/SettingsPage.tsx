@@ -2,7 +2,7 @@ import { ActionIcon, Button, Group, NumberInput, Select, SimpleGrid, Stack, Swit
 import { DateInput } from '@mantine/dates';
 import { IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
-import { type AlarmKeyword, type AlarmKeywordInput, DEFAULT_RULE_LEVELS, IncidentSettings, RULE_IDS } from '@forga/incidents-contracts';
+import { type AlarmKeyword, type AlarmKeywordInput, DEFAULT_RULE_LEVELS, IncidentSettings, RATE_TEMPLATE, RULE_IDS } from '@forga/incidents-contracts';
 import { extensionsOf, send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { DataTable, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { useKeywords, useSettings } from '../api';
@@ -121,7 +121,17 @@ function SettingsForm({ initial }: { initial: IncidentSettings }) {
           {ratesElsewhere.length ? (
             ratesElsewhere.map(({ module, component: Contribution }) => <Contribution key={module} />)
           ) : (
-            <Panel title={t('settingsPage.rates')} aside={<Button size="xs" variant="outline" onClick={() => set('rates', [...form.rates, { kind: 'incident', amount: 0, validFrom: `${thisYear}-01-01` }])}>{t('settingsPage.addRate')}</Button>}>
+            <Panel
+              title={t('settingsPage.rates')}
+              aside={
+                <Group gap="xs">
+                  {/* Example values of a statute are offered, never applied without asking. */}
+                  {!form.rates.length && <Button size="xs" variant="subtle" onClick={() => set('rates', RATE_TEMPLATE)}>{t('settingsPage.rateTemplate')}</Button>}
+                  <Button size="xs" variant="outline" onClick={() => set('rates', [...form.rates, { kind: 'incident', amount: 0, validFrom: `${thisYear}-01-01` }])}>{t('settingsPage.addRate')}</Button>
+                </Group>
+              }
+            >
+              {!form.rates.length && <Text size="sm" c="brand" mb="xs">{t('settingsPage.noRates')}</Text>}
               <Table withTableBorder>
                 <Table.Thead><Table.Tr><Table.Th>{t('settingsPage.kind')}</Table.Th><Table.Th>{t('settingsPage.amountPerHour')}</Table.Th><Table.Th>{t('settingsPage.validFrom')}</Table.Th><Table.Th /></Table.Tr></Table.Thead>
                 <Table.Tbody>

@@ -496,11 +496,11 @@ Benötigt `masterdata`; Personen, Abteilungen, Wachen und Fahrzeuge kommen über
 | --- | --- | --- |
 | `AlarmKeywordEntity` | `alarm_keyword` | Stichwort (`key`), Name, Statistik-Vorbelegung (`mainType`, `technicalCategory`, `falseAlarmType`), `requiresVehicle`, `compensationKind` (`incident`, `standby`, `fire-watch`) |
 | `IncidentEntity` | `incident` | Leitstellennummer (`dispatchNumber`, eindeutig), `internalNumber`, Stichwort, Meldebild, Alarmzeit, Einsatzort (`location` als JSON), Herkunft `createdVia` (`ui`, `api`, `import`), Kosten und Bemerkungen des ganzen Einsatzes: `chargeable`, `chargeableReason`, `notes` |
-| `ReportEntity` | `report` | Bericht einer Abteilung (jedes Fahrzeug mit Besatzung steht auch in den Fahrzeugen des Berichts, egal ob aus Editor, Import oder API: `addCrewVehicles`): Nummer, `primary`, Status, Sperre, Rückgabekommentar, Verfasser, Zeiten, Lage/Maßnahmen/Ursache, Einsatzleiter, Statistik, Wetter, Geräte (Freitext), bestätigte Warnungen (`acknowledgements`), `externallyManaged` |
+| `ReportEntity` | `report` | Bericht einer Abteilung (jedes Fahrzeug mit Besatzung steht auch in den Fahrzeugen des Berichts, egal ob aus Editor, Import oder API: `addCrewVehicles`): Nummer, `primary`, Status, Sperre, Rückgabekommentar, Verfasser, Zeiten, `endConfirmed` (Ende vom Verfasser bestätigt), Lage/Maßnahmen/Ursache, Einsatzleiter, Statistik, Wetter, Geräte (Freitext), bestätigte Warnungen (`acknowledgements`), `externallyManaged` |
 | `ReportPersonnelEntity` | `report_personnel` | Person oder Gast, Fahrzeug oder Bereitschaftswache, Funktion, Atemschutz mit Minuten, Gerät und CSA (Chemikalienschutzanzug), `from`/`to`, Verdienstausfall, Arbeitszeit beim Dienstherrn, Zuschläge, manueller Betrag, verletzt/getötet |
 | `ReportVehicleEntity`, `InvolvedPartyEntity`, `OtherAgencyEntity` | `report_vehicle`, `involved_party`, `other_agency` | Fahrzeuge mit Zeiten und km, Beteiligte mit Rolle und Anschrift, sonstige Kräfte |
 | `DutyAssignmentEntity` | `duty_assignment` | Sonderdienst aus dem Dienstplan (siehe unten) |
-| `StatisticsYearEntity` | `statistics_year` | Korrekturen und Abschluss der Jahresstatistik eines Jahres |
+| `StatisticsYearEntity` | `statistics_year` | Korrekturen und Abschluss der Jahresstatistik eines Jahres; beim Abschluss eingefrorene Werte und Prüfungen (`frozenValues`, `frozenChecks`) |
 | `ReportRevisionEntity` | `report_revision` | Gespeicherter Inhalt eines Berichts zum Rückgängigmachen (`content` im Format `ReportInput`, Benutzer, Zeitpunkt) |
 
 Alle außer `ReportRevisionEntity` sind historisiert; Personal, Fahrzeuge, Beteiligte und sonstige Kräfte erscheinen in der Historie ihres Berichts. Die Historie eines Berichts liest, wer `incidents.reports.read` für seine Abteilung oder `incidents.reports.release` für die Gesamtwehr hat.
@@ -509,10 +509,12 @@ Alle außer `ReportRevisionEntity` sind historisiert; Personal, Fahrzeuge, Betei
 
 **Einsatz und Bericht**
 - Ein Einsatz ohne Leitstellennummer bekommt eine interne Nummer `INT-JJJJ-nnnn` (höchste vergebene Nummer des Jahres + 1). Eine schon vergebene Leitstellennummer ergibt `incidents.dispatchNumberTaken`.
-- Die Einsatzdaten (Stichwort, Alarmzeit, Ort, Nummer) ändert, wer den Hauptbericht schreiben darf, oder ein Freigeber (`incidents.notPrimaryWriter`). Einen Bericht für eine weitere Abteilung legt nur an, wer den Einsatz sehen darf.
+- Ein Einsatz wird mit mindestens einer Abteilung angelegt (`incidents.departmentRequired`); nur Freigeber dürfen ihn ohne Bericht anlegen. Wird der letzte Bericht eines Einsatzes gelöscht, wird der Einsatz mit gelöscht (Audit `incidents.incident-deleted`), damit kein Einsatz zurückbleibt, den niemand in der Liste findet.
+- Die Einsatzdaten (Stichwort, Alarmzeit, Ort, Nummer) ändert, wer den Hauptbericht schreiben darf, oder ein Freigeber (`incidents.notPrimaryWriter`), immer mit der geladenen `version` (`IncidentUpdate`, sonst `conflict.stale`). Ist ein Bericht des Einsatzes freigegeben, sind die Einsatzdaten gesperrt (`incidents.incidentReleased`), bis die Sperre aufgehoben ist. Ändert sich die Alarmzeit, wandern Berichte, die mit der alten Alarmzeit beginnen, mit; ihr Ende verschiebt sich mit, solange es nicht bestätigt ist, ebenso Personal, das zur alten Alarmzeit beginnt.
+- Gemeinsame Einsätze: Beim Anlegen sucht `GET /incidents/incidents/matches` vorhandene Einsätze mit derselben Leitstellennummer oder demselben Stichwort ±2 Stunden, auch solche, die der Benutzer noch nicht lesen darf, und liefert nur Mindestdaten (Nummer, Stichwort, Alarm, Ort, beteiligte Abteilungen). Schreiber einer Abteilung fügen ihren Bericht jedem Einsatz hinzu, dessen ID sie kennen (`POST …/incidents/:id/reports`), statt einen doppelten Einsatz anzulegen.
 - Je Einsatz und Abteilung gibt es höchstens einen Bericht. Die Berichtsnummer ist je Abteilung und Jahr fortlaufend (`JJJJ-nnn`).
 - Der erste Bericht eines Einsatzes wird Hauptbericht. Ein partieller eindeutiger Index (`report_one_primary_per_incident`, in der Entität als `expression` deklariert) lässt höchstens einen Hauptbericht je Einsatz zu. Beim Wechsel (`POST …/primary`) wandern vorhandene Statistikmerkmale zum neuen Hauptbericht; Nebenberichte tragen keine.
-- Ein neuer Bericht hat die Alarmzeit des Einsatzes und als Ende eine Stunde später.
+- Ein neuer Bericht hat die Alarmzeit des Einsatzes und als Ende eine Stunde später; dieses Ende gilt als nicht bestätigt (`endConfirmed: false`, Regel `end-unconfirmed`), bis der Verfasser es ändert oder bestätigt. Speichern ohne `endConfirmed` (andere Systeme, die eigene Zeiten senden) bestätigt es; der MP-Feuer-Import bestätigt es, wenn die Quelle ein Ende hat.
 - `from`/`to` einer Person sind `null`, solange die Zeiten des Berichts gelten.
 - Speichern (`PUT …/reports/:id`) ersetzt den ganzen Inhalt samt Personal, Fahrzeugen, Beteiligten und sonstigen Kräften. Geprüft werden: Person existiert, Fahrzeug existiert, keine Person doppelt im selben Bericht.
 
@@ -534,12 +536,20 @@ Alle außer `ReportRevisionEntity` sind historisiert; Personal, Fahrzeuge, Betei
 | `no-personnel` | Fehler | kein Personal |
 | `vehicle-missing` | Fehler | Person ohne Fahrzeug und ohne Bereitschaft; nicht bei Abteilungstyp `command` oder `special-service` und nicht bei Stichworten mit `requiresVehicle: false` |
 | `personnel-overlap-incident` | Fehler | Person in einem anderen Bericht desselben Einsatzes mit sich überschneidender Zeit (aneinandergrenzende Zeiten sind erlaubt) |
-| `personnel-overlap-other` | Warnung | Überschneidung mit einem anderen Einsatz (Suche ±2 Tage, Zeiträume über 24 h werden ignoriert) |
+| `personnel-overlap-other` | Warnung | Überschneidung mit einem anderen Einsatz (Suche ±2 Tage; lange Zeiträume im anderen Einsatz werden ignoriert, eine lange Zeit im eigenen Bericht wird trotzdem verglichen) |
 | `times-invalid` | Fehler | Ende nicht nach Beginn (Bericht oder Person) |
-| `duration-long` | Warnung | Bericht länger als 24 h |
-| `rate-missing` | Warnung | kein Stundensatz für das Datum |
+| `duration-long` | Warnung | Bericht länger als `longDurationHours` (Standard 24 h; der Text nennt die eingestellten Stunden) |
+| `end-unconfirmed` | Fehler | Ende ist noch die Vorgabe (Alarm + 1 h) und nicht bestätigt |
+| `times-order` | Warnung | Zeiten des Berichts in falscher Reihenfolge (Alarmierung, Ausrücken, Eintreffen, Einsatzende, Einsatzbereit) |
+| `incident-time-differs` | Warnung | Hauptbericht beginnt nicht mit der Alarmzeit des Einsatzes; ein Nebenbericht beginnt vor ihr (später alarmierte Abteilungen beginnen später) |
+| `personnel-duration-long` | Warnung | Person länger als `longDurationHours` eingetragen |
+| `personnel-times-outside` | Warnung | eigene Zeiten einer Person außerhalb der Zeiten des Berichts |
+| `person-not-operational` | Warnung | Person am Einsatztag mit Status Jugend, Altersabteilung, passiv oder ausgetreten (Stammdaten) |
+| `person-not-member` | Warnung | Person am Einsatztag nicht Mitglied der Abteilung des Berichts (nicht bei Abteilungstyp `command` oder `special-service`) |
+| `person-too-young` | Warnung | Person am Einsatztag jünger als `minimumAgeIncidents` aus `masterdata.membership` |
+| `rate-missing` | Warnung | kein Stundensatz für das Datum (auch, solange gar keiner eingetragen ist) |
 | `working-hours-and-loss-of-earnings` | Fehler | Arbeitszeit beim Dienstherrn und Verdienstausfall zugleich |
-| `crew-exceeded` | Warnung | mehr Personen als Sitzplätze des Fahrzeugs |
+| `crew-exceeded` | Warnung | mehr Personen als Sitzplätze des Fahrzeugs; der Text nennt das Fahrzeug |
 | `breathing-without-qualification` | Warnung | Atemschutz ohne gültige Qualifikation `breathing-apparatus` |
 | `breathing-not-fit` | Warnung | Atemschutz bei einer Person mit roter Atemschutz-Ampel am Einsatztag (nur mit Modul Atemschutz) |
 
@@ -547,7 +557,7 @@ Warnungen werden mit Begründung bestätigt (`acknowledgements`, je Regel und Ge
 
 **Entschädigung** (`domain/compensation.ts`, Einstellung `incidents.general`)
 - Stunden: `started-hour` (angefangene Stunde, Standard), `started-half-hour` oder `exact-minutes`.
-- Satz: der Satz der Art (`incident`, `fire-watch` nach Stichwort, `standby` bei Bereitschaft) mit dem jüngsten `validFrom` bis zum Tag des Beginns (Europe/Berlin). Standard 15 € je Art ab 01.01.2026.
+- Satz: der Satz der Art (`incident`, `fire-watch` nach Stichwort, `standby` bei Bereitschaft) mit dem jüngsten `validFrom` bis zum Tag des Beginns (Europe/Berlin). Standardmäßig ist kein Satz eingetragen; die Einstellungen bieten die Beispielwerte `RATE_TEMPLATE` (15 € je Art ab 01.01.2026) als „Vorlage übernehmen“ an.
 - Bereitschaft auf der Wache: immer `standbyHours` (Standard 1).
 - Während der Arbeitszeit (beim Arbeitgeber, meist der Gemeinde) und für Gäste: keine Entschädigung; mit `compensateDuringWorkingHours` werden Einsätze während der Arbeitszeit normal vergütet.
 - Zuschläge (`allowances`) werden addiert; die Standardeinstellung enthält keine. Eine Einsatzleiter-Pauschale gibt es im Bericht nicht, sie kommt aus dem Dienstplan.
@@ -559,13 +569,15 @@ Warnungen werden mit Begründung bestätigt (`acknowledgements`, je Regel und Ge
 | Aktion | Recht | Von → nach |
 | --- | --- | --- |
 | `submit` | Schreibrecht | `draft` → `review`. Fehler blockieren (`incidents.findingsOpen`), unbestätigte Warnungen ebenfalls (`incidents.warningsNotAcknowledged`). |
-| `return` | `incidents.reports.release` | `review` → `draft` mit Kommentar; hebt die Sperre auf. Der Verfasser bekommt eine E-Mail mit dem Kommentar und dem Link zum Bericht, wenn er eine E-Mail-Adresse hat (`incidents.author-notified`); ein Fehler beim Versand hält das Zurückgeben nicht auf |
-| `release` (`compensation` oder `billing`) | `incidents.reports.release` | → `released-compensation` bzw. `released-billing`. Fehler blockieren, offene Warnungen gelten als bestätigt (Begründung `released`). Ereignis `incidents.report.released` |
-| `unlock` | `incidents.reports.unlock` | Sperre aufheben, zurück nach `review` oder `draft`. Grund im Audit (`incidents.report-unlocked`), Ereignis `incidents.report.unlocked` |
+| `return` | `incidents.reports.release` (Gesamtwehr) oder `incidents.reports.review` für die Abteilung des Berichts | `review` → `draft` mit Kommentar; hebt die Sperre auf. Der Verfasser bekommt eine E-Mail in der Sprache seines Benutzers (sonst Deutsch) mit dem Kommentar und dem Link zum Bericht, wenn er eine E-Mail-Adresse hat (`incidents.author-notified`); ein Fehler beim Versand hält das Zurückgeben nicht auf |
+| `release` (`compensation` oder `billing`) | `incidents.reports.release` | `compensation` nur aus `review`, `billing` aus `review` oder `released-compensation` (sonst `incidents.invalidTransition`); ein Entwurf wird also immer erst fertig gemeldet. Fehler blockieren, offene Warnungen gelten als bestätigt (Begründung `released`). Ereignis `incidents.report.released`. `POST …/reports/release` gibt mehrere Berichte nacheinander frei und meldet nicht freigegebene mit Fehlercode zurück (`ReleaseManyResult`) |
+| `unlock` | `incidents.reports.unlock` | Sperre aufheben; ein freigegebener Bericht zurück nach `review` oder `draft`, ein gesperrter Entwurf nur nach `draft`. Grund im Audit (`incidents.report-unlocked`), Ereignis `incidents.report.unlocked` |
 
 Die Freigabe ist zweistufig: erst zur Entschädigungsauszahlung, dann zur Abrechnung (die Abrechnung schließt die Entschädigung ein). Mit `incidents.general.compensationRelease: false` entfällt die erste Stufe; `release` mit `compensation` ergibt dann `incidents.compensationReleaseDisabled`.
 
 - Schreibrecht hat, wer `incidents.reports.write` für die Abteilung des Berichts hat, solange der Bericht ein Entwurf (sonst `incidents.notDraft`) und nicht gesperrt ist (`incidents.reportLocked`). Nach dem Fertigmelden ändert der Verfasser den Bericht also erst nach einer Rückgabe. Freigeber (`incidents.reports.release` für die Gesamtwehr) dürfen immer schreiben; ihr Speichern oder Freigeben sperrt den Bericht (`locked`, `lockedBy`, `lockedAt`).
+- Vorprüfung in der Abteilung: `incidents.reports.review` (Bereich Abteilung, Rollenvorlage `department-commander`) erlaubt, Berichte der eigenen Abteilungen zurückzugeben und ihre Verfasser zu erinnern; freigeben darf nur `incidents.reports.release`.
+- Statistik freigegebener Hauptberichte: Freigeber ändern sie mit `PUT …/reports/:id/statistics` (`StatisticsUpdate` mit `version`) ohne neue Freigabe; Status und Sperre bleiben, Ereignisse werden nicht erneut gesendet (Audit `incidents.statistics-changed`).
 - Löschen geht nur im Entwurf; ein Hauptbericht nur als letzter Bericht des Einsatzes.
 - `incidents.report.released` enthält Personal (mit Atemschutz, Minuten und CSA) und Fahrzeuge, z. B. für das Atemschutzmodul.
 
@@ -601,14 +613,17 @@ Die Freigabe ist zweistufig: erst zur Entschädigungsauszahlung, dann zur Abrech
 | Art | Zuständig | Fällig |
 | --- | --- | --- |
 | `report-open` / `report-returned` | Verfasser (`personIds`) mit `incidents.reports.write` in der Abteilung | 7 Tage nach Alarm |
+| `report-no-author` („Verfasser für Einsatzbericht zuweisen“) | `incidents.reports.write` in der Abteilung (auch Freigeber) | 7 Tage nach Alarm |
+| `report-locked` | `incidents.reports.release` für die Gesamtwehr: ein von einem Freigeber gesperrter Entwurf, den der Verfasser nicht mehr schreiben kann | 7 Tage nach Alarm |
 | `report-review` | `incidents.reports.release` für die Gesamtwehr | 14 Tage nach Alarm |
+| `report-billing` | `incidents.reports.release` für die Gesamtwehr, nur mit zweistufiger Freigabe: zur Entschädigung freigegeben, Abrechnung offen | 42 Tage nach Alarm |
 
 **Listen** (Recht `incidents.reports.read`, Zeilen nur aus lesbaren Abteilungen)
 
 | ID | Inhalt |
 | --- | --- |
 | `incidents.open-reports` | Berichte im Entwurf oder zur Prüfung mit Verfasser, Zahl der Fehler und offenen Warnungen; ersetzt die frühere Prüf-App |
-| `incidents.incidents` | Einsätze im Zeitraum mit Ort, Abteilung, Hauptbericht, Status |
+| `incidents.incidents` | Einsätze im Zeitraum mit Ort, Abteilung (Name aus `ORGANIZATION`), Hauptbericht, Status |
 | `incidents.per-department` | Berichte, Hauptberichte, Einsatzkräfte und Stunden je Abteilung |
 | `incidents.hours-per-person` | Einsätze, Stunden, Bereitschaften, Atemschutzminuten je Person |
 
@@ -651,11 +666,19 @@ Das Blatt „Hinweise“ des Abrechnungsexports enthält dieselben Probleme mit 
   - Einsätze (F28–F62) einmal je Einsatz über die Statistik des Hauptberichts; Seiten 5–7 nur eigene Gemeinde
   - Fahrzeuge (F63–F120) nach Statistik-Kategorie, in Dienst am Stichtag
 - Funkgeräte (F121–F129) und Abweichungen werden als Korrekturen (`<Frage>:<Spalte>`) eingetragen; jeder Wert zeigt berechnet, korrigiert und gültig.
-- Prüfungen (`checkAnnualStatistics`): Summen Brandgrößen, TH-Kategorien, Fehlalarme, hauptberufliche Kräfte; Teilmengen gerettete/tote Personen; dazu Hauptberichte ohne Statistik und nicht freigegebene Hauptberichte. Fehlgeschlagene Prüfungen blockieren den Export nicht.
-- Abschluss (`close`) friert die Korrekturen ein (`incidents.statisticsClosed`), `reopen` hebt das auf.
+- Prüfungen (`checkAnnualStatistics`): Summen Brandgrößen, TH-Kategorien, Fehlalarme, hauptberufliche Kräfte; Teilmengen gerettete/tote Personen; dazu Hauptberichte gezählter Stichworte ohne Statistik und nicht freigegebene Hauptberichte. Fehlgeschlagene Prüfungen blockieren den Export nicht.
+- Abschluss (`close`) speichert Werte und Prüfungen (`frozenValues`, `frozenChecks`) und sperrt Korrekturen (`incidents.statisticsClosed`). Mit offenen Prüfungen verlangt er `force: true` (sonst `incidents.statisticsChecksOpen`). Ein abgeschlossenes Jahr zeigt und exportiert die eingefrorenen Werte; `changedSinceClose` meldet, wenn die Berichte inzwischen anders rechnen. `reopen` verwirft die eingefrorenen Werte.
 - Export füllt die eingebettete Import-Vorlage des Landesportals (`state-template.ts`, Base64, Dokumenteigenschaften neutralisiert, Ersteller `f.orga`) in den Spalten D/F/G/H. Felder ohne Wert bleiben leer. Audit `incidents.statistics-exported`.
 
-**Einstellungen** `incidents.general`: `homeMunicipalities`, `rates`, `rounding`, `compensationRelease`, `compensateDuringWorkingHours`, `standbyHours`, `longDurationHours` (Standard 24: längere Einsätze werden markiert, längere Einsätze einer Person nicht auf Überschneidungen geprüft), `allowances`, `dutyKinds`, `rules`.
+**Andere Module** (`INCIDENTS_LOOKUP`): `ChargeableIncident.released` ist nur wahr, wenn alle Berichte zur Abrechnung freigegeben sind (eine Freigabe nur zur Entschädigung zählt für den Kostenersatz nicht); `releaseLevel` (`none`, `compensation`, `billing`) nennt die niedrigste Freigabestufe der Berichte.
+
+**Druck und eigene Einsätze**
+- `GET /api/incidents/reports/:id/pdf?lang` liefert den Bericht als PDF im Briefstil der Wehr (`renderLetterPdf`: Briefkopf oder Wappen, Fußzeile mit Seiten) mit Einsatzdaten, Zeiten, Personal, Fahrzeugen, Lage und Verlauf, Statistik, Beteiligten und sonstigen Kräften (`reports/report-pdf.ts`).
+- `GET /api/incidents/me?year` („Meine Einsätze“, Recht `incidents.self`) liefert die eigenen Einsätze des Jahres mit Stunden, immer für die mit dem Benutzer verknüpfte Person (`incidents.noPerson` ohne Person).
+- `GET /api/incidents/reports/:id/previous-crew?vehicleId` nennt die Besatzung des Fahrzeugs im letzten früheren Bericht derselben Abteilung (Personen und Funktionen, ohne Gäste).
+- Die globale Suche findet Einsätze auch über Straße, Objekt, Ort und Ortsteil (JSON-Felder von `location`).
+
+**Einstellungen** `incidents.general`: `homeMunicipalities`, `rates` (Standard leer), `rounding`, `compensationRelease`, `compensateDuringWorkingHours`, `standbyHours`, `longDurationHours` (Standard 24: längere Einsätze werden markiert, längere Einsätze einer Person nicht auf Überschneidungen geprüft), `allowances`, `dutyKinds`, `rules`.
 
 **Ereignisse:** `incidents.report.released`, `incidents.report.unlocked`, `incidents.duty.changed` (`INCIDENTS_EVENTS`).
 
@@ -1028,26 +1051,31 @@ Personen und Abteilungen für die Benutzerverwaltung kommen aus der Stammdaten-A
 
 | Pfad | Seite |
 | --- | --- |
-| `/incidents/incidents` | Einsätze des Jahres mit Ansichten (alle, nur meine, offen, zur Prüfung, freigegeben), Suche und Abteilungsfilter. „+ Einsatz anlegen“ legt Einsatz und Berichtsentwürfe für die gewählten Abteilungen an und öffnet den ersten Bericht. |
-| `/incidents/incidents/:id` | Einsatzdaten (bearbeitbar), Karte je Bericht mit Status, Verfasser, Zeit, Personal und Betrag, Hauptbericht wechseln, Bericht für weitere Abteilung; „Kosten und Bemerkungen“ des ganzen Einsatzes (kostenpflichtig, Begründung, Bemerkungen; bearbeiten mit `incidents.costs`, sonst nur lesen, auch nach der Freigabe) und daneben die Karten des Erweiterungspunkts `incidents.incident.sections` (Kostenersatz: Tatbestand) |
+| `/incidents/incidents` | Einsätze des Jahres mit Ansichten (alle, nur meine, offen, zur Prüfung, freigegeben, ohne Statistik; direkt aufrufbar mit `?view=…&year=…`), Suche und Abteilungsfilter (alle lesbaren Abteilungen). „+ Einsatz anlegen“ legt Einsatz und Berichtsentwürfe für die gewählten Abteilungen an und öffnet den ersten Bericht; passende vorhandene Einsätze (gleiche Leitstellennummer oder Stichwort ±2 h) werden angeboten und mit „Bericht … hinzufügen“ um den Bericht der eigenen Abteilung ergänzt. |
+| `/incidents/incidents/:id` | Einsatzdaten (bearbeitbar mit Version), Karte je Bericht mit Status, Verfasser, Zeit, Personal und Betrag; „Bericht öffnen“ und „PDF“ nur für lesbare Berichte; Hauptbericht wechseln, Bericht für weitere Abteilung, „Alle Berichte freigeben“ für Freigeber, wenn mehrere Berichte zur Prüfung stehen; „Kosten und Bemerkungen“ des ganzen Einsatzes (kostenpflichtig, Begründung, Bemerkungen; bearbeiten mit `incidents.costs`, sonst nur lesen, auch nach der Freigabe) und daneben die Karten des Erweiterungspunkts `incidents.incident.sections` (Kostenersatz: Tatbestand) |
 | `/incidents/reports/:id` | Berichtseditor (siehe unten) |
-| `/incidents/review` | Berichte zur Prüfung und zur Entschädigung freigegebene Berichte; Detail mit begründeten Warnungen und den Aktionen des Freigebers |
-| `/incidents/open` | Offene Berichte (Entwürfe, zurückgegebene) nach Verfasser mit Hinweisen und offen seit; Kennzahlen (offen, zur Prüfung, ohne Hauptbericht, ohne Verfasser); Verfasser zuweisen (`POST /incidents/reports/:id/author`, ohne zu sperren); „Verfasser erinnern“ per E-Mail (`POST /incidents/open-reports/remind`); Excel |
-| `/incidents/compensation` | Auszahlungslauf: Zeitraum wählen, Prüfung (`GET /incidents/compensation/check`) mit Problemen je Art, Export erst ohne Probleme |
+| `/incidents/review` | Berichte zur Prüfung und zur Entschädigung freigegebene Berichte (`?status=released-compensation`); Detail mit begründeten Warnungen und den Aktionen des Freigebers; fehlerfreie Berichte auswählen und gemeinsam freigeben |
+| `/incidents/open` | Offene Berichte (Entwürfe, zurückgegebene) nach Verfasser mit Hinweisen und offen seit; Kennzahlen (offen, zur Prüfung, ohne Hauptbericht, ohne Verfasser); Verfasser zuweisen oder ändern in jeder Zeile (`POST /incidents/reports/:id/author`, ohne zu sperren); „Verfasser erinnern“ per E-Mail (`POST /incidents/open-reports/remind`, Freigeber und Vorprüfer); Excel |
+| `/incidents/compensation` | „Prüfung Entschädigung (Einsatzberichte)“: Zeitraum wählen, Prüfung (`GET /incidents/compensation/check`) mit Problemen je Art, Export erst ohne Probleme; bei aktivem Modul Entschädigungen ein Hinweis mit Link dorthin |
 | `/incidents/duty` | EvD-Dienst: Dienste des Einsatzleiters vom Dienst und weitere Sonderdienste je Jahr, anlegen, bearbeiten, löschen; Kalender-Import über den Import-Assistenten |
-| `/incidents/statistics` | Jahresstatistik: Werte je Frage und Spalte (FF, JF, Alt.-A, Mus.-A) mit den Texten der Landesvorlage (`STATISTICS_QUESTIONS`), Filter nach Seite, Korrektur per Klick, Plausibilitätsprüfungen, Abschließen/Wiederöffnen, Export der Landesvorlage |
-| `/incidents/settings` | Einstellungen (im Menü unter „Verwaltung → Einsatzberichte“): Entschädigung (Stundensätze mit Gültigkeit und Rundung, solange das Modul Entschädigungen nicht aktiv ist; Bereitschaft, zweistufige Freigabe, eigene Gemeinde), Stichwort-Katalog (anlegen, bearbeiten, BW-Vorlage), Prüfregeln (an/aus, Stufe), Sonderdienste (Satz je Tag) |
+| `/incidents/statistics` | Jahresstatistik: Werte je Frage und Spalte (FF, JF, Alt.-A, Mus.-A) mit den Texten der Landesvorlage (`STATISTICS_QUESTIONS`), Filter nach Seite, Korrektur per Klick, Plausibilitätsprüfungen (Prüfungen zu Berichten verlinken die betroffenen Einsätze), Abschließen (mit offenen Prüfungen nach Rückfrage) mit Hinweis, wenn sich die Daten danach geändert haben, Wiederöffnen, Export der Landesvorlage |
+| `/incidents/settings` | Einstellungen (im Menü unter „Verwaltung → Einsatzberichte“): Entschädigung (Stundensätze mit Gültigkeit und Rundung, solange das Modul Entschädigungen nicht aktiv ist; ohne Satz „Vorlage übernehmen“ mit den Beispielwerten; Bereitschaft, zweistufige Freigabe, eigene Gemeinde), Stichwort-Katalog (anlegen, bearbeiten, BW-Vorlage), Prüfregeln (an/aus, Stufe), Sonderdienste (Satz je Tag) |
 
 **Berichtseditor** (`report/`): Abschnitte Zeiten & Ort, Personal & Fahrzeuge, Lage & Verlauf, Statistik, Beteiligte & Sonstiges (mit Anhängen: Fotos, Alarmfax, Skizzen, und dem Hinweis, dass Kosten und Bemerkungen beim Einsatz stehen), Prüfen; jeder Abschnitt zeigt seinen Stand (vollständig, fehlt, Fehler, Warnungen).
-- `useReportEditor` hält eine lokale Kopie des Inhalts und speichert 0,8 s nach der letzten Änderung (`PUT /incidents/reports/:id`), immer nur eine Anfrage gleichzeitig. Die Antwort aktualisiert Prüfergebnisse und Entschädigung. Vor dem Fertigmelden und beim Verlassen wird gespeichert.
+- `useReportEditor` hält eine lokale Kopie des Inhalts und speichert 0,8 s nach der letzten Änderung (`PUT /incidents/reports/:id`), immer nur eine Anfrage gleichzeitig. Die Antwort aktualisiert Prüfergebnisse und Entschädigung. Vor dem Fertigmelden, beim Verlassen und beim Ausblenden der Seite (`visibilitychange`, `pagehide`) wird gespeichert; mit ungespeicherten Änderungen fragt der Browser vor dem Verlassen.
+- Die gesendete Version ist die der letzten eigenen Speicherung, nie die eines Neuladens im Hintergrund (der Bericht wird beim Fokussieren des Fensters nicht neu geladen). Hat jemand anderes inzwischen gespeichert (`conflict.stale`), fragt ein Dialog: „Server-Stand laden“ oder „Meinen Stand übernehmen“.
+- Ungespeicherte Inhalte liegen zusätzlich im Browser (`localStorage`); beim nächsten Öffnen wird „Wiederherstellen“ angeboten. Fehlgeschlagene Speicherungen werden im Hintergrund wiederholt (5 s bis 60 s). Begründungen der Warnungen überstehen ein Neuladen bis zum Fertigmelden.
+- Freigeber öffnen Entwürfe der Verfasser nur zum Lesen; „Bearbeiten (sperrt für Verfasser)“ schaltet nach einer Rückfrage frei.
+- Zeiten: Solange das Ende nicht bestätigt ist, bleibt der Abschnitt offen; „Ende bestätigen“ oder eine Änderung des Endes bestätigt es.
 - Personalzeiten gleich den Berichtszeiten werden als `null` gespeichert und folgen so späteren Änderungen der Berichtszeiten.
-- Personal: Person (oder Gast) suchen und mit einem Klick einem Fahrzeug oder der Bereitschaft zuordnen; Karte je Fahrzeug mit Besetzung und Plätzen; Dialog je Person mit Fahrzeug, Funktion, Zeiten, Atemschutz, Verdienstausfall, Arbeitszeit, Schaden und berechneter Entschädigung.
-- Statistik nur im Hauptbericht: Vorschlag aus Stichwort und Einsatzort übernehmen; gespeichert wird erst, wenn alle Pflichtangaben gemacht sind.
+- Personal: Fahrzeug oder Bereitschaft und Funktion wählen, mehrere Personen (und einen Gast) auswählen und gemeinsam hinzufügen; ein neues Fahrzeug kommt dabei in den Bericht. „Besatzung vom letzten Einsatz übernehmen“ fügt die Besatzung des Fahrzeugs aus dem letzten Einsatz der Abteilung hinzu. Auf dem Telefon sind die Bedienelemente mindestens 44 px hoch. Karte je Fahrzeug mit Besetzung und Plätzen; Dialog je Person mit Fahrzeug, Funktion, Zeiten, Atemschutz, Verdienstausfall, Arbeitszeit, Schaden und berechneter Entschädigung.
+- Statistik nur im Hauptbericht: Vorschlag aus Stichwort und Einsatzort übernehmen; gespeichert wird erst, wenn alle Pflichtangaben gemacht sind. Eine unvollständige Änderung ist ein Fehler des Abschnitts und verhindert das Fertigmelden. Die Art der Technischen Hilfe ist genau eine (Auswahl mit Hinweis auf den Vorrang). Bei freigegebenen Hauptberichten speichern Freigeber die Statistik einzeln ohne neue Freigabe.
 - Prüfen: Fehler mit Sprung zum Abschnitt, Warnungen mit Begründungsfeld. Gleiche Befunde zu einer Person werden zusammengefasst (`mergeFindings`).
 - Fertig melden geht ohne offene Fehler und mit begründeten Warnungen. Danach ist der Bericht für den Verfasser schreibgeschützt, bis er zurückgegeben wird (Server: `incidents.notDraft`).
 - Versionen (wiederherstellen) und Verlauf (Historie) als Dialog; die Aktionsleiste zeigt den Speicherstand und die Zahl der Fehler und Warnungen.
-- `WorkflowActions` zeigt Freigebern je nach Status „Freigeben zur Entschädigungsauszahlung“ bzw. „zur Abrechnung“ (je nach Einstellung `compensationRelease`), „Zurück an Verfasser“ mit Pflichthinweis und „Sperre aufheben“ mit Begründung und Zielstatus.
-- Startseite: Kacheln „Berichte zur Prüfung“ (Freigeber) und „Meine offenen Berichte“ (Verfasser), Karte „Letzte Einsätze“; Zähler an „Zur Prüfung“ im Menü; Einsätze in der globalen Suche.
+- `WorkflowActions` zeigt Freigebern je nach Status „Freigeben zur Entschädigungsauszahlung“ bzw. „zur Abrechnung“ (je nach Einstellung `compensationRelease`), „Zurück an Verfasser“ mit Pflichthinweis (auch für Vorprüfer der Abteilung) und „Sperre aufheben“ mit Begründung und Zielstatus (gesperrte Entwürfe nur zurück an den Verfasser).
+- „PDF“ in der Aktionsleiste öffnet den Bericht als PDF.
+- Startseite: Kacheln „Berichte zur Prüfung“ und bei zweistufiger Freigabe „Berichte zur Abrechnung“ (Freigeber) und „Meine offenen Berichte“ (Verfasser), Karte „Letzte Einsätze“; Zähler an „Zur Prüfung“ im Menü (zur Prüfung und, bei zweistufiger Freigabe, zur Abrechnung); Einsätze in der globalen Suche.
 
 ### Oberfläche Übungsdienst
 
@@ -1170,6 +1198,7 @@ Die Shell zeigt unter `/me` („Mein Bereich“, in der Seitenleiste unter „Ü
 | Stammdaten | Meine Personalakte (Abteilung, Dienstgrad, Eintritt, Qualifikationen, Ehrungen) und Kontakt mit Bankverbindung zum Ändern; interne Bemerkungen bleiben verborgen, Änderungen stehen in der Historie | `GET`, `PUT /api/masterdata/me` (`masterdata.self`) |
 | Übungsdienst | nächste Dienste der eigenen Abteilungen (8 Wochen) mit Entschuldigen (Grund freiwillig), Grund ändern, Zurücknehmen; letzte Dienste (90 Tage) mit eigenem Stand; Beteiligung im Jahr. Der Gruppenführer sieht den Grund in der Anwesenheit; als anwesend Eingetragene können sich nicht entschuldigen | `GET /api/training/me`, `PUT`, `DELETE …/me/sessions/:id/excuse` (`training.self`); Feld `note` an der Anwesenheit |
 | Atemschutz | eigene Tauglichkeit mit Bedingungen und die letzten Nachweise (auch Untersuchungen, eigene Daten); nur für Geräteträger | `GET /api/respiratory-protection/me` (`respiratory-protection.self`) |
+| Einsatzberichte | Meine Einsätze des Jahres mit Stunden, Abteilung und Status | `GET /api/incidents/me?year` (`incidents.self`) |
 | Geräte | Mangel melden über Inventarnummer oder Bezeichnung (Geräte der Abteilungen mit `equipment.defects.report`), eigene Meldungen mit Stand | `GET /api/equipment/me/items?q`, `GET /api/equipment/me/defects`; Mängel merken sich den meldenden Benutzer (`reported_by_user_id`) |
 | Kleiderkammer | Meine Schutzausrüstung: zugeordnete Stücke mit Fristen, Verlauf der Ausgaben, eigene Größen; die Code-Suche findet die eigenen Stücke und führt hierher | `GET /api/clothing/me` (`clothing.self`) |
 

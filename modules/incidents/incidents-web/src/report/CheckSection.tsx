@@ -6,12 +6,14 @@ import { type StepId, stepOf } from './editor';
 import { findingKey, findingText, mergeFindings } from './findings';
 
 /** All findings of the rules: errors block submitting, warnings need a reason. */
-export function CheckSection({ findings, reasons, setReason, goTo, editable }: {
+export function CheckSection({ findings, reasons, setReason, goTo, editable, statisticsIncomplete }: {
   findings: Finding[];
   reasons: Record<string, string>;
   setReason: (key: string, value: string) => void;
   goTo: (step: StepId) => void;
   editable: boolean;
+  /** Statistics changed but not complete (and so not saved). */
+  statisticsIncomplete?: boolean;
 }) {
   const { t } = useTranslation('incidents');
   const errors = mergeFindings(findings).filter((f) => f.level === 'error');
@@ -19,6 +21,11 @@ export function CheckSection({ findings, reasons, setReason, goTo, editable }: {
   return (
     <Panel title={t('check.title')}>
       <Stack gap="sm">
+        {statisticsIncomplete && (
+          <Notice kind="error" action={<Button size="xs" variant="outline" onClick={() => goTo('statistics')}>{t('check.goTo')}</Button>}>
+            {t('statistics.incomplete')}
+          </Notice>
+        )}
         {errors.map((f) => (
           <Notice key={findingKey(f)} kind="error" action={<Button size="xs" variant="outline" onClick={() => goTo(stepOf(f))}>{t('check.goTo')}</Button>}>
             {findingText(f, t)}
@@ -45,7 +52,7 @@ export function CheckSection({ findings, reasons, setReason, goTo, editable }: {
             </Stack>
           </Notice>
         ))}
-        {!findings.length && <Notice kind="done">{t('check.allGood')}</Notice>}
+        {!findings.length && !statisticsIncomplete && <Notice kind="done">{t('check.allGood')}</Notice>}
         <Text size="sm" c="dimmed">{t('check.hint')}</Text>
       </Stack>
     </Panel>

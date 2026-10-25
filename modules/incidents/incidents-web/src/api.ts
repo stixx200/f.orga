@@ -8,6 +8,9 @@ export const WRITE = 'incidents.reports.write';
 export const RELEASE = 'incidents.reports.release';
 export const COSTS = 'incidents.costs';
 export const UNLOCK = 'incidents.reports.unlock';
+/** Department-level pre-review: return reports and remind authors. */
+export const REVIEW = 'incidents.reports.review';
+export const SELF = 'incidents.self';
 
 export const keys = {
   incidents: ['incidents', 'incidents'] as const,
@@ -24,13 +27,15 @@ export interface IncidentFilter {
   departmentId?: string;
   status?: string;
   mine?: boolean;
+  withoutStatistics?: boolean;
 }
 
 export function useIncidents(filter: IncidentFilter = {}, enabled = true) {
   return useQuery({
     enabled,
     queryKey: [...keys.incidents, filter],
-    queryFn: () => api<Incident[]>(withQuery('incidents/incidents', { ...filter, mine: filter.mine ? 'true' : undefined })),
+    queryFn: () =>
+      api<Incident[]>(withQuery('incidents/incidents', { ...filter, mine: filter.mine ? 'true' : undefined, withoutStatistics: filter.withoutStatistics ? 'true' : undefined })),
   });
 }
 
@@ -38,8 +43,21 @@ export function useIncident(id: string) {
   return useQuery({ queryKey: keys.incident(id), queryFn: () => api<Incident>(`incidents/incidents/${id}`) });
 }
 
+/**
+ * The report. Not refetched on window focus: the editor keeps its own content and version, a refetch in the
+ * background must not make the cached report look newer than what the editor saves.
+ */
 export function useReport(id: string) {
-  return useQuery({ queryKey: keys.report(id), queryFn: () => api<Report>(`incidents/reports/${id}`) });
+  return useQuery({ queryKey: keys.report(id), queryFn: () => api<Report>(`incidents/reports/${id}`), refetchOnWindowFocus: false });
+}
+
+/** IDs of the active modules (e.g. to link to the compensation module instead of duplicating it). */
+export function useActiveModules() {
+  return useQuery({
+    queryKey: ['incidents', 'active-modules'],
+    queryFn: async () => (await api<{ id: string }[]>('core/modules')).map((m) => m.id),
+    staleTime: LONG,
+  });
 }
 
 export function useRevisions(id: string, enabled: boolean) {

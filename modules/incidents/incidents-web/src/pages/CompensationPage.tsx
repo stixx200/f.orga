@@ -6,6 +6,7 @@ import { Link } from 'react-router';
 import type { CompensationCheck, CompensationProblem } from '@forga/incidents-contracts';
 import { api, apiUrl, formatDate, useTranslation, withQuery } from '@forga/web-sdk';
 import { ActionBar, DataTable, KpiTile, Notice, PageHeader, Panel, StatusBadge } from '@forga/web-ui';
+import { useActiveModules } from '../api';
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -23,6 +24,9 @@ export function CompensationPage() {
   const [from, setFrom] = useState<string | null>(initial[0]);
   const [to, setTo] = useState<string | null>(initial[1]);
   const [includeUnreleased, setIncludeUnreleased] = useState(false);
+  // With the compensation module the payout runs there; this page only checks the incident reports.
+  const { data: modules = [] } = useActiveModules();
+  const compensationModule = modules.includes('compensation');
   const { data: check, isFetching } = useQuery({
     queryKey: ['incidents', 'compensation', 'check', from, to],
     queryFn: () => api<CompensationCheck>(withQuery('incidents/compensation/check', { from, to })),
@@ -40,6 +44,11 @@ export function CompensationPage() {
   return (
     <Stack gap="lg" pb={80}>
       <PageHeader breadcrumbs={[{ label: t('module') }, { label: t('compensation.title') }]} title={t('compensation.title')} subtitle={t('compensation.subtitle')} />
+      {compensationModule && (
+        <Notice kind="info" action={<Button component={Link} to="/compensation" size="xs" variant="outline">{t('compensation.toModule')}</Button>}>
+          {t('compensation.moduleActive')}
+        </Notice>
+      )}
       <Panel>
         <Group align="end" wrap="wrap">
           <SegmentedControl

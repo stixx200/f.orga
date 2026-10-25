@@ -5,7 +5,7 @@ import { Link } from 'react-router';
 import type { Incident, RemindResult, Report } from '@forga/incidents-contracts';
 import { api, apiUrl, can, formatDate, send, useSession, useTranslation } from '@forga/web-sdk';
 import { ActionBar, ConfirmDialog, DataTable, EmptyState, KpiTile, notifySuccess, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
-import { keys, personName, RELEASE, useIncidents, useNames, usePersons, WRITE } from '../api';
+import { keys, personName, RELEASE, REVIEW, useIncidents, useNames, usePersons, WRITE } from '../api';
 import { blocking, findingText, mergeFindings, openWarnings } from '../report/findings';
 
 type Row = { incident: Incident; summary: Incident['reports'][number]; report?: Report };
@@ -33,6 +33,8 @@ export function OpenReportsPage() {
   const withoutPrimary = drafts.filter((i) => !i.reports.some((r) => r.primary)).length;
   const reviewCount = review.flatMap((i) => i.reports).filter((r) => r.status === 'review').length;
   const releaser = can(session, RELEASE);
+  // Releasers remind all authors, pre-reviewers (department commanders) the authors of their departments.
+  const reminder = releaser || can(session, REVIEW);
 
   const assign = useAction(({ reportId, personId }: { reportId: string; personId: string }) => send<Report>('POST', `incidents/reports/${reportId}/author`, { authorPersonId: personId }), {
     success: t('open.assigned'),
@@ -45,7 +47,7 @@ export function OpenReportsPage() {
     },
   });
 
-  const table = (list: Row[], assignable: boolean) => (
+  const table = (list: Row[]) => (
     <DataTable<Row>
       rows={list}
       rowKey={(r) => r.summary.id}
@@ -73,25 +75,26 @@ export function OpenReportsPage() {
             return open.length || returned ? <Text size="xs">{[returned, ...open.slice(0, 3).map((f) => findingText(f, t))].filter(Boolean).join(' · ')}</Text> : <StatusBadge tone="done">{t('open.ready')}</StatusBadge>;
           },
         },
-        ...(assignable
-          ? [{
-              key: 'assign',
-              header: t('report.author'),
-              render: (r: Row) =>
-                can(session, WRITE, r.summary.departmentId) || releaser ? (
-                  <Select
-                    aria-label={t('open.assign')}
-                    placeholder={t('open.assign')}
-                    data={persons.filter((p) => p.departmentIds.includes(r.summary.departmentId) && p.status !== 'left').map((p) => ({ value: p.id, label: personName(p) }))}
-                    value={null}
-                    onChange={(v) => v && assign.mutate({ reportId: r.summary.id, personId: v })}
-                    searchable
-                    size="xs"
-                    w={220}
-                  />
-                ) : null,
-            }]
-          : []),
+        {
+          key: 'assign',
+          header: t('report.author'),
+          // Every row: also an assigned author can be changed (e.g. on holiday), by writers of the department and releasers.
+          render: (r: Row) =>
+            (can(session, WRITE, r.summary.departmentId) || releaser) && !r.summary.locked ? (
+              <Select
+                aria-label={t(r.summary.authorPersonId ? 'open.change' : 'open.assign')}
+                placeholder={t(r.summary.authorPersonId ? 'open.change' : 'open.assign')}
+                data={persons
+                  .filter((p) => p.departmentIds.includes(r.summary.departmentId) && p.status !== 'left' && p.id !== r.summary.authorPersonId)
+                  .map((p) => ({ value: p.id, label: personName(p) }))}
+                value={null}
+                onChange={(v) => v && assign.mutate({ reportId: r.summary.id, personId: v })}
+                searchable
+                size="xs"
+                w={220}
+              />
+            ) : null,
+        },
       ]}
     />
   );
@@ -111,14 +114,14 @@ export function OpenReportsPage() {
         const own = rows.filter((r) => r.summary.authorPersonId === id);
         return (
           <Panel key={id} title={person ? personName(person) : t('personnel.unknownPerson')} aside={<Text size="sm" c="dimmed">{[person?.email, t('open.reports', { count: own.length })].filter(Boolean).join(' · ')}</Text>}>
-            {table(own, false)}
+            {table(own)}
           </Panel>
         );
       })}
-      {withoutAuthor.length > 0 && <Panel title={t('open.withoutAuthor')}>{table(withoutAuthor, true)}</Panel>}
+      {withoutAuthor.length > 0 && <Panel title={t('open.withoutAuthor')}>{table(withoutAuthor)}</Panel>}
       <ActionBar info={t('open.footer')}>
         <Button component="a" href={apiUrl('core/lists/incidents.open-reports/export/xlsx', { lang: i18n.language })} variant="default">Excel</Button>
-        {releaser && authors.length > 0 && (
+        {reminder && authors.length > 0 && (
           <Button
             onClick={() => {
               setChosen(authors.filter((a) => persons.find((p) => p.id === a)?.email));

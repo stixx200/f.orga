@@ -23,21 +23,22 @@ import {
   StatisticsYearEntity,
 } from './incidents.entities.js';
 import { KeywordsController } from './keywords/keywords.controller.js';
-import { AssignmentLines, PersonAssignmentsController } from './lists/assignments.js';
+import { AssignmentLines, MyIncidentsController, PersonAssignmentsController } from './lists/assignments.js';
 import { CompensationChecker } from './lists/compensation-check.js';
 import { CompensationExportController } from './lists/compensation-export.js';
 import { IncidentsLists } from './lists/incidents.lists.js';
 import { StatisticsController } from './statistics/statistics.controller.js';
 import { IncidentsController } from './reports/incidents.controller.js';
 import { ReportContextLoader } from './reports/report-context.js';
+import { ReportPdf } from './reports/report-pdf.js';
 import { READ, RELEASE, ReportsService } from './reports/reports.service.js';
 
 /** Global, so other modules can inject `INCIDENTS_LOOKUP`. */
 @Global()
 @Module({
-  controllers: [KeywordsController, IncidentsController, PersonAssignmentsController, ExternalController, CompensationExportController, StatisticsController, DutyController],
+  controllers: [KeywordsController, IncidentsController, PersonAssignmentsController, MyIncidentsController, ExternalController, CompensationExportController, StatisticsController, DutyController],
   providers: [
-    IncidentsData, ReportContextLoader, ReportsService, IncidentsDeadlines, AssignmentLines, IncidentsLists, DutyRosterImport, DutyEvents, MpFeuerIncidentsImport, CompensationChecker,
+    IncidentsData, ReportContextLoader, ReportsService, ReportPdf, IncidentsDeadlines, AssignmentLines, IncidentsLists, DutyRosterImport, DutyEvents, MpFeuerIncidentsImport, CompensationChecker,
     IncidentsLookupService, { provide: INCIDENTS_LOOKUP, useExisting: IncidentsLookupService },
   ],
   exports: [INCIDENTS_LOOKUP],

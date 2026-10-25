@@ -147,7 +147,9 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Beteiligte | involved parties |
 | Sonstige Kräfte | other agencies |
 | Freigabe | release |
+| Vorprüfung (Abteilungskommandant) | review, Recht `incidents.reports.review` |
 | Sperre | lock |
+| Ende bestätigt | `endConfirmed` |
 
 ### Nachweise und Fristen
 
