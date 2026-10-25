@@ -126,10 +126,10 @@ Zusatzmodule von außen kommen als **Plugin-Paket** (`.tgz`) und nutzen denselbe
 
 ## Sicherheit
 
-**Ersteinrichtung.** Solange es keinen (nicht technischen) Benutzer gibt, ist `POST /api/core/setup` offen. Gleichzeitige Aufrufe sind über eine Datenbanksperre serialisiert; nur der erste legt an. Der Aufruf legt Folgendes an:
+**Ersteinrichtung.** Solange es keinen (nicht technischen) Benutzer gibt, nimmt `POST /api/core/setup` die Einrichtung an, aber nur mit dem Einrichtungsschlüssel (`setupToken`): dem Wert von `FORGA_SETUP_TOKEN` oder einem Zufallswert, den der Server beim Start ins Protokoll schreibt (Vergleich in konstanter Zeit, falscher Schlüssel: `403` `setup.invalidToken`, Audit `setup.invalid-token`). Gleichzeitige Aufrufe sind über eine Datenbanksperre serialisiert; nur der erste legt an. Der Aufruf legt Folgendes an:
 - den Namen der Feuerwehr (Einstellung `brigade`)
 - die Standardrollen aus den Rollenvorlagen, benannt in der gewählten Sprache (siehe unten)
-- den ersten Benutzer mit der Rolle aus der Vorlage `administrator` (Muster `*`) für die Gesamtwehr
+- den ersten Benutzer mit E-Mail-Adresse und der Rolle aus der Vorlage `administrator` (Muster `*`) für die Gesamtwehr
 
 Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
 
@@ -139,17 +139,31 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
 - In der Datenbank (`core.session`) liegt nur der SHA-256 des Werts.
 - Nach 5 Fehlversuchen ist der Benutzername 1 Minute gesperrt (`429`). Der Zähler liegt im Speicher des Prozesses und hält höchstens 10.000 Benutzernamen.
 - Ändert ein Benutzer sein Passwort (`PUT /api/core/password`), enden seine anderen Sitzungen. Setzt die Benutzerverwaltung ein Passwort oder sperrt den Benutzer, enden alle seine Sitzungen.
-- Rechte deaktivierter Module zählen nicht: Ihre Listen, Importprofile, Suchtreffer und Fristen verschwinden mit dem Modul. Der Vollexport und die Auskunft je Person enthalten ihre Daten weiterhin (gespeichert ist gespeichert).
+- Die eigene E-Mail-Adresse ändert der Benutzer im Profil (`PUT /api/core/profile` mit `email`; nicht während einer Impersonation, Audit `auth.email-changed`).
+- Rechte deaktivierter Module zählen nicht, weder für Sitzungen noch für API-Tokens: Ihre Listen, Importprofile, Suchtreffer und Fristen verschwinden mit dem Modul. Der Vollexport und die Auskunft je Person enthalten ihre Daten weiterhin (gespeichert ist gespeichert).
 
 **Anmeldung mit dem Konto der Gemeinde (OIDC).** Optional zusätzlich zum Passwort, Einstellung `oidc` (Aussteller, Client-ID, Client-Secret als geheimes Feld, Scopes, Verknüpfung über `email` oder `username`, Beschriftung de/en), Bibliothek `openid-client`.
-- `GET /api/core/setup` liefert `oidc: { label }`, wenn eingeschaltet und vollständig; die Anmeldeseite zeigt dann den Knopf.
+- `GET /api/core/setup` liefert `oidc: { label }`, wenn eingeschaltet, vollständig und die Adresse von f.orga bekannt ist; die Anmeldeseite zeigt dann den Knopf.
+- `POST /api/core/settings/oidc/test` (`core.settings.manage`) lädt mit den gespeicherten Einstellungen die Konfiguration des Anbieters und liefert Aussteller und Rücksprungadresse. Ist der Anbieter nicht erreichbar oder der Aussteller falsch: `502` `auth.oidcDiscoveryFailed` (auch beim Anmelden), unvollständig: `auth.oidcIncomplete`, ohne Adresse: `auth.oidcNoPublicUrl`.
 - `GET /api/core/oidc/start` leitet zum Anbieter (Authorization Code mit PKCE, `state`, `nonce`). Die offene Anmeldung liegt 10 Minuten im Speicher des Prozesses, gefunden über das Cookie `forga_oidc` (`HttpOnly`, Pfad `/api/core/oidc`).
 - `GET /api/core/oidc/callback` prüft State, Nonce und ID-Token (Signatur über JWKS, Aussteller, Zielgruppe) und öffnet eine normale Sitzung. Die Rücksprungadresse ist `<brigade.publicUrl bzw. FORGA_PUBLIC_URL>/api/core/oidc/callback`, nie aus Kopfzeilen der Anfrage; ohne Adresse ist OIDC aus.
-- Nur vorhandene, aktive, nicht technische Benutzer melden sich an; Rollen und Rechte bleiben in f.orga. Die erste Anmeldung verknüpft das Konto (`core.user.oidc_subject` = `issuer|sub`) über die bestätigte E-Mail-Adresse (genau ein Treffer) bzw. den Benutzernamen (`preferred_username`), danach zählt nur die Verknüpfung. `DELETE /api/core/users/:id/oidc` löst sie (Benutzerverwaltung).
-- Fehler leiten auf `/?oidcError=<code>` (`auth.oidcDisabled`, `auth.oidcExpired`, `auth.oidcFailed`, `auth.oidcUnknownUser`), die Anmeldeseite zeigt den Text; Fehlschläge stehen im Audit-Log (`auth.oidc-failed`).
+- Nur vorhandene, aktive, nicht technische Benutzer melden sich an; Rollen und Rechte bleiben in f.orga. Die erste Anmeldung verknüpft das Konto (`core.user.oidc_subject` = `issuer|sub`) über die E-Mail-Adresse, wenn der Anbieter sie bestätigt hat (`email_verified: true`, genau ein Treffer), bzw. den Benutzernamen (`preferred_username`); danach zählt nur die Verknüpfung. Die Einstellungsseite warnt vor der Verknüpfung über den Benutzernamen.
+- Benutzer mit Verwaltungsrechten (irgendeine `core.*`-Berechtigung, also auch `*`) werden nie automatisch verknüpft (`auth.oidcLinkManually`). Sie verknüpfen ihr Konto selbst im Profil: `POST /api/core/oidc/link` (Sitzung mit CSRF-Header, keine Impersonation) liefert die Adresse beim Anbieter; der Rücksprung verknüpft den angemeldeten Benutzer und leitet auf `/profile?oidcLinked=1` (Audit `users.oidc-linked`). Ein schon anderweitig verknüpftes Konto des Anbieters wird abgelehnt (`auth.oidcLinkedElsewhere`).
+- `DELETE /api/core/users/:id/oidc` löst die Verknüpfung (Benutzerverwaltung, nur für Benutzer mit nicht mehr Rechten als der eigene).
+- Fehler leiten auf `/?oidcError=<code>` (`auth.oidcDisabled`, `auth.oidcDiscoveryFailed`, `auth.oidcExpired`, `auth.oidcFailed`, `auth.oidcUnknownUser`, `auth.oidcLinkManually`, `auth.oidcLinkedElsewhere`), die Anmeldeseite zeigt den Text; Fehlschläge stehen im Audit-Log (`auth.oidc-failed`).
 - Aussteller über `http://` sind nur auf `localhost` erlaubt (Entwicklung, Tests).
 
-**Passwort zurücksetzen.** `POST /api/core/password-reset` (`{ login }`: Benutzername oder E-Mail) schickt einen Einmal-Link `…/reset-password?token=…`, eine Stunde gültig (`core.password_reset`, nur der SHA-256 des Tokens). Die Antwort verrät nicht, ob es das Konto gibt. `POST /api/core/password-reset/confirm` setzt das neue Passwort und beendet alle Sitzungen des Benutzers. Die Adresse im Link kommt nur aus der Einstellung `brigade.publicUrl` oder der Umgebungsvariable `FORGA_PUBLIC_URL`, nie aus Kopfzeilen der Anfrage. Ist keine gesetzt, antwortet der Endpunkt mit `503` (`auth.resetNotConfigured`) und verschickt nichts.
+**Passwort zurücksetzen.** `POST /api/core/password-reset` (`{ login }`: Benutzername oder E-Mail) schickt einen Einmal-Link `…/reset-password?token=…`, eine Stunde gültig (`core.password_reset`, nur der SHA-256 des Tokens).
+- Die Antwort ist immer `{ ok: true }` und gleich schnell: Suche, Link und Versand laufen nach der Antwort, Versandfehler stehen nur im Protokoll. So verrät sie nicht, ob es das Konto gibt.
+- Ein Benutzername gewinnt; eine E-Mail-Adresse muss genau ein aktives Konto treffen (Groß-/Kleinschreibung egal). Teilen sich mehrere Konten die Adresse, wird keines zurückgesetzt (Audit `auth.password-reset-ambiguous`).
+- Begrenzung im Speicher des Prozesses: je Absenderadresse 20 Anfragen in 15 Minuten (danach `429` `auth.resetRateLimited`), je Konto höchstens drei Links in 15 Minuten (weitere werden still verworfen, Audit `auth.password-reset-limited`).
+- `POST /api/core/password-reset/confirm` setzt das neue Passwort und beendet alle Sitzungen des Benutzers. Die Adresse im Link kommt nur aus der Einstellung `brigade.publicUrl` oder der Umgebungsvariable `FORGA_PUBLIC_URL`, nie aus Kopfzeilen der Anfrage. Ist keine gesetzt, antwortet der Endpunkt mit `503` (`auth.resetNotConfigured`) und verschickt nichts.
+
+**Einladungen.** Statt ein Passwort zu vergeben, lädt die Benutzerverwaltung Personen ein:
+- `POST /api/core/users/invitations` (`personId`, optional `username`, `language`, `roles`) legt den Benutzer ohne Passwort an. Name und E-Mail-Adresse kommen aus der Personalakte (über den `OrganizationDirectory`, siehe unten), der Benutzername ist der Teil der Adresse vor dem `@` (bei Bedarf mit Nummer). Die Person bekommt einen Link zum Festlegen des Passworts, 7 Tage gültig (gleicher Mechanismus wie „Passwort zurücksetzen“). Ohne Adresse von f.orga: `503` `auth.resetNotConfigured`, bevor etwas angelegt wird; ohne E-Mail-Adresse der Person: `users.personWithoutEmail`.
+- `POST /api/core/users/invitations/bulk` (`personIds`, `roles`) lädt mehrere Personen mit denselben Rollen ein und meldet übersprungene (`unknownPerson`, `hasUser`, `noEmail`, `usernameTaken`).
+- `POST /api/core/users/:id/invitation` schickt die Einladung erneut, solange kein Passwort gesetzt ist. Benutzer liefern dafür `passwordSet`; die Oberfläche zeigt „eingeladen“.
+- Audit `users.invited`.
 
 **Impersonation („Anmelden als“).** Wer `core.users.impersonate` hat, kann über `POST /api/core/users/:id/impersonate` mit Grund als ein anderer Benutzer arbeiten, z. B. um zu prüfen, was ein Gruppenführer sieht.
 - Erlaubt nur für aktive, nicht technische andere Benutzer, deren Rechte der Administrator selbst vollständig hat (sonst `auth.impersonationWider`). Impersonation erweitert also nie die eigenen Rechte. Keine verschachtelte Impersonation, kein Passwortwechsel währenddessen.
@@ -168,7 +182,8 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
   - `masterdata.*` steht für alles eines Moduls.
 
   Unbekannte Muster werden abgelehnt.
-- Eine Rollenzuweisung gilt für die Gesamtwehr (`departmentId: null`) oder für eine Abteilung. Bei einer Zuweisung für eine Abteilung wirken nur Berechtigungen mit Bereich `department`.
+- Eine Rollenzuweisung gilt für die Gesamtwehr (`departmentId: null`) oder für eine Abteilung. Bei einer Zuweisung für eine Abteilung wirken nur Berechtigungen mit Bereich `department`, und zwar auch in allen Abteilungen darunter (`parentId`, rekursiv): Der Abteilungskommandant einer Einsatzabteilung ist damit auch für deren Jugendfeuerwehr und Altersabteilung zuständig (Personen lesen und bearbeiten, Übernahmen, gemeinsame Dienste planen).
+- Die Hierarchie kennt der Core nicht selbst: Das Stammdatenmodul meldet beim Start einen Anbieter am `OrganizationDirectory` an (`libs/core/core-api/src/lib/security/organization-directory.ts`) mit Abteilungen und Oberabteilung, Personen (Name, E-Mail) und der Zahl der Katalogeinträge. Der Core prüft damit auch Verweise der Benutzerverwaltung (Abteilung einer Rollenzuweisung: `users.unknownDepartment`; verknüpfte Person: `users.unknownPerson`). Eine Person gehört zu höchstens einem Benutzer (`users.personTaken`, eindeutiger Index auf `core.user.person_id`). Ohne Stammdatenmodul entfallen diese Prüfungen.
 - Jede Berechtigung einer Rolle gilt entweder **im zugewiesenen Bereich** (`permissions`: die Abteilung der Zuweisung bzw. die Gesamtwehr) oder **in allen Abteilungen** (`permissionsAllDepartments`: immer für die Gesamtwehr, auch bei Zuweisung für eine Abteilung). Beispiel: Der Abteilungskommandant bearbeitet Personen (mit sensiblen Daten), Fahrzeuge und Lehrgänge seiner Abteilung und sieht von den anderen Abteilungen nur das Personenverzeichnis (`masterdata.persons.directory`).
 - `POST /api/core/roles/:id/apply-template` setzt eine Standardrolle auf die Rechte ihrer Vorlage zurück, z. B. nachdem ein Update neue Standardrechte gebracht hat.
 - `@RequirePermissions(...)` verlangt die Berechtigung in mindestens einer Abteilung. Die Prüfung für eine bestimmte Abteilung macht der Handler mit `user.can(berechtigung, departmentId)`.
@@ -197,22 +212,30 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
 - Format `forga_<zufall>`. Gespeichert werden nur der SHA-256 und ein Präfix zum Wiedererkennen.
 - Jedes Token bekommt einen eigenen technischen Benutzer. So zeigt die Historie, welches System etwas geändert hat.
 - Ein Token hat genau die Berechtigungen seiner `scopes`, immer für die Gesamtwehr. Ein Ablaufdatum ist optional.
+- Verwaltungsrechte (`core.*`) gibt es für Tokens nicht (`tokens.coreScopes`), und ein Token bekommt nur Rechte, die sein Ersteller selbst für die Gesamtwehr hat (`tokens.scopesWider`).
+- Die Liste der Berechtigungen (`GET /api/core/permissions`) lesen Rollen- und Token-Verwalter (`core.roles.manage` oder `core.tokens.manage`).
 - Beim Widerruf werden das Token und sein Benutzer gesperrt. Die letzte Nutzung wird mitgeschrieben.
 
 **Audit.** `core.audit` protokolliert:
 - Einrichtung, Anmeldungen und fehlgeschlagene Anmeldungen, Passwortänderungen
-- Anlegen und Ändern von Benutzern und Rollen
+- Anlegen, Einladen und Ändern von Benutzern und Rollen
 - Tokens
 - Aktivieren und Deaktivieren von Modulen
+
+`GET /api/core/audit` (`core.audit.read`) filtert auf dem Server: `from`/`to` (Tage in Europe/Berlin), `userId` (auch als Impersonator), `action` (genau oder als Präfix mit `.` am Ende, z. B. `users.`), `q` (Wörter in Aktion oder Details), `limit` (höchstens 1000). Jeder Eintrag bringt `userName` und `impersonatorName` mit, sodass auch Leser ohne Benutzerverwaltung Namen sehen. `GET /api/core/audit/filters` liefert die vorkommenden Aktionen und Benutzer für die Auswahlfelder.
 
 **Modulverwaltung**
 - Die Tabelle `core.module` speichert, ob ein Modul aktiv ist. Ohne Eintrag gilt es als aktiv.
 - Aktivieren setzt aktive Abhängigkeiten voraus. Deaktivieren ist nur möglich, wenn kein aktives Modul das Modul benötigt.
-- Eine Middleware beantwortet Anfragen an `/api/<modul-id>/…` inaktiver Module mit `404` (`modules.inactive`). `GET /api/core/modules` liefert nur aktive Module.
+- Eine Middleware beantwortet Anfragen an `/api/<modul-id>/…` inaktiver Module mit `404` (`modules.inactive`). Sie vergleicht den Pfadabschnitt dekodiert und ohne Groß-/Kleinschreibung wie das Routing von Express (`/api/Cost-Recovery/…` ist gesperrt wie `/api/cost-recovery/…`). `GET /api/core/modules` liefert nur aktive Module.
 
 **Historie lesen.** Entscheidet die Prüfung aus der `HistoryAccessRegistry` (siehe [Historie](#historie)); ohne Prüfung wird abgelehnt. Core: Benutzer mit `core.users.manage`, Rollen mit `core.roles.manage`, Einstellungen mit `core.settings.manage` oder `<modul>.settings.manage` für die Abschnitte des Moduls.
 
-**Keine Rechteausweitung.** Wer Benutzer verwaltet, darf nur Rollen zuweisen, deren Rechte er selbst im selben Bereich hat; wer Rollen verwaltet, darf einer Rolle nur Rechte hinzufügen, die er selbst für die Gesamtwehr hat (`users.roleWider`). Gleiches gilt für die Impersonation (`auth.impersonationWider`).
+**Keine Rechteausweitung.**
+- Wer Benutzer verwaltet, darf nur Rollen zuweisen, deren Rechte er selbst im selben Bereich hat (`users.roleWider`). Einen Benutzer ändern (Passwort, E-Mail, Sperre, Rollen, OIDC-Verknüpfung, Einladung erneut senden) darf er nur, wenn dieser keine Rechte hat, die ihm selbst fehlen (`users.targetWider`); so übernimmt `core.users.manage` kein Administratorkonto.
+- Wer Rollen verwaltet, darf einer Rolle nur Rechte hinzufügen, die er selbst für die Gesamtwehr hat; das gilt auch für „Vorlage übernehmen“ und das Löschen einer Rolle (`users.roleWider`).
+- Gleiches gilt für die Impersonation (`auth.impersonationWider`) und API-Tokens.
+- Nach jeder Änderung von Benutzern und Rollen muss mindestens ein aktiver Benutzer `*` für die Gesamtwehr behalten (`users.lastAdministrator`): `*` aus der letzten Administratorrolle nehmen, sie löschen, dem letzten Administrator (auch sich selbst) die Rolle nehmen oder ihn sperren wird abgelehnt und zurückgerollt.
 
 **Gleichzeitiges Bearbeiten.** Einsatzbericht, Personalakte, Dienst und Gerät schicken beim Speichern die geladene `version` mit. Hat jemand anderes inzwischen gespeichert, antwortet der Server mit `409` (`conflict.stale`, `assertVersion` in `core-api`), statt dessen Änderung zu überschreiben. Ohne `version` (Importe, API) entfällt die Prüfung.
 
@@ -220,7 +243,7 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
 
 **Zeitzone.** Tagesgrenzen von Zeiträumen (Listen, Statistik, Exporte, Suchfilter) gelten in Europe/Berlin, unabhängig von der Zeitzone des Servers (`berlinDayStart`, `berlinDayAfter`, `berlinDayEnd`; `addBerlinDays` hält bei Serien die Uhrzeit über die Zeitumstellung). Das Frontend nimmt für „heute“ `localDate()` aus `web-sdk`.
 
-**Fehler.** Fehlerantworten tragen einen maschinenlesbaren `code`, z. B. `auth.invalidCredentials` oder `modules.requiredByActive`, und bei Bedarf Details. Validierungsfehler kommen als `validation.failed` mit `issues` (`path`, `code`, `message`).
+**Fehler.** Fehlerantworten tragen einen maschinenlesbaren `code`, z. B. `auth.invalidCredentials` oder `modules.requiredByActive`, und bei Bedarf Details. Validierungsfehler kommen als `validation.failed` mit `issues` (`path`, `code`, `message`); die Oberfläche nennt die betroffenen Felder (`ApiError.fields`, Feldnamen aus `fields.<name>` der Übersetzungen, sonst der Pfad). Scheitert der E-Mail-Versand, antwortet der Server mit `502` und `mail.authFailed`, `mail.connectionFailed`, `mail.tlsFailed`, `mail.rejected` oder `mail.sendFailed`.
 
 ## Ereignisse zwischen Modulen
 
@@ -234,8 +257,12 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
   - Der Core bringt `brigade` (Name, Anschrift, Kontakt), `smtp` und `reminders` (Sammel-E-Mail) mit.
   - Module registrieren eigene Abschnitte unter `<modul-id>.<abschnitt>`.
 - Werte werden gegen das Schema des Abschnitts geprüft.
-- Das SMTP-Passwort kann nur geschrieben werden. Bleibt es beim Speichern leer, gilt der gespeicherte Wert weiter.
-- Lesen darf jeder angemeldete Benutzer. Schreiben darf, wer `core.settings.manage` hat; die Abschnitte eines Moduls darf zusätzlich speichern, wer `<modul-id>.settings.manage` hat (z. B. der Atemschutzgerätewart die Tauglichkeitsregel).
+- Das SMTP-Passwort und das OIDC-Client-Secret können nur geschrieben werden. Bleiben sie beim Speichern leer, gilt der gespeicherte Wert weiter.
+- Verwalter eines Abschnitts sind, wer `core.settings.manage` hat, bei den Abschnitten eines Moduls zusätzlich, wer `<modul-id>.settings.manage` hat (z. B. der Atemschutzgerätewart die Tauglichkeitsregel). Nur sie schreiben.
+- Lesen darf jeder angemeldete Benutzer, weil Modul-Oberflächen die Einstellungen brauchen (z. B. `brigade`, `incidents.general`, `compensation.general`, `cost-recovery.general`). Ausnahmen (`SettingsAccess`): `smtp`, `oidc`, `privacy` und `reminders` lesen nur die Verwalter (`CORE_SETTINGS_ACCESS`); Module melden eigene Einschränkungen in `defineModule({ settingsAccess })`, z. B. sieht das Feld `feedToken` von `training.general` (geheimer Teil der Kalender-Adresse) nur, wer die Übungsdienst-Einstellungen verwaltet.
+- `brigade.publicUrl` muss eine `https://`-Adresse sein (`http://` nur für `localhost`), `brigade.email` eine E-Mail-Adresse. Ein gespeicherter Wert, der eine spätere, strengere Regel verletzt, fällt beim Lesen auf den Standard zurück, statt den ganzen Abschnitt zu verlieren.
+
+**Einrichtungsliste.** `GET /api/core/onboarding` (`core.settings.manage` oder `core.users.manage`) liefert, was auf einer neuen Installation noch fehlt: `publicUrl`, `smtp`, `departments` und `catalogs` (über den `OrganizationDirectory`), je aktivem Modul mit Einstellungen und Einstellungsseite `module:<id>` (erledigt, sobald ein Abschnitt des Moduls gespeichert ist; mit Beschriftung der Seite) und `users` (mehr als ein Benutzer). Jeder Punkt nennt die Seite, auf der er erledigt wird. Die Startseite zeigt die offenen Punkte.
 
 ## Listen
 
@@ -259,13 +286,16 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
   - Die Unterschriftenspalte ist leer und breit, die Zeilen sind höher.
   - Daten (`JJJJ-MM-TT`) werden je Sprache formatiert (Deutsch `TT.MM.JJJJ`), Wahrheitswerte als ja/nein bzw. yes/no.
 - **Sprache:** Parameter `lang`, sonst die Sprache des Benutzers.
+- **Abteilungen:** `GET /api/core/lists` liefert je Liste `departments`: `brigade` oder die Abteilungen, in denen der Benutzer die Berechtigung der Liste hat. Ein Abteilungsparameter bietet nur diese an („Alle Ihre Abteilungen“ statt „Alle Abteilungen“, wenn er nicht alle sehen darf).
 - **Sicherheit:** pdfmake lädt keine URLs. Lokal erlaubt sind nur die Namen der Standardschriften.
 - Jeder Export steht im Audit-Log (`lists.exported`).
 
 ## Fristen und Aufgaben
 
 - Module melden einen `DeadlineProvider` beim `DeadlineRegistry` an. Er berechnet die Fristen bei jeder Abfrage aus den aktuellen Daten; gespeichert wird nichts. Liegt der neue Nachweis vor, verschwindet die Frist von selbst.
-- Eine Frist (`DeadlineInput`) hat ID, Art (`kind`), Titel als `LocalizedText`, Gegenstand (`subject`: Typ, ID, Anzeigename), Fälligkeit (`dueOn`), Vorlauf (`leadDays`), Abteilungen (`departmentIds`), eine Berechtigung (`permission`) und optional Personen (`personIds`).
+- Eine Frist (`DeadlineInput`) hat ID, Art (`kind`), Titel als `LocalizedText`, Gegenstand (`subject`: Typ, ID, Anzeigename, Personen als „Nachname, Vorname“), Fälligkeit (`dueOn`), Vorlauf (`leadDays`), Abteilungen (`departmentIds`), eine Berechtigung (`permission`), optional Personen (`personIds`) und optional die Seite, auf der die Aufgabe erledigt wird (`to`, z. B. `/equipment/items/<id>`).
+- Ohne `to` leitet die Shell den Link aus dem Typ des Gegenstands ab (`masterdata.person`, `incidents.report`, `equipment.item`, `clothing.item`, `training.session`, `compensation.item`, `core.audit`, `core.me`).
+- Startseite und Glocke fassen Aufgaben gleicher Art und Fälligkeit zusammen („26 × Unterweisung · bis 29.11.“, aufklappbar); überfällige Aufgaben einer Art bilden eine Gruppe und stehen vorn. Die Startseite filtert nach Modul.
 - **Zuständig** ist, wer die Berechtigung in einer der Abteilungen hat. Ohne Abteilungen sehen nur Benutzer mit der Berechtigung für die Gesamtwehr die Frist. Sind `personIds` gesetzt, ist zusätzlich nur zuständig, wessen Benutzer mit einer dieser Personen verknüpft ist (z. B. der Verfasser eines Berichts).
 - **Sichtbar** wird eine Frist ab `dueOn − leadDays`. Stufen:
   - `upcoming`: im Vorlauf
@@ -280,7 +310,7 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
 - **Benachrichtigungen** (`Notifications`): sofortige E-Mails zu Ereignissen in der Sprache des Empfängers, mit Link auf die Seite in f.orga, wenn `brigade.publicUrl` oder `FORGA_PUBLIC_URL` gesetzt ist.
   - Empfänger sind aktive, nicht technische Benutzer mit E-Mail-Adresse, deren Rolle das Benachrichtigungsrecht (z. B. `equipment.defects.notify`) für die betroffene Abteilung oder die Gesamtwehr nennt, ausdrücklich oder über das Modul (`equipment.*`). Das globale `*` des Administrators zählt nicht, damit ein Administratorkonto nicht jede Meldung bekommt. Wer keine E-Mails will, bekommt eine Rolle ohne das Recht.
   - Jede verschickte Benachrichtigung steht mit den Empfängern im Audit-Log (z. B. `equipment.defect-notified`). Fehler beim Versand werden protokolliert und erreichen den Auslöser nicht.
-- **Versand** (`MailService`) über den SMTP-Server aus der Einstellung `smtp`. Fehlen Server oder Absender, schlägt der Versand mit `mail.notConfigured` fehl.
+- **Versand** (`MailService`) über den SMTP-Server aus der Einstellung `smtp`. Fehlen Server oder Absender, schlägt der Versand mit `mail.notConfigured` fehl; lehnt der Server ab oder ist er nicht erreichbar, mit `502` und einem `mail.*`-Code (`mailErrorCode`).
 - Umgebungsvariablen: `FORGA_MAIL_TRANSPORT=memory` sammelt E-Mails nur im Speicher (Tests, Vorführung), `FORGA_DIGEST_SCHEDULER=off` schaltet den stündlichen Versand ab.
 
 ## Import
@@ -926,7 +956,9 @@ Verwaltet die persönliche Schutzausrüstung (PSA). Backend `modules/clothing/cl
 - **Suche** (`SearchRegistry`): `GET /api/core/search?q=` (ab 2 Zeichen) fragt die Quellen der Module, für die der Benutzer überhaupt Rechte hat; jede Quelle prüft die Rechte selbst. Gesucht wird wortweise (`wordsWhere` in `core-api`): Jedes Wort der Eingabe muss in einem der Felder vorkommen, Reihenfolge und Kommas sind egal, also finden „Felix“, „Felix Funke“ und „Funke, Felix“ dieselbe Person. Genauso arbeiten die Suchfelder der Listen im Browser (`matchesSearch` in `web-ui`) und alle Auswahlfelder (`wordsFilter`, im Theme als Standard für `Select`, `MultiSelect`, `Autocomplete`). Stammdaten: Personen (sichtbare), Fahrzeuge; Einsatzberichte: Einsätze (Leitstellennummer, Stichwort, Meldebild).
 - **Code-Suche** (`CodeRegistry`): `GET /api/core/codes?code=` fragt die Quellen der Module mit gekennzeichneten Gegenständen (Geräte, Kleiderkammer) nach dem exakten Code: Barcode, RFID-Chip, Inventar- oder Seriennummer (ohne Groß-/Kleinschreibung) oder die URL eines QR-Etiketts von f.orga. Jede Quelle prüft die Rechte selbst. Codes sind `ItemCode`/`RfidCode` aus `core-contracts`: leer bedeutet keiner; RFID-Kennungen werden ohne Trennzeichen in Großbuchstaben gespeichert und verglichen (`normalizeRfid`), weil Lesegeräte sie unterschiedlich ausgeben. Eingabefelder für Codes (`CodeInput` in `web-ui`) füllen sich per Handscanner, Kamera (Barcode) oder NFC (RFID).
 - **Vollexport** (`ExportRegistry`, Recht `core.data.export`): `GET /api/core/export/:modul` liefert alle Daten des Moduls mit IDs als JSON (`{ format: 'forga.export', version: 1, module, exportedAt, data }`), `GET /api/core/export/person/:personId` alles zu einer Person über alle Module (Auskunft nach Art. 15 DSGVO). Beides steht im Audit-Log (`data.exported`, `data.person-exported`).
-- **Aufbewahrung** (`RetentionRegistry`, `RetentionService`, Einstellung `privacy`): eine Minute nach dem Start und dann täglich (abschaltbar mit `FORGA_RETENTION_SCHEDULER=off`) und auf Knopfdruck (`POST /api/core/retention/run` mit `dryRun`). Der Core löscht Audit-Einträge älter als `auditRetentionMonths` und nicht übernommene Import-Uploads und Datenübernahmen älter als 24 Stunden (`core.imports`). Die Stammdaten anonymisieren Personen, die vor mehr als `anonymizeLeftAfterYears` Jahren ausgeschieden sind: Name „Person (ausgeschieden)“, Kontakt- und sensible Daten, Qualifikationen, Ehrungen, Lehrgänge und ihre Historie werden entfernt, `anonymizedAt` gesetzt; Mitgliedschaften, Dienstgrade und Verweise in Einsatzberichten bleiben für die Statistik.
+  - Der Core exportiert als Modul `core` (`CoreExport`) Benutzer mit Rollenzuweisungen, Rollen, Einstellungen und API-Tokens (Name, Bereiche, Präfix, Daten); nie Passwort-Hashes, Sitzungs- oder Token-Geheimnisse und Felder, die nur geschrieben werden können.
+  - In der Auskunft zu einer Person stehen vom Core die mit ihr verknüpften Benutzer (Konto, Rollen, Sitzungen mit Beginn, Ende und ggf. Impersonation) und die Audit-Einträge, die diese Benutzer betreffen (als Handelnde, Impersonator oder in den Details).
+- **Aufbewahrung** (`RetentionRegistry`, `RetentionService`, Einstellung `privacy`): eine Minute nach dem Start und dann täglich (abschaltbar mit `FORGA_RETENTION_SCHEDULER=off`) und auf Knopfdruck (`POST /api/core/retention/run` mit `dryRun`; ein Probelauf darf mit `settings` andere Werte als die gespeicherten probieren, ein echter Lauf nimmt immer die gespeicherten). Der Core löscht Audit-Einträge älter als `auditRetentionMonths` und nicht übernommene Import-Uploads und Datenübernahmen älter als 24 Stunden (`core.imports`). Die Stammdaten anonymisieren Personen, die vor mehr als `anonymizeLeftAfterYears` Jahren ausgeschieden sind; der Standard ist `null` (nie), bis ein Administrator eine Frist wählt, und die Einstellungsseite zeigt vorher, wie viele Personen die Frist jetzt betreffen würde. Anonymisiert werden der Name (Vor- und Nachname „N.“, in jeder Sprache gleich; die Personalakte zeigt „anonymisiert“ in der Sprache der Oberfläche), Kontakt- und sensible Daten, Qualifikationen, Ehrungen, Lehrgänge und ihre Historie werden entfernt, `anonymizedAt` gesetzt; Mitgliedschaften, Dienstgrade und Verweise in Einsatzberichten bleiben für die Statistik.
 
 **Anhänge** (`attachments/attachments.ts`, Tabelle `core.attachment`): Fotos (PNG, JPEG, WebP) und PDF bis 10 MB an Datensätzen der Module, gespeichert in der Datenbank. Der Inhalt muss zum angegebenen Typ passen (Signatur der Datei), sonst `attachments.type`.
 - Module melden je Art des Datensatzes an, wer Anhänge sehen und wer sie hinzufügen oder entfernen darf (`Attachments.register(ownerType, { read, write })`); unbekannte Arten werden abgelehnt. Löscht ein Modul einen Datensatz, entfernt es dessen Anhänge (`removeAll`).
@@ -943,17 +975,17 @@ Verwaltet die persönliche Schutzausrüstung (PSA). Backend `modules/clothing/cl
 
 | Pfad | Seite | Recht |
 | --- | --- | --- |
-| `/` | Startseite: Begrüßung, Kennzahlen und Karten der Module (`dashboard` mit `area` `kpi`, `main`, `side`), Fristen und Aufgaben | angemeldet |
-| `/profile` | Sprache, wöchentliche E-Mail, Passwort ändern | angemeldet |
+| `/` | Startseite: Begrüßung, Einrichtungsliste (nur mit `core.settings.manage` oder `core.users.manage`, solange etwas fehlt), Kennzahlen und Karten der Module (`dashboard` mit `area` `kpi`, `main`, `side`), Fristen und Aufgaben gruppiert und nach Modul filterbar | angemeldet |
+| `/profile` | Sprache, eigene E-Mail-Adresse, wöchentliche E-Mail, Passwort ändern, mit dem Konto der Gemeinde verknüpfen | angemeldet |
 | `/scan` | Code suchen: Barcode, RFID-Chip, QR-Etikett oder Inventarnummer per Handscanner, Lesegerät, Kamera oder NFC | Lesen in einem Modul mit Code-Suche |
 | `/lists` | Listen nach Modul, Parameter, Vorschau, Download als PDF, Excel, CSV | je Liste |
 | `/import` | Import-Assistent: Datei, Inhalt (passendstes Profil vorgewählt), Spaltenzuordnung mit Beispielwerten, Prüfung (Probelauf), Übernahme | je Importprofil |
-| `/admin/users` | Benutzer mit Filter, Bearbeiten daneben: Person verknüpfen, Sprache, Passwort setzen, Rollen je Bereich zuweisen, sperren | `core.users.manage` |
+| `/admin/users` | Benutzer mit Filter, Bearbeiten daneben: Person verknüpfen, Sprache, Passwort setzen, Rollen je Bereich zuweisen, sperren; „Benutzer einladen“ und „Benutzer aus Personen anlegen“ (Einladung per E-Mail), Einladung erneut senden | `core.users.manage` |
 | `/admin/roles` | Rollen mit Berechtigungen je Modul, „alle Rechte des Moduls“, kopieren, löschen, fehlende Standardrollen anlegen | `core.roles.manage` |
 | `/admin/modules` | Installierte Module mit Version und Abhängigkeiten, aktivieren und deaktivieren (danach lädt die Shell neu), geplante Module der späteren Releases | `core.modules.manage` |
 | `/admin/tokens` | API-Tokens erzeugen (einmal sichtbar, kopierbar), Ablauf, letzte Nutzung, widerrufen | `core.tokens.manage` |
-| `/admin/settings` | Reiter Feuerwehr (`brigade` mit Gemeinde, Einwohnerzahl, Adresse von f.orga; Wappen und Briefkopf), E-Mail (`smtp`, Test-E-Mail), Erinnerungen (`reminders`), Datenschutz (`privacy`, Prüfen und Anwenden der Aufbewahrungsregeln), Anmeldung (`oidc`), Export (Vollexport je Modul, Link zu OpenAPI) | `core.settings.manage` |
-| `/admin/audit` | Audit-Log mit Suche | `core.audit.read` |
+| `/admin/settings` | Reiter (auch über `?tab=`) Feuerwehr (`brigade` mit Gemeinde, Einwohnerzahl, Adresse von f.orga; Wappen und Briefkopf), E-Mail (`smtp`, Test-E-Mail), Erinnerungen (`reminders`), Datenschutz (`privacy`, Zahl der betroffenen Personen je Frist, Prüfen und Anwenden der Aufbewahrungsregeln), Anmeldung (`oidc`, Warnungen, Verbindung testen), Export (Vollexport je Modul einschließlich `core`, Link zu OpenAPI) | `core.settings.manage` |
+| `/admin/audit` | Audit-Log mit Filtern auf dem Server (Zeitraum, Benutzer, Aktion, Suche), übersetzten Aktionen des Core (Aktionen der Module mit ihrem Code), lesbaren Details | `core.audit.read` |
 
 Personen und Abteilungen für die Benutzerverwaltung kommen aus der Stammdaten-API. Ist das Modul nicht aktiv, bleiben die Auswahlfelder leer.
 

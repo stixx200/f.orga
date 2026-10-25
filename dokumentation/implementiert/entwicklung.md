@@ -52,7 +52,7 @@ npm run dev
 
 `npm run seed` (`tools/seed.mts`) füllt eine laufende Instanz über die API mit erfundenen Daten. Echte Personen kommen nicht vor.
 
-- Ersteinrichtung, falls nötig: „Freiwillige Feuerwehr Musterstadt“, Administrator aus `FORGA_ADMIN_USER` / `FORGA_ADMIN_PASSWORD` (Vorgabe `admin` / `sehr-geheim-123`). Server-Adresse aus `FORGA_URL` (Vorgabe `http://localhost:3000`).
+- Ersteinrichtung, falls nötig: „Freiwillige Feuerwehr Musterstadt“, Administrator aus `FORGA_ADMIN_USER` / `FORGA_ADMIN_PASSWORD` (Vorgabe `admin` / `sehr-geheim-123`). Server-Adresse aus `FORGA_URL` (Vorgabe `http://localhost:3000`). Die Ersteinrichtung braucht den Einrichtungsschlüssel in `FORGA_SETUP_TOKEN` (aus dem Protokoll des Servers oder derselbe Wert, mit dem der Server gestartet wurde).
 - Einstellungen der Feuerwehr, BW-Vorlagen (Kataloge, Lehrgänge, Alarmstichworte) und die Standardrollen.
 - Vier Einsatzabteilungen, Altersabteilung und Jugendfeuerwehr, je ein Feuerwehrhaus und zehn Fahrzeuge.
 - Rund 140 Personen über den Personenimport aus einer erzeugten Datei im Format des MP-Feuer-Exports `Personal.xlsx`, dazu Qualifikationen und Dienstgrade nach Dienstjahren.
@@ -128,7 +128,7 @@ Ein fester Zufallsstartwert je Schritt erzeugt bei jedem Lauf dieselben Daten. E
 npm run migration:reset   # löscht alle Migrationen, erzeugt je Modul eine neue `initial`
 ```
 
-1. `migration:reset` arbeitet in einer eigenen, vorübergehenden Datenbank (`forga_migration_reset`). Ein laufender Entwicklungsserver bleibt ungestört.
+1. `migration:reset` arbeitet in einer eigenen, vorübergehenden Datenbank (`forga_migration_reset`, anderer Name mit `FORGA_RESET_DATABASE`, z. B. für parallele Arbeitskopien). Ein laufender Entwicklungsserver bleibt ungestört.
 2. Danach die Entwicklungsdatenbank neu anlegen. Der Server spielt die neuen Migrationen beim nächsten Start ein, `npm run seed` füllt die Demodaten.
 3. Datenmigrationen (`--blank`) braucht es bis dahin nicht.
 
