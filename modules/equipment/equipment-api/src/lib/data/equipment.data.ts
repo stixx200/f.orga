@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import { type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider } from '@forga/core-api';
+import { type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, wordsWhere } from '@forga/core-api';
 import { type LocalizedText, normalizeRfid, type SearchHit } from '@forga/core-contracts';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
 import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, UsageEntity } from '../equipment.entities.js';
@@ -77,8 +77,8 @@ export class EquipmentData implements DeadlineProvider {
   async search(user: AuthenticatedUser, query: string): Promise<SearchHit[]> {
     const visible = this.items.visible(user);
     if (!visible) return [];
-    const like = `%${query}%`;
-    const found = await this.em.fork().find(EquipmentItemEntity, { $and: [visible, { $or: [{ name: { $ilike: like } }, { inventoryNumber: { $ilike: like } }, { serialNumber: { $ilike: like } }, { barcode: { $ilike: like } }, { rfid: { $ilike: `%${normalizeRfid(query) || query}%` } }] }] } as never, { limit: 6 });
+    const words = wordsWhere(query, ['name', 'inventoryNumber', 'serialNumber', 'barcode']);
+    const found = await this.em.fork().find(EquipmentItemEntity, { $and: [visible, { $or: [...(words ? [words] : []), { rfid: { $ilike: `%${normalizeRfid(query) || query}%` } }] }] } as never, { limit: 6 });
     return found.map((i) => this.hit(i));
   }
 

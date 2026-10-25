@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Incident, ReportStatus } from '@forga/incidents-contracts';
 import { can, formatDateTime, useSession, useTranslation } from '@forga/web-sdk';
-import { DataTable, PageHeader } from '@forga/web-ui';
+import { DataTable, matchesSearch, PageHeader } from '@forga/web-ui';
 import { type IncidentFilter, useIncidents, useNames, WRITE } from '../api';
 import { CreateIncidentDialog } from './CreateIncidentDialog';
 import { DepartmentBadge, incidentStatus, keywordLabel, locationLabel, ReportStatusBadge } from '../parts';
@@ -38,7 +38,7 @@ export function IncidentsPage() {
     const q = query.trim().toLowerCase();
     return incidents
       .filter((i) => view !== 'released' || i.reports.every((r) => r.status.startsWith('released')))
-      .filter((i) => !q || [i.dispatchNumber, i.alarmKeyword, i.alarmMessage, locationLabel(i)].some((v) => v.toLowerCase().includes(q)));
+      .filter((i) => matchesSearch([i.dispatchNumber, i.alarmKeyword, i.alarmMessage, locationLabel(i)], q));
   }, [incidents, query, view]);
   const years = Array.from({ length: 4 }, (_, i) => String(Number(thisYear) - i));
   const { departmentName } = names;

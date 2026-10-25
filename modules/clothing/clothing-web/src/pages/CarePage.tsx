@@ -3,7 +3,7 @@ import { DateInput } from '@mantine/dates';
 import { useMemo, useState } from 'react';
 import type { CareKind, Item } from '@forga/clothing-contracts';
 import { formatDate, localDate, send, useTranslation } from '@forga/web-sdk';
-import { ActionBar, DataTable, PageHeader, Panel, useAction } from '@forga/web-ui';
+import { ActionBar, DataTable, matchesSearch, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { keys, useArticleName, useArticles, useItems, usePersonName } from '../api';
 import { Due } from '../parts';
 
@@ -28,7 +28,7 @@ export function CarePage() {
     const q = query.trim().toLowerCase();
     return items
       .filter((i) => textile.has(i.articleKey))
-      .filter((i) => !q || [i.inventoryNumber, personName(i.holderId), articleName(i.articleKey)].some((v) => v.toLowerCase().includes(q)))
+      .filter((i) => matchesSearch([i.inventoryNumber, personName(i.holderId), articleName(i.articleKey)], q))
       .toSorted((a, b) => String(a.impregnationDueOn ?? '9').localeCompare(String(b.impregnationDueOn ?? '9')));
   }, [items, query, textile, personName, articleName]);
   const toggle = (id: string, on: boolean) => setSelected((s) => { const next = new Set(s); if (on) next.add(id); else next.delete(id); return next; });

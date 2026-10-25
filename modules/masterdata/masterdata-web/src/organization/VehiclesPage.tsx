@@ -2,7 +2,7 @@ import { Button, Chip, Group, Stack, Text, TextInput } from '@mantine/core';
 import { useMemo, useState } from 'react';
 import type { Vehicle } from '@forga/masterdata-contracts';
 import { can, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { DataTable, PageHeader, StatusBadge } from '@forga/web-ui';
+import { DataTable, matchesSearch, PageHeader, StatusBadge } from '@forga/web-ui';
 import { MANAGE, useCatalog, useDepartments, useStations, useVehicles } from '../api';
 import { VehicleDialog } from './dialogs';
 
@@ -22,7 +22,7 @@ export function VehiclesPage() {
     const q = query.trim().toLowerCase();
     return vehicles
       .filter((v) => view === 'all' || v.status !== 'retired')
-      .filter((v) => !q || [v.designation, v.radioCallSign, v.licensePlate].some((x) => x.toLowerCase().includes(q)));
+      .filter((v) => matchesSearch([v.designation, v.radioCallSign, v.licensePlate], q));
   }, [vehicles, query, view]);
   const department = (id: string) => departments.find((d) => d.id === id)?.shortName ?? '';
   const type = (key: string) => {

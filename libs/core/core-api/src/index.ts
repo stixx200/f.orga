@@ -30,6 +30,7 @@ export * from './lib/imports/import-registry.js';
 export * from './lib/imports/parse.js';
 export * from './lib/imports/transfer-archive.js';
 export * from './lib/data/data.js';
+export * from './lib/data/search-words.js';
 export * from './lib/settings/assets.js';
 export * from './lib/plugins/plugin-directory.js';
 export * from './lib/plugins/plugin-package.js';

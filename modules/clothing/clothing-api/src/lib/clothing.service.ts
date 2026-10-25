@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
-import { assertVersion, type AuthenticatedUser, berlinDate } from '@forga/core-api';
+import { assertVersion, type AuthenticatedUser, berlinDate, wordsWhere } from '@forga/core-api';
 import { normalizeRfid } from '@forga/core-contracts';
 import {
   type Article,
@@ -180,7 +180,8 @@ export class ClothingService {
     else where.push({ status: { $ne: 'retired' } });
     if (filter.articleKey) where.push({ articleKey: filter.articleKey });
     if (filter.holderId) where.push({ holderId: filter.holderId });
-    if (filter.query) where.push({ $or: [{ inventoryNumber: { $ilike: `%${filter.query}%` } }, { serialNumber: { $ilike: `%${filter.query}%` } }, { barcode: { $ilike: `%${filter.query}%` } }, { rfid: { $ilike: `%${normalizeRfid(filter.query) || filter.query}%` } }] });
+    const words = filter.query ? wordsWhere(filter.query, ['inventoryNumber', 'serialNumber', 'barcode']) : null;
+    if (filter.query) where.push({ $or: [...(words ? [words] : []), { rfid: { $ilike: `%${normalizeRfid(filter.query) || filter.query}%` } }] } as FilterQuery<ClothingItemEntity>);
     const em = this.em.fork();
     return this.toDtos(em, await em.find(ClothingItemEntity, { $and: where }, { orderBy: { inventoryNumber: 'asc' } }));
   }

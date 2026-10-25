@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { berlinDayEnd } from '@forga/core-api';
+import { berlinDayEnd, wordsWhere } from '@forga/core-api';
 import { EntityManager, wrap } from '@mikro-orm/core';
 import type { AuthenticatedUser, DeadlineInput, DeadlineProvider } from '@forga/core-api';
 import type { SearchHit } from '@forga/core-contracts';
@@ -21,8 +21,9 @@ export class TrainingData implements DeadlineProvider {
   async search(user: AuthenticatedUser, query: string): Promise<SearchHit[]> {
     const visible = this.sessions.visible(user, READ);
     if (!visible) return [];
-    const like = `%${query}%`;
-    const found = await this.em.fork().find(SessionEntity, { $and: [visible, { $or: [{ title: { $ilike: like } }, { topic: { $ilike: like } }] }] } as never, { orderBy: { startsAt: 'desc' }, limit: 6 });
+    const words = wordsWhere(query, ['title', 'topic']);
+    if (!words) return [];
+    const found = await this.em.fork().find(SessionEntity, { $and: [visible, words] } as never, { orderBy: { startsAt: 'desc' }, limit: 6 });
     return found.map((s) => ({
       id: s.id,
       group: { de: 'Dienste', en: 'Sessions' },

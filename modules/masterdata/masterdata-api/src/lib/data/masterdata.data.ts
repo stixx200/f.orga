@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { type EntityClass, EntityManager, wrap } from '@mikro-orm/core';
-import { type AuthenticatedUser, HistoryEntry } from '@forga/core-api';
+import { type AuthenticatedUser, HistoryEntry, wordsWhere } from '@forga/core-api';
 import type { PrivacySettings, SearchHit } from '@forga/core-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { Course, CourseAttendance, CourseNomination } from '../courses/course.entities.js';
@@ -26,8 +26,7 @@ export class MasterdataData {
       description: p.personnelNumber ?? undefined,
       to: `/masterdata/persons/${p.id}`,
     }));
-    const like = `%${query}%`;
-    const vehicles = await this.em.fork().find(Vehicle, { $or: [{ designation: { $ilike: like } }, { radioCallSign: { $ilike: like } }, { licensePlate: { $ilike: like } }] }, { limit: 5 });
+    const vehicles = await this.em.fork().find(Vehicle, wordsWhere(query, ['designation', 'radioCallSign', 'licensePlate']) ?? {}, { limit: 5 });
     return [
       ...hits,
       ...vehicles.map((v) => ({ id: v.id, group: { de: 'Fahrzeuge', en: 'Vehicles' }, title: v.designation, description: v.radioCallSign, to: '/masterdata/vehicles' })),

@@ -1,16 +1,20 @@
 import {
   ActionIcon,
+  Autocomplete,
   Badge,
   Button,
   createTheme,
   Input,
   type MantineColorsTuple,
   Modal,
+  MultiSelect,
   NavLink,
   Paper,
+  Select,
   Tabs,
   Tooltip,
 } from '@mantine/core';
+import { wordsFilter } from './search';
 
 /** Colors from the style guide (Stil.md) and the approved mockups. */
 export const colors = {
@@ -95,5 +99,9 @@ export const forgaTheme = createTheme({
     Modal: Modal.extend({ defaultProps: { radius: 'xs', shadow: 'xl', overlayProps: { backgroundOpacity: 0.5, blur: 0 } } }),
     NavLink: NavLink.extend({ styles: { root: { borderRadius: 0 } } }),
     Tooltip: Tooltip.extend({ defaultProps: { withArrow: true } }),
+    // Search words in any order, so "Felix Funke" finds "Funke, Felix".
+    Select: Select.extend({ defaultProps: { filter: wordsFilter } }),
+    MultiSelect: MultiSelect.extend({ defaultProps: { filter: wordsFilter } }),
+    Autocomplete: Autocomplete.extend({ defaultProps: { filter: wordsFilter } }),
   },
 });
