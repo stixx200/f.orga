@@ -4,6 +4,7 @@ import {
   ConflictException,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   NotFoundException,
   Param,
@@ -45,6 +46,7 @@ import { CatalogEntry, CatalogService } from '../catalog/catalog.js';
 import { Department, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod } from '../masterdata.entities.js';
 import { requireDepartment, today } from '../shared/access.js';
 import { addDays, addMonths, ageOn } from '../shared/dates.js';
+import { DepartmentGroup } from '../organization/group.entities.js';
 import { PersonHoldingsRegistry } from './holdings.js';
 import { activeMemberships, PersonsService, READ, SENSITIVE, WRITE } from './persons.service.js';
 
@@ -55,6 +57,13 @@ type ParsedMembership = ReturnType<typeof MembershipInput.parse>;
 const Memberships = z.array(MembershipInput);
 const IsoDate = z.iso.date();
 const germanDate = (value: string) => value.split('-').toReversed().join('.');
+/** A date from the query string or the fallback; invalid dates are refused. */
+const queryDate = (value: string | undefined, fallback: string) => {
+  if (!value) return fallback;
+  const result = IsoDate.safeParse(value);
+  if (!result.success) throw new BadRequestException({ code: 'validation.failed' });
+  return result.data;
+};
 
 @Controller('masterdata/persons')
 @RequirePermissions(READ)
@@ -102,8 +111,10 @@ export class PersonsController {
     const { memberships, status, ...fields } = input;
     const start = input.joinedOn ?? memberships.map((m) => m.from).toSorted()[0];
     const rules = await this.membershipRules();
+    const master = this.masterFields(fields, user, null);
+    await this.assertMinimumAge(em, 'birthDate' in master ? (master.birthDate ?? null) : null, memberships, rules);
     const person = em.create(Person, {
-      ...this.masterFields(fields, user, null),
+      ...master,
       status,
       joinedOn: input.joinedOn ?? start,
       probationEndsOn: status === 'probation' ? probationEnd(start, rules.probationMonths) : null,
@@ -148,6 +159,9 @@ export class PersonsController {
       if (!user.can(WRITE, m.departmentId) && !foreign.some((f) => same(m, f))) requireDepartment(user, WRITE, m.departmentId);
     }
     const kept = foreign.map((f) => ({ departmentId: f.department.id, from: f.from, to: f.to ?? null, primary: f.primary }));
+    // Only new or changed memberships are checked against the minimum age, existing ones stay valid.
+    const added = memberships.filter((m) => !person.memberships.getItems().some((x) => same(m, x)));
+    await this.assertMinimumAge(em, person.birthDate ?? null, added, await this.membershipRules());
     await this.replaceMemberships(em, person, [...memberships.filter((m) => user.can(WRITE, m.departmentId)), ...kept]);
     await em.flush();
     return this.persons.toDto(person, user);
@@ -265,7 +279,7 @@ export class PersonsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<PersonDto> {
     const em = this.em.fork();
-    const person = await this.persons.load(em, id, user, WRITE);
+    const person = await this.loadSensitive(em, id, user);
     person.restPeriods.add(em.create(RestPeriod, { person, ...input }));
     await em.flush();
     return this.persons.toDto(person, user);
@@ -280,7 +294,7 @@ export class PersonsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<PersonDto> {
     const em = this.em.fork();
-    const person = await this.persons.load(em, id, user, WRITE);
+    const person = await this.loadSensitive(em, id, user);
     const entry = person.restPeriods.getItems().find((r) => r.id === entryId);
     if (!entry) throw new NotFoundException();
     em.assign(entry, input);
@@ -291,13 +305,26 @@ export class PersonsController {
   @Delete(':id/rest-periods/:entryId')
   @RequirePermissions(WRITE)
   removeRestPeriod(@Param('id') id: string, @Param('entryId') entryId: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.removeChild(id, user, (p) => p.restPeriods, entryId);
+    return this.removeChild(id, user, (p) => p.restPeriods, entryId, true);
   }
 
   @Delete(':id/offices/:entryId')
   @RequirePermissions(WRITE)
   removeOffice(@Param('id') id: string, @Param('entryId') entryId: string, @CurrentUser() user: AuthenticatedUser) {
     return this.removeChild(id, user, (p) => p.offices, entryId);
+  }
+
+  /** Number of honor certificates for the same parameters as the PDF, so the UI can say beforehand that there are none. */
+  @Get('honors/certificates')
+  @RequirePermissions(READ)
+  async honorCertificateCount(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('honor') honor?: string,
+    @Query('ids') ids?: string,
+  ): Promise<{ count: number }> {
+    return { count: (await this.awards(user, { from, to, honor, ids })).length };
   }
 
   /**
@@ -314,14 +341,7 @@ export class PersonsController {
     @Query('honor') honor?: string,
     @Query('ids') ids?: string,
   ): Promise<void> {
-    const year = berlinDate().slice(0, 4);
-    const period = { from: from ? IsoDate.parse(from) : `${year}-01-01`, to: to ? IsoDate.parse(to) : `${year}-12-31` };
-    const wanted = ids ? new Set(ids.split(',')) : null;
-    const persons = await this.persons.findVisible(user, READ, { honors: { $some: {} } });
-    const awards = persons
-      .flatMap((person) => person.honors.getItems().map((award) => ({ person, award })))
-      .filter(({ award }) => (wanted ? wanted.has(award.id) : award.awardedOn >= period.from && award.awardedOn <= period.to && (!honor || award.honor === honor)))
-      .toSorted((a, b) => a.award.awardedOn.localeCompare(b.award.awardedOn) || a.person.lastName.localeCompare(b.person.lastName, 'de'));
+    const awards = await this.awards(user, { from, to, honor, ids });
     if (!awards.length) throw new NotFoundException({ code: 'masterdata.noHonors' });
     const em = this.em.fork();
     const [config, brigade, catalog] = await Promise.all([
@@ -344,6 +364,17 @@ export class PersonsController {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="Urkunden.pdf"');
     res.send(pdf);
+  }
+
+  private async awards(user: AuthenticatedUser, query: { from?: string; to?: string; honor?: string; ids?: string }) {
+    const year = berlinDate().slice(0, 4);
+    const period = { from: queryDate(query.from, `${year}-01-01`), to: queryDate(query.to, `${year}-12-31`) };
+    const wanted = query.ids ? new Set(query.ids.split(',')) : null;
+    const persons = await this.persons.findVisible(user, READ, { honors: { $some: {} } });
+    return persons
+      .flatMap((person) => person.honors.getItems().map((award) => ({ person, award })))
+      .filter(({ award }) => (wanted ? wanted.has(award.id) : award.awardedOn >= period.from && award.awardedOn <= period.to && (!query.honor || award.honor === query.honor)))
+      .toSorted((a, b) => a.award.awardedOn.localeCompare(b.award.awardedOn) || a.person.lastName.localeCompare(b.person.lastName, 'de'));
   }
 
   @Post(':id/honors')
@@ -390,15 +421,25 @@ export class PersonsController {
   @RequirePermissions(WRITE)
   async admit(
     @Param('id') id: string,
-    @Body(new ZodPipe(Admission)) input: Admission,
+    @Body(new ZodPipe(Admission)) input: ReturnType<typeof Admission.parse>,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<PersonDto> {
     const em = this.em.fork();
     const person = await this.persons.load(em, id, user, WRITE);
     if (person.status !== 'probation') throw new BadRequestException({ code: 'masterdata.notInProbation' });
+    if (person.joinedOn && input.decidedOn < person.joinedOn) throw new BadRequestException({ code: 'masterdata.admissionBeforeJoining', joinedOn: person.joinedOn });
+    // Before the end of the probation or without its qualifications only with a reason, like a shortened probation.
+    const rules = await this.membershipRules();
+    const held = new Set(person.qualifications.getItems().filter((q) => q.acquiredOn <= input.decidedOn).map((q) => q.qualification));
+    const missing = rules.probationQualifications.filter((q) => !held.has(q));
+    const early = Boolean(person.probationEndsOn && input.decidedOn < person.probationEndsOn);
+    if ((early || missing.length) && !input.reason) {
+      throw new BadRequestException({ code: 'masterdata.admissionReasonRequired', probationEndsOn: person.probationEndsOn ?? null, missing });
+    }
     person.status = 'active';
     person.admittedOn = input.decidedOn;
     person.probationDecidedOn = input.decidedOn;
+    if (input.reason) person.notes = appendNote(person.notes, `Aufnahme / admission ${input.decidedOn}: ${input.reason}`);
     await em.flush();
     return this.persons.toDto(person, user);
   }
@@ -531,6 +572,11 @@ export class PersonsController {
     for (const membership of person.memberships.getItems()) {
       if (!membership.to || membership.to > input.leftOn) membership.to = input.leftOn;
     }
+    // Whoever left is no longer part of a group.
+    for (const group of await em.find(DepartmentGroup, {})) {
+      if (group.leader?.id === person.id) group.leader = null;
+      if (group.memberIds.includes(person.id)) group.memberIds = group.memberIds.filter((m) => m !== person.id);
+    }
     await em.flush();
     await this.events.publish<PersonLeftEvent>(MASTERDATA_EVENTS.personLeft, {
       personId: person.id,
@@ -545,9 +591,10 @@ export class PersonsController {
     user: AuthenticatedUser,
     collection: (person: Person) => { getItems(): { id: string }[]; remove(item: never): void },
     entryId: string,
+    sensitive = false,
   ): Promise<PersonDto> {
     const em = this.em.fork();
-    const person = await this.persons.load(em, id, user, WRITE);
+    const person = sensitive ? await this.loadSensitive(em, id, user) : await this.persons.load(em, id, user, WRITE);
     const items = collection(person);
     const entry = items.getItems().find((item) => item.id === entryId);
     if (!entry) throw new NotFoundException();
@@ -558,13 +605,15 @@ export class PersonsController {
 
   /** Master fields; sensitive ones are only applied with `masterdata.persons.sensitive`. */
   private masterFields(input: ParsedPerson, user: AuthenticatedUser, existing: Person | null) {
-    const { birthDate, birthPlace, employer, bank, version: _version, ...rest } = input;
+    const { birthDate, birthPlace, employer, bank, notes, version: _version, ...rest } = input;
     const sensitive = existing
       ? this.persons.can(user, SENSITIVE, existing)
       : user.grant(SENSITIVE) !== null;
     if (!sensitive) return rest;
+    if (birthDate && birthDate > today()) throw new BadRequestException({ code: 'masterdata.birthDateInFuture' });
     return {
       ...rest,
+      notes,
       ...(birthDate !== undefined ? { birthDate } : {}),
       ...(birthPlace !== undefined ? { birthPlace } : {}),
       ...(employer !== undefined ? { employer } : {}),
@@ -596,6 +645,26 @@ export class PersonsController {
     if (!number) return;
     const other = await em.findOne(Person, { personnelNumber: number });
     if (other && other.id !== ownId) throw new ConflictException({ code: 'masterdata.personnelNumberTaken' });
+  }
+
+  /**
+   * Persons below `minimumAgeOperational` cannot become members of an operational department (unknown birth dates pass).
+   * Memberships that ended before today are history (e.g. entered from old files) and are not checked.
+   */
+  private async assertMinimumAge(em: EntityManager, birthDate: string | null, all: { departmentId: string; from: string; to?: string | null }[], rules: MembershipSettings): Promise<void> {
+    const memberships = all.filter((m) => !m.to || m.to >= today());
+    if (!birthDate || !memberships.length) return;
+    const operational = new Set((await em.find(Department, { id: { $in: memberships.map((m) => m.departmentId) }, type: 'operational' })).map((d) => d.id));
+    if (memberships.some((m) => operational.has(m.departmentId) && ageOn(birthDate, m.from) < rules.minimumAgeOperational)) {
+      throw new BadRequestException({ code: 'masterdata.belowMinimumAge', age: rules.minimumAgeOperational });
+    }
+  }
+
+  /** Loads a person for changes of sensitive data (rest periods): `masterdata.persons.write` and `masterdata.persons.sensitive`. */
+  private async loadSensitive(em: EntityManager, id: string, user: AuthenticatedUser): Promise<Person> {
+    const person = await this.persons.load(em, id, user, WRITE);
+    if (!this.persons.can(user, SENSITIVE, person)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [SENSITIVE] });
+    return person;
   }
 
   private async membershipRules(): Promise<MembershipSettings> {

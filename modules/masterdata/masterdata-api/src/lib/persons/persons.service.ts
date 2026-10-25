@@ -185,7 +185,10 @@ export class PersonsService {
     };
   }
 
-  /** With `self`, the person's own view: all own data, but without internal notes. */
+  /**
+   * With `self`, the person's own view: all own data, but without internal notes.
+   * Without `masterdata.persons.sensitive`, the sensitive fields (`SENSITIVE_PERSON_FIELDS`) are left out or empty.
+   */
   toDto(person: Person, user: AuthenticatedUser, options: { self?: boolean } = {}): PersonDto {
     const sensitive = options.self || this.can(user, SENSITIVE, person);
     const dto: PersonDto = {
@@ -208,13 +211,13 @@ export class PersonsService {
       joinedOn: person.joinedOn ?? null,
       musician: person.musician,
       driverLicense: person.driverLicense,
-      notes: options.self ? '' : person.notes,
+      notes: options.self || !sensitive ? '' : person.notes,
       status: person.status,
       probationEndsOn: person.probationEndsOn ?? null,
       probationDecidedOn: person.probationDecidedOn ?? null,
       admittedOn: person.admittedOn ?? null,
       leftOn: person.leftOn ?? null,
-      exitReason: person.exitReason ?? null,
+      exitReason: sensitive ? (person.exitReason ?? null) : null,
       rank: currentRank(person),
       memberships: sortBy(person.memberships.getItems(), (m) => m.from).map((m) => ({
         id: m.id,
@@ -243,7 +246,7 @@ export class PersonsService {
         awardedOn: h.awardedOn,
         notes: h.notes,
       })),
-      restPeriods: sortBy(person.restPeriods.getItems(), (r) => r.from).map((r: RestPeriod) => ({ id: r.id, reason: r.reason, from: r.from, to: r.to ?? null, notes: r.notes })),
+      restPeriods: (sensitive ? sortBy(person.restPeriods.getItems(), (r) => r.from) : []).map((r: RestPeriod) => ({ id: r.id, reason: r.reason, from: r.from, to: r.to ?? null, notes: r.notes })),
       offices: sortBy(person.offices.getItems(), (o) => o.from).map((o: OfficeAssignment) => ({
         id: o.id,
         office: o.office,

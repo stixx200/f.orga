@@ -1,15 +1,27 @@
 import { z } from 'zod';
 
+/** Allowed range of the ages in the membership rules (years); keeps out typos such as negative values or 170 instead of 17. */
+export const MEMBERSHIP_AGE_BOUNDS = {
+  minimumAgeOperational: [10, 30],
+  minimumAgeIncidents: [10, 30],
+  ageLimitOperational: [40, 99],
+  veteransApplicationAge: [30, 99],
+  youthEndAge: [10, 30],
+} as const satisfies Record<string, readonly [number, number]>;
+
+const age = (key: keyof typeof MEMBERSHIP_AGE_BOUNDS, fallback: number) =>
+  z.number().int().min(MEMBERSHIP_AGE_BOUNDS[key][0]).max(MEMBERSHIP_AGE_BOUNDS[key][1]).default(fallback);
+
 /** Membership rules from the brigade statute (Feuerwehrsatzung). Defaults are common example values. */
 export const MembershipSettings = z.object({
   probationMonths: z.number().int().min(0).max(60).default(12),
   /** Who decides on admission, shown in the UI, e.g. "Feuerwehrausschuss". */
   admissionDecidedBy: z.string().default('Feuerwehrausschuss'),
-  minimumAgeOperational: z.number().int().default(17),
-  minimumAgeIncidents: z.number().int().default(18),
-  ageLimitOperational: z.number().int().default(65),
-  veteransApplicationAge: z.number().int().default(55),
-  youthEndAge: z.number().int().default(18),
+  minimumAgeOperational: age('minimumAgeOperational', 17),
+  minimumAgeIncidents: age('minimumAgeIncidents', 18),
+  ageLimitOperational: age('ageLimitOperational', 65),
+  veteransApplicationAge: age('veteransApplicationAge', 55),
+  youthEndAge: age('youthEndAge', 18),
   /** Qualifications to acquire during the probation (catalog keys), e.g. basic training part 1. */
   probationQualifications: z.array(z.string()).default(['truppmann-1']),
   /** Years of service listed as anniversaries. */

@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FUNCTION_ALLOWANCES } from '@forga/compensation-contracts';
+import { EntityManager } from '@mikro-orm/core';
 import { DomainEvents } from '@forga/core-api';
+import { MASTERDATA_EVENTS } from '@forga/masterdata-contracts';
 import { INCIDENTS_EVENTS, type ReportReleasedEvent } from '@forga/incidents-contracts';
 import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
 
@@ -261,5 +263,25 @@ describe('compensation', () => {
     await post(`/masterdata/persons/${ids.lena}/course-attendances`, { course: 'truppmann-2', startsOn: '2026-09-01', result: 'passed' }).expect(201);
     const items = (await get(`/compensation/persons/${ids.lena}/items?year=2026`).expect(200)).body as { label: string; source: string; date: string; amount: number }[];
     expect(items.filter((i) => i.source === 'course')).toEqual([expect.objectContaining({ label: 'Lehrgangspauschale Truppführer', date: '2026-09-20', amount: 70 })]);
+  });
+
+  it('withdraws the course allowance when the attendance is deleted', async () => {
+    const courseItems = async () => ((await get(`/compensation/persons/${ids.lena}/items?year=2026`).expect(200)).body as { source: string; amount: number; correction: boolean }[]).filter((i) => i.source === 'course');
+    const attendances = (await get(`/masterdata/persons/${ids.lena}/course-attendances`).expect(200)).body as { id: string; course: string }[];
+    const squadLeader = attendances.find((a) => a.course === 'squad-leader')!;
+    await test.http.delete(`/api/masterdata/persons/${ids.lena}/course-attendances/${squadLeader.id}`).set('Cookie', admin).set(UI).expect(204);
+    // Not paid out yet: the item disappears.
+    expect(await courseItems()).toEqual([]);
+
+    // Already paid out: a correction item reverses the amount in the next run.
+    const bus = test.app.get(DomainEvents);
+    await bus.publish(MASTERDATA_EVENTS.coursePassed, { personId: ids.lena, course: 'squad-leader', courseName: 'Truppführer', passedOn: '2026-09-20', attendanceId: squadLeader.id });
+    const [item] = (await courseItems()) as unknown as { id: string }[];
+    const sql = test.app.get(EntityManager).getConnection();
+    const runId = '01a16846-0000-7000-8000-0000000c0099';
+    await sql.execute(`insert into compensation.run (id, number, "from", "to", status, created_at, version) values ('${runId}', '2026-99', '2026-09-01', '2026-09-30', 'paid', now(), 1)`);
+    await sql.execute(`update compensation.item set run_id = '${runId}' where id = '${item.id}'`);
+    await bus.publish(MASTERDATA_EVENTS.courseRevoked, { personId: ids.lena, course: 'squad-leader', attendanceId: squadLeader.id });
+    expect((await courseItems()).map((i) => [i.amount, i.correction])).toEqual(expect.arrayContaining([[70, false], [-70, true]]));
   });
 });

@@ -12,13 +12,15 @@ import {
 } from '@forga/masterdata-contracts';
 import { MASTERDATA_MIGRATIONS } from '../migrations/index.js';
 import { CatalogController, CatalogEntry, CatalogService } from './catalog/catalog.js';
-import { Course, CourseAttendance, CourseNomination } from './courses/course.entities.js';
+import { Course, CourseAttendance, CourseNomination, CourseRun } from './courses/course.entities.js';
 import { CoursesController } from './courses/courses.controller.js';
 import { MasterdataDeadlines } from './deadlines/masterdata.deadlines.js';
 import { OrganizationService, PersonDirectoryService } from './directory/directory.js';
 import { CareerImport } from './imports/career.import.js';
 import { PersonsImport } from './imports/persons.import.js';
 import { MasterdataLists } from './lists/masterdata.lists.js';
+import { DepartmentGroup } from './organization/group.entities.js';
+import { GroupsController } from './organization/groups.controller.js';
 import { OrganizationController } from './organization/organization.controller.js';
 import { Department, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod, Station, Vehicle } from './masterdata.entities.js';
 import { MasterdataData } from './data/masterdata.data.js';
@@ -31,7 +33,7 @@ import { PersonsService, READ, SENSITIVE } from './persons/persons.service.js';
 /** Global, so other modules can inject `PERSON_DIRECTORY`, `ORGANIZATION`, `ORGANIZATION_REFERENCES` and `PERSON_HOLDINGS` without importing this package. */
 @Global()
 @Module({
-  controllers: [CatalogController, OrganizationController, PersonsController, CoursesController, SelfController],
+  controllers: [CatalogController, OrganizationController, GroupsController, PersonsController, CoursesController, SelfController],
   providers: [
     CatalogService,
     PersonsService,
@@ -87,7 +89,8 @@ export class MasterdataModule implements OnModuleInit {
     this.historyAccess.register('masterdata.person', async (user, id) => {
       const person = await this.em.fork().findOne(Person, id, { populate: ['memberships.department'] });
       if (!person || !this.persons.can(user, READ, person)) return { allowed: false };
-      return { allowed: true, hiddenFields: this.persons.can(user, SENSITIVE, person) ? [] : SENSITIVE_PERSON_FIELDS };
+      // Rest periods are sensitive as a whole: their entries are masked like the sensitive fields of the person.
+      return { allowed: true, hiddenFields: this.persons.can(user, SENSITIVE, person) ? [] : [...SENSITIVE_PERSON_FIELDS, 'masterdata.rest_period'] };
     });
     this.historyAccess.registerPermission('masterdata.catalog_entry', 'masterdata.catalogs.manage');
     this.historyAccess.registerPermission('masterdata.department', 'masterdata.organization.manage');
@@ -113,8 +116,10 @@ export const masterdataModule = defineModule({
     OfficeAssignment,
     RestPeriod,
     Course,
+    CourseRun,
     CourseAttendance,
     CourseNomination,
+    DepartmentGroup,
   ],
   historized: [
     CatalogEntry,
@@ -129,8 +134,10 @@ export const masterdataModule = defineModule({
     { entity: OfficeAssignment, parent: 'person' },
     { entity: RestPeriod, parent: 'person' },
     Course,
+    { entity: CourseRun, parent: 'course' },
     { entity: CourseAttendance, parent: 'person' },
     { entity: CourseNomination, parent: 'person' },
+    { entity: DepartmentGroup, parent: 'department' },
   ],
   migrations: MASTERDATA_MIGRATIONS,
   settings: MASTERDATA_SETTINGS,

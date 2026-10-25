@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, Delete, Get, HttpCode, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { type AuthenticatedUser, CurrentUser, RequirePermissions, SettingsService, ZodPipe } from '@forga/core-api';
 import {
@@ -17,6 +17,7 @@ import { OrganizationReferenceRegistry } from './references.js';
 import { requireBrigade, requireDepartment } from '../shared/access.js';
 
 const MANAGE = 'masterdata.organization.manage';
+const sorted = (values: readonly string[]) => JSON.stringify([...values].toSorted());
 
 type ParsedDepartment = ReturnType<typeof DepartmentInput.parse>;
 type ParsedStation = ReturnType<typeof StationInput.parse>;
@@ -114,7 +115,29 @@ export class OrganizationController {
     const em = this.em.fork();
     const department = await em.findOne(Department, id);
     if (!department) throw new NotFoundException();
-    em.assign(department, await this.departmentFields(em, input, id));
+    // Structure and statistics are a matter of the whole brigade: with the permission for the own department only,
+    // name, short name, commander and deputies may change.
+    let fields = input;
+    if (user.grant(MANAGE) !== 'brigade') {
+      const stored = {
+        type: department.type,
+        parentId: department.parent?.id ?? null,
+        specialTasks: department.specialTasks,
+        statisticsRelevant: department.statisticsRelevant ?? null,
+        population: department.population ?? null,
+      };
+      const relevant = (value: boolean | null) => value ?? STATISTICS_RELEVANT_TYPES.includes(department.type);
+      const changed = [
+        input.type !== stored.type && 'type',
+        input.parentId !== stored.parentId && 'parentId',
+        sorted(input.specialTasks) !== sorted(stored.specialTasks) && 'specialTasks',
+        relevant(input.statisticsRelevant) !== relevant(stored.statisticsRelevant) && 'statisticsRelevant',
+        input.population !== stored.population && 'population',
+      ].filter((field): field is string => Boolean(field));
+      if (changed.length) throw new ForbiddenException({ code: 'masterdata.departmentFieldsBrigadeOnly', fields: changed, permissions: [MANAGE] });
+      fields = { ...input, ...stored };
+    }
+    em.assign(department, await this.departmentFields(em, fields, id));
     await em.flush();
     return toDepartmentDto(department);
   }
@@ -264,6 +287,12 @@ export class OrganizationController {
   private async departmentFields(em: EntityManager, input: ParsedDepartment, ownId: string | null) {
     const { parentId, commanderId, deputyIds, ...rest } = input;
     if (parentId && parentId === ownId) throw new BadRequestException({ code: 'masterdata.departmentOwnParent' });
+    // Short names appear wherever space is short (lists, badges), so they must tell the departments apart.
+    const sameShortName = await em.findOne(Department, { shortName: { $ilike: input.shortName }, ...(ownId ? { id: { $ne: ownId } } : {}) });
+    const own = ownId ? await em.findOne(Department, ownId) : null;
+    if (sameShortName && own?.shortName.toLowerCase() !== input.shortName.toLowerCase()) {
+      throw new ConflictException({ code: 'masterdata.shortNameTaken', shortName: input.shortName, department: sameShortName.name });
+    }
     const rules = (await this.settings.get<MembershipSettings>('masterdata.membership')) as MembershipSettings;
     if (deputyIds.length > rules.maxDeputies) throw new BadRequestException({ code: 'masterdata.tooManyDeputies', max: rules.maxDeputies });
     const personIds = [...(commanderId ? [commanderId] : []), ...deputyIds];

@@ -16,7 +16,7 @@ export class PersonHoldingsRegistry implements PersonHoldings {
   async assertNothingHeld(personId: string): Promise<void> {
     const held = (await Promise.all(this.counters.map(async ({ module, count }) => ({ module, count: await count(personId) })))).filter((h) => h.count > 0);
     if (held.length) {
-      throw new ConflictException({ code: 'masterdata.personHoldsItems', modules: held.map((h) => h.module).join(', '), count: held.reduce((sum, h) => sum + h.count, 0) });
+      throw new ConflictException({ code: 'masterdata.personHoldsItems', modules: held.map((h) => h.module), count: held.reduce((sum, h) => sum + h.count, 0) });
     }
   }
 }

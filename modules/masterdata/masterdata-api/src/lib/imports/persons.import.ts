@@ -156,9 +156,11 @@ export class PersonsImport {
         // Creating departments needs the permission for the organization, not only for persons.
         if (!department && options['createDepartments'] && user.can('masterdata.organization.manage')) {
           const parent = parsed.type === 'veterans' ? byKey.get(normalizeHeading(parsed.place)) : undefined;
+          // Short names are unique: "Altersabt. Musterstadt" keeps its full name next to "Musterstadt".
+          const shortName = parsed.place && ![...byKey.values()].some((d) => d.shortName.toLowerCase() === parsed.place.toLowerCase()) ? parsed.place : values['department'].trim();
           department = em.create(Department, {
             name: values['department'].trim(),
-            shortName: parsed.place || values['department'].trim(),
+            shortName,
             type: parsed.type,
             parent: parent ?? null,
             specialTasks: [],
