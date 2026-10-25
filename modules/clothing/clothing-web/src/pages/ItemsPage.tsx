@@ -16,7 +16,7 @@ export function ItemsPage() {
   const navigate = useNavigate();
   const localized = useLocalized();
   const session = useSession().data;
-  const [view, setView] = useState<View>('all');
+  const [view, setView] = useState<View>('stock');
   const [articleKeys, setArticleKeys] = useState<string[]>([]);
   const [sizes, setSizes] = useState<string[]>([]);
   const [query, setQuery] = useState('');
@@ -42,7 +42,7 @@ export function ItemsPage() {
         actions={can(session, MANAGE) && <Button onClick={() => setAdding(true)}>{t('items.add')}</Button>}
       />
       <Chip.Group value={view} onChange={(v) => setView(v as View)}>
-        <Group gap="xs">{(['all', 'stock', 'issued', 'retired'] as const).map((v) => <Chip key={v} value={v} radius="xs">{t(`items.views.${v}`)}</Chip>)}</Group>
+        <Group gap="xs">{(['stock', 'issued', 'retired', 'all'] as const).map((v) => <Chip key={v} value={v} radius="xs">{t(`items.views.${v}`)}</Chip>)}</Group>
       </Chip.Group>
       <Group grow align="end">
         <TextInput type="search" label={t('items.search')} placeholder={t('items.searchPlaceholder')} value={query} onChange={(e) => setQuery(e.currentTarget.value)} />
