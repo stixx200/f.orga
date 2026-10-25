@@ -1004,11 +1004,19 @@ async function costRecovery(): Promise<void> {
   for (const incident of alarms) {
     const primary = incident.reports.find((r) => r.primary) ?? incident.reports[0];
     if (!primary) continue;
+    // Released reports are changed through the workflow: unlock, add the operator as party, submit, release again.
+    const status = (await call<{ status: string }>('GET', `incidents/reports/${primary.id}`)).status;
+    if (status.startsWith('released')) await call('POST', `incidents/reports/${primary.id}/unlock`, { reason: 'Betreiber als Beteiligten ergänzt (Demodaten)', toStatus: 'draft' });
     const report = await call<Record<string, unknown>>('GET', `incidents/reports/${primary.id}`);
-    await call('PUT', `incidents/reports/${primary.id}`, {
+    const saved = await call<{ findings: { rule: string; level: string; subject: string | null; acknowledged: boolean }[] }>('PUT', `incidents/reports/${primary.id}`, {
       ...report,
       involvedParties: [{ role: 'owner', name: 'Muster Logistik GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
+      statistics: report['statistics'] ?? { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
     });
+    // Notices need reports released for billing.
+    const acknowledgements = saved.findings.filter((f) => f.level === 'warning' && !f.acknowledged).map((f) => ({ rule: f.rule, subject: f.subject, reason: 'Demodaten' }));
+    if ((await call<{ status: string }>('GET', `incidents/reports/${primary.id}`)).status === 'draft') await call('POST', `incidents/reports/${primary.id}/submit`, { acknowledgements });
+    await call('POST', `incidents/reports/${primary.id}/release`, { level: 'billing' });
     // Costs apply to the whole incident.
     await call('PUT', `incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Fehlalarm der Brandmeldeanlage', notes: 'Betreiber über Kostenpflicht informiert' });
   }
