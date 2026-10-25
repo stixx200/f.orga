@@ -57,7 +57,8 @@ export interface MemberPeriods {
   id: string;
   firstName: string;
   lastName: string;
-  periods: { from: string; to: string | null }[];
+  /** Memberships with their department (`primary`: the person's primary department then). */
+  periods: { from: string; to: string | null; departmentId: string; primary: boolean }[];
 }
 
 /** Persons of `memberPeriods()` with a membership on the date. */

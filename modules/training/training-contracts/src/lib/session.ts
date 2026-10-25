@@ -218,9 +218,13 @@ export type TrainingSettings = z.infer<typeof TrainingSettings>;
 
 export const TRAINING_SETTINGS = { 'training.general': TrainingSettings } as const;
 
-/** Participation of one person in a period. */
+/**
+ * Participation of one person in a period: `sessions` are those of the person's departments while a member (and those
+ * the person is listed in); `departmentId` is the primary department at the end of the period.
+ */
 export const Participation = z.object({
   personId: z.uuid(),
+  departmentId: z.uuid().nullable(),
   sessions: z.number(),
   present: z.number(),
   excused: z.number(),

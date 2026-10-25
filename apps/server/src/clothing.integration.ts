@@ -282,3 +282,91 @@ describe('clothing store: checks, blocks and corrections', () => {
     expect((await get('/core/codes?code=PSA-J-001', ben).expect(200)).body).toEqual([]);
   });
 });
+
+const tasks = async (asOf: string) => (await get(`/core/tasks?asOf=${asOf}`, officer).expect(200)).body as { kind: string; subject: { id: string }; dueOn: string }[];
+const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
+
+describe('clothing store: tasks, stock counting, checks and roles', () => {
+
+  it('makes a piece still issued after a failed inspection a task due at once', async () => {
+    const boots = await piece('S-100', 'boots', { size: '44', purchasedOn: '2026-01-10' });
+    await post(`/clothing/items/${boots}/issue`, { personId: ids.wart, date: today }, officer).expect(200);
+    expect((await tasks(today)).some((t) => t.subject.id === boots && t.kind === 'clothing-defective')).toBe(false);
+    await post(`/clothing/items/${boots}/inspections`, { date: today, passed: false, notes: 'Sohle gelöst' }, officer).expect(201);
+    expect((await tasks(today)).find((t) => t.subject.id === boots && t.kind === 'clothing-defective')).toMatchObject({ dueOn: today });
+    // Taken back to repair: no longer a task.
+    await post(`/clothing/items/${boots}/return`, { date: today }, officer).expect(200);
+    expect((await tasks(today)).some((t) => t.subject.id === boots && t.kind === 'clothing-defective')).toBe(false);
+  });
+
+  it('reminds of a piece left at the laundry after the set days', async () => {
+    const jacket = await piece('J-100', 'jacket', { size: '52', purchasedOn: '2026-01-15' });
+    await post(`/clothing/items/${jacket}/issue`, { personId: ids.wart, date: today }, officer).expect(200);
+    await post('/clothing/return', { date: today, items: [{ itemId: jacket, laundry: true }] }, officer).expect(200);
+    const laundry = async (asOf: string) => (await tasks(asOf)).find((t) => t.subject.id === jacket && t.kind === 'clothing-laundry');
+    expect(await laundry(inDays(13))).toBeUndefined();
+    expect(await laundry(inDays(14))).toMatchObject({ dueOn: inDays(14) });
+    // Configurable; 0 = never. The officer of one department may not change it.
+    await put('/core/settings/clothing.settings', { laundryReminderDays: 3 }, officer).expect(403);
+    await put('/core/settings/clothing.settings', { laundryReminderDays: 0 }).expect(200);
+    expect(await laundry(inDays(30))).toBeUndefined();
+    await put('/core/settings/clothing.settings', { laundryReminderDays: 14 }).expect(200);
+    await post('/clothing/care', { itemIds: [jacket], kind: 'wash', date: today }, officer).expect(201);
+    expect(await laundry(inDays(30))).toBeUndefined();
+  });
+
+  it('warns before handing out more than the counter holds and sets the counter to a count', async () => {
+    const gloves = async () => ((await get('/clothing/stock', officer).expect(200)).body as { articleKey: string; size: string; available: number }[]).find((r) => r.articleKey === 'gloves' && r.size === '9')!.available;
+    const available = await gloves();
+    expect((await post('/clothing/consumables', { personId: ids.wart, articleKey: 'gloves', size: '9', quantity: available + 1, date: today }, officer).expect(409)).body).toMatchObject({ code: 'clothing.stockInsufficient', available });
+    await post('/clothing/consumables', { personId: ids.wart, articleKey: 'gloves', size: '9', quantity: available + 1, date: today, acceptLowStock: true }, officer).expect(201);
+    expect(await gloves()).toBe(-1);
+    // Counting sets the counter; a receipt is always positive.
+    await post('/clothing/consumables/receipts', { articleKey: 'gloves', size: '9', quantity: -3, date: today }, officer).expect(400);
+    const counted = (await post('/clothing/consumables/counts', { articleKey: 'gloves', size: '9', counted: 20, date: today, notes: 'Inventur' }, officer).expect(201)).body as { articleKey: string; size: string; available: number }[];
+    expect(counted.find((r) => r.articleKey === 'gloves' && r.size === '9')).toMatchObject({ available: 20 });
+    await post('/clothing/consumables/counts', { articleKey: 'gloves', size: '9', counted: 5, date: today }, leader).expect(403);
+    // An article with sizes: handing out and counting need one.
+    const { id, version: _version, ...gloveArticle } = ((await get('/clothing/articles')).body as ({ id: string; key: string } & Record<string, unknown>)[]).find((x) => x.key === 'gloves')!;
+    await put(`/clothing/articles/${id}`, { ...gloveArticle, sizes: ['8', '9', '10'] }).expect(200);
+    expect((await post('/clothing/consumables', { personId: ids.wart, articleKey: 'gloves', date: today }, officer).expect(400)).body).toMatchObject({ code: 'clothing.sizeRequired' });
+    await post('/clothing/consumables/counts', { articleKey: 'gloves', counted: 5, date: today }, officer).expect(400);
+  });
+
+  it('refuses washing and inspections before the purchase and sizes the article does not have', async () => {
+    expect((await post('/clothing/care', { itemIds: [ids.jacket], kind: 'wash', date: '2025-12-01' }, officer).expect(400)).body).toMatchObject({ code: 'clothing.dateBeforePurchase', number: 'J-001' });
+    expect((await post(`/clothing/items/${ids.jacket}/inspections`, { date: '2000-01-01', passed: true }, officer).expect(400)).body).toMatchObject({ code: 'clothing.dateBeforePurchase' });
+    expect((await put(`/clothing/persons/${ids.wart}/sizes`, { sizes: { jacket: '99' } }, officer).expect(400)).body).toMatchObject({ code: 'clothing.unknownSize', size: '99' });
+    expect((await put(`/clothing/persons/${ids.wart}/sizes`, { sizes: { jacket: '54' } }, officer).expect(200)).body.sizes).toEqual({ jacket: '54' });
+  });
+
+  it('retires a piece on return only with the right to manage the store', async () => {
+    const issuer = (await post('/core/roles', { name: 'Ausgabe', permissions: ['clothing.read', 'clothing.issue', 'masterdata.persons.read'] }).expect(201)).body.id;
+    await post('/core/users', { username: 'ausgabe', displayName: 'Ausgabe', password: 'auch-sehr-geheim', roles: [{ roleId: issuer, departmentId: ids.musterstadt }] }).expect(201);
+    const desk = await test.login({ username: 'ausgabe', password: 'auch-sehr-geheim' });
+    const boots = await piece('S-101', 'boots', { size: '44', purchasedOn: '2026-01-10' });
+    await post(`/clothing/items/${boots}/issue`, { personId: ids.wart, date: today }, desk).expect(200);
+    expect((await post('/clothing/return', { date: today, items: [{ itemId: boots, retire: true }] }, desk).expect(403)).body).toMatchObject({ code: 'auth.forbidden', permissions: ['clothing.manage'] });
+    expect((await item(boots)).status).toBe('issued');
+    await post('/clothing/return', { date: today, items: [{ itemId: boots }] }, desk).expect(200);
+  });
+
+  it('gives a piece back on cancelling the return only to a person it could be issued to', async () => {
+    ids.carl = (await post('/masterdata/persons', { firstName: 'Carl', lastName: 'Kleider', status: 'active', memberships: [{ departmentId: ids.musterstadt, from: '2010-01-01', primary: true }] }).expect(201)).body.id;
+    const jacket = await piece('J-101', 'jacket', { size: '52', purchasedOn: '2026-01-15' });
+    await post(`/clothing/items/${jacket}/issue`, { personId: ids.carl, date: today }, officer).expect(200);
+    await post(`/clothing/items/${jacket}/return`, { date: today }, officer).expect(200);
+    await post(`/masterdata/persons/${ids.carl}/transfer-to-veterans`, { departmentId: ids.veterans, on: today }).expect(201);
+    const [back] = (await item(jacket)).history as { id: string }[];
+    expect((await post(`/clothing/issues/${back.id}/cancel`, { reason: 'nicht abgegeben' }, officer).expect(400)).body).toMatchObject({ code: 'clothing.personVeteran' });
+    expect((await item(jacket)).status).toBe('stock');
+  });
+
+  it('gives the clothing officer the own areas of the other modules; department commanders only view', async () => {
+    const roles = (await get('/core/roles')).body as { templateKey: string; permissions: string[] }[];
+    const role = (key: string) => roles.find((r) => r.templateKey === key)!.permissions;
+    expect(role('clothing-officer')).toEqual(expect.arrayContaining(['clothing.*', 'masterdata.self', 'training.self', 'incidents.self', 'respiratory-protection.self', 'compensation.self']));
+    expect(role('department-commander')).toContain('clothing.read');
+    expect(role('department-commander')).not.toContain('clothing.issue');
+  });
+});

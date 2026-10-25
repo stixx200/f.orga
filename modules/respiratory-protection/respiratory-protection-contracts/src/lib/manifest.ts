@@ -29,6 +29,7 @@ export const RESPIRATORY_PROTECTION_MANIFEST = {
     { key: 'group-leader', permissions: ['respiratory-protection.self'] },
     { key: 'course-coordinator', permissions: ['respiratory-protection.self'] },
     { key: 'equipment-officer', permissions: ['respiratory-protection.self'] },
+    { key: 'clothing-officer', permissions: ['respiratory-protection.self'] },
     { key: 'administration', permissions: ['respiratory-protection.self'] },
     { key: 'commander', permissions: ['respiratory-protection.read', 'respiratory-protection.evidence'] },
     { key: 'department-commander', permissions: ['respiratory-protection.read', 'respiratory-protection.evidence', 'respiratory-protection.notify'] },

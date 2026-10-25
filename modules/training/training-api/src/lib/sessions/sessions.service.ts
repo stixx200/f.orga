@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { addBerlinDays, assertVersion, Attachments, type AuthenticatedUser, berlinDate, berlinDayAfter, berlinDayEnd, berlinDayStart, DomainEvents, SettingsService } from '@forga/core-api';
+import { addBerlinDays, assertVersion, Attachments, Audit, type AuthenticatedUser, berlinDate, berlinDayAfter, berlinDayEnd, berlinDayStart, DomainEvents, SettingsService } from '@forga/core-api';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import {
   ATTENDANCE_TOLERANCE_MINUTES,
@@ -40,6 +40,10 @@ const checkInPeriod = (now: Date) => Math.floor(now.getTime() / (CHECK_IN_ROTATI
 /** Signature of a check-in code: HMAC of session and period with the session's secret. */
 const checkInSignature = (secret: string, sessionId: string, period: number) => createHmac('sha256', secret).update(`${sessionId}:${period}`).digest('base64url').slice(0, 22);
 const safeEqual = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+/** Minutes a check-in ticket stays valid: time to log in after scanning the QR code. */
+export const CHECK_IN_TICKET_MINUTES = 10;
+/** Signature of a check-in ticket: HMAC of session and expiry (seconds) with the session's secret. */
+const ticketSignature = (secret: string, sessionId: string, expires: number) => createHmac('sha256', secret).update(`${sessionId}:ticket:${expires}`).digest('base64url').slice(0, 22);
 
 @Injectable()
 export class SessionsService implements TrainingCasualties, TrainingSessions {
@@ -48,6 +52,7 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
     private readonly events: DomainEvents,
     private readonly settings: SettingsService,
     private readonly attachments: Attachments,
+    private readonly audit: Audit,
     @Inject(ORGANIZATION) private readonly organization: Organization,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
   ) {}
@@ -193,6 +198,7 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
    * Replaces the attendance list; a session with attendance counts as held. Presence is recorded only once the
    * session has begun (from the opening of the QR check-in), with times inside the session (with a tolerance).
    * QR check-ins made while the list was being edited are kept: unconfirmed check-ins the client did not know.
+   * Persons not listed yet must exist in the person directory (members of the departments, invited persons or guests).
    */
   async setAttendance(user: AuthenticatedUser, id: string, input: ParsedAttendance[], now = new Date()): Promise<SessionEntity> {
     const em = this.em.fork();
@@ -201,6 +207,13 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
     if (session.status === 'closed') throw new ConflictException({ code: 'training.closed' });
     const ids = input.map((a) => a.personId);
     if (new Set(ids).size !== ids.length) throw new BadRequestException({ code: 'training.personTwice' });
+    const listed = new Set(session.attendance.getItems().map((a) => a.personId));
+    const added = ids.filter((personId) => !listed.has(personId));
+    if (added.length) {
+      const known = new Set((await this.directory.snapshots(added)).map((p) => p.id));
+      const unknown = added.find((personId) => !known.has(personId));
+      if (unknown) throw new BadRequestException({ code: 'training.unknownPerson', personId: unknown });
+    }
     if (input.some((a) => a.status !== 'excused') && now < (await this.checkInWindow(session)).from) throw new BadRequestException({ code: 'training.notStarted' });
     for (const a of input.filter((x) => x.status === 'present')) this.assertTimes(session, a);
     const existing = new Map(session.attendance.getItems().map((a) => [a.personId, a]));
@@ -231,6 +244,24 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
     return session;
   }
 
+  /**
+   * Discards an unconfirmed QR check-in (e.g. a wrong person or a joke): the row goes, or returns to the excuse the
+   * person had sent before.
+   */
+  async discardCheckIn(user: AuthenticatedUser, id: string, personId: string): Promise<SessionEntity> {
+    const em = this.em.fork();
+    const session = await this.load(em, id, user);
+    if (!this.can(user, ATTENDANCE, session)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [ATTENDANCE] });
+    if (session.status === 'closed') throw new ConflictException({ code: 'training.closed' });
+    const row = session.attendance.getItems().find((a) => a.personId === personId);
+    if (!row?.checkedInAt || row.confirmed) throw new ConflictException({ code: 'training.noUnconfirmedCheckIn' });
+    if (row.note) Object.assign(row, { status: 'excused', checkedInAt: null, confirmed: true });
+    else session.attendance.remove(row);
+    session.status = session.attendance.getItems().some((a) => a.status === 'present') ? 'held' : 'planned';
+    await em.flush();
+    return session;
+  }
+
   /** Own times of a person present: end after start, inside the session give or take the tolerance. */
   private assertTimes(session: SessionEntity, a: ParsedAttendance): void {
     const from = a.from ? new Date(a.from) : session.startsAt;
@@ -256,6 +287,7 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
     session.closedAt = new Date();
     session.closedBy = user.displayName;
     await em.flush();
+    await this.audit.log('training.session-closed', { sessionId: session.id, title: session.title, startsAt: session.startsAt.toISOString(), present: session.attendance.getItems().filter((a) => a.status === 'present').length });
     await this.publishClosed(session, type);
     return session;
   }
@@ -315,6 +347,7 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
     session.closedAt = null;
     session.closedBy = null;
     await em.flush();
+    await this.audit.log('training.session-reopened', { sessionId: session.id, title: session.title, startsAt: session.startsAt.toISOString() });
     await this.events.publish<SessionReopenedEvent>(TRAINING_EVENTS.sessionReopened, { sessionId: session.id });
     return session;
   }
@@ -348,19 +381,47 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
   }
 
   /**
+   * The session of a scanned code: `<session id>.<signature>` (the code shown, valid in its minute and the following
+   * one) or a ticket `<session id>.<expiry>.<signature>` (see `checkInTicket`).
+   */
+  private async scanned(em: EntityManager, code: string, now: Date): Promise<SessionEntity> {
+    const [sessionId, ...rest] = code.split('.');
+    const session = /^[0-9a-f-]{36}$/i.test(sessionId ?? '') ? await em.findOne(SessionEntity, sessionId.toLowerCase(), { populate: ['attendance'] }) : null;
+    const signature = rest.at(-1);
+    if (!session?.checkInSecret || !signature || rest.length > 2) throw new NotFoundException({ code: 'training.unknownCode' });
+    if (rest.length === 2) {
+      const expires = Number(rest[0]);
+      if (!/^\d+$/.test(rest[0]) || !safeEqual(ticketSignature(session.checkInSecret, session.id, expires), signature)) throw new NotFoundException({ code: 'training.unknownCode' });
+      if (now.getTime() > expires * 1000) throw new BadRequestException({ code: 'training.codeExpired' });
+      return session;
+    }
+    const period = checkInPeriod(now);
+    if (![period, period - 1].some((p) => safeEqual(checkInSignature(session.checkInSecret!, session.id, p), signature))) {
+      throw new BadRequestException({ code: 'training.codeExpired' });
+    }
+    return session;
+  }
+
+  /**
+   * Exchanges a fresh code of the QR code for a ticket valid `CHECK_IN_TICKET_MINUTES` minutes, so logging in after
+   * scanning does not let the code expire. Needs no login (the QR code leads here first); `null` for a code that is
+   * unknown or expired.
+   */
+  async checkInTicket(code: string, now = new Date()): Promise<string | null> {
+    const session = await this.scanned(this.em.fork(), code, now).catch(() => null);
+    if (!session?.checkInSecret || code.split('.').length !== 2) return null;
+    const expires = Math.floor(now.getTime() / 1000) + CHECK_IN_TICKET_MINUTES * 60;
+    return `${session.id}.${expires}.${ticketSignature(session.checkInSecret, session.id, expires)}`;
+  }
+
+  /**
    * A member scans the QR code and is marked present (needs a user linked to a person). Only members of the session's
    * departments and persons invited to it (responsible, instructors, already listed) may check in.
    */
   async checkIn(user: AuthenticatedUser, code: string, now = new Date()): Promise<{ sessionId: string; title: string }> {
     if (!user.personId) throw new BadRequestException({ code: 'training.noPerson' });
     const em = this.em.fork();
-    const [sessionId, signature] = code.split('.');
-    const session = /^[0-9a-f-]{36}$/i.test(sessionId ?? '') ? await em.findOne(SessionEntity, sessionId.toLowerCase(), { populate: ['attendance'] }) : null;
-    if (!session?.checkInSecret || !signature) throw new NotFoundException({ code: 'training.unknownCode' });
-    const period = checkInPeriod(now);
-    if (![period, period - 1].some((p) => safeEqual(checkInSignature(session.checkInSecret!, session.id, p), signature))) {
-      throw new BadRequestException({ code: 'training.codeExpired' });
-    }
+    const session = await this.scanned(em, code, now);
     if (session.status === 'closed') throw new ConflictException({ code: 'training.closed' });
     const window = await this.checkInWindow(session);
     if (now < window.from || now > window.until) throw new BadRequestException({ code: 'training.checkInClosed' });

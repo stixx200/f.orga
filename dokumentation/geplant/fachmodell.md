@@ -195,6 +195,7 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Ausgabe / Rücknahme | issue / return (`IssueEntity`, `kind`) |
 | Waschen / Imprägnieren | care `wash` / `impregnation` (`CareEntity`) |
 | Aussondern | retire (`status: 'retired'`) |
+| Zählung (gezählter Bestand) | count (`ConsumableCountInput`, `counted`) |
 | Kleiderwart | Rollenvorlage `clothing-officer` |
 | Was eine Person noch hält | `PERSON_HOLDINGS` (Stammdaten-Vertrag) |
 
