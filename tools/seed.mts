@@ -128,8 +128,8 @@ const DEPARTMENTS: DepartmentPlan[] = [
     station: { name: 'Feuerwehrhaus Weidenhain', street: 'Schulstraße 5' },
     vehicles: [{ designation: 'TSF', radioCallSign: 'Florian Musterstadt 4/48', vehicleType: 'tsf', licensePlate: 'MS-FE 448' }],
   },
-  { name: 'Altersabteilung Musterstadt', shortName: 'Musterstadt', type: 'veterans', parent: 'Abteilung Musterstadt', postalCode: '12345', persons: 12, vehicles: [] },
-  { name: 'Jugendfeuerwehr Musterstadt', shortName: 'Jugendfeuerwehr', type: 'youth', parent: 'Abteilung Musterstadt', postalCode: '12345', persons: 14, vehicles: [] },
+  { name: 'Altersabteilung Musterstadt', shortName: 'Alters Musterstadt', type: 'veterans', parent: 'Abteilung Musterstadt', postalCode: '12345', persons: 12, vehicles: [] },
+  { name: 'Jugendfeuerwehr Musterstadt', shortName: 'JF Musterstadt', type: 'youth', parent: 'Abteilung Musterstadt', postalCode: '12345', persons: 14, vehicles: [] },
 ];
 
 // --- persons ------------------------------------------------------------------------------------
@@ -187,7 +187,7 @@ function planPersons(): PlannedPerson[] {
 }
 
 /** Department column as MP-Feuer writes it ("Abt. Musterstadt", "Altersabt. Musterstadt"). */
-const exportName = (d: DepartmentPlan) => (d.type === 'operational' ? `Abt. ${d.shortName}` : d.type === 'veterans' ? `Altersabt. ${d.shortName}` : d.name);
+const exportName = (d: DepartmentPlan) => (d.type === 'operational' ? `Abt. ${d.shortName}` : d.type === 'veterans' ? `Altersabt. ${d.name.replace(/^Altersabteilung /, '')}` : d.name);
 
 async function personsWorkbook(persons: PlannedPerson[]): Promise<Buffer> {
   const headers = ['Pers.-Nr.', 'Anrede', 'Vorname', 'Nachname', 'Straße', 'PLZ', 'Ort', 'Handy', 'E-Mail', 'Geburtsdatum', 'Eintritt', 'Status', 'Bezeichnung'];

@@ -318,7 +318,8 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
 
 **Entitäten**
 - `masterdata.entities.ts`: `Department`, `Station`, `Vehicle`, `Person`, `Membership`, `PersonQualification`, `RankAssignment`, `HonorAward`, `OfficeAssignment` (Amt aus dem Katalog `office`, Abteilung oder Gesamtwehr, von, bis, Bemerkung; historisiert), `RestPeriod` (Ruhezeit: Ruhen der Mitgliedschaft oder Mitgliedschaft in einer anderen Feuerwehr, von, bis oder offen; historisiert; `POST|PUT|DELETE /api/masterdata/persons/:id/rest-periods`). Organisation und Personen verweisen gegenseitig aufeinander (Kommandant einer Abteilung, Mitgliedschaften), deshalb liegen sie in einer Datei.
-- `courses/course.entities.ts`: `Course`, `CourseAttendance`, `CourseNomination`
+- `courses/course.entities.ts`: `Course`, `CourseRun` (Lehrgangstermin, Kind des Lehrgangs), `CourseAttendance`, `CourseNomination`
+- `organization/group.entities.ts`: `DepartmentGroup` (Gruppe einer Abteilung, Kind der Abteilung)
 - `catalog/catalog.ts`: `CatalogEntry`
 
 Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elternbezug `person`.
@@ -345,6 +346,9 @@ Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elt
   - Kommandant (`commander`) und Stellvertreter (`deputyIds`)
   - `statisticsRelevant`: `null` heißt Standard des Typs. Standardmäßig zählen Einsatz-, Jugend-, Alters- und Musikabteilung.
   - `population`: Einwohner des Ortsteils der Abteilung, z. B. für Beförderungsregeln; `null` heißt die Einwohner der Gemeinde (`brigade.population`).
+  - Kurznamen sind eindeutig, ohne Groß- und Kleinschreibung (`masterdata.shortNameTaken`); der Import legt bei Gleichheit den vollen Namen als Kurznamen an.
+  - Wer `masterdata.organization.manage` nur für die eigene Abteilung hat (Abteilungskommandant), ändert Name, Kurzname, Kommandant und Stellvertreter. Typ, übergeordnete Abteilung, Sonderaufgaben, Statistik und Einwohner brauchen das Recht für die Gesamtwehr (`masterdata.departmentFieldsBrigadeOnly`); der Dialog sperrt diese Felder.
+- **Gruppen** (`DepartmentGroup`, „Gruppe als Einheit“): je Abteilung Name (eindeutig in der Abteilung), Gruppenführer und Mitglieder (`memberIds`); beide müssen heute Mitglieder der Abteilung sein (`masterdata.groupMemberNotInDepartment`). Pflege mit `masterdata.organization.manage` für die Abteilung. Sehen darf sie, wer Personen der Abteilung lesen darf; der Gruppenführer (verknüpfte Person) sieht seine Gruppe immer (`/masterdata/groups/mine`). Beim Austritt verschwindet die Person aus den Gruppen. Die Personenliste filtert nach Gruppe und bietet Gruppenführern „Meine Gruppe“.
 - `Station` hat das Merkmal `permanentlyStaffed`.
 - `Vehicle` verweist auf einen Fahrzeugtyp aus dem Katalog. Sitzplätze und Statistik-Kategorie werden aus dem Typ übernommen, wenn sie nicht angegeben sind. Eine Statistik-Kategorie ist Pflicht.
 
@@ -354,17 +358,18 @@ Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elt
   - Mit `masterdata.persons.directory` erscheint sie nur im Personenverzeichnis: Die Liste `GET /masterdata/persons` enthält dann Name, Status und Abteilungen, alles andere ist leer und `restricted` ist `true`. Die Akte selbst gibt `404`. Die Suche nach der Personalnummer und der Filter nach Qualifikation wirken nur in den Akten, die der Benutzer lesen darf.
   - Maßgeblich sind die heute gültigen Mitgliedschaften. Bei Ausgeschiedenen zählen alle früheren.
   - Wer eine Person nicht sehen darf, erhält `404`.
-- **Sensible Felder:** `birthDate`, `birthPlace`, `employer` und `bank` (`SENSITIVE_PERSON_FIELDS`) brauchen `masterdata.persons.sensitive`.
-  - Ohne das Recht fehlen sie in der Antwort, und `sensitiveHidden` ist `true`.
-  - Beim Schreiben werden sie ohne das Recht ignoriert.
-  - In der Historie der Person werden sie maskiert.
+- **Sensible Felder:** `birthDate`, `birthPlace`, `employer`, `bank`, die interne Bemerkung `notes`, der Austrittsgrund `exitReason` und die Ruhezeiten `restPeriods` (`SENSITIVE_PERSON_FIELDS`) brauchen `masterdata.persons.sensitive`. So sieht z. B. ein Gruppenführer mit `masterdata.persons.read` keine Bemerkungen und Ruhezeiten.
+  - Ohne das Recht fehlen sie in der Antwort bzw. sind leer (`notes: ''`, `restPeriods: []`, `exitReason: null`), und `sensitiveHidden` ist `true`.
+  - Beim Schreiben werden sie ohne das Recht ignoriert; Ruhezeiten ändern braucht das Recht (`auth.forbidden`).
+  - In der Historie der Person werden sie maskiert, die Einträge der Ruhezeiten ganz (`hiddenFields` mit `masterdata.rest_period`). Listen enthalten diese Felder nicht.
+- **Prüfungen:** Geburtsdatum nicht in der Zukunft (`masterdata.birthDateInFuture`). Eine laufende oder künftige Mitgliedschaft in einer Einsatzabteilung braucht bei bekanntem Geburtsdatum das Mindestalter `minimumAgeOperational` zu ihrem Beginn (`masterdata.belowMinimumAge`, beim Anlegen und bei neuen Mitgliedschaften; beendete Mitgliedschaften gelten als Historie). IBAN von Person und Arbeitgeber mit Prüfziffer (`isValidIban` in `masterdata-contracts`, in Formularen als Feldfehler).
 - **Mitgliedschaften:**
   - Unter den heute gültigen ist genau eine die Stammabteilung (`primary`).
   - Wer Mitgliedschaften ändert, braucht `masterdata.persons.write` für die alten und die neuen Abteilungen.
 - **Status:** `probation`, `active`, `passive`, `youth`, `veterans`, `left`.
   - Neue Personen beginnen standardmäßig in der Probezeit. Das Ende ist der Vortag des Jahrestags: Eintrittsdatum plus `probationMonths` der Einstellung `masterdata.membership` (Standard 12) minus ein Tag, am Monatsende abgefangen (`probationEnd` in `masterdata-contracts`, gleich für Anlegen, Import, Übernahme und Oberfläche).
   - Die Probezeit lässt sich mit Begründung verkürzen oder verlängern. Die Begründung kommt in die Bemerkung.
-  - Die endgültige Aufnahme setzt `active` und das Beschlussdatum.
+  - Die endgültige Aufnahme setzt `active` und das Beschlussdatum. Sie liegt nicht vor dem Eintritt (`masterdata.admissionBeforeJoining`). Vor dem Ende der Probezeit oder solange Qualifikationen der Probezeit (`probationQualifications`) fehlen, braucht sie wie eine verkürzte Probezeit eine Begründung (`masterdata.admissionReasonRequired`), die in die Bemerkung kommt; der Dialog zeigt die Gründe und verlangt dann das Feld.
   - Der Austritt setzt `left`, beendet offene Mitgliedschaften zum Austrittsdatum und löst `masterdata.person.left` aus.
   - **Übernahme in Einsatzabteilung** (Feuerwehrsatzung, Schaltfläche bei Jugendlichen): nur aus `youth`, Zielabteilung vom Typ `operational`, Mindestalter `minimumAgeOperational` (17) am Übernahmetag. Die Mitgliedschaft in der Jugendfeuerwehr endet am Vortag und bleibt bis dahin die Stammabteilung, die neue ist es ab dem Übernahmetag. Probezeit regulär (`probationMonths`, endet am Vortag des Jahrestags), verkürzt (nicht vor dem Übernahmetag) oder entfallen; verkürzt und entfallen brauchen eine Begründung (`masterdata.probationReasonRequired`), die in die Bemerkung kommt. Ohne Probezeit ist die Person sofort `active` und aufgenommen.
   - **Übernahme in Altersabteilung** (Feuerwehrsatzung, Schaltfläche bei Aktiven und Passiven): Zielabteilung vom Typ `veterans`, vorgeschlagen die Altersabteilung der Stammabteilung. Mitgliedschaften in Einsatzabteilungen und Führungseinheiten enden am Vortag, andere (z. B. Musik) bleiben; Status `veterans`, der Dienstgrad bleibt. Kein Altersblock, weil die Übernahme auch bei Ende des Dienstes aus gesundheitlichen Gründen gilt; der Dialog nennt 55 Jahre auf Antrag und 65 Jahre.
@@ -374,13 +379,17 @@ Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elt
 - Qualifikationen gelten bis `validUntil`. Fehlt das Datum, wird es aus `validityMonths` des Katalogs berechnet.
 
 **Lehrgänge**
-- Eine bestandene Teilnahme legt die Qualifikationen des Lehrgangs an (`courseAttendanceId` verweist zurück). Offene Vormerkungen der Person für den Lehrgang werden `completed`.
-- Wird die Teilnahme gelöscht, verschwinden auch die so entstandenen Qualifikationen.
-- Die Lehrgangsplanung (`course-planning/:course`) zeigt über alle Abteilungen, für die der Benutzer `masterdata.courses.plan` hat, zwei Gruppen:
-  - die offenen Vormerkungen
-  - die Kandidaten: aktive Personen und Personen in der Probezeit, die die Voraussetzungen erfüllen, den Lehrgang noch nicht haben und nicht vorgemerkt sind
+- **Katalog:** Neben Ebene, vermittelten Qualifikationen und Voraussetzungen (andere Lehrgänge) hat ein Lehrgang weitere Bedingungen: gültige Qualifikationen (`requiredQualifications`, z. B. eine Untersuchung), ein Mindestalter zum Lehrgangsbeginn (`minimumAge`; ein unbekanntes Geburtsdatum schließt nicht aus) und die zugelassenen Status (`allowedStatuses`, Standard Probezeit und aktiv; in der BW-Vorlage Truppmann Teil 1 auch Jugendfeuerwehr). Dazu ein Soll je Abteilung (`targets`) für den Lehrgangsbedarf.
+- **Teilnahme:** Ende nicht vor Beginn; bestanden erst nach dem Ende (`masterdata.courseNotFinished`) und nur einmal je Lehrgang (`masterdata.coursePassedAlready`, nicht bestandene Versuche daneben bleiben möglich). Eine bestandene Teilnahme legt die Qualifikationen des Lehrgangs an (`courseAttendanceId` verweist zurück). Offene Vormerkungen der Person für den Lehrgang werden `completed` und merken sich die Teilnahme (`attendanceId`).
+- Wird die Teilnahme gelöscht, verschwinden auch die so entstandenen Qualifikationen, die damit erledigte Vormerkung wird wieder `confirmed`, und bei einer bestandenen Teilnahme folgen `masterdata.course.revoked` und `masterdata.person.qualification-changed`. Die Entschädigungen nehmen daraufhin die Lehrgangspauschale zurück.
+- **Lehrgangstermin** (`CourseRun`): ein Lehrgang mit Datum und Ort, z. B. Truppmann Teil 2 in der Gemeinde oder der Kreislehrgang, für den Personen angemeldet sind. Vormerkungen werden einem Termin zugeordnet (`runId`). „Teilnahme erfassen“ trägt für alle Vormerkungen mit zugesagtem Platz (eines Termins oder ohne Termin mit eigenem Datum) Ergebnisse auf einmal ein (`POST /masterdata/course-results`); wer nicht teilgenommen hat, bleibt weg, nicht eintragbare Personen werden mit Grund gemeldet. Ein Termin mit Ergebnissen lässt sich nicht löschen.
+- Die Lehrgangsplanung (`course-planning/:course`) zeigt über alle Abteilungen, für die der Benutzer `masterdata.courses.plan` hat:
+  - die offenen Vormerkungen mit erfüllten Bedingungen (`prerequisitesMet`)
+  - die Kandidaten: Personen mit einem zugelassenen Status, die alle Bedingungen erfüllen, den Lehrgang noch nicht haben und nicht vorgemerkt sind
+  - die Termine des Lehrgangs
 
-  Eine Voraussetzung gilt als erfüllt bei bestandenem Lehrgang oder wenn alle Qualifikationen des Lehrgangs vorliegen, z. B. von Hand eingetragen.
+  Eine Voraussetzung gilt als erfüllt bei bestandenem Lehrgang oder wenn alle Qualifikationen des Lehrgangs vorliegen, z. B. von Hand eingetragen. Mehrere Personen werden mit einem Aufruf vorgemerkt (`course-nominations/bulk`); bereits Vorgemerkte werden übersprungen statt abzubrechen.
+- **Lehrgangsbedarf** (`course-needs`): je aktivem Lehrgang und Abteilung, für die der Benutzer planen darf, die Mitglieder in Probezeit oder aktiv mit dem Lehrgang (`have`), das Soll (`target`) und die offenen Vormerkungen (`nominated`).
 - Lehrgangsteilnahmen eintragen und löschen darf, wer für die Person `masterdata.persons.write` **oder** `masterdata.courses.plan` hat. So kann der Lehrgangsbeauftragte (Rolle `course-coordinator`) Vormerkungen, Anmeldungen und Ergebnisse pflegen, ohne Personendaten ändern zu dürfen. Den Lehrgangskatalog pflegt weiter nur, wer `masterdata.catalogs.manage` hat.
 
 **Listen** (`lists/masterdata.lists.ts`). Sie enthalten nur Personen, die der Benutzer sehen darf. Ohne Statusfilter fehlen Ausgeschiedene.
@@ -399,10 +408,12 @@ Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elt
 | `masterdata.age-limits` | Personen, die im Jahr 18, 55 oder 65 werden | `masterdata.persons.sensitive` |
 | `masterdata.strength` | Personalstärke je Stammabteilung nach Status, davon weiblich | `masterdata.persons.read` |
 | `masterdata.vehicles` | Fahrzeuge ohne ausgesonderte | `masterdata.persons.read` |
+| `masterdata.course-nominations` | Lehrgangsvormerkungen (offen) mit Lehrgang, Abteilung, Priorität, Wunschzeitraum, Termin und Status | `masterdata.courses.plan` |
+| `masterdata.course-year` | Lehrgänge im Jahr: Teilnahmen mit Datum, Ort, Abteilung und Ergebnis | `masterdata.courses.plan` |
 
-**Urkunden für Ehrungen:** `GET /api/masterdata/persons/honors/certificates.pdf?from&to&honor` (Ehrungen im Zeitraum, optional einer Art) oder `?ids=` (einzelne Verleihungen) als Serien-PDF mit `renderCertificatesPdf`, nur für lesbare Personen (`masterdata.persons.read`). Text, Ort und Unterschrift aus der Einstellung `masterdata.certificates` (Platzhalter `{honor}`, `{name}`, `{date}`); Datum ist das der Verleihung. In der Oberfläche: Knopf „Ehrungsurkunden“ in der Personenliste (Administratoren pflegen dort die Texte) und je Ehrung in der Personenakte.
+**Urkunden für Ehrungen:** `GET /api/masterdata/persons/honors/certificates.pdf?from&to&honor` (Ehrungen im Zeitraum, optional einer Art) oder `?ids=` (einzelne Verleihungen) als Serien-PDF mit `renderCertificatesPdf`, nur für lesbare Personen (`masterdata.persons.read`). Text, Ort und Unterschrift aus der Einstellung `masterdata.certificates` (Platzhalter `{honor}`, `{name}`, `{date}`); Datum ist das der Verleihung. `GET …/honors/certificates` liefert vorab die Anzahl; der Dialog nennt sie im Knopf und zeigt bei null Ehrungen den Hinweis `masterdata.noHonors`, statt das PDF zu öffnen. In der Oberfläche: Knopf „Ehrungsurkunden“ in der Personenliste (Administratoren pflegen dort die Texte) und je Ehrung in der Personenakte.
 
-**Feuerwehrsatzung** (Einstellung `masterdata.membership`, Seite „Verwaltung → Feuerwehrsatzung“, Recht `masterdata.settings.manage`): Probezeit in Monaten, beschließendes Gremium (erscheint in den Beschlussfeldern), in der Probezeit zu erwerbende Qualifikationen (`probationQualifications`, Standard Truppmann Teil 1), Mindestalter Einsatzabteilung und Einsatzdienst, Ende Jugendfeuerwehr, Antrag Altersabteilung, Altersgrenze, Stellvertreter je Abteilungskommandant (`maxDeputies`, sonst `masterdata.tooManyDeputies`) und Dienstjubiläen (`jubileeYears`). Die Standardwerte sind übliche Beispielwerte.
+**Feuerwehrsatzung** (Einstellung `masterdata.membership`, Seite „Verwaltung → Feuerwehrsatzung“, Recht `masterdata.settings.manage`): Probezeit in Monaten, beschließendes Gremium (erscheint in den Beschlussfeldern), in der Probezeit zu erwerbende Qualifikationen (`probationQualifications`, Standard Truppmann Teil 1), Mindestalter Einsatzabteilung und Einsatzdienst, Ende Jugendfeuerwehr, Antrag Altersabteilung, Altersgrenze, Stellvertreter je Abteilungskommandant (`maxDeputies`, sonst `masterdata.tooManyDeputies`) und Dienstjubiläen (`jubileeYears`). Die Standardwerte sind übliche Beispielwerte. Die Altersgrenzen haben Wertebereiche (`MEMBERSHIP_AGE_BOUNDS`: Mindestalter und Ende Jugendfeuerwehr 10–30, Antrag Altersabteilung 30–99, Altersgrenze 40–99), die Seite zeigt Abweichungen als Feldfehler.
 
 **Fristen** (`deadlines/masterdata.deadlines.ts`). Zuständig ist, wer `masterdata.persons.write` für eine Abteilung der Person hat. Altersgrenzen und die Qualifikationen der Probezeit kommen aus der Einstellung `masterdata.membership`; die Listen Altersgrenzen, Geburtstage, Dienstjubiläen und Probezeit ebenso.
 
@@ -433,7 +444,9 @@ Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elt
 - Ein Eintrag mit gleichem Katalogschlüssel und Datum bleibt unverändert. Ohne „gültig bis“ gilt die Gültigkeit des Katalogeintrags.
 - **Datenübernahme** (`imports/career.transfer.ts`): bestandene Lehrgänge aus `PER_LEHRG` (Datum = Ende, sonst Beginn oder Bestätigung) und die Kategorien „Dienstgrad“ und „Ehrung“ aus `PER_HIST`.
 
-**Ereignisse:** `masterdata.person.left`, `masterdata.person.qualification-changed`, `masterdata.course.passed` (`MASTERDATA_EVENTS`).
+**Ereignisse:** `masterdata.person.left`, `masterdata.person.qualification-changed`, `masterdata.course.passed`, `masterdata.course.revoked` (gelöschte bestandene Teilnahme, `CourseRevokedEvent`) (`MASTERDATA_EVENTS`).
+
+**Suche:** Personen mit lesbarer Akte stehen vorn (die der eigenen Abteilungen zuerst), dann Einträge, die nur im Personenverzeichnis sichtbar sind; diese nennen die Stammabteilung und führen zur Personenliste mit dem Namen als Suche (`/masterdata/persons?q=`), nicht zur Akte.
 
 **Schnittstellen für andere Module.** `MasterdataModule` ist `@Global()` und stellt zwei Tokens aus `@forga/masterdata-contracts` bereit. Beide prüfen keine Rechte; das ist Sache des aufrufenden Moduls.
 
@@ -441,7 +454,7 @@ Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elt
 | --- | --- |
 | `PERSON_DIRECTORY` | `search`, `snapshots(ids, date)` mit Abteilungen, gültigen Qualifikationen, Dienstgrad, Geschlecht, Beschäftigung, Musiker und Führerscheinklassen zum Stichtag, `findByPersonnelNumber`, `memberPeriods` (Name und Mitgliedschaftszeiträume aller Personen, mit `membersOnDate` für Importe über viele Tage), `membersOn(date)` (alle Personen mit Mitgliedschaft am Tag), `careers(ids?)` (mit Ämtern), `offices({ offices? })` (Inhaber von Ämtern mit Zeitraum) |
 | `ORGANIZATION` | `departments`, `stations`, `vehicles` |
-| `PERSON_HOLDINGS` | `register(module, count(personId))`: andere Module melden, was eine Person noch hält (z. B. Schutzausrüstung); Austritt und Übernahme in die Altersabteilung lehnen dann mit `masterdata.personHoldsItems` ab |
+| `PERSON_HOLDINGS` | `register(module, count(personId))`: andere Module melden, was eine Person noch hält (z. B. Schutzausrüstung); Austritt und Übernahme in die Altersabteilung lehnen dann mit `masterdata.personHoldsItems` ab (`modules`: Modul-IDs, die Oberfläche nennt die Modulnamen) |
 
 ## Modul Einsatzberichte (`incidents`)
 
@@ -741,6 +754,7 @@ Benötigt `masterdata`, nutzt optional `incidents` und `training`. Ersetzt `ausw
 **Posten aus anderen Modulen** (`DomainEvents`):
 - `incidents.report.released` trägt je Person Zeiten, Stunden, Satz und Betrag des Berichts, Arbeitszeit und Verdienstausfall. Daraus entsteht je Person ein Entschädigungsposten (bei Arbeitszeit 0 € mit „(AZ)“, höchstens `maxPerService`), bei Verdienstausfall ein Posten ohne Betrag und bei mehr als `refreshment.afterHours` Stunden der Erfrischungszuschuss als Pauschalposten, wenn die Satzung einen Betrag nennt (`incidentPayout` in den Verträgen).
 - `masterdata.course.passed`: Nennt die Satzung für den Lehrgang eine Pauschale (`courseAllowances`, gültig am Lehrgangsende), entsteht ein Pauschalposten „Lehrgangspauschale …“ (Quelle `course`). Der Antrag gilt mit dem Eintrag des bestandenen Lehrgangs als gestellt.
+- `masterdata.course.revoked` (Teilnahme gelöscht): Die Pauschale wird wie bei anderen Quellen auf „keine Posten“ gebracht (`apply('course', attendanceId, [])`): ein offener Posten verschwindet, ein schon ausgezahlter wird mit einem Korrekturposten zurückgebucht.
 - `incidents.duty.changed`: je Sonderdienst ein Pauschalposten (Quelle `duty`, z. B. „Einsatzleiter vom Dienst (EvD) (3 Tage)“) mit dem Betrag des Dienstplans; ein gelöschter Dienst entfernt ihn bzw. bucht ihn zurück, wenn er schon ausgezahlt ist.
 - `training.session.closed`: je anwesender Person Stunden (Rundung der Einstellung) × Satz für Übungsdienst bzw. Brandsicherheitswache, gültig am Tag des Dienstes, höchstens `maxPerService`. Arten ohne Entschädigung ergeben keine Posten. Fehlt der Satz für den Tag, bleibt der Betrag offen (Hinweis „Betrag fehlt“, verhindert den Abschluss) und wird im Lauf eingetragen.
 - `training.session.reopened`: offene Posten des Dienstes verschwinden, ausgezahlte werden zurückgebucht.
@@ -1079,6 +1093,7 @@ Personen und Abteilungen für die Benutzerverwaltung kommen aus der Stammdaten-A
 - Links der Abteilungsbaum (Unterabteilungen über `parentId`) mit Typ und Zahl der Mitglieder, rechts die gewählte Abteilung mit Typ, Kurzname, Leitung, Stellvertretern, Einwohnern im Ortsteil, Statistik, Sonderaufgaben und Kennzahlen.
 - Mit `masterdata.organization.manage`: Abteilung bearbeiten (für die Gesamtwehr auch anlegen, Unterabteilung anlegen und löschen), Wache und Fahrzeug anlegen, bearbeiten und löschen (Zeile anklicken). Ein Fahrzeug wechselt die Abteilung über das Feld „Abteilung“.
 - Löschen geht nur, solange nichts mehr darauf verweist. Andere Module melden ihre Verweise über `ORGANIZATION_REFERENCES` (Einsatzberichte: Berichte, Fahrzeuge und Bereitschaft im Personal; der Core: Rollenzuweisungen). Sonst nennt die Meldung den Grund; genutzte Fahrzeuge werden ausgesondert.
+- Gruppen der Abteilung mit Gruppenführer und Mitgliedern; mit `masterdata.organization.manage` anlegen, bearbeiten und löschen.
 - Mitglieder: Liste der Personen mit Stamm- oder zusätzlicher Mitgliedschaft. Mit `masterdata.persons.write` lässt sich eine Person zusätzlich aufnehmen (z. B. die Einsatzleiter vom Dienst in einer Führungseinheit „Gesamtfeuerwehr“) und eine zusätzliche Mitgliedschaft beenden (Ende gestern; am selben Tag begonnene werden entfernt). Gespeichert wird über `PUT /masterdata/persons/:id/memberships`.
 - Wer nur Rechte für einzelne Abteilungen hat, sieht in der Personensuche eines Berichts nur deren Mitglieder; zusätzliche Mitgliedschaften zählen dabei mit.
 
@@ -1086,12 +1101,12 @@ Weitere Seiten der Stammdaten:
 
 | Pfad | Seite |
 | --- | --- |
-| `/masterdata/persons` | Personen mit Suche und Filtern nach Status (Mehrfachauswahl als Chips, Standard aktiv), Abteilung, Qualifikation und Dienstgrad (je Mehrfachauswahl, eine passende genügt). Die Abteilungen sind anfangs die eigenen: die der verknüpften Person, sonst die mit `masterdata.persons.read` |
+| `/masterdata/persons` | Personen mit Suche und Filtern nach Status (Mehrfachauswahl als Chips, Standard aktiv), Abteilung, Qualifikation, Dienstgrad und Gruppe (je Mehrfachauswahl, eine passende genügt). Die Abteilungen sind anfangs die eigenen: die der verknüpften Person, sonst die mit `masterdata.persons.read`. Gruppenführer haben den Knopf „Meine Gruppe“. `?q=` (z. B. aus der globalen Suche) sucht in allen Abteilungen und Status außer ausgeschieden |
 | `/masterdata/persons/new` | Person anlegen mit Stammabteilung, Aufnahmedatum, Status und Probezeitende (Abweichung mit Begründung). Hinweis auf gleichnamige Personen, auch ausgeschiedene. |
-| `/masterdata/persons/:id` | Personalakte: Kopf mit Dienstgrad, Abteilungen, Status und Qualifikationen; Reiter Stammdaten (sensible Felder nur mit Recht), Feuerwehr (Ruhezeiten, Probezeit ändern, endgültig aufnehmen, Übernahme in Einsatzabteilung bzw. Altersabteilung, Status ändern, Austritt, Abteilungen, Beförderungen, Führerschein), Lehrgänge (Teilnahmen, Vormerkungen), Qualifikationen, Ehrungen, Ämter (mit Abteilung und Zeitraum, beenden über „bis“), Reiter anderer Module, Historie. Stammdaten werden gesammelt mit „Speichern“ übernommen, alles andere sofort. |
+| `/masterdata/persons/:id` | Personalakte: Kopf mit Dienstgrad, Abteilungen, Status und Qualifikationen; Reiter Stammdaten (sensible Felder nur mit Recht), Feuerwehr (Ruhezeiten, Probezeit ändern, endgültig aufnehmen, Übernahme in Einsatzabteilung bzw. Altersabteilung, Status ändern, Austritt, Abteilungen, Beförderungen, Führerschein), Lehrgänge (Teilnahmen, Vormerkungen), Qualifikationen, Ehrungen, Ämter (mit Abteilung und Zeitraum, beenden über „bis“), Reiter anderer Module, Historie. Stammdaten werden gesammelt mit „Speichern“ übernommen, alles andere sofort. Lehrgänge pflegt auch, wer nur `masterdata.courses.plan` hat. **Direktlink auf einen Reiter:** `/masterdata/persons/:id?tab=<reiter>` mit `master`, `brigade`, `courses`, `qualifications`, `honors`, `offices`, `history` oder der Modul-ID eines Erweiterungsreiters (`masterdata.person.tab`), z. B. `?tab=respiratory-protection`, `?tab=clothing`, `?tab=incidents`; unbekannte Werte öffnen die Stammdaten. Der gewählte Reiter steht in der Adresse. |
 | `/masterdata/vehicles` | Alle Fahrzeuge, bearbeiten über den Fahrzeugdialog |
-| `/masterdata/courses` | Lehrgangsplanung: Lehrgänge mit Zahl der Vormerkungen und Anmeldungen; je Lehrgang Vorgemerkte mit Voraussetzung und Status, weitere Kandidaten gemeinsam vormerken |
-| `/masterdata/catalogs` | Kataloge (im Menü unter „Verwaltung“, sie gelten für die ganze Anwendung) (Funktionen, Qualifikationen, Fahrzeugtypen, Ehrungen, Austrittsgründe, Dienstgrade) und Lehrgänge pflegen, BW-Vorlage ergänzen; Einträge werden deaktiviert statt gelöscht |
+| `/masterdata/courses` | Lehrgangsplanung, Reiter „Lehrgänge“: Lehrgänge mit Zahl der Vormerkungen und Anmeldungen; je Lehrgang die Bedingungen (Namen statt Schlüssel), Termine (anlegen, ändern, löschen, „Teilnahme erfassen“ mit Ergebnis je Person), Vorgemerkte mit Abteilung, Wunschzeitraum, Bedingungen und direkt änderbarer Priorität, Termin, Status und Bemerkung (Löschen mit Rückfrage), Kandidaten als Tabelle mit Abteilungsfilter, Sortierung und Mehrfachauswahl, gemeinsam vormerken. Reiter „Lehrgangsbedarf“: Lehrgang × Abteilung mit Haben, Soll, Vorgemerkt und Fehlen |
+| `/masterdata/catalogs` | Kataloge (im Menü unter „Verwaltung“, sie gelten für die ganze Anwendung) (Funktionen, Qualifikationen, Fahrzeugtypen, Ehrungen, Austrittsgründe, Dienstgrade) und Lehrgänge (mit Bedingungen und Soll je Abteilung) pflegen, BW-Vorlage ergänzen; Einträge werden deaktiviert statt gelöscht |
 
 **Erweiterungspunkte:** Ein Modul-Frontend kann über `extensions` in `defineWebModule` Inhalte in andere Module einhängen (`Extension` mit `label`, `permission`, `component`). Die Shell registriert sie beim Laden (`registerExtensions`), das Zielmodul fragt sie mit `extensionsOf(punkt)` ab. Vorhanden: `masterdata.person.tab` (Reiter der Personalakte, Props `{ personId }`); die Einsatzberichte liefern damit den Reiter „Einsätze“ (`GET /api/incidents/persons/:personId/assignments?year=`); `incidents.report.sections` (Karten im Bericht, Props `{ reportId, incidentId, departmentId, vehicleIds, breathingVehicleIds, disabled }`); `incidents.incident.sections` (Karten beim Einsatz neben „Kosten und Bemerkungen“, Props `{ incidentId, chargeable, disabled }`; der Kostenersatz zeigt dort den Tatbestand); `training.session.sections` (Reiter eines Dienstes, Props `{ sessionId, departmentIds, disabled }`); `core.me.sections` (Mein Bereich); `incidents.settings.rates` (ersetzt in den Einstellungen der Einsatzberichte Stundensätze und Rundung, wenn ein Modul sie führt).
 
