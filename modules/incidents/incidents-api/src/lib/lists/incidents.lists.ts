@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { berlinDayStart, berlinDayAfter } from '@forga/core-api';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { z } from 'zod';
 import type { Language, ListColumn } from '@forga/core-contracts';
 import type { AuthenticatedUser, ListDefinition } from '@forga/core-api';
 import type { ReportStatus } from '@forga/incidents-contracts';
+import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
 import { ReportEntity } from '../incidents.entities.js';
 import { ReportsService, READ, RELEASE } from '../reports/reports.service.js';
 import { AssignmentLines } from './assignments.js';
@@ -45,6 +46,7 @@ export class IncidentsLists {
     private readonly em: EntityManager,
     private readonly reports: ReportsService,
     private readonly lines: AssignmentLines,
+    @Inject(ORGANIZATION) private readonly organization: Organization,
   ) {}
 
   definitions(): ListDefinition<never>[] {
@@ -133,7 +135,7 @@ export class IncidentsLists {
           },
           { populate: ['incident'], orderBy: { alarmedAt: 'asc' } },
         );
-        const context = await this.reports.contextFor(new ReportEntity());
+        const departments = new Map((await this.organization.departments()).map((d) => [d.id, d.name]));
         return {
           subtitle: `${from} – ${to}`,
           rows: reports.map((r) => ({
@@ -141,7 +143,7 @@ export class IncidentsLists {
             dispatchNumber: r.incident.dispatchNumber,
             keyword: r.incident.alarmKeyword,
             location: [r.incident.location.street, r.incident.location.houseNumber, r.incident.location.city].filter(Boolean).join(' '),
-            department: context.departments.get(r.departmentId)?.name ?? '',
+            department: departments.get(r.departmentId) ?? '',
             primary: r.primary,
             status: STATUS[r.status as ReportStatus][language],
           })),

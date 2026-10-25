@@ -14,36 +14,69 @@ import {
   Post,
   Put,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { z } from 'zod';
-import { assertVersion, Audit, type AuthenticatedUser, berlinDayAfter, berlinDayStart, CurrentUser, MailService, Notifications, RequirePermissions, ZodPipe } from '@forga/core-api';
+import { assertVersion, Audit, type AuthenticatedUser, berlinDayAfter, berlinDayStart, CurrentUser, MailService, Notifications, RequirePermissions, User, ZodPipe } from '@forga/core-api';
+import type { Language } from '@forga/core-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import {
   AssignAuthor,
+  CreateIncident,
   type Incident as IncidentDto,
   IncidentCosts,
-  IncidentInput,
+  type IncidentMatch,
+  IncidentUpdate,
   NewReportInput,
   Release,
+  ReleaseMany,
+  type ReleaseManyResult,
   RemindAuthors,
   type RemindResult,
   type Report,
   type ReportRevision,
   ReportInput,
   ReturnToAuthor,
+  StatisticsUpdate,
   Submit,
   Unlock,
 } from '@forga/incidents-contracts';
-import { IncidentEntity, ReportEntity, ReportRevisionEntity } from '../incidents.entities.js';
+import { AlarmKeywordEntity, IncidentEntity, ReportEntity, ReportRevisionEntity } from '../incidents.entities.js';
 import { DutyEvents } from '../duty/duty.js';
-import { COSTS, READ, RELEASE, REPORT_POPULATE, ReportsService, UNLOCK, WRITE } from './reports.service.js';
+import { ReportPdf } from './report-pdf.js';
+import { COSTS, READ, RELEASE, REPORT_POPULATE, ReportsService, REVIEW, UNLOCK, WRITE } from './reports.service.js';
 
 const Period = z.object({ from: z.iso.date(), to: z.iso.date() });
+const MatchQuery = z.object({ dispatchNumber: z.string().trim().optional(), alarmKeyword: z.string().optional(), alarmedAt: z.iso.datetime({ offset: true }) });
 
-type ParsedIncident = ReturnType<typeof IncidentInput.parse>;
-const CreateIncident = IncidentInput.extend({ departmentIds: z.array(z.uuid()).default([]) });
 type ParsedCreateIncident = ReturnType<typeof CreateIncident.parse>;
+const MATCH_WINDOW_MS = 2 * 3_600_000;
+
+/** Texts of the e-mails to authors, in the language of the recipient. */
+const MAIL = {
+  de: {
+    hello: (name: string) => `Hallo ${name},`,
+    returnedSubject: (date: string, keyword: string) => `Einsatzbericht zurückgegeben: ${date} ${keyword}`,
+    returnedText: (by: string, date: string, incident: string) => `${by} hat Ihren Einsatzbericht vom ${date} (${incident}) zur Überarbeitung zurückgegeben:`,
+    openSubject: (count: number) => `Offene Einsatzberichte (${count})`,
+    openIntro: 'folgende Einsatzberichte sind noch offen:',
+    openPoints: (count: number) => (count === 1 ? '1 offener Punkt' : `${count} offene Punkte`),
+    ready: 'bereit zum Fertigmelden',
+    regards: 'Viele Grüße',
+  },
+  en: {
+    hello: (name: string) => `Hello ${name},`,
+    returnedSubject: (date: string, keyword: string) => `Incident report returned: ${date} ${keyword}`,
+    returnedText: (by: string, date: string, incident: string) => `${by} returned your incident report of ${date} (${incident}) for revision:`,
+    openSubject: (count: number) => `Open incident reports (${count})`,
+    openIntro: 'the following incident reports are still open:',
+    openPoints: (count: number) => (count === 1 ? '1 open point' : `${count} open points`),
+    ready: 'ready to submit',
+    regards: 'Kind regards',
+  },
+} satisfies Record<Language, unknown>;
 
 export function toIncidentDto(incident: IncidentEntity): IncidentDto {
   return {
@@ -69,9 +102,17 @@ export function toIncidentDto(incident: IncidentEntity): IncidentDto {
         status: r.status,
         locked: r.locked,
         authorPersonId: r.authorPersonId ?? null,
+        hasStatistics: Boolean(r.statistics),
       })),
     version: incident.version,
   };
+}
+
+/** Error code of a failed action, e.g. `incidents.findingsOpen`; unexpected errors give `incidents.releaseFailed`. */
+function errorCode(error: unknown): string {
+  const response = (error as { getResponse?: () => unknown }).getResponse?.();
+  if (response && typeof response === 'object' && 'code' in response) return String((response as { code: unknown }).code);
+  return (error as { getStatus?: () => number }).getStatus?.() === 404 ? 'notFound' : 'incidents.releaseFailed';
 }
 
 const canWriteFor = (user: AuthenticatedUser, departmentId: string) =>
@@ -88,6 +129,7 @@ export class IncidentsController {
     private readonly notifications: Notifications,
     private readonly dutyEvents: DutyEvents,
     private readonly audit: Audit,
+    private readonly pdf: ReportPdf,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
     @Inject(ORGANIZATION) private readonly organization: Organization,
   ) {}
@@ -104,6 +146,7 @@ export class IncidentsController {
     @Query('departmentId') departmentId?: string,
     @Query('status') status?: string,
     @Query('mine') mine?: string,
+    @Query('withoutStatistics') withoutStatistics?: string,
   ): Promise<IncidentDto[]> {
     const grant = user.grant(READ);
     const where: FilterQuery<IncidentEntity>[] = [];
@@ -113,19 +156,28 @@ export class IncidentsController {
     if (departmentId) where.push({ reports: { departmentId } });
     if (status) where.push({ reports: { status: status as Report['status'] } });
     if (mine === 'true') where.push({ reports: { authorPersonId: user.personId ?? '-' } });
-    const incidents = await this.em
-      .fork()
-      .find(IncidentEntity, where.length ? { $and: where } : {}, { populate: ['reports'], orderBy: { alarmedAt: 'desc' }, limit: 500 });
+    if (withoutStatistics === 'true') where.push({ reports: { primary: true, statistics: null } });
+    const em = this.em.fork();
+    let incidents = await em.find(IncidentEntity, where.length ? { $and: where } : {}, { populate: ['reports'], orderBy: { alarmedAt: 'desc' }, limit: 500 });
+    if (withoutStatistics === 'true') {
+      // Only keywords that count in the statistics need them.
+      const counted = new Set((await em.find(AlarmKeywordEntity, { mainType: { $ne: null } })).map((k) => k.key));
+      incidents = incidents.filter((i) => counted.has(i.alarmKeyword));
+    }
     return incidents.map(toIncidentDto);
   }
 
-  /** Creates an incident and a draft report for each given department. */
+  /**
+   * Creates an incident and a draft report for each given department. Writers name at least one department:
+   * an incident without a report of theirs would vanish from their list. Releasers may create it without reports.
+   */
   @Post('incidents')
   @RequirePermissions(WRITE)
   async create(
     @Body(new ZodPipe(CreateIncident)) input: ParsedCreateIncident,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<IncidentDto> {
+    if (!input.departmentIds.length && user.grant(RELEASE) !== 'brigade') throw new BadRequestException({ code: 'incidents.departmentRequired' });
     for (const departmentId of input.departmentIds) {
       if (!canWriteFor(user, departmentId)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
     }
@@ -139,6 +191,34 @@ export class IncidentsController {
     return toIncidentDto(incident);
   }
 
+  /**
+   * Existing incidents that may be the one about to be created: the same dispatch number, or the same keyword
+   * within two hours of the alarm. Minimal data, also of incidents the user cannot read yet, so writers of another
+   * department join the incident with their report (`POST incidents/:id/reports`) instead of creating a duplicate.
+   */
+  @Get('incidents/matches')
+  @RequirePermissions(WRITE)
+  async matches(@Query(new ZodPipe(MatchQuery)) query: z.infer<typeof MatchQuery>): Promise<IncidentMatch[]> {
+    const alarmedAt = new Date(query.alarmedAt);
+    const or: FilterQuery<IncidentEntity>[] = [];
+    if (query.dispatchNumber) or.push({ dispatchNumber: query.dispatchNumber });
+    if (query.alarmKeyword) {
+      or.push({ alarmKeyword: query.alarmKeyword, alarmedAt: { $gte: new Date(alarmedAt.getTime() - MATCH_WINDOW_MS), $lte: new Date(alarmedAt.getTime() + MATCH_WINDOW_MS) } });
+    }
+    if (!or.length) return [];
+    const incidents = await this.em.fork().find(IncidentEntity, { $or: or }, { populate: ['reports'], orderBy: { alarmedAt: 'desc' }, limit: 10 });
+    return incidents.map((i) => ({
+      id: i.id,
+      dispatchNumber: i.dispatchNumber,
+      alarmKeyword: i.alarmKeyword,
+      alarmedAt: i.alarmedAt.toISOString(),
+      city: i.location.city,
+      street: [i.location.street, i.location.houseNumber].filter(Boolean).join(' '),
+      departmentIds: i.reports.getItems().map((r) => r.departmentId),
+      sameDispatchNumber: Boolean(query.dispatchNumber) && i.dispatchNumber === query.dispatchNumber,
+    }));
+  }
+
   @Get('incidents/:id')
   @RequirePermissions(READ)
   async get(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<IncidentDto> {
@@ -147,18 +227,24 @@ export class IncidentsController {
     return toIncidentDto(incident);
   }
 
-  /** Changes the incident data (number, keyword, location); not while one of its reports is locked. */
+  /**
+   * Changes the incident data (number, keyword, alarm, location) with the version the client loaded; not while one
+   * of its reports is locked (except releasers) and not after one was released (unlock first). Reports starting
+   * with the old alarm time move along with it.
+   */
   @Put('incidents/:id')
   @RequirePermissions(WRITE)
   async update(
     @Param('id') id: string,
-    @Body(new ZodPipe(IncidentInput)) input: ParsedIncident,
+    @Body(new ZodPipe(IncidentUpdate)) input: ReturnType<typeof IncidentUpdate.parse>,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<IncidentDto> {
     const em = this.em.fork();
-    const incident = await em.findOne(IncidentEntity, id, { populate: ['reports'] });
+    const incident = await em.findOne(IncidentEntity, id, { populate: ['reports', 'reports.personnel'] });
     if (!incident || !this.visible(user, incident)) throw new NotFoundException();
+    assertVersion(incident, input.version);
     const reports = incident.reports.getItems();
+    if (reports.some((r) => r.status.startsWith('released'))) throw new ConflictException({ code: 'incidents.incidentReleased' });
     // The incident data belongs to the primary report: only its writers (and releasers) change them.
     const owner = reports.find((r) => r.primary) ?? reports[0];
     if (!owner || !canWriteFor(user, owner.departmentId)) throw new ForbiddenException({ code: 'incidents.notPrimaryWriter' });
@@ -173,10 +259,12 @@ export class IncidentsController {
       incident.dispatchNumber = input.dispatchNumber;
       incident.internalNumber = false;
     }
+    const alarmedAt = new Date(input.alarmedAt);
+    this.reports.moveAlarm(incident, incident.alarmedAt, alarmedAt);
     em.assign(incident, {
       alarmKeyword: input.alarmKeyword,
       alarmMessage: input.alarmMessage,
-      alarmedAt: new Date(input.alarmedAt),
+      alarmedAt,
       location: input.location,
     });
     await em.flush();
@@ -200,6 +288,10 @@ export class IncidentsController {
     return toIncidentDto(incident);
   }
 
+  /**
+   * Adds the report of a department. Writers of that department may join any incident they know the ID of
+   * (e.g. from `incidents/matches`), so a joint incident created by another department is not duplicated.
+   */
   @Post('incidents/:id/reports')
   @RequirePermissions(WRITE)
   async addReport(
@@ -210,7 +302,7 @@ export class IncidentsController {
     if (!canWriteFor(user, input.departmentId)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
     const em = this.em.fork();
     const incident = await em.findOne(IncidentEntity, id, { populate: ['reports'] });
-    if (!incident || !this.visible(user, incident)) throw new NotFoundException();
+    if (!incident) throw new NotFoundException();
     if (incident.reports.getItems().some((r) => r.departmentId === input.departmentId)) {
       throw new ConflictException({ code: 'incidents.reportExists' });
     }
@@ -244,6 +336,39 @@ export class IncidentsController {
     this.reports.assertWrite(user, report);
     await this.save(em, report, input, user);
     await em.flush();
+    return this.reports.toDto(em, report);
+  }
+
+  /** The report as PDF (letterhead of the brigade) with times, personnel, vehicles, narrative, statistics and parties. */
+  @Get('reports/:id/pdf')
+  @RequirePermissions(READ)
+  async reportPdf(@Param('id') id: string, @Query('lang') lang: string | undefined, @CurrentUser() user: AuthenticatedUser, @Res() res: Response): Promise<void> {
+    const em = this.em.fork();
+    const report = await this.reports.load(em, id, user);
+    const language: Language = lang === 'en' || lang === 'de' ? lang : user.language;
+    const { fileName, pdf } = await this.pdf.render(em, report, language);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+    res.send(pdf);
+  }
+
+  /**
+   * Statistics of a primary report, changed by a releaser without a new release, also after the release
+   * (the release events for compensation and respiratory protection are not sent again).
+   */
+  @Put('reports/:id/statistics')
+  @RequirePermissions(RELEASE)
+  async updateStatistics(
+    @Param('id') id: string,
+    @Body(new ZodPipe(StatisticsUpdate)) input: ReturnType<typeof StatisticsUpdate.parse>,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<Report> {
+    if (user.grant(RELEASE) !== 'brigade') throw new ForbiddenException({ code: 'auth.forbidden', permissions: [RELEASE] });
+    const em = this.em.fork();
+    const report = await this.reports.load(em, id, user);
+    this.reports.setStatistics(report, input.statistics, input.version);
+    await em.flush();
+    await this.audit.log('incidents.statistics-changed', { reportId: report.id });
     return this.reports.toDto(em, report);
   }
 
@@ -308,11 +433,13 @@ export class IncidentsController {
    */
   @Post('open-reports/remind')
   @HttpCode(200)
-  @RequirePermissions(RELEASE)
+  @RequirePermissions(READ)
   async remind(@Body(new ZodPipe(RemindAuthors)) input: ReturnType<typeof RemindAuthors.parse>, @CurrentUser() user: AuthenticatedUser): Promise<RemindResult> {
+    // Releasers remind for all departments, pre-reviewers (`incidents.reports.review`) for theirs.
+    if (user.grant(RELEASE) !== 'brigade' && !user.grant(REVIEW)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [RELEASE] });
     const em = this.em.fork();
     const reports = await em.find(ReportEntity, { status: 'draft', authorPersonId: { $in: input.personIds } }, { populate: REPORT_POPULATE, orderBy: { alarmedAt: 'asc' } });
-    const visible = reports.filter((r) => user.can(READ, r.departmentId) || user.grant(RELEASE) === 'brigade');
+    const visible = reports.filter((r) => this.reports.canReview(user, r.departmentId));
     const authors = await this.directory.summaries(input.personIds);
     const departments = new Map((await this.organization.departments()).map((d) => [d.id, d.name]));
     const sent: string[] = [];
@@ -325,17 +452,19 @@ export class IncidentsController {
         missingEmail.push(name);
         continue;
       }
+      const language = await this.languageOf(author.id);
+      const texts = MAIL[language];
       const lines = await Promise.all(
         own.map(async (r) => {
           const findings = (await this.reports.findings(em, r, await this.reports.contextFor(r))).filter((f) => f.level === 'error' || !f.acknowledged);
-          const date = r.incident.alarmedAt.toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin' });
-          return `- ${date} ${r.incident.alarmKeyword} ${r.incident.dispatchNumber} (${departments.get(r.departmentId) ?? ''}): ${findings.length ? `${findings.length} offene Punkte` : 'bereit zum Fertigmelden'}`;
+          const date = this.date(r.incident.alarmedAt, language);
+          return `- ${date} ${r.incident.alarmKeyword} ${r.incident.dispatchNumber} (${departments.get(r.departmentId) ?? ''}): ${findings.length ? texts.openPoints(findings.length) : texts.ready}`;
         }),
       );
       await this.mail.send({
         to: author.email,
-        subject: `Offene Einsatzberichte (${own.length})`,
-        text: [`Hallo ${author.firstName},`, '', 'folgende Einsatzberichte sind noch offen:', '', ...lines, '', input.message, '', `Viele Grüße`, user.displayName].filter((l, i, all) => l !== '' || all[i - 1] !== '').join('\n'),
+        subject: texts.openSubject(own.length),
+        text: [texts.hello(author.firstName), '', texts.openIntro, '', ...lines, '', input.message, '', texts.regards, user.displayName].filter((l, i, all) => l !== '' || all[i - 1] !== '').join('\n'),
       });
       sent.push(name);
     }
@@ -371,9 +500,10 @@ export class IncidentsController {
     return this.reports.toDto(em, report);
   }
 
+  /** Returns a submitted report to its author; releasers for all departments, pre-reviewers for theirs. */
   @Post('reports/:id/return')
   @HttpCode(200)
-  @RequirePermissions(RELEASE)
+  @RequirePermissions(READ)
   async returnToAuthor(
     @Param('id') id: string,
     @Body(new ZodPipe(ReturnToAuthor)) input: ReturnToAuthor,
@@ -381,6 +511,7 @@ export class IncidentsController {
   ): Promise<Report> {
     const em = this.em.fork();
     const report = await this.reports.load(em, id, user);
+    if (!this.reports.canReview(user, report.departmentId)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [RELEASE] });
     this.reports.returnToAuthor(report, input.comment);
     await em.flush();
     await this.tellAuthor(report, input.comment, user);
@@ -393,12 +524,14 @@ export class IncidentsController {
     try {
       const [author] = await this.directory.summaries([report.authorPersonId]);
       if (!author?.email) return;
-      const date = report.incident.alarmedAt.toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin' });
+      const language = await this.languageOf(author.id);
+      const texts = MAIL[language];
+      const date = this.date(report.incident.alarmedAt, language);
       const link = await this.notifications.link(`/incidents/reports/${report.id}`);
       await this.mail.send({
         to: author.email,
-        subject: `Einsatzbericht zurückgegeben: ${date} ${report.incident.alarmKeyword}`,
-        text: [`Hallo ${author.firstName},`, '', `${user.displayName} hat Ihren Einsatzbericht vom ${date} (${report.incident.alarmKeyword} ${report.incident.dispatchNumber}) zur Überarbeitung zurückgegeben:`, '', comment, ...(link ? ['', link] : [])].join('\n'),
+        subject: texts.returnedSubject(date, report.incident.alarmKeyword),
+        text: [texts.hello(author.firstName), '', texts.returnedText(user.displayName, date, `${report.incident.alarmKeyword} ${report.incident.dispatchNumber}`), '', comment, ...(link ? ['', link] : [])].join('\n'),
       });
       await this.audit.log('incidents.author-notified', { reportId: report.id });
     } catch (error) {
@@ -413,6 +546,28 @@ export class IncidentsController {
   async republish(@Body(new ZodPipe(Period)) input: z.infer<typeof Period>, @CurrentUser() user: AuthenticatedUser): Promise<{ reports: number; duties: number }> {
     if (user.grant(RELEASE) !== 'brigade') throw new ForbiddenException({ code: 'auth.forbidden', permissions: [RELEASE] });
     return { reports: await this.reports.republish(this.em.fork(), input.from, input.to), duties: await this.dutyEvents.republish(input.from, input.to) };
+  }
+
+  /**
+   * Releases several reports one after another, e.g. all error-free reports for review or all reports of an
+   * incident. A report that cannot be released is reported back with its error code; the others are released.
+   */
+  @Post('reports/release')
+  @HttpCode(200)
+  @RequirePermissions(RELEASE)
+  async releaseMany(@Body(new ZodPipe(ReleaseMany)) input: ReleaseMany, @CurrentUser() user: AuthenticatedUser): Promise<ReleaseManyResult> {
+    const result: ReleaseManyResult = { released: [], failed: [] };
+    for (const reportId of new Set(input.reportIds)) {
+      const em = this.em.fork();
+      try {
+        const report = await this.reports.load(em, reportId, user);
+        await this.reports.release(em, report, user, input.level);
+        result.released.push(reportId);
+      } catch (error) {
+        result.failed.push({ reportId, code: errorCode(error) });
+      }
+    }
+    return result;
   }
 
   @Post('reports/:id/release')
@@ -443,7 +598,10 @@ export class IncidentsController {
     return this.reports.toDto(em, report);
   }
 
-  /** Only drafts can be deleted; a primary report only as the last report of the incident. */
+  /**
+   * Only drafts can be deleted; a primary report only as the last report of the incident. Deleting the last
+   * report deletes the incident as well, so no incident is left that nobody finds in the list.
+   */
   @Delete('reports/:id')
   @HttpCode(204)
   @RequirePermissions(WRITE)
@@ -452,10 +610,13 @@ export class IncidentsController {
     const report = await this.reports.load(em, id, user);
     this.reports.assertWrite(user, report);
     if (report.status !== 'draft') throw new ConflictException({ code: 'incidents.invalidTransition', from: report.status });
-    if (report.primary && (await em.count(ReportEntity, { incident: report.incident, id: { $ne: report.id } }))) {
-      throw new ConflictException({ code: 'incidents.primaryHasSiblings' });
-    }
-    await em.remove(report).flush();
+    const siblings = await em.count(ReportEntity, { incident: report.incident, id: { $ne: report.id } });
+    if (report.primary && siblings) throw new ConflictException({ code: 'incidents.primaryHasSiblings' });
+    const incident = report.incident;
+    em.remove(report);
+    if (!siblings) em.remove(incident);
+    await em.flush();
+    if (!siblings) await this.audit.log('incidents.incident-deleted', { incidentId: incident.id, dispatchNumber: incident.dispatchNumber });
   }
 
   // ----- Helpers -----
@@ -463,6 +624,16 @@ export class IncidentsController {
   private visible(user: AuthenticatedUser, incident: IncidentEntity): boolean {
     if (user.grant(READ) === 'brigade' || user.grant(RELEASE) === 'brigade') return true;
     return incident.reports.getItems().some((r) => user.can(READ, r.departmentId));
+  }
+
+  /** Language of the user linked to the person; German if there is none. */
+  private async languageOf(personId: string): Promise<Language> {
+    const user = await this.em.fork().findOne(User, { personId, active: true });
+    return user?.language ?? 'de';
+  }
+
+  private date(date: Date, language: Language): string {
+    return date.toLocaleDateString(language === 'de' ? 'de-DE' : 'en-GB', { timeZone: 'Europe/Berlin' });
   }
 
   private save(em: EntityManager, report: ReportEntity, input: ReturnType<typeof ReportInput.parse>, user: AuthenticatedUser) {

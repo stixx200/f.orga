@@ -35,6 +35,8 @@ export const AnnualStatistics = z.object({
   referenceDate: z.string(),
   closedAt: z.string().nullable(),
   closedBy: z.string().nullable(),
+  /** Closed statistics show the values frozen at closing; `true` if the data computes differently by now. */
+  changedSinceClose: z.boolean(),
   values: z.array(StatisticsValue),
   checks: z.array(StatisticsCheck),
 });
@@ -45,3 +47,7 @@ export const StatisticsCorrections = z.object({
   corrections: z.record(z.string().regex(/^F\d{1,3}:[DFGH]$/), z.number().int().min(0).nullable()),
 });
 export type StatisticsCorrections = z.infer<typeof StatisticsCorrections>;
+
+/** Closing with open checks needs `force`; otherwise the server answers `incidents.statisticsChecksOpen`. */
+export const CloseStatistics = z.object({ force: z.boolean().default(false) });
+export type CloseStatistics = z.input<typeof CloseStatistics>;

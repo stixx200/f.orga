@@ -24,6 +24,12 @@ const toReference = (r: ReportEntity): ReportReference => ({
   location: locationText(r.incident.location),
 });
 
+/** Lowest release level of the reports; a release for compensation only is not ready for cost recovery. */
+function releaseLevel(reports: ReportEntity[]): ChargeableIncident['releaseLevel'] {
+  if (!reports.length || reports.some((r) => !r.status.startsWith('released'))) return 'none';
+  return reports.every((r) => r.status === 'released-billing') ? 'billing' : 'compensation';
+}
+
 /** Incidents for other modules (`INCIDENTS_LOOKUP`), e.g. for cost recovery notices. */
 @Injectable()
 export class IncidentsLookupService implements IncidentsLookup {
@@ -46,7 +52,8 @@ export class IncidentsLookupService implements IncidentsLookup {
       object: incident.location.object,
       mainType: primary?.statistics?.mainType ?? keyword?.mainType ?? null,
       falseAlarmType: primary?.statistics?.falseAlarmType ?? keyword?.falseAlarmType ?? null,
-      released: reports.length > 0 && reports.every((r) => r.status.startsWith('released')),
+      released: releaseLevel(reports) === 'billing',
+      releaseLevel: releaseLevel(reports),
       departmentIds: reports.map((r) => r.departmentId),
       chargeableReason: incident.chargeableReason,
     };

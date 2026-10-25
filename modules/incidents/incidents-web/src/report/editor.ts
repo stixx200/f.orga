@@ -15,6 +15,7 @@ const DEBOUNCE_MS = 800;
 export function toContent(report: Report): Content {
   const { times } = report;
   return {
+    endConfirmed: report.endConfirmed,
     authorPersonId: report.authorPersonId,
     times,
     situation: report.situation,
