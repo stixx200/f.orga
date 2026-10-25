@@ -881,7 +881,7 @@ Verwaltet die persönliche Schutzausrüstung (PSA). Backend `modules/clothing/cl
 
 **Austritt:** Die Kleiderkammer meldet sich beim `PERSON_HOLDINGS` der Stammdaten. Solange einer Person Stücke zugeordnet sind, lehnen Austritt und Übernahme in die Altersabteilung mit `masterdata.personHoldsItems` (409) ab.
 
-**Oberfläche:** Schutzausrüstung (Bestand mit Filtern, Fristen farbig), Stück (Stammdaten, Ausgabe, Rücknahme, Wäsche, Prüfung, Verlauf), Ausgabe (Person wählen: Stück aus dem Lager ausgeben, Verbrauchsartikel abgeben, zurücknehmen, Verlauf), Wäsche (mehrere Stücke, „Fällige auswählen“), Verwaltung → Kleiderkammer (Artikel, Vorlage). Reiter „Kleiderkammer“ in der Personalakte und „Meine Schutzausrüstung“ in „Mein Bereich“.
+**Oberfläche:** Schutzausrüstung (Bestand mit Suche und Filtern nach Status, Artikel und Größe, je Mehrfachauswahl; die Größen kommen aus den vorhandenen Stücken der gewählten Artikel; Fristen farbig), Stück (Stammdaten, Ausgabe, Rücknahme, Wäsche, Prüfung, Verlauf), Ausgabe (Person wählen: Stück aus dem Lager ausgeben, Verbrauchsartikel abgeben, zurücknehmen, Verlauf), Wäsche (mehrere Stücke, „Fällige auswählen“), Verwaltung → Kleiderkammer (Artikel, Vorlage). Reiter „Kleiderkammer“ in der Personalakte und „Meine Schutzausrüstung“ in „Mein Bereich“.
 
 **Fristen:** Imprägnieren und Prüfung je Stück (30 Tage Vorlauf, zuständig `clothing.issue` der Kleiderkammer). **Listen:** ausgegebene Schutzausrüstung, fällige Wäsche und Prüfungen. **Daten:** Suche nach Inventar- und Seriennummer, Vollexport. Abteilungen mit Stücken lassen sich nicht löschen.
 

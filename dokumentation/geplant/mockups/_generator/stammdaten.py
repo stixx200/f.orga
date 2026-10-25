@@ -346,7 +346,7 @@ seite('stammdaten/fahrzeug.html', 'LF 20/16 · Florian Musterstadt 1/44', '''
     <div class="feld"><label>Bezeichnung</label><input type="text" value="LF 20/16"></div>
     <div class="feld"><label>Funkrufname</label><input type="text" value="Florian Musterstadt 1/44"></div>
     <div class="feld"><label>Fahrzeugtyp</label><select><option>LF 20 (Löschgruppenfahrzeug)</option></select><div class="hilfe">Normbesatzung 1/8 · 9 Plätze</div></div>
-    <div class="feld"><label>Kennzeichen</label><input type="text" value="UL-FW 1144"></div>
+    <div class="feld"><label>Kennzeichen</label><input type="text" value="MS-FW 1144"></div>
     <div class="feld"><label>Abteilung</label><select><option>Abt. Musterstadt</option></select></div>
     <div class="feld"><label>Wache</label><select><option>Feuerwehrhaus Musterstadt</option></select></div>
     <div class="feld"><label>Besatzungsplätze</label><input type="number" value="9"></div>
@@ -378,7 +378,7 @@ seite('stammdaten/fahrzeug.html', 'LF 20/16 · Florian Musterstadt 1/44', '''
   <section class="karte">
     <h2>Historie</h2>
     <ul class="historie">
-      <li><div class="wer">Markus Vogt · 02.02.2026</div><div class="aenderung"><span>Kennzeichen</span><span><span class="alt">UL-FW 144</span> → <span class="neu">UL-FW 1144</span></span></div></li>
+      <li><div class="wer">Markus Vogt · 02.02.2026</div><div class="aenderung"><span>Kennzeichen</span><span><span class="alt">MS-FW 144</span> → <span class="neu">MS-FW 1144</span></span></div></li>
     </ul>
   </section>
 </aside>

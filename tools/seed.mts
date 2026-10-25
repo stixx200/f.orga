@@ -1,12 +1,13 @@
 /**
  * Fills a running f.orga instance with demo data through the public API:
- * organization, one user per standard role, persons and incidents (imported from generated files in the
+ * organization, one user per standard role, persons and incidents, protective equipment of the clothing store (imported from generated files in the
  * format of the MP-Feuer exports `Personal.xlsx` and `MP-EXCEL.xlsx`) and a duty roster calendar.
  *
  * All persons and incidents are made up; a fixed random seed keeps them identical between runs, so running
  * the script again only updates what changed.
  *
  *   npm run seed
+ *   npm run seed -- --only clothing      (only the clothing store, into an instance with persons)
  *   FORGA_URL=http://localhost:3000 FORGA_ADMIN_USER=admin FORGA_ADMIN_PASSWORD=… npm run seed
  */
 import ExcelJS from 'exceljs';
@@ -101,31 +102,31 @@ const DEPARTMENTS: DepartmentPlan[] = [
     name: 'Abteilung Musterstadt', shortName: 'Musterstadt', type: 'operational', postalCode: '12345', persons: 48,
     station: { name: 'Feuerwehrhaus Musterstadt', street: 'Am Feuerwehrhaus 1' },
     vehicles: [
-      { designation: 'KdoW', radioCallSign: 'Florian Musterstadt 1/10', vehicleType: 'kdow', licensePlate: 'UL-FE 110' },
-      { designation: 'ELW 1', radioCallSign: 'Florian Musterstadt 1/11', vehicleType: 'elw-1', licensePlate: 'UL-FE 111' },
-      { designation: 'HLF 20', radioCallSign: 'Florian Musterstadt 1/46', vehicleType: 'lf-20-16', licensePlate: 'UL-FE 146' },
-      { designation: 'LF 10', radioCallSign: 'Florian Musterstadt 1/44', vehicleType: 'lf-10', licensePlate: 'UL-FE 144' },
-      { designation: 'DLA(K) 23-12', radioCallSign: 'Florian Musterstadt 1/33', vehicleType: 'dlak-23-12', licensePlate: 'UL-FE 133' },
-      { designation: 'MTW', radioCallSign: 'Florian Musterstadt 1/19', vehicleType: 'mtw', licensePlate: 'UL-FE 119' },
+      { designation: 'KdoW', radioCallSign: 'Florian Musterstadt 1/10', vehicleType: 'kdow', licensePlate: 'MS-FE 110' },
+      { designation: 'ELW 1', radioCallSign: 'Florian Musterstadt 1/11', vehicleType: 'elw-1', licensePlate: 'MS-FE 111' },
+      { designation: 'HLF 20', radioCallSign: 'Florian Musterstadt 1/46', vehicleType: 'lf-20-16', licensePlate: 'MS-FE 146' },
+      { designation: 'LF 10', radioCallSign: 'Florian Musterstadt 1/44', vehicleType: 'lf-10', licensePlate: 'MS-FE 144' },
+      { designation: 'DLA(K) 23-12', radioCallSign: 'Florian Musterstadt 1/33', vehicleType: 'dlak-23-12', licensePlate: 'MS-FE 133' },
+      { designation: 'MTW', radioCallSign: 'Florian Musterstadt 1/19', vehicleType: 'mtw', licensePlate: 'MS-FE 119' },
     ],
   },
   {
     name: 'Abteilung Ahornfeld', shortName: 'Ahornfeld', type: 'operational', postalCode: '12345', persons: 20,
     station: { name: 'Feuerwehrhaus Ahornfeld', street: 'Dorfstraße 12' },
-    vehicles: [{ designation: 'TSF-W', radioCallSign: 'Florian Musterstadt 2/47', vehicleType: 'tsf-w', licensePlate: 'UL-FE 247' }],
+    vehicles: [{ designation: 'TSF-W', radioCallSign: 'Florian Musterstadt 2/47', vehicleType: 'tsf-w', licensePlate: 'MS-FE 247' }],
   },
   {
     name: 'Abteilung Birkenhain', shortName: 'Birkenhain', type: 'operational', postalCode: '12345', persons: 26,
     station: { name: 'Feuerwehrhaus Birkenhain', street: 'Rathausplatz 3' },
     vehicles: [
-      { designation: 'LF 10', radioCallSign: 'Florian Musterstadt 3/44', vehicleType: 'lf-10', licensePlate: 'UL-FE 344' },
-      { designation: 'MTW', radioCallSign: 'Florian Musterstadt 3/19', vehicleType: 'mtw', licensePlate: 'UL-FE 319' },
+      { designation: 'LF 10', radioCallSign: 'Florian Musterstadt 3/44', vehicleType: 'lf-10', licensePlate: 'MS-FE 344' },
+      { designation: 'MTW', radioCallSign: 'Florian Musterstadt 3/19', vehicleType: 'mtw', licensePlate: 'MS-FE 319' },
     ],
   },
   {
     name: 'Abteilung Weidenhain', shortName: 'Weidenhain', type: 'operational', postalCode: '12345', persons: 18,
     station: { name: 'Feuerwehrhaus Weidenhain', street: 'Schulstraße 5' },
-    vehicles: [{ designation: 'TSF', radioCallSign: 'Florian Musterstadt 4/48', vehicleType: 'tsf', licensePlate: 'UL-FE 448' }],
+    vehicles: [{ designation: 'TSF', radioCallSign: 'Florian Musterstadt 4/48', vehicleType: 'tsf', licensePlate: 'MS-FE 448' }],
   },
   { name: 'Altersabteilung Musterstadt', shortName: 'Musterstadt', type: 'veterans', parent: 'Abteilung Musterstadt', postalCode: '12345', persons: 12, vehicles: [] },
   { name: 'Jugendfeuerwehr Musterstadt', shortName: 'Jugendfeuerwehr', type: 'youth', parent: 'Abteilung Musterstadt', postalCode: '12345', persons: 14, vehicles: [] },
@@ -624,6 +625,137 @@ async function equipment(persons: PersonRef[]): Promise<void> {
   console.log(`  ${count} Geräte für ${vehicles.length} Fahrzeuge`);
 }
 
+/** A purchase date between 2016 and 2025. */
+const purchase = () => isoDate(new Date(between(2016, 2025), between(0, 11), between(1, 28)));
+/** A date after `from` and before today. */
+const later = (from: string) => {
+  const start = new Date(from).getTime();
+  return isoDate(new Date(start + random() * Math.max(0, Date.now() - start - 86_400_000)));
+};
+
+/**
+ * Clothing store: articles with sizes, personal equipment for every active member of the operational departments
+ * (jacket, trousers, boots, helmet; overtrousers for breathing apparatus wearers), spare pieces in stock,
+ * washing and impregnation (most current, some overdue), yearly inspections, consumables and a few replaced pieces.
+ */
+async function clothing(persons: PersonRef[]): Promise<void> {
+  reseed(1207);
+  await call('POST', 'clothing/articles/template', {});
+  if ((await call<unknown[]>('GET', 'clothing/items?status=issued')).length) {
+    console.log('  Kleiderkammer vorhanden');
+    return;
+  }
+  const garment = ['44', '46', '48', '50', '52', '54', '56', '58', '60', '62', '64'];
+  const sizes: Record<string, string[]> = {
+    jacket: garment, trousers: garment, 'breathing-apparatus-trousers': ['S', 'M', 'L', 'XL', 'XXL'], boots: ['38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48'],
+    helmet: ['S', 'M', 'L'], gloves: ['7', '8', '9', '10', '11'], hood: [], cap: [], 't-shirt': ['S', 'M', 'L', 'XL', 'XXL', '3XL'],
+  };
+  const manufacturers: Record<string, string[]> = {
+    jacket: ['S-GARD', 'Texport', 'Lion'], trousers: ['S-GARD', 'Texport', 'Lion'], 'breathing-apparatus-trousers': ['Texport', 'S-GARD'],
+    boots: ['HAIX', 'Völkl', 'Elten'], helmet: ['Dräger', 'MSA', 'Rosenbauer'],
+  };
+  const articles = await call<{ id: string; key: string; [field: string]: unknown }[]>('GET', 'clothing/articles');
+  for (const article of articles) {
+    if (!sizes[article.key] || (article['sizes'] as string[]).length) continue;
+    const { id: _id, version: _version, ...input } = article;
+    await call('PUT', `clothing/articles/${article.id}`, { ...input, sizes: sizes[article.key] });
+  }
+
+  // Operational departments as they are in the instance (also when it holds other data than this script's).
+  const operational = (await call<{ id: string; type: string }[]>('GET', 'masterdata/departments')).filter((d) => d.type === 'operational');
+  const operationalIds = new Set(operational.map((d) => d.id));
+  const members = persons.filter((p) => ['active', 'probation'].includes(p.status) && operationalIds.has(p.primaryDepartmentId ?? ''));
+  const counters = new Map<string, number>();
+  const prefixes: Record<string, string> = { jacket: 'J', trousers: 'H', 'breathing-apparatus-trousers': 'AH', boots: 'S', helmet: 'HM' };
+  type Piece = { id: string; articleKey: string; departmentId: string };
+  const create = async (articleKey: string, departmentId: string, size: string, purchasedOn: string): Promise<Piece> => {
+    const n = (counters.get(articleKey) ?? 0) + 1;
+    counters.set(articleKey, n);
+    const created = await call<{ id: string }>('POST', 'clothing/items', {
+      articleKey, inventoryNumber: `${prefixes[articleKey]}-${String(n).padStart(4, '0')}`, size, departmentId, purchasedOn,
+      manufacturer: pick(manufacturers[articleKey] ?? ['']), serialNumber: chance(0.7) ? String(between(100000, 999999)) : '',
+    });
+    return { id: created.id, articleKey, departmentId };
+  };
+
+  const issued: Piece[] = [];
+  let consumables = 0;
+  let replaced = 0;
+  for (const person of members) {
+    const departmentId = person.primaryDepartmentId!;
+    const garmentSize = pick(garment.slice(2, 9));
+    const kit: [string, string][] = [['jacket', garmentSize], ['trousers', garmentSize], ['boots', pick(sizes.boots.slice(2, 9))], ['helmet', pick(sizes.helmet)]];
+    if (person.qualifications.includes('breathing-apparatus')) kit.push(['breathing-apparatus-trousers', pick(sizes['breathing-apparatus-trousers'])]);
+    for (const [articleKey, size] of kit) {
+      // Some members had a worn piece replaced: the old one was taken back and retired.
+      if (articleKey !== 'helmet' && chance(0.12)) {
+        const old = await create(articleKey, departmentId, size, isoDate(new Date(between(2012, 2016), between(0, 11), between(1, 28))));
+        const issuedOn = later('2016-01-01');
+        await call('POST', `clothing/items/${old.id}/issue`, { personId: person.id, date: issuedOn });
+        await call('POST', `clothing/items/${old.id}/return`, { date: later(issuedOn), retire: true, notes: pick(['verschlissen', 'Riss im Obermaterial', 'Reflexstreifen beschädigt', 'zu klein']) });
+        replaced++;
+      }
+      const purchasedOn = purchase();
+      const piece = await create(articleKey, departmentId, size, purchasedOn);
+      await call('POST', `clothing/items/${piece.id}/issue`, { personId: person.id, date: later(purchasedOn) });
+      issued.push(piece);
+    }
+    // Consumables: gloves now and then, a cap and T-shirts, hoods for breathing apparatus wearers.
+    const handOut: [string, string, number][] = [['gloves', pick(sizes.gloves), 1], ['cap', '', 1], ['t-shirt', pick(sizes['t-shirt']), between(1, 3)]];
+    if (person.qualifications.includes('breathing-apparatus')) handOut.push(['hood', '', 1]);
+    for (const [articleKey, size, quantity] of handOut) {
+      for (let k = 0; k < (articleKey === 'gloves' ? between(1, 3) : 1); k++) {
+        await call('POST', 'clothing/consumables', { personId: person.id, articleKey, size, quantity, date: daysAgo(between(10, 1500)) });
+        consumables++;
+      }
+    }
+  }
+
+  // Spare pieces in the store of each operational department.
+  let stock = 0;
+  for (const department of operational) {
+    const departmentId = department.id;
+    const large = members.filter((m) => m.primaryDepartmentId === departmentId).length > 30;
+    for (const [articleKey, count] of [['jacket', 3], ['trousers', 3], ['boots', 2], ['helmet', 2], ['breathing-apparatus-trousers', 1]] as const) {
+      for (let k = 0; k < (large ? count + 2 : count); k++) {
+        const piece = await create(articleKey, departmentId, pick(sizes[articleKey]), purchase());
+        if (articleKey === 'jacket' || articleKey === 'trousers') issued.push(piece);
+        stock++;
+      }
+    }
+  }
+
+  // Washing: impregnation within the last year for most textiles, some overdue; washing in between.
+  const textile = new Set(['jacket', 'trousers', 'breathing-apparatus-trousers']);
+  const laundries = ['Wäscherei Sauber GmbH', 'Textilpflege Weiß', 'Feuerwehrhaus (Waschmaschine)'];
+  const batches = new Map<string, string[]>();
+  const add = (kind: string, date: string, place: string, id: string) => batches.set(`${kind}|${date}|${place}`, [...(batches.get(`${kind}|${date}|${place}`) ?? []), id]);
+  // Collection days every few weeks, so the pieces of one laundry trip share a date.
+  const days = Array.from({ length: 30 }, (_, i) => daysAgo(i * 17 + 3));
+  for (const piece of issued.filter((p) => textile.has(p.articleKey))) {
+    const overdue = chance(0.1);
+    const impregnated = overdue ? days.filter((d) => d < daysAgo(380))[between(0, 5)] : days.filter((d) => d >= daysAgo(360))[between(0, 20)];
+    if (impregnated) add('impregnation', impregnated, pick(laundries.slice(0, 2)), piece.id);
+    for (let k = 0; k < between(0, 3); k++) add('wash', pick(days.slice(0, 20)), pick(laundries), piece.id);
+  }
+  for (const [key, itemIds] of batches) {
+    const [kind, date, place] = key.split('|');
+    await call('POST', 'clothing/care', { itemIds, kind, date, place });
+  }
+
+  // Yearly inspections by the clothing officers; some are overdue.
+  const all = await call<{ id: string; articleKey: string; status: string }[]>('GET', 'clothing/items');
+  const inspected = new Set(['jacket', 'trousers', 'breathing-apparatus-trousers', 'boots', 'helmet']);
+  let inspections = 0;
+  for (const piece of all.filter((p) => inspected.has(p.articleKey) && p.status !== 'retired')) {
+    if (chance(0.15)) continue;
+    const date = chance(0.9) ? daysAgo(between(5, 350)) : daysAgo(between(380, 500));
+    await call('POST', `clothing/items/${piece.id}/inspections`, { date, passed: chance(0.97), inspector: pick(['Kleiderwart', 'Gerätewart', 'Fachfirma']), notes: chance(0.1) ? pick(['Klettverschluss erneuert', 'Reflexstreifen nachgenäht', 'Innenfutter geprüft']) : '' });
+    inspections++;
+  }
+  console.log(`  ${issued.length} Stücke ausgegeben, ${stock} im Lager, ${replaced} getauscht, ${batches.size} Wäschen, ${inspections} Prüfungen, ${consumables} Verbrauchsartikel`);
+}
+
 /** Cost recovery: authority settings, a few false alarms of fire alarm systems as chargeable incidents with notices. */
 async function costRecovery(): Promise<void> {
   const general = (await call<Record<string, unknown> | null>('GET', 'core/settings/cost-recovery.general')) ?? {};
@@ -634,6 +766,9 @@ async function costRecovery(): Promise<void> {
     bankAccount: 'IBAN DE00 0000 0000 0000 0000 00 (Beispiel)',
     budgetAccount: '1.2600.1100',
     signer: 'Im Auftrag – Ordnungsamt',
+    statute: 'Feuerwehr-Kostenersatzsatzung der Stadt Musterstadt (Beispiel)',
+    // Personnel rates come from the local statute; these are example values.
+    personnelRates: [{ kind: 'volunteer', validFrom: `${new Date().getFullYear() - 2}-01-01`, amount: 22 }, { kind: 'fire-watch', validFrom: `${new Date().getFullYear() - 2}-01-01`, amount: 16 }],
     materials: [{ key: 'oil-binder', name: 'Ölbindemittel (Sack)', unit: 'Sack', price: 18.5 }],
   });
   const year = new Date().getFullYear();
@@ -681,6 +816,14 @@ async function promotions(): Promise<void> {
 async function main(): Promise<void> {
   console.log(`f.orga seed → ${BASE}`);
   await login();
+  // `--only clothing`: only the clothing store, for an instance that already has persons.
+  const only = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1] : null;
+  if (only === 'clothing') {
+    console.log('Kleiderkammer …');
+    await clothing(await call<PersonRef[]>('GET', 'masterdata/persons'));
+    console.log('Fertig.');
+    return;
+  }
   console.log('Einstellungen und Vorlagen …');
   await settings();
   console.log('Organisation …');
@@ -722,6 +865,9 @@ async function main(): Promise<void> {
 
   console.log('Geräte …');
   await equipment(persons);
+
+  console.log('Kleiderkammer …');
+  await clothing(persons);
 
   console.log('Kostenersatz …');
   await costRecovery();
