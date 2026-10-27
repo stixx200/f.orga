@@ -149,6 +149,8 @@ export const common = {
       'catalog.keyImmutable': 'Der Schlüssel eines Katalogeintrags kann nicht geändert werden.',
       'catalog.keyTaken': 'Diesen Schlüssel gibt es im Katalog bereits.',
       'catalog.unknownKey': 'Unbekannter Katalogeintrag: {{key}}',
+      'catalog.inUse': 'Der Katalogeintrag wird noch verwendet ({{count}}× in: {{modules}}) und kann nicht gelöscht werden.',
+      'catalog.required': 'Der Katalogeintrag wird von der Anwendung benötigt ({{modules}}) und kann nicht gelöscht werden.',
     },
   },
   en: {
@@ -300,6 +302,8 @@ export const common = {
       'catalog.keyImmutable': 'The key of a catalog entry cannot be changed.',
       'catalog.keyTaken': 'This key already exists in the catalog.',
       'catalog.unknownKey': 'Unknown catalog entry: {{key}}',
+      'catalog.inUse': 'The catalog entry is still in use ({{count}}× in: {{modules}}) and cannot be deleted.',
+      'catalog.required': 'The catalog entry is needed by the application ({{modules}}) and cannot be deleted.',
     },
   },
 };

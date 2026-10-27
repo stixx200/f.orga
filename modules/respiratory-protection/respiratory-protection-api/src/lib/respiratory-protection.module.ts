@@ -1,8 +1,14 @@
 import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry } from '@forga/core-api';
-import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
-import { RESPIRATORY_PROTECTION_FITNESS, RESPIRATORY_PROTECTION_MANIFEST, RESPIRATORY_PROTECTION_SETTINGS } from '@forga/respiratory-protection-contracts';
+import { CATALOG_REFERENCES, type CatalogReferences, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
+import {
+  QUALIFICATION_BREATHING_APPARATUS,
+  QUALIFICATION_CHEMICAL_SUIT,
+  RESPIRATORY_PROTECTION_FITNESS,
+  RESPIRATORY_PROTECTION_MANIFEST,
+  RESPIRATORY_PROTECTION_SETTINGS,
+} from '@forga/respiratory-protection-contracts';
 import { RESPIRATORY_PROTECTION_MIGRATIONS } from '../migrations/index.js';
 import { RespiratoryProtectionData } from './data/respiratory-protection.data.js';
 import { EvidenceController } from './evidence/evidence.controller.js';
@@ -34,6 +40,7 @@ export class RespiratoryProtectionModule implements OnModuleInit {
     private readonly stressExercises: StressExercisesImport,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
     private readonly personData: PersonDataRegistry,
+    @Inject(CATALOG_REFERENCES) private readonly catalogReferences: CatalogReferences,
   ) {}
 
   onModuleInit(): void {
@@ -43,6 +50,9 @@ export class RespiratoryProtectionModule implements OnModuleInit {
     this.personData.register('respiratory-protection', { anonymize: (ids) => this.data.anonymize(ids) });
     this.imports.register('respiratory-protection', this.examinations.profile());
     this.imports.register('respiratory-protection', this.stressExercises.profile());
+    // Wearers and the chemical suit condition are recognised by these qualifications.
+    this.catalogReferences.require('respiratory-protection', 'qualification', QUALIFICATION_BREATHING_APPARATUS);
+    this.catalogReferences.require('respiratory-protection', 'qualification', QUALIFICATION_CHEMICAL_SUIT);
     // History of evidence: examinations only with the permission for health data.
     this.historyAccess.register('respiratory_protection.evidence', async (user, id) => {
       const evidence = await this.em.fork().findOne(EvidenceEntity, id);

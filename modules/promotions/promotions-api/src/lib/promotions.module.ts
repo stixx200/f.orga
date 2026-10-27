@@ -1,8 +1,10 @@
-import { Module, type OnModuleInit } from '@nestjs/common';
+import { Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
 import { defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry, PersonDataRegistry } from '@forga/core-api';
 import { PROMOTIONS_MANIFEST, PROMOTIONS_SETTINGS } from '@forga/promotions-contracts';
+import { CATALOG_REFERENCES, type CatalogReferences } from '@forga/masterdata-contracts';
 import { PROMOTIONS_MIGRATIONS } from '../migrations/index.js';
+import { ruleReferences } from './catalog-usage.js';
 import { PromotionsLists } from './lists/promotions.lists.js';
 import { PromotionsController } from './promotions/promotions.controller.js';
 import { PromotionsData } from './promotions.data.js';
@@ -22,6 +24,8 @@ export class PromotionsModule implements OnModuleInit {
     private readonly historyAccess: HistoryAccessRegistry,
     private readonly data: PromotionsData,
     private readonly personData: PersonDataRegistry,
+    private readonly promotions: PromotionsService,
+    @Inject(CATALOG_REFERENCES) private readonly catalogReferences: CatalogReferences,
   ) {}
 
   onModuleInit(): void {
@@ -39,6 +43,17 @@ export class PromotionsModule implements OnModuleInit {
       person: (id) => this.data.exportPerson(id),
     });
     this.personData.register('promotions', { anonymize: (ids) => this.data.anonymize(ids) });
+    // Rules (settings), promotion lists and exclusions refer to ranks; the rules also to qualifications and offices.
+    // Persons in probation without a rank assignment count with the rank `probation`.
+    this.catalogReferences.register('promotions', async (kind, key) => {
+      const rules = ruleReferences(await this.promotions.config(), kind, key);
+      if (kind !== 'rank') return rules;
+      const em = this.em.fork();
+      const [exclusions, lists] = await Promise.all([em.count(ExclusionEntity, { targetRank: key }), em.find(PromotionListEntity, {}, { fields: ['entries'] })]);
+      const entries = lists.reduce((sum, l) => sum + l.entries.filter((e) => e.rank === key || e.targetRank === key).length, 0);
+      return rules + exclusions + entries;
+    });
+    this.catalogReferences.require('promotions', 'rank', 'probation');
   }
 }
 

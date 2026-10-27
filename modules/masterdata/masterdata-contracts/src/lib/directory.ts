@@ -11,6 +11,7 @@ import type { Vehicle } from './vehicle.js';
 export const PERSON_DIRECTORY = 'masterdata.PersonDirectory';
 export const ORGANIZATION = 'masterdata.Organization';
 export const ORGANIZATION_REFERENCES = 'masterdata.OrganizationReferences';
+export const CATALOG_REFERENCES = 'masterdata.CatalogReferences';
 
 /** A person as of a given date, with what other modules usually need to check. */
 export interface PersonSnapshot {
@@ -126,6 +127,23 @@ export type OrganizationObject = 'department' | 'station' | 'vehicle';
  */
 export interface OrganizationReferences {
   register(module: string, count: (kind: OrganizationObject, id: string) => Promise<number>): void;
+}
+
+/**
+ * Catalog entries are referenced by `kind` and `key` (data, settings, rules). Every module reports how often it refers
+ * to an entry, so the masterdata module deletes only entries nothing uses (`catalog.inUse` with `usages`).
+ * Register in `onModuleInit`: `catalogReferences.register('incidents', (kind, key) => …count…)`.
+ */
+export interface CatalogReferences {
+  register(module: string, count: (kind: CatalogKind, key: string) => Promise<number>): void;
+  /** The module's code relies on this entry (e.g. the qualification `breathing-apparatus`); it is never deleted (`catalog.required`). */
+  require(module: string, kind: CatalogKind, key: string): void;
+}
+
+/** Body of the `409 catalog.inUse` response: references per module (module ID). */
+export interface CatalogUsage {
+  module: string;
+  count: number;
 }
 
 /**

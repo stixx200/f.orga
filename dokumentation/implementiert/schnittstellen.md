@@ -103,6 +103,7 @@ Schemas aus `@forga/masterdata-contracts`. „Abteilungsbezogen“ heißt: Das R
 | `GET` | `/masterdata/catalog?kind=` | angemeldet | Katalogeinträge, optional einer Art (`CatalogKind`) |
 | `POST` | `/masterdata/catalog` | `masterdata.catalogs.manage` | Eintrag anlegen (`CatalogEntryInput`). Fehler: `catalog.keyTaken` (`409`), `validation.failed` für `attributes.*` |
 | `PUT` | `/masterdata/catalog/:id` | `masterdata.catalogs.manage` | Name, Reihenfolge, `active`, Zusatzfelder ändern. `kind` und `key` sind fest (`catalog.keyImmutable`). |
+| `DELETE` | `/masterdata/catalog/:id` | `masterdata.catalogs.manage` | Unbenutzten Eintrag löschen (`204`). Fehler (`409`): `catalog.inUse` mit `usages: [{ module, count }]` (Verweise je Modul, `CATALOG_REFERENCES`), `catalog.required` mit `modules` (vom Code benötigter Eintrag) |
 | `POST` | `/masterdata/catalog/templates/bw` | `masterdata.catalogs.manage` | BW-Vorlage anwenden, Antwort `{ added: { <art>: anzahl } }` |
 | `GET` | `/masterdata/vehicle-statistics-categories` | angemeldet | Feste Statistik-Kategorien F63–F120 |
 

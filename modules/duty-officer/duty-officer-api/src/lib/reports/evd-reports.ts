@@ -22,6 +22,8 @@ import { ExpectedReportEntity, IncidentExemptionEntity } from '../duty-officer.e
 import { DutyOfficerConfig, DutyRosterService } from '../roster/roster.js';
 
 const MODULE = 'duty-officer';
+/** Function (catalog key) of the duty officer in his EvD report. */
+export const DUTY_OFFICER_FUNCTION = 'duty-officer';
 
 /**
  * The EvD report of every incident: registers the unit "Einsatzleiter vom Dienst" with the incidents module, adds
@@ -79,7 +81,7 @@ export class EvdReports implements OnModuleInit, DeadlineProvider {
   private async create(incidentId: string, alarmedAt: Date): Promise<void> {
     const [officer] = await this.roster.onDutyAt(alarmedAt);
     const functions = await this.organization.catalog('function');
-    const role = functions.some((f) => f.key === 'duty-officer') ? 'duty-officer' : null;
+    const role = functions.some((f) => f.key === DUTY_OFFICER_FUNCTION) ? DUTY_OFFICER_FUNCTION : null;
     await this.reports.createUnitReport(incidentId, DUTY_OFFICER_UNIT, {
       authorPersonId: officer ?? null,
       personnel: officer ? [{ personId: officer, function: role }] : [],

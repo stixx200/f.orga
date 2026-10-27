@@ -2,6 +2,7 @@ import { Global, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, OrganizationDirectory, RetentionRegistry, RoleAssignment, SearchRegistry } from '@forga/core-api';
 import {
+  CATALOG_REFERENCES,
   MASTERDATA_MANIFEST,
   MASTERDATA_SETTINGS,
   ORGANIZATION,
@@ -12,6 +13,8 @@ import {
 } from '@forga/masterdata-contracts';
 import { MASTERDATA_MIGRATIONS } from '../migrations/index.js';
 import { CatalogController, CatalogEntry, CatalogService } from './catalog/catalog.js';
+import { CatalogReferenceRegistry } from './catalog/references.js';
+import { MasterdataCatalogUsage } from './catalog/usage.js';
 import { Course, CourseAttendance, CourseNomination, CourseRun } from './courses/course.entities.js';
 import { CoursesController } from './courses/courses.controller.js';
 import { MasterdataDeadlines } from './deadlines/masterdata.deadlines.js';
@@ -30,7 +33,10 @@ import { PersonsController } from './persons/persons.controller.js';
 import { SelfController } from './self/self.controller.js';
 import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/persons.service.js';
 
-/** Global, so other modules can inject `PERSON_DIRECTORY`, `ORGANIZATION`, `ORGANIZATION_REFERENCES` and `PERSON_HOLDINGS` without importing this package. */
+/**
+ * Global, so other modules can inject `PERSON_DIRECTORY`, `ORGANIZATION`, `ORGANIZATION_REFERENCES`, `CATALOG_REFERENCES`
+ * and `PERSON_HOLDINGS` without importing this package.
+ */
 @Global()
 @Module({
   controllers: [CatalogController, OrganizationController, GroupsController, PersonsController, CoursesController, SelfController],
@@ -46,10 +52,13 @@ import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/person
     { provide: ORGANIZATION, useClass: OrganizationService },
     OrganizationReferenceRegistry,
     { provide: ORGANIZATION_REFERENCES, useExisting: OrganizationReferenceRegistry },
+    CatalogReferenceRegistry,
+    { provide: CATALOG_REFERENCES, useExisting: CatalogReferenceRegistry },
+    MasterdataCatalogUsage,
     PersonHoldingsRegistry,
     { provide: PERSON_HOLDINGS, useExisting: PersonHoldingsRegistry },
   ],
-  exports: [PERSON_DIRECTORY, ORGANIZATION, ORGANIZATION_REFERENCES, PERSON_HOLDINGS],
+  exports: [PERSON_DIRECTORY, ORGANIZATION, ORGANIZATION_REFERENCES, CATALOG_REFERENCES, PERSON_HOLDINGS],
 })
 export class MasterdataModule implements OnModuleInit {
   constructor(
@@ -64,6 +73,8 @@ export class MasterdataModule implements OnModuleInit {
     private readonly personsImport: PersonsImport,
     private readonly careerImport: CareerImport,
     private readonly references: OrganizationReferenceRegistry,
+    private readonly catalogReferences: CatalogReferenceRegistry,
+    private readonly catalogUsage: MasterdataCatalogUsage,
     private readonly search: SearchRegistry,
     private readonly exports: ExportRegistry,
     private readonly retention: RetentionRegistry,
@@ -84,6 +95,10 @@ export class MasterdataModule implements OnModuleInit {
     this.references.register('core', (kind, id) =>
       kind === 'department' ? this.em.fork().count(RoleAssignment, { departmentId: id }) : Promise.resolve(0),
     );
+    // Person files, vehicles, courses and membership rules refer to catalog entries; the list of breathing apparatus
+    // wearers relies on the qualification `breathing-apparatus`.
+    this.catalogReferences.register('masterdata', (kind, key) => this.catalogUsage.count(kind, key));
+    this.catalogReferences.require('masterdata', 'qualification', 'breathing-apparatus');
     // The core checks role assignments and user links against departments and persons, and extends a department
     // assignment to the departments below it (youth and veterans department of an operational department).
     this.organization.register({

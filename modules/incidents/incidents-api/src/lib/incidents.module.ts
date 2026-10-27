@@ -2,7 +2,7 @@ import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { Attachments, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
 import { INCIDENT_UNITS, INCIDENTS_LOOKUP, INCIDENTS_MANIFEST, INCIDENTS_SETTINGS, INCIDENTS_UNIT_REPORTS } from '@forga/incidents-contracts';
-import { ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
+import { CATALOG_REFERENCES, type CatalogReferences, ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
 import { INCIDENTS_MIGRATIONS } from '../migrations/index.js';
 import { ExternalController } from './api/external.controller.js';
 import { IncidentsData } from './data/incidents.data.js';
@@ -58,6 +58,7 @@ export class IncidentsModule implements OnModuleInit {
     private readonly imports: ImportRegistry,
     private readonly mpFeuerImport: MpFeuerIncidentsImport,
     @Inject(ORGANIZATION_REFERENCES) private readonly references: OrganizationReferences,
+    @Inject(CATALOG_REFERENCES) private readonly catalogReferences: CatalogReferences,
     private readonly search: SearchRegistry,
     private readonly exports: ExportRegistry,
     private readonly data: IncidentsData,
@@ -77,6 +78,9 @@ export class IncidentsModule implements OnModuleInit {
       if (kind === 'station') return em.count(ReportPersonnelEntity, { standbyStationId: id });
       return Promise.all([em.count(ReportVehicleEntity, { vehicleId: id }), em.count(ReportPersonnelEntity, { vehicleId: id })]).then(([a, b]) => a + b);
     });
+    // Personnel of the reports keep the function key; the rule `breathing-without-qualification` relies on the qualification.
+    this.catalogReferences.register('incidents', (kind, key) => (kind === 'function' ? this.em.fork().count(ReportPersonnelEntity, { function: key }) : Promise.resolve(0)));
+    this.catalogReferences.require('incidents', 'qualification', 'breathing-apparatus');
     this.search.register('incidents', (user, query) => this.data.search(user, query));
     this.exports.register('incidents', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
     this.historyAccess.register('incidents.report', async (user, id) => {
