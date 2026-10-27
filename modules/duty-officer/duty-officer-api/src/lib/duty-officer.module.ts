@@ -1,10 +1,11 @@
-import { Global, Module, type OnModuleInit } from '@nestjs/common';
+import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
 import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry } from '@forga/core-api';
 import { DUTY_OFFICER_MANIFEST, DUTY_OFFICER_READ, DUTY_OFFICER_ROSTER, DUTY_OFFICER_SETTINGS, DUTY_ROSTER } from '@forga/duty-officer-contracts';
+import { CATALOG_REFERENCES, type CatalogReferences } from '@forga/masterdata-contracts';
 import { DUTY_OFFICER_MIGRATIONS } from '../migrations/index.js';
 import { DutyAssignmentEntity, ExpectedReportEntity, IncidentExemptionEntity } from './duty-officer.entities.js';
-import { EvdIncidentsController, EvdReports } from './reports/evd-reports.js';
+import { DUTY_OFFICER_FUNCTION, EvdIncidentsController, EvdReports } from './reports/evd-reports.js';
 import { DutyEvents, DutyOfficerConfig, DutyRosterImport, DutyRosterService, RosterController } from './roster/roster.js';
 
 /** Global, so other modules can inject `DUTY_ROSTER` (e.g. the compensation export of the incident reports). */
@@ -23,11 +24,14 @@ export class DutyOfficerModule implements OnModuleInit {
     private readonly evd: EvdReports,
     private readonly exports: ExportRegistry,
     private readonly historyAccess: HistoryAccessRegistry,
+    @Inject(CATALOG_REFERENCES) private readonly catalogReferences: CatalogReferences,
   ) {}
 
   onModuleInit(): void {
     this.imports.register('duty-officer', this.rosterImport.profile());
     this.deadlines.register(this.evd);
+    // New EvD reports enter the duty officer with this function.
+    this.catalogReferences.require('duty-officer', 'function', DUTY_OFFICER_FUNCTION);
     const duties = async (where: object = {}) => (await this.em.fork().find(DutyAssignmentEntity, where)).map((d) => wrap(d).toObject());
     this.exports.register('duty-officer', {
       all: async () => ({ duties: await duties(), ...(await this.evd.exportAll()) }),

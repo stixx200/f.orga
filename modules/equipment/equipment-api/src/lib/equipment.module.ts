@@ -2,14 +2,14 @@ import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { Attachments, CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
 import { EQUIPMENT_MANIFEST, EQUIPMENT_SETTINGS, EQUIPMENT_USAGE } from '@forga/equipment-contracts';
-import { ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
+import { CATALOG_REFERENCES, type CatalogReferences, ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
 import { EQUIPMENT_MIGRATIONS } from '../migrations/index.js';
 import { CatalogController } from './catalog/catalog.controller.js';
 import { EquipmentData } from './data/equipment.data.js';
 import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, UsageEntity } from './equipment.entities.js';
 import { InventoryImport } from './imports/inventory.import.js';
 import { ItemsController } from './items/items.controller.js';
-import { ItemsService, READ } from './items/items.service.js';
+import { INSPECTOR_QUALIFICATIONS, ItemsService, READ } from './items/items.service.js';
 import { EquipmentLists } from './lists/equipment.lists.js';
 
 /** Global, so other modules can inject `EQUIPMENT_USAGE` (consumables of an incident report). */
@@ -35,6 +35,7 @@ export class EquipmentModule implements OnModuleInit {
     private readonly attachments: Attachments,
     private readonly items: ItemsService,
     @Inject(ORGANIZATION_REFERENCES) private readonly references: OrganizationReferences,
+    @Inject(CATALOG_REFERENCES) private readonly catalogReferences: CatalogReferences,
   ) {}
 
   onModuleInit(): void {
@@ -44,6 +45,8 @@ export class EquipmentModule implements OnModuleInit {
     this.codes.register('equipment', (user, code) => this.data.code(user, code));
     this.exports.register('equipment', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
     this.imports.register('equipment', this.inventory.profile());
+    // Inspections by a competent person are checked against these qualifications.
+    for (const key of Object.values(INSPECTOR_QUALIFICATIONS)) this.catalogReferences.require('equipment', 'qualification', key);
     this.historyAccess.register('equipment.item', async (user, id) => {
       const item = await this.em.fork().findOne(EquipmentItemEntity, id);
       return { allowed: Boolean(item) && user.can(READ, item!.departmentId) };

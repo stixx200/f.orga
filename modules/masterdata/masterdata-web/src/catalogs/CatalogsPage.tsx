@@ -1,8 +1,11 @@
-import { Button, Group, MultiSelect, NumberInput, Select, SimpleGrid, Stack, Switch, Tabs, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Group, List, MultiSelect, NumberInput, Select, SimpleGrid, Stack, Switch, Tabs, Text, TextInput } from '@mantine/core';
+import { IconTrash } from '@tabler/icons-react';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { type CatalogEntry, CatalogKind, type Course, type CourseInput, type PersonStatus, VEHICLE_STATISTICS_CATEGORIES } from '@forga/masterdata-contracts';
-import { send, useLocalized, useTranslation } from '@forga/web-sdk';
-import { DataTable, PageHeader, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import type { ActiveModule } from '@forga/core-contracts';
+import { type CatalogEntry, CatalogKind, type CatalogUsage, type Course, type CourseInput, type PersonStatus, VEHICLE_STATISTICS_CATEGORIES } from '@forga/masterdata-contracts';
+import { api, ApiError, send, useLocalized, useTranslation } from '@forga/web-sdk';
+import { DataTable, Notice, notifySuccess, PageHeader, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { useCatalog, useDepartments } from '../api';
 import { useCourses } from '../persons/CoursesTab';
 
@@ -168,9 +171,90 @@ function CourseDialog({ course, onClose }: { course?: Course; onClose: () => voi
   );
 }
 
+/** Why an entry cannot be deleted: references per module (`catalog.inUse`) or modules relying on it (`catalog.required`). */
+type Blocked = { code: 'catalog.inUse'; usages: CatalogUsage[] } | { code: 'catalog.required'; modules: string[] };
+
+/**
+ * Confirms the deletion of an entry. The server deletes only entries nothing refers to; otherwise the dialog lists the
+ * references per module and offers to deactivate the entry instead.
+ */
+function DeleteEntryDialog({ entry, onClose }: { entry: CatalogEntry; onClose: () => void }) {
+  const { t } = useTranslation('masterdata');
+  const { t: common } = useTranslation('common');
+  const localized = useLocalized();
+  const [blocked, setBlocked] = useState<Blocked | null>(null);
+  const { data: modules = [] } = useQuery({ queryKey: ['core', 'modules'], queryFn: () => api<ActiveModule[]>('core/modules'), staleTime: 5 * 60_000 });
+  const moduleName = (id: string) => {
+    const module = modules.find((m) => m.id === id);
+    return module ? localized(module.name) : id;
+  };
+  const invalidate = [['masterdata', 'catalog', entry.kind]] as const;
+  const remove = useAction(
+    async () => {
+      try {
+        await send('DELETE', `masterdata/catalog/${entry.id}`);
+        return true;
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 409) throw error;
+        if (error.code === 'catalog.inUse') setBlocked({ code: error.code, usages: (error.body?.['usages'] as CatalogUsage[] | undefined) ?? [] });
+        else if (error.code === 'catalog.required') setBlocked({ code: error.code, modules: (error.body?.['modules'] as string[] | undefined) ?? [] });
+        else throw error;
+        return false;
+      }
+    },
+    {
+      invalidate,
+      onSuccess: (deleted) => {
+        if (!deleted) return;
+        notifySuccess(t('catalogs.deleted'));
+        onClose();
+      },
+    },
+  );
+  const deactivate = useAction(
+    () => send('PUT', `masterdata/catalog/${entry.id}`, { kind: entry.kind, key: entry.key, name: entry.name, sortOrder: entry.sortOrder, active: false, attributes: entry.attributes }),
+    { success: t('catalogs.deactivated'), invalidate, onSuccess: onClose },
+  );
+  return (
+    <ResponsiveDialog
+      opened
+      onClose={onClose}
+      title={t('catalogs.deleteTitle')}
+      actions={
+        blocked ? (
+          <>
+            <Button variant="default" onClick={onClose}>{common('actions.close')}</Button>
+            {entry.active && <Button loading={deactivate.isPending} onClick={() => deactivate.mutate(undefined)}>{t('catalogs.deactivateInstead')}</Button>}
+          </>
+        ) : (
+          <>
+            <Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button>
+            <Button color="red" loading={remove.isPending} onClick={() => remove.mutate(undefined)}>{common('actions.delete')}</Button>
+          </>
+        )
+      }
+    >
+      <Text size="sm">{t('catalogs.deleteConfirm', { name: localized(entry.name), key: entry.key })}</Text>
+      {blocked?.code === 'catalog.inUse' && (
+        <Notice kind="warning">
+          {t('catalogs.inUse')}
+          <List size="sm" mt={4}>
+            {blocked.usages.map((u) => <List.Item key={u.module}>{t('catalogs.usage', { module: moduleName(u.module), count: u.count })}</List.Item>)}
+          </List>
+          {entry.active ? t('catalogs.deactivateHint') : t('catalogs.alreadyInactive')}
+        </Notice>
+      )}
+      {blocked?.code === 'catalog.required' && (
+        <Notice kind="warning">{t('catalogs.required', { modules: blocked.modules.map(moduleName).join(', ') })}</Notice>
+      )}
+    </ResponsiveDialog>
+  );
+}
+
 function CatalogTable({ kind, onEdit }: { kind: CatalogKind; onEdit: (entry?: CatalogEntry) => void }) {
   const { t } = useTranslation('masterdata');
   const { data = [] } = useCatalog(kind);
+  const [deleting, setDeleting] = useState<CatalogEntry | null>(null);
   return (
     <Stack gap="sm">
       <Group justify="flex-end"><Button size="xs" variant="outline" onClick={() => onEdit()}>{t('catalogs.add')}</Button></Group>
@@ -185,8 +269,27 @@ function CatalogTable({ kind, onEdit }: { kind: CatalogKind; onEdit: (entry?: Ca
           { key: 'key', header: t('catalogs.key'), render: (e) => <code>{e.key}</code> },
           ...ATTRIBUTE_FIELDS[kind].map((f) => ({ key: f.key, header: t(`catalogs.attributes.${f.key}`), render: (e: CatalogEntry) => String(e.attributes[f.key] ?? '') })),
           { key: 'active', header: t('catalogs.status'), render: (e) => <StatusBadge tone={e.active ? 'done' : 'neutral'}>{t(e.active ? 'catalogs.activeBadge' : 'catalogs.inactiveBadge')}</StatusBadge> },
+          {
+            key: 'actions',
+            header: '',
+            align: 'right',
+            render: (e) => (
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                aria-label={t('catalogs.deleteEntry', { name: e.name.de })}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDeleting(e);
+                }}
+              >
+                <IconTrash size={16} />
+              </ActionIcon>
+            ),
+          },
         ]}
       />
+      {deleting && <DeleteEntryDialog entry={deleting} onClose={() => setDeleting(null)} />}
     </Stack>
   );
 }

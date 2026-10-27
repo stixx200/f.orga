@@ -127,6 +127,8 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Lehrgangstermin | `CourseRun` |
 | Lehrgangsbedarf (Haben, Soll, Vorgemerkt je Lehrgang und Abteilung) | `CourseNeed`, Soll `targets` am Lehrgang |
 | Gruppe (als Einheit einer Abteilung), Gruppenführer | `DepartmentGroup`, `leader` |
+| Katalog, Katalogeintrag (Schlüssel) | `CatalogEntry` (`kind`, `key`) |
+| Verwendung eines Katalogeintrags | catalog reference (`CATALOG_REFERENCES`, `catalog.inUse`) |
 | Qualifikation | `Qualification` |
 | Dienstgrad | `Rank` |
 | Beförderung | `Promotion` |

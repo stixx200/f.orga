@@ -361,8 +361,27 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
 Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elternbezug `person`.
 
 **Kataloge**
-- Arten (`CatalogKind`): `function`, `qualification`, `vehicle-type`, `honor`, `exit-reason`, `rank`.
-- Jeder Eintrag hat einen stabilen `key` und einen zweisprachigen `name`. Andere Daten verweisen über den Schlüssel, deshalb können `kind` und `key` nach dem Anlegen nicht mehr geändert werden. Einträge werden deaktiviert statt gelöscht.
+- Arten (`CatalogKind`): `function`, `qualification`, `vehicle-type`, `honor`, `exit-reason`, `rank`, `office`.
+- Jeder Eintrag hat einen stabilen `key` und einen zweisprachigen `name`. Andere Daten verweisen über den Schlüssel, deshalb können `kind` und `key` nach dem Anlegen nicht mehr geändert werden. Inaktive Einträge stehen nicht mehr zur Auswahl, bleiben aber an bestehenden Daten erhalten.
+- **Löschen** (`DELETE /api/masterdata/catalog/:id`) geht nur, solange nichts den Eintrag verwendet; benutzte Einträge werden deaktiviert. Jedes Modul zählt seine Verweise selbst und meldet sie über `CATALOG_REFERENCES` (`register(module, count(kind, key))`, Registry `catalog/references.ts`). Sonst `409 catalog.inUse` mit `usages: [{ module, count }]` (die Oberfläche nennt die Modulnamen und bietet „Stattdessen deaktivieren“). Die Löschung steht in der Historie des Eintrags. Gezählt werden:
+
+  | Modul | Verweise |
+  | --- | --- |
+  | `masterdata` | Qualifikationen der Personen, vermittelte und geforderte Qualifikationen der Lehrgänge, Probezeit-Qualifikationen der Einstellung `masterdata.membership`; Dienstgrade, Ehrungen und Ämter der Personen; Austrittsgrund; Fahrzeugtyp der Fahrzeuge |
+  | `incidents` | Funktion im Personal der Berichte (auch EvD-Berichte) |
+  | `compensation` | Amt einer Funktionspauschale (Einstellung `compensation.general`) |
+  | `promotions` | Zieldienstgrad und Bedingungen (Dienstgrad, Qualifikation, Amt) der Regeln (Einstellung `promotions.general`), Dienstgrad und Zieldienstgrad der Einträge von Beförderungslisten, Zieldienstgrad von Sperren |
+
+  Nicht als Verweis zählen: die Fahrzeugsätze des Kostenersatzes (Kategorien der Verordnung; maßgeblich ist der Fahrzeugtyp bzw. die Kostenersatz-Kategorie des Fahrzeugs), die Rollen der Dienst-Anwesenheit (freier Text) und die Lehrgangspauschalen der Entschädigung (Lehrgangsschlüssel, keine Katalogeinträge).
+- **Vom Code benötigte Einträge** meldet ein Modul mit `require(module, kind, key)`; sie lassen sich nie löschen (`409 catalog.required` mit `modules`):
+
+  | Eintrag | Modul | Grund |
+  | --- | --- | --- |
+  | Qualifikation `breathing-apparatus` | `masterdata`, `incidents`, `respiratory-protection` | Liste der Atemschutzgeräteträger, Prüfregel `breathing-without-qualification`, Atemschutzgeräteträger der Tauglichkeit |
+  | Qualifikation `chemical-suit` | `respiratory-protection` | Bedingung CSA-Übung |
+  | Qualifikationen `equipment-officer`, `breathing-apparatus-officer` | `equipment` | Qualifikationswarnung bei Prüfungen durch eine befähigte Person |
+  | Dienstgrad `probation` | `promotions` | Dienstgrad von Personen in Probezeit ohne Dienstgrad-Eintrag |
+  | Funktion `duty-officer` | `duty-officer` | Funktion des EvD in neuen EvD-Berichten |
 - Zusatzfelder je Art prüft `CatalogAttributes`:
   - Qualifikation: `validityMonths`
   - Fahrzeugtyp: `crew`, `seats`, `statisticsCategory`
@@ -496,12 +515,14 @@ Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elt
 
 **Suche:** Personen mit lesbarer Akte stehen vorn (die der eigenen Abteilungen zuerst), dann Einträge, die nur im Personenverzeichnis sichtbar sind; diese nennen die Stammabteilung und führen zur Personenliste mit dem Namen als Suche (`/masterdata/persons?q=`), nicht zur Akte.
 
-**Schnittstellen für andere Module.** `MasterdataModule` ist `@Global()` und stellt zwei Tokens aus `@forga/masterdata-contracts` bereit. Beide prüfen keine Rechte; das ist Sache des aufrufenden Moduls.
+**Schnittstellen für andere Module.** `MasterdataModule` ist `@Global()` und stellt diese Tokens aus `@forga/masterdata-contracts` bereit. Sie prüfen keine Rechte; das ist Sache des aufrufenden Moduls.
 
 | Token | Leistung |
 | --- | --- |
 | `PERSON_DIRECTORY` | `search`, `snapshots(ids, date)` mit Abteilungen, gültigen Qualifikationen, Dienstgrad, Geschlecht, Beschäftigung, Musiker und Führerscheinklassen zum Stichtag, `findByPersonnelNumber`, `memberPeriods` (Name und Mitgliedschaftszeiträume aller Personen mit Abteilung und Stammabteilung, mit `membersOnDate` für Importe über viele Tage), `membersOn(date)` (alle Personen mit Mitgliedschaft am Tag), `careers(ids?)` (mit Ämtern), `offices({ offices? })` (Inhaber von Ämtern mit Zeitraum) |
 | `ORGANIZATION` | `departments`, `stations`, `vehicles` |
+| `ORGANIZATION_REFERENCES` | `register(module, count(kind, id))`: Verweise auf Abteilungen, Wachen und Fahrzeuge; gelöscht wird nur, was niemand mehr nutzt (`masterdata.inUse`) |
+| `CATALOG_REFERENCES` | `register(module, count(kind, key))` und `require(module, kind, key)`: Verweise auf Katalogeinträge und vom Code benötigte Einträge (siehe Kataloge; `catalog.inUse`, `catalog.required`) |
 | `PERSON_HOLDINGS` | `register(module, count(personId))`: andere Module melden, was eine Person noch hält (z. B. Schutzausrüstung); Austritt und Übernahme in die Altersabteilung lehnen dann mit `masterdata.personHoldsItems` ab (`modules`: Modul-IDs, die Oberfläche nennt die Modulnamen) |
 
 ## Modul Einsatzberichte (`incidents`)
@@ -1289,7 +1310,7 @@ Weitere Seiten der Stammdaten:
 | `/masterdata/persons/:id` | Personalakte: Kopf mit Dienstgrad, Abteilungen, Status und Qualifikationen; Reiter Stammdaten (sensible Felder nur mit Recht), Feuerwehr (Ruhezeiten, Probezeit ändern, endgültig aufnehmen, Übernahme in Einsatzabteilung bzw. Altersabteilung, Status ändern, Austritt, Abteilungen, Beförderungen, Führerschein), Lehrgänge (Teilnahmen, Vormerkungen), Qualifikationen, Ehrungen, Ämter (mit Abteilung und Zeitraum, beenden über „bis“), Reiter anderer Module, Historie. Stammdaten werden gesammelt mit „Speichern“ übernommen, alles andere sofort. Lehrgänge pflegt auch, wer nur `masterdata.courses.plan` hat. **Direktlink auf einen Reiter:** `/masterdata/persons/:id?tab=<reiter>` mit `master`, `brigade`, `courses`, `qualifications`, `honors`, `offices`, `history` oder der Modul-ID eines Erweiterungsreiters (`masterdata.person.tab`), z. B. `?tab=respiratory-protection`, `?tab=clothing`, `?tab=incidents`; unbekannte Werte öffnen die Stammdaten. Der gewählte Reiter steht in der Adresse. |
 | `/masterdata/vehicles` | Alle Fahrzeuge, bearbeiten über den Fahrzeugdialog |
 | `/masterdata/courses` | Lehrgangsplanung, Reiter „Lehrgänge“: Lehrgänge mit Zahl der Vormerkungen und Anmeldungen; je Lehrgang die Bedingungen (Namen statt Schlüssel), Termine (anlegen, ändern, löschen, „Teilnahme erfassen“ mit Ergebnis je Person), Vorgemerkte mit Abteilung, Wunschzeitraum, Bedingungen und direkt änderbarer Priorität, Termin, Status und Bemerkung (Löschen mit Rückfrage), Kandidaten als Tabelle mit Abteilungsfilter, Sortierung und Mehrfachauswahl, gemeinsam vormerken. Reiter „Lehrgangsbedarf“: Lehrgang × Abteilung mit Haben, Soll, Vorgemerkt und Fehlen |
-| `/masterdata/catalogs` | Kataloge (im Menü unter „Verwaltung“, sie gelten für die ganze Anwendung) (Funktionen, Qualifikationen, Fahrzeugtypen, Ehrungen, Austrittsgründe, Dienstgrade) und Lehrgänge (mit Bedingungen und Soll je Abteilung) pflegen, BW-Vorlage ergänzen; Einträge werden deaktiviert statt gelöscht |
+| `/masterdata/catalogs` | Kataloge (im Menü unter „Verwaltung“, sie gelten für die ganze Anwendung) (Funktionen, Qualifikationen, Fahrzeugtypen, Ehrungen, Austrittsgründe, Dienstgrade, Ämter) und Lehrgänge (mit Bedingungen und Soll je Abteilung) pflegen, BW-Vorlage ergänzen; unbenutzte Einträge löschen (mit Bestätigung; bei Verwendung nennt der Dialog die Module mit Anzahl und bietet „Stattdessen deaktivieren“) |
 
 **Erweiterungspunkte:** Ein Modul-Frontend kann über `extensions` in `defineWebModule` Inhalte in andere Module einhängen (`Extension` mit `label`, `permission`, `component`). Die Shell registriert sie beim Laden (`registerExtensions`), das Zielmodul fragt sie mit `extensionsOf(punkt)` ab. Vorhanden: `masterdata.person.tab` (Reiter der Personalakte, Props `{ personId }`); die Einsatzberichte liefern damit den Reiter „Einsätze“ (`GET /api/incidents/persons/:personId/assignments?year=`); `incidents.report.sections` (Karten im Bericht, Props `{ reportId, incidentId, departmentId, vehicleIds, breathingVehicleIds, disabled }`); `incidents.incident.sections` (Karten beim Einsatz neben „Kosten und Bemerkungen“, Props `{ incidentId, chargeable, disabled }`; der Kostenersatz zeigt dort den Tatbestand); `training.session.sections` (Reiter eines Dienstes, Props `{ sessionId, departmentIds, disabled }`); `core.me.sections` (Mein Bereich); `incidents.settings.rates` (ersetzt in den Einstellungen der Einsatzberichte Stundensätze und Rundung, wenn ein Modul sie führt).
 

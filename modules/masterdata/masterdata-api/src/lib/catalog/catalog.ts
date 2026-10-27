@@ -3,7 +3,9 @@ import {
   Body,
   ConflictException,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Injectable,
   NotFoundException,
   Param,
@@ -24,6 +26,7 @@ import {
   CatalogKind,
   VEHICLE_STATISTICS_CATEGORIES,
 } from '@forga/masterdata-contracts';
+import { CatalogReferenceRegistry } from './references.js';
 
 export const CatalogEntrySchema = defineEntity({
   name: 'CatalogEntry',
@@ -113,6 +116,7 @@ export class CatalogController {
   constructor(
     private readonly em: EntityManager,
     private readonly catalogs: CatalogService,
+    private readonly references: CatalogReferenceRegistry,
   ) {}
 
   /** Catalogs are readable by every authenticated user (selection lists). */
@@ -135,7 +139,7 @@ export class CatalogController {
     return toCatalogDto(entry);
   }
 
-  /** Kind and key are fixed once created; entries are deactivated instead of deleted. */
+  /** Kind and key are fixed once created; entries still in use are deactivated instead of deleted. */
   @Put('catalog/:id')
   @RequirePermissions('masterdata.catalogs.manage')
   async update(@Param('id') id: string, @Body(new ZodPipe(CatalogEntryInput)) input: ParsedEntry): Promise<CatalogEntryDto> {
@@ -149,6 +153,21 @@ export class CatalogController {
     em.assign(entry, { name, sortOrder, active, attributes });
     await em.flush();
     return toCatalogDto(entry);
+  }
+
+  /**
+   * Deletes an entry nothing refers to. Otherwise `409 catalog.inUse` with the references per module (`usages`),
+   * or `409 catalog.required` when a module's code relies on the entry.
+   */
+  @Delete('catalog/:id')
+  @HttpCode(204)
+  @RequirePermissions('masterdata.catalogs.manage')
+  async remove(@Param('id') id: string): Promise<void> {
+    const em = this.em.fork();
+    const entry = await em.findOne(CatalogEntry, id);
+    if (!entry) throw new NotFoundException();
+    await this.references.assertDeletable(entry.kind, entry.key);
+    await em.remove(entry).flush();
   }
 
   @Post('catalog/templates/bw')

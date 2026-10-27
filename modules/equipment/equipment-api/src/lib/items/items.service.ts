@@ -80,8 +80,11 @@ export function defectText(defect: Pick<Defect, 'description' | 'finding'>, lang
 }
 
 /** Qualification an inspector person should have; other inspectors are external. */
+/** Qualifications (catalog keys) a competent person needs for inspections of breathing apparatus or other equipment. */
+export const INSPECTOR_QUALIFICATIONS = { breathing: 'breathing-apparatus-officer', other: 'equipment-officer' } as const;
+
 const INSPECTOR_QUALIFICATION: Partial<Record<InspectionType['inspector'], (breathing: boolean) => string>> = {
-  'competent-person': (breathing) => (breathing ? 'breathing-apparatus-officer' : 'equipment-officer'),
+  'competent-person': (breathing) => (breathing ? INSPECTOR_QUALIFICATIONS.breathing : INSPECTOR_QUALIFICATIONS.other),
 };
 
 const toInspectionDto = (i: InspectionEntity): Inspection => ({

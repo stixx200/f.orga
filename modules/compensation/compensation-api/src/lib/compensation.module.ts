@@ -1,6 +1,7 @@
-import { Global, Module, type OnModuleInit } from '@nestjs/common';
+import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry } from '@forga/core-api';
 import { COMPENSATION_MANIFEST, COMPENSATION_SETTINGS, COMPENSATION_STATUTE } from '@forga/compensation-contracts';
+import { CATALOG_REFERENCES, type CatalogReferences } from '@forga/masterdata-contracts';
 import { COMPENSATION_MIGRATIONS } from '../migrations/index.js';
 import { FunctionHolderEntity, ItemEntity, RunEntity } from './compensation.entities.js';
 import { CompensationData } from './data/compensation.data.js';
@@ -29,12 +30,18 @@ export class CompensationModule implements OnModuleInit {
     private readonly exports: ExportRegistry,
     private readonly data: CompensationData,
     private readonly historyAccess: HistoryAccessRegistry,
+    private readonly items: ItemsService,
+    @Inject(CATALOG_REFERENCES) private readonly catalogReferences: CatalogReferences,
   ) {}
 
   onModuleInit(): void {
     for (const definition of this.moduleLists.definitions()) this.lists.register('compensation', definition);
     this.deadlines.register(this.data);
     this.exports.register('compensation', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
+    // Function allowances paid to the holders of an office (settings) refer to the office catalog.
+    this.catalogReferences.register('compensation', async (kind, key) =>
+      kind === 'office' ? (await this.items.config()).functionAllowances.filter((a) => a.office === key).length : 0,
+    );
     for (const entity of ['compensation.run', 'compensation.item', 'compensation.function_holder']) this.historyAccess.registerPermission(entity, 'compensation.runs');
   }
 }
