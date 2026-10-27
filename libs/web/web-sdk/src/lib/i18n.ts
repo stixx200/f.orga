@@ -20,20 +20,26 @@ function browserLanguage(): Language {
 }
 
 /**
- * The single i18next instance of the application. Shared via Module Federation,
- * so the shell and all module frontends switch language together.
+ * The single i18next instance of the application, so the shell and all module frontends switch language together.
+ * Module Federation shares this package, but a production build of a module frontend may still evaluate its own copy;
+ * the instance therefore lives on `globalThis`, and a later copy neither creates nor binds a second one (that would
+ * leave React with an instance without the texts of the shell and the other modules).
  */
-export const i18n: I18n = createInstance();
+const shared = globalThis as typeof globalThis & { forgaI18n?: I18n };
+export const i18n: I18n = shared.forgaI18n ?? createInstance();
 
-void i18n.use(initReactI18next).init({
-  lng: storedLanguage() ?? browserLanguage(),
-  fallbackLng: DEFAULT_LANGUAGE,
-  supportedLngs: [...LANGUAGES],
-  ns: ['common'],
-  defaultNS: 'common',
-  resources: { de: { common: common.de }, en: { common: common.en } },
-  interpolation: { escapeValue: false },
-});
+if (!shared.forgaI18n) {
+  shared.forgaI18n = i18n;
+  void i18n.use(initReactI18next).init({
+    lng: storedLanguage() ?? browserLanguage(),
+    fallbackLng: DEFAULT_LANGUAGE,
+    supportedLngs: [...LANGUAGES],
+    ns: ['common'],
+    defaultNS: 'common',
+    resources: { de: { common: common.de }, en: { common: common.en } },
+    interpolation: { escapeValue: false },
+  });
+}
 
 /** Translations of one namespace (the module ID) in every supported language. */
 export type Translations = Record<Language, Record<string, unknown>>;

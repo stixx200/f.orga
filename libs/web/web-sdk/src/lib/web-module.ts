@@ -44,7 +44,9 @@ export function defineWebModule(module: WebModule): WebModule {
   return module;
 }
 
-const extensionPoints = new Map<string, (Extension & { module: string })[]>();
+// On `globalThis` like the i18n instance: a module frontend may evaluate its own copy of this package.
+const registry = globalThis as typeof globalThis & { forgaExtensionPoints?: Map<string, (Extension & { module: string })[]> };
+const extensionPoints = (registry.forgaExtensionPoints ??= new Map<string, (Extension & { module: string })[]>());
 
 /** Called by the shell for every loaded module frontend. */
 export function registerExtensions(module: string, extensions: Record<string, Extension> = {}): void {

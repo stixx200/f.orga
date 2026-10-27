@@ -3,6 +3,9 @@
 #   test system (demo data from `npm run seed`)               http://localhost:${FORGA_TEST_PORT:-8081}
 # Start: docker compose -f docker/compose.stages.yml up -d --build   (values in docker/.env, template docker/.env.example)
 # The systems share the image, nothing else: data, sessions and settings stay apart.
+# Own project name, so it does not collide with docker/compose.dev.yml in the same directory.
+name: forga-stages
+
 x-forga: &forga
   build:
     context: ..
@@ -69,8 +72,13 @@ services:
     volumes:
       - forga-test-db:/var/lib/postgresql/data
 
+# Fixed names: the data survives a change of the project name.
 volumes:
   forga-real-db:
+    name: forga_real_db
   forga-real-plugins:
+    name: forga_real_plugins
   forga-test-db:
+    name: forga_test_db
   forga-test-plugins:
+    name: forga_test_plugins
