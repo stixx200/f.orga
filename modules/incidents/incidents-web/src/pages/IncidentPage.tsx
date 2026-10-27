@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import type { Incident, ReleaseManyResult, Report } from '@forga/incidents-contracts';
 import { api, apiUrl, can, extensionsOf, formatDateTime, formatMoney, fromLocalInput, send, toLocalInput, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
-import { COSTS, keys, READ, RELEASE, useDepartments, useIncident, useKeywords, useNames, useSettings, WRITE } from '../api';
+import { COSTS, keys, useDepartments, useIncident, useKeywords, useNames, useReportAccess, useSettings } from '../api';
 import { DepartmentBadge, keywordLabel, locationLabel, notifyReleaseResult, ReportStatusBadge } from '../parts';
 
 function EditIncidentDialog({ incident, onClose }: { incident: Incident; onClose: () => void }) {
@@ -113,10 +113,11 @@ function ReportCard({ summary, report, readable, onMakePrimary }: { summary: Inc
   const errors = report?.findings.filter((f) => f.level === 'error' && f.rule !== 'primary-missing').length ?? 0;
   return (
     <Panel
-      title={names.departmentName(summary.departmentId)}
+      title={names.ownerName(summary)}
       aside={
         <Group gap={4}>
-          <DepartmentBadge name={t(summary.primary ? 'report.primary' : 'report.secondary')} primary={summary.primary} />
+          {/* Reports of brigade-wide units (e.g. the duty officer) are never primary: they are named as such. */}
+          {summary.unit ? <DepartmentBadge name={t('report.unitReport')} primary={false} unit /> : <DepartmentBadge name={t(summary.primary ? 'report.primary' : 'report.secondary')} primary={summary.primary} />}
           <ReportStatusBadge status={summary.status} locked={summary.locked} />
         </Group>
       }
@@ -148,7 +149,7 @@ function ReportCard({ summary, report, readable, onMakePrimary }: { summary: Inc
             <Button component={Link} to={`/incidents/reports/${summary.id}`} variant="outline" size="xs">{t('incident.openReport')}</Button>
           </Group>
         ) : (
-          <Text size="xs" c="dimmed">{t('incident.otherDepartment')}</Text>
+          <Text size="xs" c="dimmed">{t(summary.unit ? 'incident.otherUnit' : 'incident.otherDepartment')}</Text>
         )}
       </Group>
     </Panel>
@@ -165,20 +166,20 @@ export function IncidentPage() {
   const { data: incident, error } = useIncident(id);
   const { data: departments = [] } = useDepartments();
   const { data: settings } = useSettings();
-  const releaser = session?.permissions[RELEASE] === 'brigade';
-  const readable = (department: string) => releaser || can(session, READ, department);
+  const access = useReportAccess();
+  const releaser = access.releaser;
   const reports = useQueries({
     queries: (incident?.reports ?? []).map((r) => ({
       queryKey: keys.report(r.id),
       queryFn: () => api<Report>(`incidents/reports/${r.id}`),
-      enabled: readable(r.departmentId),
+      enabled: access.read(r),
     })),
   });
   const [releasingAll, setReleasingAll] = useState(false);
   const [editing, setEditing] = useState(false);
   const [primaryFor, setPrimaryFor] = useState<string | null>(null);
   const [departmentId, setDepartmentId] = useState<string | null>(null);
-  const canWrite = (department: string) => releaser || can(session, WRITE, department);
+  const canWrite = (department: string) => access.write({ departmentId: department });
 
   const makePrimary = useAction((reportId: string) => send('POST', `incidents/reports/${reportId}/primary`), {
     success: t('incident.primaryChanged'),
@@ -193,7 +194,7 @@ export function IncidentPage() {
         setReleasingAll(false);
         notifyReleaseResult(result, (reportId) => {
           const summary = incident?.reports.find((r) => r.id === reportId);
-          return summary ? `${names.department(summary.departmentId)} ${summary.number}` : reportId;
+          return summary ? `${names.owner(summary)} ${summary.number}` : reportId;
         }, t);
       },
     },
@@ -211,10 +212,10 @@ export function IncidentPage() {
   const forReview = incident.reports.filter((r) => r.status === 'review');
   // The incident data belong to the writers of the primary report while all reports are unlocked drafts; releasers
   // change them until a report is released.
-  const owner = primary ?? incident.reports[0];
+  const owner = primary ?? incident.reports.find((r) => r.departmentId) ?? incident.reports[0];
   const editable =
     Boolean(owner) &&
-    canWrite(owner.departmentId) &&
+    access.write(owner) &&
     (releaser ? !incident.reports.some((r) => r.status.startsWith('released')) : incident.reports.every((r) => r.status === 'draft' && !r.locked));
 
   return (
@@ -245,8 +246,8 @@ export function IncidentPage() {
             key={summary.id}
             summary={summary}
             report={reports[index]?.data}
-            readable={readable(summary.departmentId)}
-            onMakePrimary={!summary.primary && canWrite(summary.departmentId) && !summary.locked && !summary.status.startsWith('released') && !primary?.status.startsWith('released') ? () => setPrimaryFor(summary.id) : undefined}
+            readable={access.read(summary)}
+            onMakePrimary={!summary.primary && summary.departmentId && canWrite(summary.departmentId) && !summary.locked && !summary.status.startsWith('released') && !primary?.status.startsWith('released') ? () => setPrimaryFor(summary.id) : undefined}
           />
         ))}
       </SimpleGrid>

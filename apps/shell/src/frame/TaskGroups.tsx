@@ -10,6 +10,7 @@ import { deadlineBadge } from './stage';
 const SUBJECT_ROUTES: Record<string, (id: string) => string> = {
   'masterdata.person': (id) => `/masterdata/persons/${id}`,
   'incidents.report': (id) => `/incidents/reports/${id}`,
+  'incidents.incident': (id) => `/incidents/incidents/${id}`,
   'equipment.item': (id) => `/equipment/items/${id}`,
   'clothing.item': (id) => `/clothing/items/${id}`,
   'training.session': (id) => `/training/sessions/${id}`,

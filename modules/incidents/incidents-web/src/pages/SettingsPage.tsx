@@ -114,7 +114,6 @@ function SettingsForm({ initial }: { initial: IncidentSettings }) {
         <Tabs.Tab value="compensation">{t('settingsPage.tabs.compensation')}</Tabs.Tab>
         <Tabs.Tab value="keywords">{t('settingsPage.tabs.keywords')}</Tabs.Tab>
         <Tabs.Tab value="rules">{t('settingsPage.tabs.rules')}</Tabs.Tab>
-        <Tabs.Tab value="duty">{t('settingsPage.tabs.duty')}</Tabs.Tab>
       </Tabs.List>
       <Tabs.Panel value="compensation">
         <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
@@ -226,45 +225,12 @@ function SettingsForm({ initial }: { initial: IncidentSettings }) {
           {saveButton}
         </Panel>
       </Tabs.Panel>
-      <Tabs.Panel value="duty">
-        <Panel title={t('settingsPage.dutyKinds')}>
-          <Text size="sm" c="dimmed" mb="sm">{t('settingsPage.dutyHint')}</Text>
-          <Table withTableBorder>
-            <Table.Thead><Table.Tr><Table.Th>{t('settingsPage.name')}</Table.Th><Table.Th>{t('settingsPage.dutyUnit')}</Table.Th><Table.Th>{t('settingsPage.amountPerDay')}</Table.Th><Table.Th>{t('settingsPage.validFrom')}</Table.Th></Table.Tr></Table.Thead>
-            <Table.Tbody>
-              {form.dutyKinds.map((kind, index) => {
-                const rate = kind.rates.at(-1) ?? { amountPerDay: 0, validFrom: `${thisYear}-01-01` };
-                const update = (patch: Partial<typeof rate>) =>
-                  set('dutyKinds', form.dutyKinds.map((k, i) => (i === index ? { ...k, rates: [...k.rates.slice(0, -1), { ...rate, ...patch }] } : k)));
-                return (
-                  <Table.Tr key={kind.key}>
-                    <Table.Td>{localized(kind.name)}</Table.Td>
-                    <Table.Td>
-                      <Select
-                        aria-label={t('settingsPage.dutyUnit')}
-                        data={(['full-day', 'started-day'] as const).map((u) => ({ value: u, label: t(`settingsPage.dutyUnits.${u}`) }))}
-                        value={kind.unit}
-                        onChange={(v) => v && set('dutyKinds', form.dutyKinds.map((k, i) => (i === index ? { ...k, unit: v as typeof kind.unit } : k)))}
-                        allowDeselect={false}
-                        w={170}
-                      />
-                    </Table.Td>
-                    <Table.Td><NumberInput aria-label={t('settingsPage.amountPerDay')} value={rate.amountPerDay} onChange={(v) => update({ amountPerDay: Number(v) || 0 })} min={0} decimalScale={2} suffix=" €" w={110} /></Table.Td>
-                    <Table.Td><DateInput aria-label={t('settingsPage.validFrom')} value={rate.validFrom} onChange={(v) => v && update({ validFrom: v })} valueFormat="DD.MM.YYYY" w={140} /></Table.Td>
-                  </Table.Tr>
-                );
-              })}
-            </Table.Tbody>
-          </Table>
-          {saveButton}
-        </Panel>
-      </Tabs.Panel>
       {keyword && <KeywordDialog keyword={keyword === 'new' ? undefined : keyword} onClose={() => setKeyword(null)} />}
     </Tabs>
   );
 }
 
-/** Settings of the incident reports: compensation, keywords, report rules, special services. */
+/** Settings of the incident reports: compensation, keywords, report rules. */
 export function SettingsPage() {
   const { t } = useTranslation('incidents');
   const { data, isLoading } = useSettings();

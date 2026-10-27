@@ -4,7 +4,6 @@ import { READ, RELEASE, SELF, WRITE } from './api';
 import { BillingTile, MyOpenTile, RecentIncidents, ReviewTile, useNavigationBadges } from './dashboard';
 import { translations } from './i18n';
 import { CompensationPage } from './pages/CompensationPage';
-import { DutyPage } from './pages/DutyPage';
 import { IncidentPage } from './pages/IncidentPage';
 import { OpenReportsPage } from './pages/OpenReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -26,7 +25,6 @@ export default defineWebModule({
     { path: 'review', element: <ReviewPage /> },
     { path: 'open', element: <OpenReportsPage /> },
     { path: 'compensation', element: <CompensationPage /> },
-    { path: 'duty', element: <DutyPage /> },
     { path: 'statistics', element: <StatisticsPage /> },
     { path: 'settings', element: <SettingsPage /> },
     { path: '*', element: <Pending /> },

@@ -286,6 +286,7 @@ export const de = {
       'cost-recovery': 'Kostenersatz nach Satzung: Tatbestände, Sätze, Berechnung, Bescheid, Kämmerei-Export.',
       promotions: 'Beförderungsregeln, jährliche Beförderungsliste mit Beschluss und Durchführung.',
       clothing: 'Kleiderkammer: Schutzkleidung und Dienstkleidung, Ausgabe und Rücknahme, Größen, Waschen und Imprägnieren.',
+      'duty-officer': 'Einsatzleiter vom Dienst: EvD-Dienstplan mit Tagespauschalen und ein EvD-Bericht für jeden Einsatz.',
     },
     noDescription: 'Zusatzmodul (Plugin) ohne Beschreibung.',
   },

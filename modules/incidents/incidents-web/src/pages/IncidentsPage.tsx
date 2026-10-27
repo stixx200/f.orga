@@ -95,7 +95,7 @@ export function IncidentsPage() {
             header: t('incidents.reports'),
             render: (i) => (
               <Group gap={4}>
-                {i.reports.map((r) => <DepartmentBadge key={r.id} name={names.department(r.departmentId)} primary={r.primary} />)}
+                {i.reports.map((r) => <DepartmentBadge key={r.id} name={names.owner(r)} primary={r.primary} unit={Boolean(r.unit)} />)}
               </Group>
             ),
           },

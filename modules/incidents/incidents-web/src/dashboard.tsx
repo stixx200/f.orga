@@ -2,24 +2,23 @@ import { Text } from '@mantine/core';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import type { Incident } from '@forga/incidents-contracts';
-import { can, formatDateTime, localDate, useSession, useTranslation } from '@forga/web-sdk';
+import { formatDateTime, localDate, useTranslation } from '@forga/web-sdk';
 import { DataTable, KpiTile, Panel } from '@forga/web-ui';
-import { RELEASE, REVIEW, useIncidents, useNames, useSettings } from './api';
+import { type ReportOwner, useIncidents, useNames, useReportAccess, useSettings } from './api';
 import { useForeignBufferCleanup } from './report/editor';
 import { DepartmentBadge, incidentStatus, keywordLabel, locationLabel, ReportStatusBadge } from './parts';
 
 /** Number of reports in the given status among the incidents returned (optionally only of some departments). */
-const countReports = (incidents: Incident[], status: string, departments: (id: string) => boolean = () => true) =>
-  incidents.flatMap((i) => i.reports).filter((r) => r.status === status && departments(r.departmentId)).length;
+const countReports = (incidents: Incident[], status: string, owners: (owner: ReportOwner) => boolean = () => true) =>
+  incidents.flatMap((i) => i.reports).filter((r) => r.status === status && owners(r)).length;
 
 /** The setting `compensationRelease` (two-step release) as the server applies it: on unless switched off. */
 const twoStepRelease = (settings: { compensationRelease?: boolean } | undefined) => settings?.compensationRelease ?? true;
 
-/** Releasers review all departments, pre-reviewers (`incidents.reports.review`) theirs. */
+/** Releasers review all departments, pre-reviewers (`incidents.reports.review`) theirs, those of a unit its reports. */
 function useReviewer() {
-  const session = useSession().data;
-  const releaser = can(session, RELEASE);
-  return { releaser, reviewer: releaser || can(session, REVIEW), reviews: (departmentId: string) => releaser || can(session, REVIEW, departmentId) };
+  const access = useReportAccess();
+  return { releaser: access.releaser, reviewer: access.reviewsAny, reviews: access.review };
 }
 
 export function ReviewTile() {
@@ -73,7 +72,7 @@ export function RecentIncidents() {
             ),
           },
           { key: 'alarm', header: t('fields.alarmedAt'), render: (i) => formatDateTime(i.alarmedAt, language) },
-          { key: 'reports', header: t('incidents.reports'), render: (i) => i.reports.map((r) => <DepartmentBadge key={r.id} name={names.department(r.departmentId)} primary={r.primary} />) },
+          { key: 'reports', header: t('incidents.reports'), render: (i) => i.reports.map((r) => <DepartmentBadge key={r.id} name={names.owner(r)} primary={r.primary} unit={Boolean(r.unit)} />) },
           { key: 'status', header: t('fields.status'), render: (i) => { const s = incidentStatus(i); return s && <ReportStatusBadge status={s} />; } },
         ]}
       />

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { CatalogEntry, Department, PersonSummary, Station, Vehicle } from '@forga/masterdata-contracts';
-import type { AlarmKeyword, Incident, IncidentSettings, Report, ReportRevision } from '@forga/incidents-contracts';
-import { api, withQuery } from '@forga/web-sdk';
+import type { AlarmKeyword, Incident, IncidentSettings, IncidentUnit, Report, ReportRevision } from '@forga/incidents-contracts';
+import { api, can, useLocalized, useSession, withQuery } from '@forga/web-sdk';
 
 export const READ = 'incidents.reports.read';
 export const WRITE = 'incidents.reports.write';
@@ -60,17 +60,62 @@ export function useActiveModules() {
   });
 }
 
+/** Who a report belongs to: a department, or a brigade-wide unit such as the duty officer (`unit`). */
+export type ReportOwner = { departmentId: string | null; unit?: string | null };
+
+/** Key of the owner for queries and maps, e.g. `unit:duty-officer`. */
+export const ownerKey = (owner: ReportOwner) => owner.departmentId ?? `unit:${owner.unit ?? ''}`;
+
 /**
- * Persons who may write the reports of the department (with an account); only they are offered as authors, others
- * would never see the report.
+ * Persons who may write the reports of the department or unit (with an account); only they are offered as authors,
+ * others would never see the report. `null`: nothing to load (e.g. read-only).
  */
-export function useAuthors(departmentId: string | null | undefined) {
+export function useAuthors(owner: ReportOwner | null) {
   return useQuery({
-    queryKey: ['incidents', 'authors', departmentId],
-    queryFn: () => api<string[]>(withQuery('incidents/authors', { departmentId: departmentId ?? undefined })),
-    enabled: Boolean(departmentId),
+    queryKey: ['incidents', 'authors', owner ? ownerKey(owner) : null],
+    queryFn: () => api<string[]>(withQuery('incidents/authors', owner?.departmentId ? { departmentId: owner.departmentId } : { unit: owner?.unit ?? undefined })),
+    enabled: Boolean(owner && (owner.departmentId || owner.unit)),
     staleTime: LONG,
   });
+}
+
+/** Brigade-wide units writing their own reports (e.g. the duty officer), registered by other modules. */
+export function useUnits() {
+  return useQuery({ queryKey: ['incidents', 'units'], queryFn: () => api<IncidentUnit[]>('incidents/units'), staleTime: LONG });
+}
+
+/**
+ * What the user may do with a report, as the server checks it: department reports by the department grants, reports
+ * of units by the permissions the unit names; releasers everything.
+ */
+export function useReportAccess() {
+  const session = useSession().data;
+  const { data: units = [] } = useUnits();
+  const releaser = session?.permissions[RELEASE] === 'brigade';
+  const unitOf = (owner: ReportOwner) => units.find((u) => u.key === owner.unit);
+  return {
+    releaser,
+    read: (owner: ReportOwner) => {
+      if (releaser) return true;
+      if (owner.departmentId) return can(session, READ, owner.departmentId);
+      const unit = unitOf(owner);
+      return session?.permissions[READ] === 'brigade' || Boolean(unit && [unit.readPermission, unit.writePermission, unit.reviewPermission].some((p) => can(session, p)));
+    },
+    write: (owner: ReportOwner) => {
+      if (releaser) return true;
+      if (owner.departmentId) return can(session, WRITE, owner.departmentId);
+      const unit = unitOf(owner);
+      return Boolean(unit && can(session, unit.writePermission));
+    },
+    review: (owner: ReportOwner) => {
+      if (releaser) return true;
+      if (owner.departmentId) return can(session, REVIEW, owner.departmentId);
+      const unit = unitOf(owner);
+      return Boolean(unit && can(session, unit.reviewPermission));
+    },
+    /** Pre-reviewer of any department or unit. */
+    reviewsAny: releaser || can(session, REVIEW) || units.some((u) => can(session, u.reviewPermission)),
+  };
 }
 
 export function useRevisions(id: string, enabled: boolean) {
@@ -122,6 +167,8 @@ export const personName = (p: Pick<PersonSummary, 'firstName' | 'lastName'>) => 
 
 /** Lookup helpers for names of departments, persons and vehicles by ID. */
 export function useNames() {
+  const localized = useLocalized();
+  const { data: units = [] } = useUnits();
   const { data: departments = [] } = useDepartments();
   const { data: persons = [] } = usePersons();
   const { data: vehicles = [] } = useVehicles();
@@ -129,6 +176,23 @@ export function useNames() {
   return {
     department: (id: string | null | undefined) => departments.find((d) => d.id === id)?.shortName ?? '',
     departmentName: (id: string | null | undefined) => departments.find((d) => d.id === id)?.name ?? '',
+    /** Short name of the owner of a report: the department, or the unit (e.g. "EvD"). */
+    owner: (owner: ReportOwner) => {
+      if (owner.departmentId) return departments.find((d) => d.id === owner.departmentId)?.shortName ?? '';
+      const unit = units.find((u) => u.key === owner.unit);
+      return unit ? localized(unit.shortLabel) : (owner.unit ?? '');
+    },
+    /** Full name of the owner of a report: the department, or the unit (e.g. "Einsatzleiter vom Dienst"). */
+    ownerName: (owner: ReportOwner) => {
+      if (owner.departmentId) return departments.find((d) => d.id === owner.departmentId)?.name ?? '';
+      const unit = units.find((u) => u.key === owner.unit);
+      return unit ? localized(unit.label) : (owner.unit ?? '');
+    },
+    /** Short name of a unit by its key (e.g. in findings, `unit:duty-officer`). */
+    unit: (key: string) => {
+      const unit = units.find((u) => u.key === key);
+      return unit ? localized(unit.shortLabel) : key;
+    },
     person: (id: string | null | undefined) => {
       const person = persons.find((p) => p.id === id);
       return person ? personName(person) : '';
