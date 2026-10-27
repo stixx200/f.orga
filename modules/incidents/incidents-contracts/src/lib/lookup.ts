@@ -1,3 +1,4 @@
+import type { LocalizedText } from '@forga/core-contracts';
 import type { PartyRole } from './report.js';
 import type { CompensationRate, Rounding } from './settings.js';
 import type { FalseAlarmType, MainType } from './statistics.js';
@@ -22,6 +23,7 @@ export interface ChargeableIncident {
   released: boolean;
   /** Lowest release level of all reports: `none` while one is not released, `compensation`, or `billing` (= `released`). */
   releaseLevel: 'none' | 'compensation' | 'billing';
+  /** Departments with a report (reports of brigade-wide units are not listed here, but count for the release). */
   departmentIds: string[];
   /** Why the incident is chargeable, from the costs of the incident. */
   chargeableReason: string;
@@ -34,7 +36,11 @@ export interface IncidentForCostRecovery extends ChargeableIncident {
   compensationKind: 'incident' | 'standby' | 'fire-watch';
   reports: {
     reportId: string;
-    departmentId: string;
+    /** `null` for the report of a brigade-wide unit (`unit`, e.g. the duty officer). */
+    departmentId: string | null;
+    unit: string | null;
+    /** Short name of the unit, e.g. "EvD"; `null` for department reports. */
+    unitLabel: LocalizedText | null;
     status: string;
     alarmedAt: string;
     /** Departure of the first vehicle; `null` if not recorded. */
@@ -55,7 +61,9 @@ export interface IncidentForCostRecovery extends ChargeableIncident {
 export interface ReportReference {
   reportId: string;
   reportNumber: string;
-  departmentId: string;
+  /** `null` for the report of a brigade-wide unit (`unit`, e.g. the duty officer). */
+  departmentId: string | null;
+  unit: string | null;
   status: string;
   /** Edited by a releaser: only releasers may change it (also while it is a draft). */
   locked: boolean;
@@ -76,7 +84,8 @@ export interface CompensationPreview {
   reports: {
     reportId: string;
     reportNumber: string;
-    departmentId: string;
+    departmentId: string | null;
+    unit: string | null;
     status: string;
     personnel: {
       personId: string | null;

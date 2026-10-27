@@ -35,7 +35,13 @@
       "path": "../../modules/cost-recovery/cost-recovery-contracts/tsconfig.lib.json"
     },
     {
+      "path": "../../modules/duty-officer/duty-officer-contracts/tsconfig.lib.json"
+    },
+    {
       "path": "../../modules/compensation/compensation-contracts/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/duty-officer/duty-officer-api/tsconfig.lib.json"
     },
     {
       "path": "../../modules/clothing/clothing-api/tsconfig.lib.json"

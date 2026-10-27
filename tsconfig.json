@@ -71,6 +71,12 @@
     },
     {
       "path": "./modules/clothing/clothing-api"
+    },
+    {
+      "path": "./modules/duty-officer/duty-officer-contracts"
+    },
+    {
+      "path": "./modules/duty-officer/duty-officer-api"
     }
   ],
   "compilerOptions": {}

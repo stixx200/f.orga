@@ -111,6 +111,11 @@ export const CompensationSettings = z.object({
   multiDayAfterDays: z.number().int().min(1).default(2),
   householdRates: z.array(HouseholdRate).default([]),
   courseAllowances: z.array(CourseAllowance).default([]),
+  /**
+   * Incident hours from the EvD reports (duty officer module) are paid like those of other reports. Off: the duty
+   * officer's flat rate per duty day covers his incidents; only a loss of earnings is still recorded.
+   */
+  dutyOfficerReportPaid: z.boolean().default(true),
   /** Upper limits for the hourly compensation per incident or session and per person and day; `null`: none. */
   maxPerService: money.min(0).nullable().default(null),
   maxPerDay: money.min(0).nullable().default(null),
@@ -368,5 +373,6 @@ export interface Preview {
   alarmKeyword: string;
   alarmedAt: string;
   compensationKind: 'incident' | 'standby' | 'fire-watch';
-  reports: { reportId: string; reportNumber: string; departmentId: string; status: string; personnel: PreviewPerson[] }[];
+  /** `departmentId` is `null` for the report of a brigade-wide unit (e.g. the EvD report, `unit`). */
+  reports: { reportId: string; reportNumber: string; departmentId: string | null; unit: string | null; status: string; personnel: PreviewPerson[] }[];
 }

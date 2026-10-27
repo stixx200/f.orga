@@ -2,27 +2,26 @@
 export const INCIDENTS_EVENTS = {
   reportReleased: 'incidents.report.released',
   reportUnlocked: 'incidents.report.unlocked',
-  dutyChanged: 'incidents.duty.changed',
+  /** A new incident was created (in the UI, through the API or by an import). */
+  incidentCreated: 'incidents.incident.created',
 } as const;
 
-/** A special service of the duty roster was saved or deleted (`deleted`), with its compensation per full day. */
-export interface DutyChangedEvent {
-  dutyId: string;
-  personId: string;
-  /** Name of the duty kind (German, for item labels). */
-  kindName: string;
-  from: string;
-  to: string;
-  days: number;
-  rate: number | null;
-  amount: number;
-  deleted: boolean;
+export interface IncidentCreatedEvent {
+  incidentId: string;
+  dispatchNumber: string;
+  alarmKeyword: string;
+  alarmedAt: string;
+  /** `import`: data taken over from another system (e.g. MP-Feuer), usually historic. */
+  createdVia: 'ui' | 'api' | 'import';
 }
 
 export interface ReportReleasedEvent {
   reportId: string;
   incidentId: string;
-  departmentId: string;
+  /** Department of the report; `null` for a brigade-wide unit report (see `unit`). */
+  departmentId: string | null;
+  /** Key of the brigade-wide unit (e.g. `duty-officer`) of a unit report; `null` for department reports. */
+  unit: string | null;
   level: 'compensation' | 'billing';
   alarmedAt: string;
   /** Leitstellennummer and report number, e.g. for compensation items. */

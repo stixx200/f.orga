@@ -376,7 +376,7 @@ describe('equipment', () => {
     await put(`/equipment/reports/${reportId}/usage`, [{ itemId: ids.scba, inspectAfter: true }], member).expect(404);
     await get(`/equipment/reports/${reportId}/usage`, member).expect(404);
     const event: ReportReleasedEvent = {
-      reportId, incidentId: '01a16846-0000-7000-8000-00000000e002', departmentId: ids.musterstadt, level: 'billing', alarmedAt: new Date().toISOString(),
+      reportId, incidentId: '01a16846-0000-7000-8000-00000000e002', departmentId: ids.musterstadt, unit: null, level: 'billing', alarmedAt: new Date().toISOString(),
       dispatchNumber: '2026-1', reportNumber: '2026-001', alarmKeyword: 'B2', compensationKind: 'incident', personnel: [], vehicleIds: [ids.lf],
     };
     // The test app has no usage for the made-up report; mark the item via the vehicle and the usage table.

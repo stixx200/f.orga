@@ -160,7 +160,8 @@ export class StatisticsController {
         r.personnel
           .getItems()
           .filter((p) => p.personId && (p.injured || p.killed))
-          .map((p) => ({ departmentType: typeOf.get(r.departmentId) ?? 'operational', injured: p.injured, killed: p.killed })),
+          // Persons in the report of a brigade-wide unit (e.g. the duty officer) count as operational.
+          .map((p) => ({ departmentType: (r.departmentId && typeOf.get(r.departmentId)) || 'operational', injured: p.injured, killed: p.killed })),
       ),
       trainingCasualties: (await this.training?.injured(year))?.map((c) => ({ departmentType: typeOf.get(c.departmentIds[0] ?? '') ?? 'operational' })) ?? [],
     });

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CompensationSettings, DEFAULT_FUNCTION_ALLOWANCES, SAMPLE_STATUTE } from '@forga/compensation-contracts';
 import { EntityManager } from '@mikro-orm/core';
 import { DomainEvents } from '@forga/core-api';
+import { DUTY_KIND_TEMPLATE } from '@forga/duty-officer-contracts';
 import { MASTERDATA_EVENTS } from '@forga/masterdata-contracts';
 import { INCIDENTS_EVENTS, type ReportReleasedEvent } from '@forga/incidents-contracts';
 import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
@@ -19,7 +20,7 @@ const openItems = async (label: string) => ((await get('/compensation/items?open
 const amounts = (items: { amount: number | null }[]) => items.map((i) => i.amount);
 
 const released = (personnel: { personId: string; amount: number; hours?: number; lossOfEarnings?: boolean; duringWorkingHours?: boolean; from?: string; to?: string }[]): ReportReleasedEvent => ({
-  reportId: '01a16846-0000-7000-8000-00000000c001', incidentId: '01a16846-0000-7000-8000-00000000c002', departmentId: ids.musterstadt, level: 'compensation',
+  reportId: '01a16846-0000-7000-8000-00000000c001', incidentId: '01a16846-0000-7000-8000-00000000c002', departmentId: ids.musterstadt, unit: null, level: 'compensation',
   alarmedAt: '2026-03-10T13:00:00Z', dispatchNumber: '2026-555', reportNumber: '2026-001', alarmKeyword: 'B2', compensationKind: 'incident',
   personnel: personnel.map((p) => ({
     personId: p.personId, vehicleId: null, breathingApparatus: false, breathingMinutes: null, chemicalSuit: false, breathingDevice: null, from: p.from ?? '2026-03-10T13:00:00Z', to: p.to ?? '2026-03-10T15:30:00Z',
@@ -39,6 +40,8 @@ beforeAll(async () => {
   test = await startTestApp();
   admin = await setUp(test);
   await post('/training/types/templates/bw', {}).expect(201);
+  // The duty roster pays the duty officer per day; the EvD reports are covered in duty-officer.integration.ts.
+  await put('/core/settings/duty-officer.general', { reportRequired: false, dutyKinds: DUTY_KIND_TEMPLATE }).expect(200);
   ids.musterstadt = (await post('/masterdata/departments', { name: 'Abteilung Musterstadt', shortName: 'Musterstadt', type: 'operational' }).expect(201)).body.id;
   ids.ahornfeld = (await post('/masterdata/departments', { name: 'Abteilung Ahornfeld', shortName: 'Ahornfeld', type: 'operational' }).expect(201)).body.id;
   const person = async (firstName: string, departmentId: string, iban: string) =>
@@ -215,12 +218,12 @@ describe('compensation', () => {
   });
 
   it('takes over the special services of the duty roster per full day', async () => {
-    const duty = (await post('/incidents/duty', { personId: ids.jonas, kind: 'duty-officer', from: '2026-11-02T07:00:00+01:00', to: '2026-11-04T07:00:00+01:00' }).expect(201)).body;
+    const duty = (await post('/duty-officer/roster', { personId: ids.jonas, kind: 'duty-officer', from: '2026-11-02T07:00:00+01:00', to: '2026-11-04T07:00:00+01:00' }).expect(201)).body;
     const item = () => get(`/compensation/persons/${ids.jonas}/items?year=2026`).expect(200).then((r) => (r.body as { label: string; amount: number }[]).find((i) => i.label.startsWith('Einsatzleiter vom Dienst')));
     expect(await item()).toMatchObject({ label: 'Einsatzleiter vom Dienst (EvD) (2 Tage)', amount: 20 });
-    await put(`/incidents/duty/${duty.id}`, { personId: ids.jonas, kind: 'duty-officer', from: '2026-11-02T07:00:00+01:00', to: '2026-11-05T07:00:00+01:00' }).expect(200);
+    await put(`/duty-officer/roster/${duty.id}`, { personId: ids.jonas, kind: 'duty-officer', from: '2026-11-02T07:00:00+01:00', to: '2026-11-05T07:00:00+01:00' }).expect(200);
     expect(await item()).toMatchObject({ label: 'Einsatzleiter vom Dienst (EvD) (3 Tage)', amount: 30 });
-    await test.http.delete(`/api/incidents/duty/${duty.id}`).set('Cookie', admin).set(UI).expect(204);
+    await test.http.delete(`/api/duty-officer/roster/${duty.id}`).set('Cookie', admin).set(UI).expect(204);
     expect(await item()).toBeUndefined();
   });
 

@@ -688,17 +688,24 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
    * Departments of the report or session after checking access: reading needs the read permission of the report or
    * session; writing a draft report that is not locked (releasers always) or a session that is not closed.
    */
-  private async usageDepartments(user: AuthenticatedUser, id: string, source: UsageSource, mode: 'read' | 'write'): Promise<string[]> {
+  private async usageDepartments(user: AuthenticatedUser, id: string, source: UsageSource, mode: 'read' | 'write'): Promise<string[] | null> {
     if (source === 'incidents') {
       const [report] = this.incidents ? await this.incidents.reports([id]) : [];
       const releaser = user.grant(REPORTS_RELEASE) === 'brigade';
-      if (!report || !(releaser || user.can(REPORTS_READ, report.departmentId) || user.can(REPORTS_WRITE, report.departmentId))) throw new NotFoundException();
+      if (report && !report.departmentId) {
+        // Report of a brigade-wide unit (e.g. the duty officer): read brigade-wide, written by releasers; items of any department.
+        if (!(releaser || user.grant(REPORTS_READ) === 'brigade')) throw new NotFoundException();
+        if (mode === 'write' && !releaser) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [REPORTS_RELEASE] });
+        return null;
+      }
+      const departmentId = report?.departmentId ?? '';
+      if (!report || !(releaser || user.can(REPORTS_READ, departmentId) || user.can(REPORTS_WRITE, departmentId))) throw new NotFoundException();
       if (mode === 'write' && !releaser) {
-        if (!user.can(REPORTS_WRITE, report.departmentId)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [REPORTS_WRITE] });
+        if (!user.can(REPORTS_WRITE, departmentId)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [REPORTS_WRITE] });
         if (report.locked) throw new ForbiddenException({ code: 'incidents.reportLocked' });
         if (report.status !== 'draft') throw new ForbiddenException({ code: 'incidents.notDraft', status: report.status });
       }
-      return [report.departmentId];
+      return [departmentId];
     }
     const [session] = this.sessions ? await this.sessions.sessions([id]) : [];
     const can = (permission: string) => Boolean(session?.departmentIds.some((d) => user.can(permission, d)));
@@ -724,7 +731,7 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     for (const u of input) {
       const item = items.find((i) => i.id === u.itemId);
       if (!item || item.status === 'retired') throw new BadRequestException({ code: 'equipment.unknownItem' });
-      if (!departments.includes(item.departmentId) && !stock.has(item.categoryKey)) throw new BadRequestException({ code: 'equipment.otherDepartment', item: item.inventoryNumber });
+      if (departments && !departments.includes(item.departmentId) && !stock.has(item.categoryKey)) throw new BadRequestException({ code: 'equipment.otherDepartment', item: item.inventoryNumber });
     }
     for (const row of await em.find(UsageEntity, { reportId, source })) em.remove(row);
     for (const u of input) em.create(UsageEntity, { reportId, source, item: items.find((i) => i.id === u.itemId)!, quantity: u.quantity, inspectAfter: u.inspectAfter });

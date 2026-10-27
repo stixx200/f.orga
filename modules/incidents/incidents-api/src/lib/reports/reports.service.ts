@@ -1,11 +1,13 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/core';
+import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { assertVersion, Audit, type AuthenticatedUser, berlinDayAfter, berlinDayStart, DomainEvents } from '@forga/core-api';
 import {
   type Acknowledgement,
   IncidentInput,
   type Finding,
+  type IncidentCreatedEvent,
   INCIDENTS_EVENTS,
+  type IncidentUnit,
   type IncidentStatistics,
   type ReleaseLevel,
   type Report,
@@ -29,6 +31,7 @@ import {
   ReportVehicleEntity,
   type StoredAcknowledgement,
 } from '../incidents.entities.js';
+import { IncidentUnitsRegistry } from '../units/units.registry.js';
 import { type ReportContext, ReportContextLoader } from './report-context.js';
 
 export const READ = 'incidents.reports.read';
@@ -146,18 +149,58 @@ export class ReportsService {
     private readonly contexts: ReportContextLoader,
     private readonly events: DomainEvents,
     private readonly audit: Audit,
+    readonly units: IncidentUnitsRegistry,
     @Optional() @Inject(RESPIRATORY_PROTECTION_FITNESS) private readonly fitness?: FitnessLookup,
   ) {}
 
   // ----- Access -----
 
-  canRead(user: AuthenticatedUser, report: ReportEntity): boolean {
-    return user.can(READ, report.departmentId) || user.grant(RELEASE) === 'brigade';
+  /** The registered unit of a unit report; reports of a unit no module registers any more are handled by releasers only. */
+  unitOf(report: Pick<ReportEntity, 'unit'>): IncidentUnit | undefined {
+    return this.units.get(report.unit);
   }
 
-  /** Releasers (brigade) and pre-reviewers of the department may return reports and remind their authors. */
-  canReview(user: AuthenticatedUser, departmentId: string): boolean {
-    return user.grant(RELEASE) === 'brigade' || user.can(REVIEW, departmentId);
+  /**
+   * Department reports: readers of the department. Unit reports: brigade-wide readers of incident reports and those
+   * with a permission of the unit. Releasers read all reports.
+   */
+  canRead(user: AuthenticatedUser, report: Pick<ReportEntity, 'departmentId' | 'unit'>): boolean {
+    if (user.grant(RELEASE) === 'brigade') return true;
+    if (report.departmentId) return user.can(READ, report.departmentId);
+    const unit = this.unitOf(report);
+    return user.grant(READ) === 'brigade' || Boolean(unit && [unit.readPermission, unit.writePermission, unit.reviewPermission].some((p) => user.can(p)));
+  }
+
+  /** Releasers write every report; writers of the department its reports; the writers of a unit its reports. */
+  canWrite(user: AuthenticatedUser, report: Pick<ReportEntity, 'departmentId' | 'unit'>): boolean {
+    if (user.grant(RELEASE) === 'brigade') return true;
+    if (report.departmentId) return user.can(WRITE, report.departmentId);
+    const unit = this.unitOf(report);
+    return Boolean(unit && user.can(unit.writePermission));
+  }
+
+  /** Releasers (brigade) and pre-reviewers of the department (or of the unit) may return reports and remind their authors. */
+  canReview(user: AuthenticatedUser, report: Pick<ReportEntity, 'departmentId' | 'unit'>): boolean {
+    if (user.grant(RELEASE) === 'brigade') return true;
+    if (report.departmentId) return user.can(REVIEW, report.departmentId);
+    const unit = this.unitOf(report);
+    return Boolean(unit && user.can(unit.reviewPermission));
+  }
+
+  /** Keys of the units whose reports the user may read. */
+  readableUnits(user: AuthenticatedUser): string[] {
+    return this.units.all().filter((unit) => this.canRead(user, { departmentId: null, unit: unit.key })).map((unit) => unit.key);
+  }
+
+  /** Filter for the reports the user may read; `null` if none. */
+  readableFilter(user: AuthenticatedUser): FilterQuery<ReportEntity> | null {
+    const grant = user.grant(RELEASE) === 'brigade' ? 'brigade' : user.grant(READ);
+    if (grant === 'brigade') return {};
+    const units = this.readableUnits(user);
+    const or: FilterQuery<ReportEntity>[] = [];
+    if (grant?.length) or.push({ departmentId: { $in: grant } });
+    if (units.length) or.push({ unit: { $in: units } });
+    return or.length ? { $or: or } : null;
   }
 
   /**
@@ -168,7 +211,7 @@ export class ReportsService {
   assertWrite(user: AuthenticatedUser, report: ReportEntity): void {
     if (report.status.startsWith('released')) throw new ForbiddenException({ code: 'incidents.reportReleased' });
     if (user.grant(RELEASE) === 'brigade') return;
-    if (!user.can(WRITE, report.departmentId)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
+    if (!this.canWrite(user, report)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [report.departmentId ? WRITE : (this.unitOf(report)?.writePermission ?? RELEASE)] });
     if (report.locked) throw new ForbiddenException({ code: 'incidents.reportLocked', lockedBy: report.lockedBy ?? '' });
     // After submitting, the author changes the report only once it is returned.
     if (report.status !== 'draft') throw new ForbiddenException({ code: 'incidents.notDraft', status: report.status });
@@ -211,17 +254,33 @@ export class ReportsService {
     });
   }
 
+  /** Tells other modules about a new incident (e.g. the duty officer module adds its report); after the commit. */
+  async publishCreated(incident: IncidentEntity): Promise<void> {
+    await this.events.publish<IncidentCreatedEvent>(INCIDENTS_EVENTS.incidentCreated, {
+      incidentId: incident.id,
+      dispatchNumber: incident.dispatchNumber,
+      alarmKeyword: incident.alarmKeyword,
+      alarmedAt: incident.alarmedAt.toISOString(),
+      createdVia: incident.createdVia,
+    });
+  }
+
   /**
-   * New draft report; the first report of an incident becomes its primary report. Times default to alarm + 1 h,
-   * with the end unconfirmed until the author confirms or changes it.
+   * New draft report of a department or (with `{ unit }`) of a brigade-wide unit. The first department report of an
+   * incident becomes its primary report; unit reports never are. Times default to alarm + 1 h, with the end
+   * unconfirmed until the author confirms or changes it.
    */
-  async createReport(em: EntityManager, incident: IncidentEntity, departmentId: string, authorPersonId: string | null): Promise<ReportEntity> {
+  async createReport(em: EntityManager, incident: IncidentEntity, owner: string | { unit: string }, authorPersonId: string | null): Promise<ReportEntity> {
     await em.populate(incident, ['reports']);
+    const departmentId = typeof owner === 'string' ? owner : null;
+    const unit = typeof owner === 'string' ? null : this.units.get(owner.unit);
+    if (!departmentId && !unit) throw new BadRequestException({ code: 'incidents.unknownUnit' });
     const report = em.create(ReportEntity, {
       incident,
       departmentId,
-      number: await this.nextNumber(em, departmentId, incident.alarmedAt),
-      primary: incident.reports.count() === 0,
+      unit: unit?.key ?? null,
+      number: unit ? await this.nextUnitNumber(em, unit, incident.alarmedAt) : await this.nextNumber(em, departmentId!, incident.alarmedAt),
+      primary: Boolean(departmentId) && !incident.reports.getItems().some((r) => r.primary),
       authorPersonId,
       alarmedAt: incident.alarmedAt,
       returnedAt: new Date(incident.alarmedAt.getTime() + 3_600_000),
@@ -282,6 +341,14 @@ export class ReportsService {
     const existing = await em.find(ReportEntity, { departmentId, number: { $like: `${year}-%` } }, { fields: ['number'] });
     const highest = existing.reduce((max, r) => Math.max(max, Number(r.number.split('-')[1]) || 0), 0);
     return `${year}-${String(highest + 1).padStart(3, '0')}`;
+  }
+
+  /** Numbers of unit reports carry the prefix of the unit, e.g. `EvD-2026-001`. */
+  async nextUnitNumber(em: EntityManager, unit: IncidentUnit, alarmedAt: Date): Promise<string> {
+    const prefix = `${unit.numberPrefix}-${localDate(alarmedAt.toISOString()).slice(0, 4)}-`;
+    const existing = await em.find(ReportEntity, { unit: unit.key, number: { $like: `${prefix}%` } }, { fields: ['number'] });
+    const highest = existing.reduce((max, r) => Math.max(max, Number(r.number.slice(prefix.length)) || 0), 0);
+    return `${prefix}${String(highest + 1).padStart(3, '0')}`;
   }
 
   /** Replaces the editable content of a report including all child lists. */
@@ -353,7 +420,9 @@ export class ReportsService {
     if (vehicleIds.some((id) => !context.vehicles.has(id))) throw new BadRequestException({ code: 'incidents.unknownVehicle' });
     const personIds = input.personnel.flatMap((p) => (p.personId ? [p.personId] : []));
     if (new Set(personIds).size !== personIds.length) throw new BadRequestException({ code: 'incidents.personTwiceInReport' });
-    if (!context.departments.has(report.departmentId)) throw new BadRequestException({ code: 'masterdata.unknownDepartment' });
+    if (report.departmentId ? !context.departments.has(report.departmentId) : !this.unitOf(report)) {
+      throw new BadRequestException({ code: report.departmentId ? 'masterdata.unknownDepartment' : 'incidents.unknownUnit' });
+    }
   }
 
   // ----- Findings and DTO -----
@@ -423,12 +492,14 @@ export class ReportsService {
         situation: report.situation,
         actions: report.actions,
         statistics: report.statistics ?? null,
-        departmentId: report.departmentId,
-        departmentType: context.departments.get(report.departmentId)?.type ?? 'operational',
+        departmentId: report.departmentId ?? undefined,
+        departmentType: (report.departmentId && context.departments.get(report.departmentId)?.type) || 'operational',
+        unit: report.unit ? { vehicleRequired: this.unitOf(report)?.vehicleRequired ?? false } : undefined,
         keyword: keyword ? { mainType: keyword.mainType ?? null, requiresVehicle: keyword.requiresVehicle } : null,
         personnel: assignments,
         sameIncident: siblings.map((s) => ({
-          department: context.departments.get(s.departmentId)?.name ?? s.departmentId,
+          // Units are named by the UI in its language (`unit:<key>`).
+          department: s.departmentId ? (context.departments.get(s.departmentId)?.name ?? s.departmentId) : `unit:${s.unit ?? ''}`,
           assignments: s.personnel.getItems().map((p) => ({ personId: p.personId ?? null, ...assignmentTimes(p, s) })),
         })),
         otherIncidents: others.flatMap((o) =>
@@ -487,7 +558,8 @@ export class ReportsService {
     return {
       id: report.id,
       incidentId: report.incident.id,
-      departmentId: report.departmentId,
+      departmentId: report.departmentId ?? null,
+      unit: report.unit ?? null,
       number: report.number,
       primary: report.primary,
       status: report.status,
@@ -557,6 +629,7 @@ export class ReportsService {
   /** Makes the report primary; `imported` data of another system may also move the primary role of released reports. */
   async setPrimary(em: EntityManager, report: ReportEntity, imported = false): Promise<void> {
     if (report.primary) return;
+    if (report.unit) throw new BadRequestException({ code: 'incidents.unitReportNotPrimary' });
     const current = await em.findOne(ReportEntity, { incident: report.incident, primary: true });
     // The statistics of a released primary report do not move away: it is unlocked first.
     if (!imported && current?.status.startsWith('released')) throw new ForbiddenException({ code: 'incidents.reportReleased' });
@@ -653,7 +726,8 @@ export class ReportsService {
     await this.events.publish<ReportReleasedEvent>(INCIDENTS_EVENTS.reportReleased, {
       reportId: report.id,
       incidentId: report.incident.id,
-      departmentId: report.departmentId,
+      departmentId: report.departmentId ?? null,
+      unit: report.unit ?? null,
       level,
       alarmedAt: report.alarmedAt.toISOString(),
       dispatchNumber: report.incident.dispatchNumber,

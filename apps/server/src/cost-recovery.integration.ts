@@ -38,6 +38,8 @@ const importPayments = async (csv: string, step: 'apply' | 'preview' = 'apply') 
 beforeAll(async () => {
   test = await startTestApp();
   admin = await setUp(test);
+  // Without the duty officer module, as a brigade without EvD (its report in the notice: duty-officer.integration.ts).
+  await put('/core/modules/duty-officer', { active: false }).expect(200);
   await post('/masterdata/catalog/templates/bw', {}).expect(201);
   await post('/incidents/keywords/templates/bw', {}).expect(201);
   ids.musterstadt = (await post('/masterdata/departments', { name: 'Abteilung Musterstadt', shortName: 'Musterstadt', type: 'operational' }).expect(201)).body.id;

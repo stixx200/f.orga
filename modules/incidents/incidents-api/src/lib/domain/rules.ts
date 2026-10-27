@@ -47,6 +47,11 @@ export interface RuleInput {
   statistics: IncidentStatistics | null;
   departmentId?: string;
   departmentType: string;
+  /**
+   * Set for the report of a brigade-wide unit (e.g. the duty officer): its persons come from every department, and
+   * they need a vehicle only if the unit says so.
+   */
+  unit?: { vehicleRequired: boolean };
   /** Keyword of the incident; `null` if unknown. */
   keyword: { mainType: MainType | null; requiresVehicle: boolean } | null;
   personnel: Assignment[];
@@ -144,7 +149,7 @@ export function evaluateRules(input: RuleInput, settings: IncidentSettings): Raw
     if (input.primary ? reportFrom !== incidentAlarm : reportFrom < incidentAlarm) add('incident-time-differs');
   }
 
-  const vehicleRequired = (input.keyword?.requiresVehicle ?? true) && !NO_VEHICLE_DEPARTMENTS.has(input.departmentType);
+  const vehicleRequired = (input.keyword?.requiresVehicle ?? true) && (input.unit ? input.unit.vehicleRequired : !NO_VEHICLE_DEPARTMENTS.has(input.departmentType));
   const crew = new Map<string, number>();
 
   for (const p of input.personnel) {
@@ -161,7 +166,7 @@ export function evaluateRules(input: RuleInput, settings: IncidentSettings): Raw
     const facts = input.persons?.get(p.personId);
     if (facts) {
       if (NOT_OPERATIONAL.has(facts.status)) add('person-not-operational', p.key, { person: p.label, status: facts.status });
-      else if (input.departmentId && !NO_VEHICLE_DEPARTMENTS.has(input.departmentType) && !facts.departmentIds.includes(input.departmentId)) {
+      else if (input.departmentId && !input.unit && !NO_VEHICLE_DEPARTMENTS.has(input.departmentType) && !facts.departmentIds.includes(input.departmentId)) {
         add('person-not-member', p.key, { person: p.label });
       }
       if (facts.birthDate && input.minimumAge && ageOn(facts.birthDate, localDay(input.times.alarmedAt)) < input.minimumAge) {

@@ -78,7 +78,8 @@ export class ExternalController {
       existing ?? (await this.reports.createIncident(em, IncidentInput.parse({ ...input, dispatchNumber: input.dispatchNumber }), 'api'));
 
     const results = new Map<string, { report: ReportEntity; created: boolean; updated: boolean }>();
-    for (const report of incident.reports.getItems()) results.set(report.departmentId, { report, created: false, updated: false });
+    // Reports of brigade-wide units (e.g. the duty officer) are not changed through this API.
+    for (const report of incident.reports.getItems()) if (report.departmentId) results.set(report.departmentId, { report, created: false, updated: false });
     for (const departmentId of departmentIds) {
       if (results.has(departmentId)) continue;
       const commander = departments.find((d) => d.id === departmentId)?.commanderId ?? null;
@@ -123,12 +124,13 @@ export class ExternalController {
     }
 
     await em.flush();
+    if (created) await this.reports.publishCreated(incident);
     return {
       incidentId: incident.id,
       created,
       reports: [...results.values()].map(({ report, created: c, updated }) => ({
         id: report.id,
-        departmentId: report.departmentId,
+        departmentId: report.departmentId as string,
         created: c,
         updated,
       })),

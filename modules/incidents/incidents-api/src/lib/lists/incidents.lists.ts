@@ -7,7 +7,8 @@ import type { AuthenticatedUser, ListDefinition } from '@forga/core-api';
 import type { ReportStatus } from '@forga/incidents-contracts';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
 import { ReportEntity } from '../incidents.entities.js';
-import { ReportsService, READ, RELEASE } from '../reports/reports.service.js';
+import { ReportsService, READ } from '../reports/reports.service.js';
+import { ownerName } from '../units/units.registry.js';
 import { AssignmentLines } from './assignments.js';
 
 const col = (key: string, de: string, en: string, width?: number, align?: ListColumn['align']): ListColumn => ({
@@ -54,8 +55,7 @@ export class IncidentsLists {
   }
 
   private readableReports(user: AuthenticatedUser): FilterQuery<ReportEntity> {
-    const grant = user.grant(RELEASE) === 'brigade' ? 'brigade' : user.grant(READ);
-    return grant === 'brigade' ? {} : { departmentId: { $in: grant ?? [] } };
+    return this.reports.readableFilter(user) ?? { id: null };
   }
 
   /** Replaces the former check app: open reports with their findings, sorted by author. */
@@ -91,7 +91,7 @@ export class IncidentsLists {
           const author = report.authorPersonId ? context.persons.get(report.authorPersonId) : undefined;
           rows.push({
             author: author ? `${author.lastName}, ${author.firstName}` : '–',
-            department: context.departments.get(report.departmentId)?.name ?? '',
+            department: ownerName(report, new Map([...context.departments.values()].map((d) => [d.id, d.name])), this.reports.units, language),
             dispatchNumber: report.incident.dispatchNumber,
             alarmedAt: dateTime(report.alarmedAt.toISOString(), language),
             keyword: report.incident.alarmKeyword,
@@ -143,7 +143,7 @@ export class IncidentsLists {
             dispatchNumber: r.incident.dispatchNumber,
             keyword: r.incident.alarmKeyword,
             location: [r.incident.location.street, r.incident.location.houseNumber, r.incident.location.city].filter(Boolean).join(' '),
-            department: departments.get(r.departmentId) ?? '',
+            department: ownerName(r, departments, this.reports.units, language),
             primary: r.primary,
             status: STATUS[r.status as ReportStatus][language],
           })),
@@ -166,9 +166,9 @@ export class IncidentsLists {
         col('persons', 'Einsatzkräfte', 'Assignments', 1, 'right'),
         col('hours', 'Stunden', 'Hours', 1, 'right'),
       ],
-      rows: async (user, params) => {
+      rows: async (user, params, language) => {
         const p = period(params);
-        const lines = await this.lines.load(user, p);
+        const lines = await this.lines.load(user, p, { language });
         const reports = new Map<string, { department: string; primary: boolean }>();
         const em = this.em.fork();
         for (const report of await em.find(ReportEntity, { id: { $in: [...new Set(lines.map((l) => l.reportId))] } })) {

@@ -29,7 +29,8 @@
     "exceljs": "^4.4.0",
     "@forga/respiratory-protection-contracts": "*",
     "@forga/training-contracts": "*",
-    "@forga/compensation-contracts": "*"
+    "@forga/compensation-contracts": "*",
+    "@forga/duty-officer-contracts": "*"
   },
   "nx": {
     "tags": [

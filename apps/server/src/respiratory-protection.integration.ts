@@ -111,7 +111,7 @@ describe('respiratory protection', () => {
 
     // Released incident report with Jonas under breathing apparatus replaces the exercise.
     const event: ReportReleasedEvent = {
-      reportId: '01a16846-0000-7000-8000-000000000001', incidentId: '01a16846-0000-7000-8000-000000000002', departmentId: ids.musterstadt, level: 'compensation', alarmedAt: at(-60 * 24 * 3),
+      reportId: '01a16846-0000-7000-8000-000000000001', incidentId: '01a16846-0000-7000-8000-000000000002', departmentId: ids.musterstadt, unit: null, level: 'compensation', alarmedAt: at(-60 * 24 * 3),
       dispatchNumber: '2026-1', reportNumber: '2026-001', alarmKeyword: 'B2', compensationKind: 'incident',
       personnel: [
         { personId: ids.jonas, vehicleId: null, breathingApparatus: true, breathingMinutes: 25, chemicalSuit: true, breathingDevice: 'compressed-air', from: at(-60 * 24 * 3), to: at(-60 * 24 * 3 + 60), hours: 1, rate: 15, amount: 15, duringWorkingHours: false, lossOfEarnings: false },

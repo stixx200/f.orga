@@ -6,7 +6,8 @@ import type { CompensationCheck, CompensationProblem } from '@forga/incidents-co
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
 import { computeCompensation } from '../domain/compensation.js';
 import { ReportEntity } from '../incidents.entities.js';
-import { assignmentTimes, READ, RELEASE, REPORT_POPULATE, ReportsService } from '../reports/reports.service.js';
+import { assignmentTimes, REPORT_POPULATE, ReportsService } from '../reports/reports.service.js';
+import { ownerName } from '../units/units.registry.js';
 
 /** Report rules that concern personnel and therefore the compensation. */
 const PERSONNEL_RULES = new Set([
@@ -33,11 +34,10 @@ export class CompensationChecker {
 
   async check(user: AuthenticatedUser, from: string, to: string): Promise<CompensationCheck> {
     const em = this.em.fork();
-    const grant = user.grant(RELEASE) === 'brigade' ? 'brigade' : user.grant(READ);
     const where: FilterQuery<ReportEntity>[] = [
       { alarmedAt: { $gte: berlinDayStart(from), $lt: berlinDayAfter(to) } },
+      this.reports.readableFilter(user) ?? { id: null },
     ];
-    if (grant !== 'brigade') where.push({ departmentId: { $in: grant ?? [] } });
     const reports = await em.find(ReportEntity, { $and: where }, { populate: REPORT_POPULATE, orderBy: { alarmedAt: 'asc' } });
     const departments = new Map((await this.organization.departments()).map((d) => [d.id, d.name]));
     const problems: CompensationProblem[] = [];
@@ -47,7 +47,7 @@ export class CompensationChecker {
         reportId: report.id,
         dispatchNumber: report.incident.dispatchNumber,
         alarmedAt: report.alarmedAt.toISOString(),
-        department: departments.get(report.departmentId) ?? '',
+        department: ownerName(report, departments, this.reports.units, user.language),
         reportNumber: report.number,
         status: report.status,
       };

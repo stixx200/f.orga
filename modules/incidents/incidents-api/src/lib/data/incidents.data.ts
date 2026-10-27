@@ -4,7 +4,6 @@ import { type AuthenticatedUser, wordsWhere } from '@forga/core-api';
 import type { SearchHit } from '@forga/core-contracts';
 import {
   AlarmKeywordEntity,
-  DutyAssignmentEntity,
   IncidentEntity,
   InvolvedPartyEntity,
   OtherAgencyEntity,
@@ -13,7 +12,7 @@ import {
   ReportVehicleEntity,
   StatisticsYearEntity,
 } from '../incidents.entities.js';
-import { READ, RELEASE } from '../reports/reports.service.js';
+import { ReportsService } from '../reports/reports.service.js';
 
 const LOCATION_FIELDS = ['street', 'object', 'city', 'district'] as const;
 
@@ -23,7 +22,10 @@ const plain = async <T extends object>(em: EntityManager, entity: EntityClass<T>
 /** Search and full export of the incident reports. */
 @Injectable()
 export class IncidentsData {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly reports: ReportsService,
+  ) {}
 
   async search(user: AuthenticatedUser, query: string): Promise<SearchHit[]> {
     // The location is JSON: street, object, city and district are searched as JSON properties.
@@ -32,9 +34,9 @@ export class IncidentsData {
     );
     if (!words) return [];
     const where: FilterQuery<IncidentEntity>[] = [words as FilterQuery<IncidentEntity>];
-    const grant = user.grant(RELEASE) === 'brigade' ? 'brigade' : user.grant(READ);
-    if (!grant) return [];
-    if (grant !== 'brigade') where.push({ reports: { departmentId: { $in: grant } } });
+    const readable = this.reports.readableFilter(user);
+    if (!readable) return [];
+    if (Object.keys(readable).length) where.push({ reports: readable });
     const incidents = await this.em.fork().find(IncidentEntity, { $and: where }, { orderBy: { alarmedAt: 'desc' }, limit: 8 });
     return incidents.map((i) => ({
       id: i.id,
@@ -56,7 +58,6 @@ export class IncidentsData {
       involvedParties: await plain(em, InvolvedPartyEntity),
       otherAgencies: await plain(em, OtherAgencyEntity),
       statisticsYears: await plain(em, StatisticsYearEntity),
-      duties: await plain(em, DutyAssignmentEntity),
     };
   }
 
@@ -65,7 +66,6 @@ export class IncidentsData {
     return {
       assignments: await plain(em, ReportPersonnelEntity, { personId }),
       authoredReports: (await em.find(ReportEntity, { authorPersonId: personId })).map((r) => ({ id: r.id, number: r.number })),
-      duties: await plain(em, DutyAssignmentEntity, { personId }),
     };
   }
 }

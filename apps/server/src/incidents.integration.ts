@@ -46,6 +46,8 @@ beforeAll(async () => {
   await post('/masterdata/catalog/templates/bw', {}).expect(201);
   await post('/incidents/keywords/templates/bw', {}).expect(201);
   await put('/core/settings/incidents.general', { homeMunicipalities: ['Musterstadt'] }).expect(200);
+  // The EvD reports of the duty officer module are covered in duty-officer.integration.ts.
+  await put('/core/settings/duty-officer.general', { reportRequired: false }).expect(200);
   // The statute rates are no defaults any more: adopt the sample statute like a brigade would.
   await put('/core/settings/compensation.general', SAMPLE_STATUTE).expect(200);
 
@@ -361,53 +363,6 @@ describe('evaluations', () => {
     expect(notes.getRow(4).getCell(1).value).toBe('Bericht nicht freigegeben (fehlt in der Auszahlung)');
 
     await get('/incidents/compensation/export?from=2026-10-01&to=2026-10-31', writer).expect(403);
-  });
-});
-
-describe('duty roster', () => {
-  it('imports duty officer weeks from an iCal file and pays them per full day', async () => {
-    const ics = [
-      'BEGIN:VCALENDAR',
-      'BEGIN:VEVENT',
-      'UID:evd-45@kalender',
-      'SUMMARY:EvD Jonas Test',
-      'DTSTART;VALUE=DATE:20261102',
-      'DTEND;VALUE=DATE:20261109',
-      'END:VEVENT',
-      'BEGIN:VEVENT',
-      'UID:evd-46@kalender',
-      'SUMMARY:EvD Unbekannt',
-      'DTSTART;VALUE=DATE:20261109',
-      'DTEND;VALUE=DATE:20261116',
-      'END:VEVENT',
-      'END:VCALENDAR',
-    ].join('\r\n');
-    const upload = await test.http.post('/api/core/imports').set('Cookie', admin).set(UI).attach('file', Buffer.from(ics), 'evd.ics').expect(201);
-    const mapping = upload.body.suggestions['incidents.duty-roster'];
-    expect(mapping).toEqual({ uid: 'UID', title: 'SUMMARY', from: 'DTSTART', to: 'DTEND', notes: 'DESCRIPTION' });
-    const applied = await post(`/core/imports/${upload.body.id}/apply`, { profile: 'incidents.duty-roster', mapping }).expect(200);
-    expect(applied.body.counts).toEqual({ create: 1, update: 0, unchanged: 0, error: 1 });
-    expect(applied.body.rows[1].messages[0].code).toBe('incidents.duty.unknownPerson');
-
-    const duties = await get('/incidents/duty?from=2026-11-01&to=2026-11-30').expect(200);
-    expect(duties.body).toEqual([
-      expect.objectContaining({ personId: ids.jonas, kind: 'duty-officer', from: '2026-11-01T23:00:00.000Z', days: 7, rate: 10, amount: 70 }),
-    ]);
-
-    // Importing the calendar again updates by event UID instead of duplicating.
-    const again = await test.http.post('/api/core/imports').set('Cookie', admin).set(UI).attach('file', Buffer.from(ics), 'evd.ics').expect(201);
-    const second = await post(`/core/imports/${again.body.id}/apply`, { profile: 'incidents.duty-roster', mapping }).expect(200);
-    expect(second.body.counts).toMatchObject({ create: 0, unchanged: 1 });
-
-    const response = await get('/incidents/compensation/export?from=2026-11-01&to=2026-11-30&lang=de').buffer(true).parse(binary()).expect(200);
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(response.body as ArrayBuffer);
-    const duty = workbook.getWorksheet('Sonderdienste')!;
-    expect(duty.getRow(4).values).toEqual(expect.arrayContaining(['Test, Jonas', 'Einsatzleiter vom Dienst (EvD)', 7, 10, 70]));
-    const perPerson = workbook.getWorksheet('Betrag pro Person')!;
-    expect(perPerson.getRow(perPerson.rowCount).getCell(6).value).toBe(70);
-
-    await get('/incidents/duty', writer).expect(403);
   });
 });
 
