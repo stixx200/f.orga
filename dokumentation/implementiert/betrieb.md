@@ -40,6 +40,21 @@ docker compose -f docker/compose.yml up -d --build
 | `FORGA_TRUST_PROXY` | Reverse Proxy vor f.orga, dem `X-Forwarded-For` geglaubt wird (Express `trust proxy`): `true` (jeder), Anzahl der Proxys (z. B. `1`) oder Adressen/Netze, kommagetrennt (z. B. `loopback`, `10.0.0.0/8`). Nur dann gelten Anfragebegrenzung und Anmeldesperre für die Adresse des Benutzers statt für die des Proxys. Nur setzen, wenn wirklich ein Proxy davor steht, sonst kann jeder seine Adresse fälschen. | aus |
 | `FORGA_PUBLIC_URL` | Adresse von f.orga, falls nicht in den Einstellungen (`brigade.publicUrl`); für Links in E-Mails und die Rücksprungadresse der OIDC-Anmeldung. In den Einstellungen nur `https://…` (`http://` nur für `localhost`). | – |
 
+**Echt- und Testsystem nebeneinander** (`docker/compose.stages.yml`): zwei getrennte Instanzen aus demselben Image, jede mit eigener Datenbank und eigenen Volumes. Das Echtsystem ist für echte Daten (z. B. die MP-Feuer-Datenübernahme), das Testsystem für Demodaten. Gewechselt wird über die Adresse; Sitzungen und Daten bleiben getrennt.
+
+```bash
+cp docker/.env.example docker/.env      # Passwörter und Einrichtungsschlüssel setzen
+docker compose -f docker/compose.stages.yml up -d --build
+FORGA_URL=http://localhost:8081 FORGA_SETUP_TOKEN=<FORGA_SETUP_TOKEN_TEST> npm run seed   # Demodaten ins Testsystem
+```
+
+| System | Adresse | Variablen |
+| --- | --- | --- |
+| Echtsystem | `http://<server>:8080` | `POSTGRES_PASSWORD_REAL`, `FORGA_SETUP_TOKEN_REAL`, `FORGA_REAL_PORT` |
+| Testsystem | `http://<server>:8081` | `POSTGRES_PASSWORD_TEST`, `FORGA_SETUP_TOKEN_TEST`, `FORGA_TEST_PORT` |
+
+Das Testsystem lässt sich jederzeit neu aufsetzen, ohne das Echtsystem zu berühren: `docker compose -f docker/compose.stages.yml rm -sf forga-test db-test && docker volume rm docker_forga-test-db`, danach `up -d` und erneut `npm run seed`.
+
 **Plugins:** Ein signiertes Paket wird unter „Verwaltung → Module“ hochgeladen oder als `.tgz` in das Volume `/plugins` gelegt. Es wirkt nach einem Neustart des Containers (`docker compose -f docker/compose.yml restart forga`); Migrationen des Plugins laufen dabei mit. Abgelehnte Pakete heißen danach `*.tgz.rejected`, der Grund steht im Protokoll des Containers.
 
 **E-Mail:** Für die wöchentliche Sammel-E-Mail mit den Fristen, Einladungen und „Passwort vergessen“ braucht es in den Einstellungen (Abschnitt `smtp`) Server und Absender. Wochentag und Uhrzeit stehen im Abschnitt `reminders`. Benutzer bekommen die E-Mail nur mit hinterlegter E-Mail-Adresse. Scheitert der Versand, nennt die Meldung die Ursache (`mail.authFailed`: Benutzer/Passwort, `mail.connectionFailed`: Server/Port, `mail.tlsFailed`: Port/STARTTLS, `mail.rejected`: Absender/Empfänger); Einzelheiten stehen im Protokoll des Containers. Der Knopf „Test-E-Mail an mich senden“ prüft die gespeicherten Einstellungen.
