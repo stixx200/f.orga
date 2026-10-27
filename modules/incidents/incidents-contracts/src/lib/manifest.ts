@@ -5,7 +5,7 @@ export const INCIDENTS_MANIFEST = {
   name: { de: 'Einsatzberichte', en: 'Incident reports' },
   version: '0.1.0',
   requires: ['masterdata'],
-  optional: ['equipment', 'respiratory-protection', 'compensation', 'cost-recovery'],
+  optional: ['equipment', 'respiratory-protection', 'compensation', 'cost-recovery', 'duty-officer'],
   permissions: [
     { id: 'incidents.reports.read', name: { de: 'Einsatzberichte lesen', en: 'Read incident reports' }, scope: 'department' },
     {
@@ -30,11 +30,6 @@ export const INCIDENTS_MANIFEST = {
     },
     { id: 'incidents.reports.unlock', name: { de: 'Sperre aufheben', en: 'Unlock reports' }, scope: 'brigade' },
     { id: 'incidents.statistics', name: { de: 'Jahresstatistik', en: 'Annual statistics' }, scope: 'brigade' },
-    {
-      id: 'incidents.duty.manage',
-      name: { de: 'Dienstplan (Sonderdienste) pflegen', en: 'Manage duty roster' },
-      scope: 'brigade',
-    },
     {
       id: 'incidents.compensation.export',
       name: { de: 'Entschädigung exportieren', en: 'Export compensation' },
@@ -66,7 +61,6 @@ export const INCIDENTS_MANIFEST = {
       permission: 'incidents.compensation.export',
       icon: 'coins',
     },
-    { label: { de: 'EvD-Dienst', en: 'Duty officer' }, path: 'duty', permission: 'incidents.duty.manage', icon: 'calendar' },
     { label: { de: 'Jahresstatistik', en: 'Annual statistics' }, path: 'statistics', permission: 'incidents.statistics', icon: 'chart' },
     { label: { de: 'Einsatzberichte', en: 'Incident reports' }, path: 'settings', permission: 'incidents.settings.manage', icon: 'settings', section: 'administration' },
   ],
@@ -84,7 +78,7 @@ export const INCIDENTS_MANIFEST = {
     { key: 'clothing-officer', permissions: ['incidents.self'] },
     {
       key: 'administration',
-      permissions: ['incidents.reports.read', 'incidents.compensation.export', 'incidents.statistics', 'incidents.duty.manage', 'incidents.self'],
+      permissions: ['incidents.reports.read', 'incidents.compensation.export', 'incidents.statistics', 'incidents.self'],
     },
   ],
   frontend: { remote: 'incidents_web', exposed: './Module' },

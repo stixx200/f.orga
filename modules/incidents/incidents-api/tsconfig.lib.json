@@ -18,6 +18,9 @@
   "include": ["src/**/*.ts"],
   "references": [
     {
+      "path": "../../duty-officer/duty-officer-contracts/tsconfig.lib.json"
+    },
+    {
       "path": "../../compensation/compensation-contracts/tsconfig.lib.json"
     },
     {

@@ -6,7 +6,7 @@ import { Link, useParams } from 'react-router';
 import type { IncidentStatisticsInput, Report } from '@forga/incidents-contracts';
 import { apiUrl, can, extensionsOf, formatDateTime, formatMoney, formatTime, send, useSession, useTranslation } from '@forga/web-sdk';
 import { ActionBar, Attachments, ConfirmDialog, DataTable, EmptyState, HistoryTimeline, Notice, notifyError, notifySuccess, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
-import { keys, RELEASE, useIncident, useNames, useReport, useRevisions, WRITE } from '../api';
+import { keys, RELEASE, useIncident, useNames, useReport, useReportAccess, useRevisions } from '../api';
 import { DepartmentBadge, ReportStatusBadge } from '../parts';
 import { WorkflowActions } from '../WorkflowActions';
 import { CheckSection } from './CheckSection';
@@ -57,7 +57,7 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
   const { data: revisions = [] } = useRevisions(report.id, dialog === 'versions');
 
   const releaser = session?.permissions[RELEASE] === 'brigade';
-  const writer = can(session, WRITE, report.departmentId);
+  const writer = useReportAccess().write(report);
   // The own draft of a releaser is not someone else's.
   const ownDraft = Boolean(session?.user.personId) && report.authorPersonId === session?.user.personId;
   const draftOfAuthor = releaser && report.status === 'draft' && !report.locked && !takenOver && !ownDraft;
@@ -146,7 +146,7 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
           ? t('editor.savedAt', { time: formatTime(saveState.savedAt.toISOString(), i18n.language) })
           : t('editor.upToDate');
   const primaryReport = incident?.reports.find((r) => r.primary);
-  const department = names.departmentName(report.departmentId);
+  const department = names.ownerName(report);
 
   return (
     <Stack gap="lg" pb={80}>
@@ -155,12 +155,12 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
           { label: t('module') },
           { label: t('incidents.title'), to: '/incidents/incidents' },
           { label: incident?.dispatchNumber ?? '…', to: `/incidents/incidents/${report.incidentId}` },
-          { label: names.department(report.departmentId) },
+          { label: names.owner(report) },
         ]}
         title={t('editor.title', { department })}
         badges={
           <Group gap={4}>
-            <DepartmentBadge name={t(report.primary ? 'report.primary' : 'report.secondary')} primary={report.primary} />
+            {report.unit ? <DepartmentBadge name={t('report.unitReport')} primary={false} unit /> : <DepartmentBadge name={t(report.primary ? 'report.primary' : 'report.secondary')} primary={report.primary} />}
             <ReportStatusBadge status={report.status} locked={report.locked} />
             {incident && <StatusBadge>{`${incident.alarmKeyword} · ${incident.dispatchNumber}`}</StatusBadge>}
             <StatusBadge>{t('editor.number', { number: report.number })}</StatusBadge>
@@ -207,7 +207,7 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
         })}
       </ol>
 
-      {step === 'times' && incident && <TimesSection content={content} incident={incident} departmentId={report.departmentId} update={update} disabled={!editable} />}
+      {step === 'times' && incident && <TimesSection content={content} incident={incident} owner={report} update={update} disabled={!editable} />}
       {step === 'personnel' && <PersonnelSection content={content} report={report} update={update} disabled={!editable} findings={report.findings} />}
       {step === 'narrative' && <NarrativeSection content={content} update={update} disabled={!editable} />}
       {step === 'statistics' && (

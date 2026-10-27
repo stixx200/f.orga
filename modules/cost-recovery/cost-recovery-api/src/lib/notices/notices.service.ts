@@ -311,7 +311,8 @@ export class NoticesService {
         const count = `${group.length} ${group.length === 1 ? 'Person' : 'Personen'}`;
         positions.push({
           kind: 'personnel',
-          label: `Personal ${departments.get(report.departmentId) ?? ''}${PERSONNEL_LABELS[kind]} (${count})${rate === null ? ' – kein Satz' : ''}`.replace(/\s+/g, ' ').trim(),
+          // The report of a brigade-wide unit is named by its short name, e.g. "Personal EvD".
+          label: `Personal ${report.departmentId ? (departments.get(report.departmentId) ?? '') : (report.unitLabel?.de ?? '')}${PERSONNEL_LABELS[kind]} (${count})${rate === null ? ' – kein Satz' : ''}`.replace(/\s+/g, ' ').trim(),
           quantity: hours, unit: 'h', rate: rate ?? 0, amount, computedAmount: amount, reason: '', category: kind, vehicleId: null,
           persons: group.length, hoursEach: each.every((h) => h === each[0]) ? each[0]! : null,
         });
@@ -376,7 +377,7 @@ export class NoticesService {
       released,
       reports: incident.reports.map((r) => ({
         reportId: r.reportId,
-        department: departments.get(r.departmentId) ?? '',
+        department: r.departmentId ? (departments.get(r.departmentId) ?? '') : (r.unitLabel?.de ?? ''),
         number: r.number,
         status: r.status,
         alarmedAt: r.alarmedAt,

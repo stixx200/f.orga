@@ -7,6 +7,7 @@ import { ReportEntity } from '../incidents.entities.js';
 import { ReportContextLoader } from '../reports/report-context.js';
 import { ReportWriters } from '../reports/report-writers.js';
 import { RELEASE, REVIEW, WRITE } from '../reports/reports.service.js';
+import { IncidentUnitsRegistry } from '../units/units.registry.js';
 
 const DAY = 86_400_000;
 
@@ -27,6 +28,7 @@ export class IncidentsDeadlines implements DeadlineProvider {
     private readonly em: EntityManager,
     private readonly contexts: ReportContextLoader,
     private readonly writers: ReportWriters,
+    private readonly units: IncidentUnitsRegistry,
   ) {}
 
   async deadlines(asOf: string): Promise<DeadlineInput[]> {
@@ -42,6 +44,11 @@ export class IncidentsDeadlines implements DeadlineProvider {
       };
       const due = (days: number) => localDate(new Date(report.alarmedAt.getTime() + days * DAY).toISOString());
       const releasers = { departmentIds: [], permission: RELEASE };
+      // Reports of brigade-wide units: their writers and pre-reviewers instead of those of a department.
+      const unit = report.departmentId ? undefined : this.units.get(report.unit);
+      const departmentIds = report.departmentId ? [report.departmentId] : [];
+      const write = unit ? unit.writePermission : WRITE;
+      const review = unit ? unit.reviewPermission : REVIEW;
       if (report.status === 'released-compensation') {
         return {
           id: `report-billing:${report.id}`,
@@ -61,8 +68,8 @@ export class IncidentsDeadlines implements DeadlineProvider {
           subject,
           dueOn: due(14),
           leadDays: 14,
-          departmentIds: [report.departmentId],
-          permission: [RELEASE, REVIEW],
+          departmentIds,
+          permission: [RELEASE, review],
         };
       }
       if (report.locked) {
@@ -77,8 +84,9 @@ export class IncidentsDeadlines implements DeadlineProvider {
         };
       }
       // Writers of the department and releasers take over drafts nobody else would write.
-      const department = { departmentIds: [report.departmentId], permission: [WRITE, RELEASE] };
-      if (!report.authorPersonId || !writers.of(report.departmentId).has(report.authorPersonId)) {
+      const department = unit ? { departmentIds, permission: [review, RELEASE] } : { departmentIds, permission: [WRITE, RELEASE] };
+      const possible = report.departmentId ? writers.of(report.departmentId) : writers.ofUnit(report.unit ?? '');
+      if (!report.authorPersonId || !possible.has(report.authorPersonId)) {
         return {
           id: `report-open:${report.id}`,
           kind: 'report-no-author',
@@ -109,8 +117,8 @@ export class IncidentsDeadlines implements DeadlineProvider {
         subject,
         dueOn: due(7),
         leadDays: 7,
-        departmentIds: [report.departmentId],
-        permission: WRITE,
+        departmentIds,
+        permission: write,
         personIds: [report.authorPersonId],
       };
     });

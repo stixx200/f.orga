@@ -3,7 +3,7 @@ import { type ReactNode, useState } from 'react';
 import type { Report } from '@forga/incidents-contracts';
 import { can, formatMoney, send, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, Panel, useAction } from '@forga/web-ui';
-import { keys, RELEASE, REVIEW, UNLOCK, useNames, useSettings } from './api';
+import { keys, RELEASE, UNLOCK, useNames, useReportAccess, useSettings } from './api';
 
 /** Long labels wrap in narrow panels instead of being cut off. */
 const WRAP = { root: { height: 'auto', minHeight: 36, paddingBlock: 8 }, label: { whiteSpace: 'normal' as const } };
@@ -18,16 +18,18 @@ export function WorkflowActions({ report, onDone, framed }: { report: Report; on
   const { t, i18n } = useTranslation('incidents');
   const session = useSession().data;
   const names = useNames();
+  const access = useReportAccess();
   const { data: settings } = useSettings();
   const [dialog, setDialog] = useState<Dialog>(null);
   // A locked draft was never submitted: it can only go back to the author.
   const [toStatus, setToStatus] = useState<'review' | 'draft'>(report.status === 'draft' ? 'draft' : 'review');
   const twoSteps = settings?.compensationRelease ?? true;
-  const mayRelease = can(session, RELEASE, report.departmentId);
-  const mayUnlock = can(session, UNLOCK, report.departmentId);
-  // Department commanders pre-review: they return reports of their department, but do not release. A report
-  // locked by a releaser is returned only by releasers.
-  const mayReturn = mayRelease || (can(session, REVIEW, report.departmentId) && !report.locked);
+  // Releasing and unlocking apply to the whole brigade.
+  const mayRelease = can(session, RELEASE);
+  const mayUnlock = can(session, UNLOCK);
+  // Department commanders (managers of a unit) pre-review: they return reports of their department (unit), but do
+  // not release. A report locked by a releaser is returned only by releasers.
+  const mayReturn = mayRelease || (access.review(report) && !report.locked);
   const invalidate = [keys.report(report.id), keys.incidents];
   const done = () => {
     setDialog(null);
@@ -50,7 +52,7 @@ export function WorkflowActions({ report, onDone, framed }: { report: Report; on
   });
 
   const errors = report.findings.filter((f) => f.level === 'error').length;
-  const label = `${names.departmentName(report.departmentId)} · ${report.number}`;
+  const label = `${names.ownerName(report)} · ${report.number}`;
   const summary = t('workflow.summary', { count: report.personnel.length, amount: formatMoney(report.compensationTotal, i18n.language) });
   const buttons: ReactNode[] = [];
   if (mayRelease && report.status === 'review') {

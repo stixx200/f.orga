@@ -267,8 +267,11 @@ export type PersonnelEntry = z.infer<typeof PersonnelEntry>;
 export const Report = z.object({
   id: z.uuid(),
   incidentId: z.uuid(),
-  departmentId: z.uuid(),
-  /** Sequential number per department and year, e.g. `2026-017`. */
+  /** Department of the report; `null` for the report of a brigade-wide unit (`unit`, e.g. the duty officer). */
+  departmentId: z.uuid().nullable(),
+  /** Key of the brigade-wide unit (see `IncidentUnit`); `null` for department reports. Exactly one of both is set. */
+  unit: z.string().nullable(),
+  /** Sequential number per department (or unit, with its prefix) and year, e.g. `2026-017` or `EvD-2026-003`. */
   number: z.string(),
   primary: z.boolean(),
   status: ReportStatus,
@@ -344,7 +347,8 @@ export const Incident = z.object({
   reports: z.array(
     z.object({
       id: z.uuid(),
-      departmentId: z.uuid(),
+      departmentId: z.uuid().nullable(),
+      unit: z.string().nullable(),
       number: z.string(),
       primary: z.boolean(),
       status: ReportStatus,

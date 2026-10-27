@@ -6,6 +6,6 @@ export * from './lib/settings.js';
 export * from './lib/statistics.js';
 export * from './lib/external.js';
 export * from './lib/annual-statistics.js';
-export * from './lib/duty.js';
+export * from './lib/units.js';
 export * from './lib/statistics-questions.js';
 export * from './lib/lookup.js';

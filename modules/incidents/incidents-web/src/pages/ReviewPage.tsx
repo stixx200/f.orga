@@ -3,11 +3,11 @@ import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import type { Incident, ReleaseManyResult, Report, ReportStatus } from '@forga/incidents-contracts';
-import { api, can, formatDateTime, formatMoney, send, useSession, useTranslation } from '@forga/web-sdk';
+import { api, formatDateTime, formatMoney, send, useTranslation } from '@forga/web-sdk';
 import { ActionBar, ConfirmDialog, DataTable, EmptyState, Notice, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
-import { keys, RELEASE, REVIEW, useIncidents, useNames, useSettings } from '../api';
+import { keys, useIncidents, useNames, useReportAccess, useSettings } from '../api';
 import { DepartmentBadge, keywordLabel, notifyReleaseResult, ReportStatusBadge } from '../parts';
-import { findingText, mergeFindings } from '../report/findings';
+import { mergeFindings, useFindingText } from '../report/findings';
 import { WorkflowActions } from '../WorkflowActions';
 
 type Row = { incident: Incident; summary: Incident['reports'][number]; report?: Report };
@@ -15,6 +15,7 @@ type Row = { incident: Incident; summary: Incident['reports'][number]; report?: 
 function Detail({ row, onDone }: { row: Row; onDone: () => void }) {
   const { t, i18n } = useTranslation('incidents');
   const names = useNames();
+  const findingText = useFindingText();
   const { report, incident, summary } = row;
   if (!report) return null;
   const findings = mergeFindings(report.findings);
@@ -22,16 +23,16 @@ function Detail({ row, onDone }: { row: Row; onDone: () => void }) {
   const errors = findings.filter((f) => f.level === 'error');
   const standby = report.personnel.filter((p) => p.standbyStationId).length;
   return (
-    <Panel title={`${names.department(summary.departmentId)} · ${keywordLabel(incident)}`} aside={<ReportStatusBadge status={report.status} locked={report.locked} />}>
+    <Panel title={`${names.owner(summary)} · ${keywordLabel(incident)}`} aside={<ReportStatusBadge status={report.status} locked={report.locked} />}>
       <Stack gap="sm">
         <Text size="sm"><Text span c="dimmed">{t('report.time')}: </Text>{formatDateTime(report.times.alarmedAt, i18n.language)} – {formatDateTime(report.times.returnedAt, i18n.language)}</Text>
         <Text size="sm"><Text span c="dimmed">{t('report.author')}: </Text>{names.person(report.authorPersonId) || '–'}</Text>
         <Text size="sm"><Text span c="dimmed">{t('report.personnel')}: </Text>{t('review.personnel', { count: report.personnel.length, standby })}</Text>
         <Text size="sm"><Text span c="dimmed">{t('review.compensation')}: </Text><strong>{formatMoney(report.compensationTotal, i18n.language)}</strong></Text>
-        {errors.map((f) => <Notice key={`${f.rule}-${f.subject}`} kind="error">{findingText(f, t)}</Notice>)}
+        {errors.map((f) => <Notice key={`${f.rule}-${f.subject}`} kind="error">{findingText(f)}</Notice>)}
         {acknowledged.map((f) => (
           <Notice key={`${f.rule}-${f.subject}`} kind="warning">
-            {findingText(f, t)} {t('review.reason', { reason: f.reason === 'released' ? t('check.releasedReason') : f.reason })}
+            {findingText(f)} {t('review.reason', { reason: f.reason === 'released' ? t('check.releasedReason') : f.reason })}
           </Notice>
         ))}
         <Button component={Link} to={`/incidents/reports/${report.id}`} variant="subtle" px={0} style={{ alignSelf: 'flex-start' }}>{t('review.open')}</Button>
@@ -48,14 +49,14 @@ function Detail({ row, onDone }: { row: Row; onDone: () => void }) {
 export function ReviewPage() {
   const { t, i18n } = useTranslation('incidents');
   const names = useNames();
-  const session = useSession().data;
-  const releaser = can(session, RELEASE);
+  const access = useReportAccess();
+  const releaser = access.releaser;
   const [params] = useSearchParams();
   const [status, setStatus] = useState<ReportStatus>(() => (releaser && params.get('status') === 'released-compensation' ? 'released-compensation' : 'review'));
   const [selected, setSelected] = useState<string | null>(null);
   const { data: incidents = [], isLoading } = useIncidents({ status });
   const summaries = incidents.flatMap((incident) =>
-    incident.reports.filter((r) => r.status === status && (releaser || can(session, REVIEW, r.departmentId))).map((summary) => ({ incident, summary })),
+    incident.reports.filter((r) => r.status === status && access.review(r)).map((summary) => ({ incident, summary })),
   );
   const details = useQueries({
     queries: summaries.map(({ summary }) => ({ queryKey: keys.report(summary.id), queryFn: () => api<Report>(`incidents/reports/${summary.id}`) })),
@@ -76,7 +77,7 @@ export function ReviewPage() {
       setChosen([]);
       notifyReleaseResult(result, (reportId) => {
         const row = rows.find((r) => r.summary.id === reportId);
-        return row ? `${keywordLabel(row.incident)} · ${names.department(row.summary.departmentId)} ${row.summary.number}` : reportId;
+        return row ? `${keywordLabel(row.incident)} · ${names.owner(row.summary)} ${row.summary.number}` : reportId;
       }, t);
     },
   });
@@ -137,7 +138,7 @@ export function ReviewPage() {
                     </>
                   ),
                 },
-                { key: 'department', header: t('fields.department'), render: (r) => <DepartmentBadge name={names.department(r.summary.departmentId)} primary={r.summary.primary} /> },
+                { key: 'department', header: t('fields.department'), render: (r) => <DepartmentBadge name={names.owner(r.summary)} primary={r.summary.primary} unit={Boolean(r.summary.unit)} /> },
                 { key: 'author', header: t('report.author'), render: (r) => names.person(r.summary.authorPersonId) || '–' },
                 { key: 'personnel', header: t('report.personnel'), align: 'right', render: (r) => r.report?.personnel.length ?? '' },
                 { key: 'amount', header: t('review.amount'), align: 'right', render: (r) => (r.report ? formatMoney(r.report.compensationTotal, i18n.language) : '') },

@@ -7,7 +7,7 @@ export const COMPENSATION_MANIFEST = {
   name: { de: 'Entschädigungen', en: 'Compensation' },
   version: '0.1.0',
   requires: ['masterdata'],
-  optional: ['incidents', 'training'],
+  optional: ['incidents', 'training', 'duty-officer'],
   permissions: [
     { id: 'compensation.read', name: { de: 'Entschädigungen lesen', en: 'Read compensation' }, scope: 'department' },
     { id: 'compensation.runs', name: { de: 'Auszahlungsläufe', en: 'Payout runs' }, scope: 'brigade' },

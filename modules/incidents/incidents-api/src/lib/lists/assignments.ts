@@ -1,6 +1,7 @@
 import { Controller, Get, Inject, Injectable, NotFoundException, Param, Query } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { type AuthenticatedUser, berlinDayAfter, berlinDayStart, CurrentUser, RequirePermissions } from '@forga/core-api';
+import type { Language } from '@forga/core-contracts';
 import type { Compensation, MyIncidents, PersonAssignment, ReportStatus } from '@forga/incidents-contracts';
 import {
   ORGANIZATION,
@@ -11,7 +12,8 @@ import {
 import { computeCompensation } from '../domain/compensation.js';
 import { ReportEntity } from '../incidents.entities.js';
 import { ReportContextLoader } from '../reports/report-context.js';
-import { assignmentTimes, READ, RELEASE, SELF } from '../reports/reports.service.js';
+import { assignmentTimes, READ, ReportsService, SELF } from '../reports/reports.service.js';
+import { ownerName } from '../units/units.registry.js';
 
 /** One person in one report, with everything evaluations need. */
 export interface AssignmentLine {
@@ -20,7 +22,10 @@ export interface AssignmentLine {
   dispatchNumber: string;
   alarmKeyword: string;
   reportNumber: string;
-  reportDepartmentId: string;
+  /** `null` for the report of a brigade-wide unit (`reportUnit`). */
+  reportDepartmentId: string | null;
+  reportUnit: string | null;
+  /** Name of the department of the report, or the short name of the unit (e.g. "EvD"). */
   reportDepartment: string;
   status: ReportStatus;
   personId: string | null;
@@ -43,25 +48,27 @@ export class AssignmentLines {
   constructor(
     private readonly em: EntityManager,
     private readonly contexts: ReportContextLoader,
+    private readonly reports: ReportsService,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
     @Inject(ORGANIZATION) private readonly organization: Organization,
   ) {}
 
   /**
    * With `personId`, only the assignments of that person in all departments (for "My area"; the caller makes sure
-   * it is the user's own person), otherwise those of the departments the user may read.
+   * it is the user's own person), otherwise those of the reports the user may read. Unit reports are named in the
+   * `language` (default: the user's).
    */
   async load(
     user: AuthenticatedUser,
     period: { from: string; to: string },
-    options: { releasedOnly?: boolean; departmentId?: string; personId?: string } = {},
+    options: { releasedOnly?: boolean; departmentId?: string; personId?: string; language?: Language } = {},
   ): Promise<AssignmentLine[]> {
-    const grant = options.personId ? 'brigade' : user.grant(RELEASE) === 'brigade' ? 'brigade' : user.grant(READ);
-    if (!grant) return [];
+    const readable = options.personId ? {} : this.reports.readableFilter(user);
+    if (!readable) return [];
     const where: FilterQuery<ReportEntity>[] = [
       { alarmedAt: { $gte: berlinDayStart(period.from), $lt: berlinDayAfter(period.to) } },
+      readable,
     ];
-    if (grant !== 'brigade') where.push({ departmentId: { $in: grant } });
     if (options.personId) where.push({ personnel: { personId: options.personId } });
     if (options.departmentId) where.push({ departmentId: options.departmentId });
     if (options.releasedOnly) where.push({ status: { $in: RELEASED } });
@@ -89,8 +96,9 @@ export class AssignmentLines {
           dispatchNumber: report.incident.dispatchNumber,
           alarmKeyword: report.incident.alarmKeyword,
           reportNumber: report.number,
-          reportDepartmentId: report.departmentId,
-          reportDepartment: departmentNames.get(report.departmentId) ?? '',
+          reportDepartmentId: report.departmentId ?? null,
+          reportUnit: report.unit ?? null,
+          reportDepartment: ownerName(report, departmentNames, this.reports.units, options.language ?? user.language),
           status: report.status,
           personId: p.personId ?? null,
           name: person ? `${person.lastName}, ${person.firstName}` : p.guestName,

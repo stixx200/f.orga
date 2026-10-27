@@ -1,17 +1,51 @@
-import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Inject, Injectable, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, HttpCode, Inject, Injectable, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { berlinDayAfter, berlinDayStart, berlinTime, DomainEvents, type ImportContext, type ImportProfile, type ImportRow, normalizeHeading, RequirePermissions, ZodPipe } from '@forga/core-api';
+import {
+  type AuthenticatedUser,
+  berlinDate,
+  berlinDayAfter,
+  berlinDayStart,
+  berlinTime,
+  CurrentUser,
+  DomainEvents,
+  type ImportContext,
+  type ImportProfile,
+  type ImportRow,
+  normalizeHeading,
+  RequirePermissions,
+  SettingsService,
+  ZodPipe,
+} from '@forga/core-api';
 import type { ImportMessage, ImportResult, ImportRowResult } from '@forga/core-contracts';
-import { type DutyAssignment, DutyAssignmentInput, type DutyChangedEvent, INCIDENTS_EVENTS, type IncidentSettings } from '@forga/incidents-contracts';
+import {
+  type DutyAssignment,
+  DutyAssignmentInput,
+  type DutyChangedEvent,
+  dutyCompensation,
+  DUTY_OFFICER_EVENTS,
+  DUTY_OFFICER_READ,
+  DUTY_OFFICER_ROSTER,
+  DutyOfficerSettings,
+  DutyPeriodQuery,
+  type DutyPeriod,
+  type DutyRoster,
+} from '@forga/duty-officer-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory, type PersonSnapshot } from '@forga/masterdata-contracts';
-import { dutyCompensation, localDate } from '../domain/compensation.js';
-import { DutyAssignmentEntity } from '../incidents.entities.js';
-import { ReportContextLoader } from '../reports/report-context.js';
+import { DutyAssignmentEntity } from '../duty-officer.entities.js';
 
-export const DUTY = 'incidents.duty.manage';
 type ParsedDuty = ReturnType<typeof DutyAssignmentInput.parse>;
 
-export function toDutyDto(duty: DutyAssignmentEntity, settings: IncidentSettings): DutyAssignment {
+/** The settings of the module with defaults. */
+@Injectable()
+export class DutyOfficerConfig {
+  constructor(private readonly settings: SettingsService) {}
+
+  async get(): Promise<DutyOfficerSettings> {
+    return DutyOfficerSettings.parse((await this.settings.get('duty-officer.general')) ?? {});
+  }
+}
+
+export function toDutyDto(duty: DutyAssignmentEntity, settings: DutyOfficerSettings): DutyAssignment {
   const from = duty.from.toISOString();
   const to = duty.to.toISOString();
   return {
@@ -27,21 +61,31 @@ export function toDutyDto(duty: DutyAssignmentEntity, settings: IncidentSettings
   };
 }
 
-/** Publishes `incidents.duty.changed`, e.g. for the compensation module (also again for a period: `republish`). */
+/** Publishes `duty-officer.duty.changed`, e.g. for the compensation module (also again for a period: `republish`). */
 @Injectable()
 export class DutyEvents {
   constructor(
     private readonly em: EntityManager,
     private readonly events: DomainEvents,
-    private readonly contexts: ReportContextLoader,
+    private readonly config: DutyOfficerConfig,
   ) {}
 
   async changed(duties: DutyAssignmentEntity[], deleted = false): Promise<void> {
-    const settings = await this.contexts.settingsOnly();
+    const settings = await this.config.get();
     for (const duty of duties) {
       const dto = toDutyDto(duty, settings);
       const kindName = settings.dutyKinds.find((k) => k.key === duty.kind)?.name.de ?? duty.kind;
-      await this.events.publish<DutyChangedEvent>(INCIDENTS_EVENTS.dutyChanged, { dutyId: duty.id, personId: duty.personId, kindName, from: dto.from, to: dto.to, days: dto.days, rate: dto.rate, amount: dto.amount, deleted });
+      await this.events.publish<DutyChangedEvent>(DUTY_OFFICER_EVENTS.dutyChanged, {
+        dutyId: duty.id,
+        personId: duty.personId,
+        kindName,
+        from: dto.from,
+        to: dto.to,
+        days: dto.days,
+        rate: dto.rate,
+        amount: dto.amount,
+        deleted,
+      });
     }
   }
 
@@ -50,6 +94,37 @@ export class DutyEvents {
     const duties = await this.em.fork().find(DutyAssignmentEntity, { from: { $lt: berlinDayAfter(to) }, to: { $gt: berlinDayStart(from) } });
     await this.changed(duties);
     return duties.length;
+  }
+}
+
+/** The roster for other modules (`DUTY_ROSTER`) and for finding the duty officer of an incident. */
+@Injectable()
+export class DutyRosterService implements DutyRoster {
+  constructor(
+    private readonly em: EntityManager,
+    private readonly config: DutyOfficerConfig,
+  ) {}
+
+  async startingIn(from: string, to: string): Promise<DutyPeriod[]> {
+    const list = await this.em.fork().find(DutyAssignmentEntity, { from: { $gte: berlinDayStart(from), $lt: berlinDayAfter(to) } }, { orderBy: { from: 'asc' } });
+    if (!list.length) return [];
+    const settings = await this.config.get();
+    return list.map((d) => {
+      const dto = toDutyDto(d, settings);
+      const kind = settings.dutyKinds.find((k) => k.key === d.kind);
+      return { id: d.id, personId: d.personId, kind: d.kind, kindName: kind?.name ?? { de: d.kind, en: d.kind }, from: dto.from, to: dto.to, days: dto.days, rate: dto.rate, amount: dto.amount };
+    });
+  }
+
+  /** Persons on duty at the time, the first duty kind of the settings (the duty officer) first. */
+  async onDutyAt(at: Date): Promise<string[]> {
+    const settings = await this.config.get();
+    const order = (kind: string) => {
+      const index = settings.dutyKinds.findIndex((k) => k.key === kind);
+      return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+    };
+    const duties = await this.em.fork().find(DutyAssignmentEntity, { from: { $lte: at }, to: { $gt: at } }, { orderBy: { from: 'asc' } });
+    return [...new Set(duties.toSorted((a, b) => order(a.kind) - order(b.kind)).map((d) => d.personId))];
   }
 }
 
@@ -77,20 +152,20 @@ export function matchPerson(title: string, persons: readonly PersonSnapshot[]): 
 export class DutyRosterImport {
   constructor(
     private readonly em: EntityManager,
-    private readonly contexts: ReportContextLoader,
+    private readonly config: DutyOfficerConfig,
     private readonly dutyEvents: DutyEvents,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
   ) {}
 
   profile(): ImportProfile {
     return {
-      id: 'incidents.duty-roster',
+      id: 'duty-officer.roster',
       name: { de: 'EvD-Dienst (iCal)', en: 'Duty officer roster (iCal)' },
       description: {
         de: 'Sonderdienste wie den Einsatzleiter vom Dienst aus einem Kalender (.ics) übernehmen. Die Person wird am Namen im Termintitel erkannt; ein erneuter Import aktualisiert die Termine.',
         en: 'Take over special services such as the duty officer from a calendar (.ics). The person is recognised by the name in the event title; importing again updates the events.',
       },
-      permission: DUTY,
+      permission: DUTY_OFFICER_ROSTER,
       fields: [
         { key: 'uid', label: { de: 'Termin-ID', en: 'Event ID' }, required: true, aliases: ['UID'] },
         { key: 'title', label: { de: 'Titel mit Name', en: 'Title with name' }, required: true, aliases: ['SUMMARY'] },
@@ -105,7 +180,7 @@ export class DutyRosterImport {
   private async run(rows: ImportRow[], { dryRun }: ImportContext): Promise<ImportResult> {
     const touched: DutyAssignmentEntity[] = [];
     const em = this.em.fork();
-    const settings = await this.contexts.settingsOnly();
+    const settings = await this.config.get();
     const kind = settings.dutyKinds[0]?.key;
     const members = new Map<string, PersonSnapshot[]>();
     const results: ImportRowResult[] = [];
@@ -116,18 +191,18 @@ export class DutyRosterImport {
       const from = calendarTime(values['from'] ?? '');
       const to = calendarTime(values['to'] ?? '');
       if (!kind) {
-        fail('incidents.duty.noKind');
+        fail('duty-officer.noKind');
         continue;
       }
       if (!values['uid'] || !from || !to || to <= from) {
         fail('imports.invalidDate');
         continue;
       }
-      const date = localDate(from.toISOString());
+      const date = berlinDate(from);
       if (!members.has(date)) members.set(date, await this.directory.membersOn(date));
       const matches = matchPerson(label, members.get(date) ?? []);
       if (matches.length !== 1) {
-        fail(matches.length ? 'incidents.duty.ambiguousPerson' : 'incidents.duty.unknownPerson', { title: label });
+        fail(matches.length ? 'duty-officer.ambiguousPerson' : 'duty-officer.unknownPerson', { title: label });
         continue;
       }
       const existing = await em.findOne(DutyAssignmentEntity, { externalUid: values['uid'] });
@@ -158,29 +233,31 @@ export class DutyRosterImport {
   }
 }
 
-/** Duty roster: special services such as duty officer, compensated per full day. */
-@Controller('incidents/duty')
-@RequirePermissions(DUTY)
-export class DutyController {
+/** Duty roster: special services such as duty officer, compensated per day. */
+@Controller('duty-officer/roster')
+export class RosterController {
   constructor(
     private readonly em: EntityManager,
-    private readonly contexts: ReportContextLoader,
+    private readonly config: DutyOfficerConfig,
     private readonly dutyEvents: DutyEvents,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
   ) {}
 
+  /** Readers of the module (e.g. the duty officers) and those maintaining the roster. */
   @Get()
-  async list(@Query('from') from?: string, @Query('to') to?: string): Promise<DutyAssignment[]> {
+  async list(@CurrentUser() user: AuthenticatedUser, @Query('from') from?: string, @Query('to') to?: string): Promise<DutyAssignment[]> {
+    if (!user.can(DUTY_OFFICER_READ) && !user.can(DUTY_OFFICER_ROSTER)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [DUTY_OFFICER_READ] });
     const where = {
       ...(from ? { to: { $gt: berlinDayStart(from) } } : {}),
       ...(to ? { from: { $lt: berlinDayAfter(to) } } : {}),
     };
-    const settings = await this.contexts.settingsOnly();
+    const settings = await this.config.get();
     const list = await this.em.fork().find(DutyAssignmentEntity, where, { orderBy: { from: 'asc' } });
     return list.map((d) => toDutyDto(d, settings));
   }
 
   @Post()
+  @RequirePermissions(DUTY_OFFICER_ROSTER)
   async create(@Body(new ZodPipe(DutyAssignmentInput)) input: ParsedDuty): Promise<DutyAssignment> {
     const em = this.em.fork();
     const settings = await this.validate(input);
@@ -190,7 +267,16 @@ export class DutyController {
     return toDutyDto(duty, settings);
   }
 
+  /** Publishes the special services of a period again (e.g. after activating the compensation module). */
+  @Post('republish')
+  @HttpCode(200)
+  @RequirePermissions(DUTY_OFFICER_ROSTER)
+  async republish(@Body(new ZodPipe(DutyPeriodQuery)) input: DutyPeriodQuery): Promise<{ duties: number }> {
+    return { duties: await this.dutyEvents.republish(input.from, input.to) };
+  }
+
   @Put(':id')
+  @RequirePermissions(DUTY_OFFICER_ROSTER)
   async update(@Param('id') id: string, @Body(new ZodPipe(DutyAssignmentInput)) input: ParsedDuty): Promise<DutyAssignment> {
     const em = this.em.fork();
     const duty = await em.findOne(DutyAssignmentEntity, id);
@@ -204,6 +290,7 @@ export class DutyController {
 
   @Delete(':id')
   @HttpCode(204)
+  @RequirePermissions(DUTY_OFFICER_ROSTER)
   async remove(@Param('id') id: string): Promise<void> {
     const em = this.em.fork();
     const duty = await em.findOne(DutyAssignmentEntity, id);
@@ -212,10 +299,10 @@ export class DutyController {
     await this.dutyEvents.changed([duty], true);
   }
 
-  private async validate(input: ParsedDuty): Promise<IncidentSettings> {
-    const settings = await this.contexts.settingsOnly();
-    if (!settings.dutyKinds.some((k) => k.key === input.kind)) throw new BadRequestException({ code: 'incidents.duty.unknownKind', kind: input.kind });
-    if (!(await this.directory.snapshots([input.personId])).length) throw new BadRequestException({ code: 'incidents.unknownPerson' });
+  private async validate(input: ParsedDuty): Promise<DutyOfficerSettings> {
+    const settings = await this.config.get();
+    if (!settings.dutyKinds.some((k) => k.key === input.kind)) throw new BadRequestException({ code: 'duty-officer.unknownKind', kind: input.kind });
+    if (!(await this.directory.snapshots([input.personId])).length) throw new BadRequestException({ code: 'duty-officer.unknownPerson' });
     return settings;
   }
 }

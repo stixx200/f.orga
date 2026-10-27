@@ -71,26 +71,3 @@ export function computeCompensation(input: CompensationInput, settings: Incident
   }
   return { hours, rate, allowances, amount: computed, overridden: false };
 }
-
-/** Full days (24 h) of a duty period. */
-export function fullDays(from: string, to: string): number {
-  return Math.max(0, Math.floor((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000));
-}
-
-/** Started days of a duty period (25 hours are two days). */
-export function startedDays(from: string, to: string): number {
-  return Math.max(0, Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000));
-}
-
-/** Compensation of a duty period: full or started days (per duty kind) × rate per day valid on the first day. */
-export function dutyCompensation(
-  duty: { from: string; to: string; kind: string },
-  kinds: IncidentSettings['dutyKinds'],
-): { days: number; rate: number | null; amount: number } {
-  const kind = kinds.find((k) => k.key === duty.kind);
-  const days = kind?.unit === 'started-day' ? startedDays(duty.from, duty.to) : fullDays(duty.from, duty.to);
-  const rates = kind?.rates ?? [];
-  const date = localDate(duty.from);
-  const rate = rates.filter((r) => r.validFrom <= date).toSorted((a, b) => b.validFrom.localeCompare(a.validFrom))[0]?.amountPerDay ?? null;
-  return { days, rate, amount: Math.round(days * (rate ?? 0) * 100) / 100 };
-}

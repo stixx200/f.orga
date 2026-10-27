@@ -72,7 +72,14 @@ export const ReportSchema = defineEntity({
   name: 'ReportEntity',
   schema: 'incidents',
   tableName: 'report',
-  uniques: [{ properties: ['incident', 'departmentId'] }, { properties: ['departmentId', 'number'] }],
+  // A report belongs to a department or to a brigade-wide unit (`unit`); one per incident each, numbered per year.
+  uniques: [
+    { properties: ['incident', 'departmentId'] },
+    { properties: ['departmentId', 'number'] },
+    { properties: ['incident', 'unit'] },
+    { properties: ['unit', 'number'] },
+  ],
+  checks: [{ name: 'report_department_or_unit', expression: '("department_id" is null) <> ("unit" is null)' }],
   indexes: [
     {
       name: 'report_one_primary_per_incident',
@@ -83,8 +90,10 @@ export const ReportSchema = defineEntity({
   properties: {
     id: p.uuid().primary().onCreate(() => uuidv7()),
     incident: () => p.manyToOne(IncidentEntity).deleteRule('cascade'),
-    /** Department in the masterdata module. */
-    departmentId: p.string(),
+    /** Department in the masterdata module; `null` for the report of a brigade-wide unit. */
+    departmentId: p.string().nullable(),
+    /** Key of a brigade-wide unit registered with `INCIDENT_UNITS` (e.g. `duty-officer`); `null` for department reports. */
+    unit: p.string().nullable(),
     number: p.string(),
     /** At most one primary report per incident (partial unique index). */
     primary: p.boolean().default(false),
@@ -222,26 +231,6 @@ export const StatisticsYearSchema = defineEntity({
 });
 export class StatisticsYearEntity extends StatisticsYearSchema.class {}
 StatisticsYearSchema.setClass(StatisticsYearEntity);
-
-/** A special service from the duty roster (e.g. duty officer), compensated per full day. */
-export const DutyAssignmentSchema = defineEntity({
-  name: 'DutyAssignmentEntity',
-  schema: 'incidents',
-  tableName: 'duty_assignment',
-  properties: {
-    id: p.uuid().primary().onCreate(() => uuidv7()),
-    personId: p.string().index(),
-    kind: p.string(),
-    from: p.datetime().index(),
-    to: p.datetime(),
-    notes: p.text().default(''),
-    /** UID of the calendar event; a second import of the same calendar updates instead of duplicating. */
-    externalUid: p.string().nullable().unique(),
-    version: p.integer().version(),
-  },
-});
-export class DutyAssignmentEntity extends DutyAssignmentSchema.class {}
-DutyAssignmentSchema.setClass(DutyAssignmentEntity);
 
 /**
  * A saved state of the report content, for undo. Saves of the same user within a few minutes

@@ -6,7 +6,7 @@ import { api, formatDate, formatMoney, useLocalized, useTranslation } from '@for
 import { Notice, notifyError, notifySuccess, Panel, StatusBadge } from '@forga/web-ui';
 import { personName, useFunctions, usePersons, useStations, useVehicles } from '../api';
 import type { Content, Personnel } from './editor';
-import { findingText, mergeFindings } from './findings';
+import { mergeFindings, useFindingText } from './findings';
 import { PersonDialog, placeOf, type Target, targetOf } from './PersonDialog';
 import classes from './report.module.css';
 
@@ -43,6 +43,7 @@ export function PersonnelSection({ content, report, update, disabled, findings }
 }) {
   const { t, i18n } = useTranslation('incidents');
   const localized = useLocalized();
+  const findingText = useFindingText();
   const { data: persons = [] } = usePersons();
   const { data: vehicles = [] } = useVehicles();
   const { data: stations = [] } = useStations();
@@ -54,9 +55,10 @@ export function PersonnelSection({ content, report, update, disabled, findings }
   const [loadingCrew, setLoadingCrew] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
 
-  const ownVehicles = vehicles.filter((v) => v.departmentId === report.departmentId);
+  // A brigade-wide unit (e.g. the duty officer) uses the vehicles and stations of every department.
+  const ownVehicles = vehicles.filter((v) => !report.departmentId || v.departmentId === report.departmentId);
   const usedVehicleIds = [...new Set([...content.vehicles.map((v) => v.vehicleId), ...content.personnel.flatMap((p) => (p.vehicleId ? [p.vehicleId] : []))])];
-  const ownStations = stations.filter((s) => s.departmentId === report.departmentId);
+  const ownStations = stations.filter((s) => !report.departmentId || s.departmentId === report.departmentId);
   const usedStationIds = [...new Set(content.personnel.flatMap((p) => (p.standbyStationId ? [p.standbyStationId] : [])))];
   const targets: Target[] = [
     ...[...new Set([...usedVehicleIds, ...ownVehicles.map((v) => v.id)])].map((id) => ({ value: `v:${id}`, label: vehicles.find((v) => v.id === id)?.designation ?? id })),
@@ -68,7 +70,10 @@ export function PersonnelSection({ content, report, update, disabled, findings }
   const inReport = new Set(content.personnel.flatMap((p) => (p.personId ? [p.personId] : [])));
   const candidates = persons
     .filter((p) => !inReport.has(p.id) && p.status !== 'youth' && p.status !== 'veterans')
-    .toSorted((a, b) => Number(b.departmentIds.includes(report.departmentId)) - Number(a.departmentIds.includes(report.departmentId)) || a.lastName.localeCompare(b.lastName));
+    .toSorted((a, b) => {
+      const own = (p: typeof a) => Number(Boolean(report.departmentId) && p.departmentIds.includes(report.departmentId as string));
+      return own(b) - own(a) || a.lastName.localeCompare(b.lastName);
+    });
   const nameOf = (p: Personnel) => p.guestName || (persons.find((x) => x.id === p.personId) ? personName(persons.find((x) => x.id === p.personId)!) : t('personnel.unknownPerson'));
   const functionAbbreviation = (key: string | null | undefined) => {
     const entry = functions.find((f) => f.key === key);
@@ -134,7 +139,7 @@ export function PersonnelSection({ content, report, update, disabled, findings }
   return (
     <Stack gap="md">
       {personnelFindings.map((f) => (
-        <Notice key={`${f.rule}-${f.subject}`} kind={f.level === 'error' ? 'error' : 'warning'}>{findingText(f, t)}</Notice>
+        <Notice key={`${f.rule}-${f.subject}`} kind={f.level === 'error' ? 'error' : 'warning'}>{findingText(f)}</Notice>
       ))}
       {!disabled && (
         <Panel>

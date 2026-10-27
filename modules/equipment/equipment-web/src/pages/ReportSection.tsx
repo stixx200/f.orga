@@ -11,12 +11,13 @@ import { useCategories, useItems } from '../api';
  * Equipment used in an incident report or a training session, with quantity for consumables and "inspect after use".
  * `offer` limits the items offered for adding; `suggested` are proposed with one click.
  */
-function UsageCard({ path, departmentIds, offer, suggest = () => [], disabled }: { path: string; departmentIds: string[]; offer: (item: Item, stock: boolean) => boolean; suggest?: (items: Item[], current: ReportUsage[], breathingCategories: string[]) => Item[]; disabled: boolean }) {
+/** `departmentIds: null`: items of every department (report of a brigade-wide unit, e.g. the duty officer). */
+function UsageCard({ path, departmentIds, offer, suggest = () => [], disabled }: { path: string; departmentIds: string[] | null; offer: (item: Item, stock: boolean) => boolean; suggest?: (items: Item[], current: ReportUsage[], breathingCategories: string[]) => Item[]; disabled: boolean }) {
   const { t } = useTranslation('equipment');
   const { data: categories = [] } = useCategories();
   const { data: usage = [], refetch } = useQuery({ queryKey: ['equipment', 'usage', path], queryFn: () => api<ReportUsage[]>(path) });
   const { data: all = [] } = useItems({});
-  const items = all.filter((i) => departmentIds.includes(i.departmentId));
+  const items = all.filter((i) => !departmentIds || departmentIds.includes(i.departmentId));
   const [rows, setRows] = useState<ReportUsage[] | null>(null);
   const current = rows ?? usage;
   const stock = new Set(categories.filter((c) => c.tracking === 'stock').map((c) => c.key));
@@ -94,7 +95,7 @@ export function ReportSection({ reportId, departmentId, vehicleIds, breathingVeh
   return (
     <UsageCard
       path={`equipment/reports/${String(reportId)}/usage`}
-      departmentIds={[String(departmentId)]}
+      departmentIds={departmentId ? [String(departmentId)] : null}
       offer={(i, stock) => Boolean(i.vehicleId && vehicles.includes(i.vehicleId)) || stock}
       suggest={suggest}
       disabled={Boolean(disabled)}

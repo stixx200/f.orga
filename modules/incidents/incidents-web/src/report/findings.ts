@@ -1,10 +1,21 @@
 import type { Finding } from '@forga/incidents-contracts';
+import { useTranslation } from '@forga/web-sdk';
+import { useNames } from '../api';
 
 type T = (key: string, options?: Record<string, unknown>) => string;
 
-/** Text of a finding in the UI language, e.g. "Jonas Keller steht auch im Bericht Ahornfeld." */
-export function findingText(finding: Finding, t: T): string {
+/**
+ * Text of a finding in the UI language, e.g. "Jonas Keller steht auch im Bericht Ahornfeld." Reports of brigade-wide
+ * units come as `unit:<key>` and are named with `unit`.
+ */
+export function findingText(finding: Finding, t: T, unit: (key: string) => string = (key) => key): string {
   const params: Record<string, unknown> = { ...finding.params };
+  if (typeof params['department'] === 'string') {
+    params['department'] = (params['department'] as string)
+      .split(', ')
+      .map((name) => (name.startsWith('unit:') ? unit(name.slice('unit:'.length)) : name))
+      .join(', ');
+  }
   // Names of report times and person statuses come as keys.
   if (finding.rule === 'times-order') {
     params['first'] = t(`times.${String(params['first'])}`);
@@ -12,6 +23,13 @@ export function findingText(finding: Finding, t: T): string {
   }
   if (finding.rule === 'person-not-operational') params['status'] = t(`personStatus.${String(params['status'])}`);
   return t(`rules.${finding.rule}${finding.rule === 'times-invalid' && finding.params['person'] ? '-person' : ''}`, params);
+}
+
+/** `findingText` with the translations of the module and the names of the units. */
+export function useFindingText(): (finding: Finding) => string {
+  const { t } = useTranslation('incidents');
+  const names = useNames();
+  return (finding) => findingText(finding, t, names.unit);
 }
 
 /** Errors other than a missing primary report block submitting; that one is fixed on the incident. */

@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import type { Incident } from '@forga/incidents-contracts';
 import { formatDateTime, fromLocalInput, toLocalInput, useLocalized, useTranslation } from '@forga/web-sdk';
 import { Notice, Panel } from '@forga/web-ui';
-import { personName, useAuthors, useKeywords, usePersons } from '../api';
+import { personName, type ReportOwner, useAuthors, useKeywords, usePersons } from '../api';
 import { locationLabel } from '../parts';
 import type { Content } from './editor';
 
@@ -16,10 +16,11 @@ function durationText(times: Times, t: (key: string, options?: Record<string, un
   return t('times.duration', { hours: Math.floor(minutes / 60), minutes: minutes % 60, started: Math.ceil(minutes / 60) });
 }
 
-export function TimesSection({ content, incident, departmentId, update, disabled }: {
+export function TimesSection({ content, incident, owner, update, disabled }: {
   content: Content;
   incident: Incident;
-  departmentId: string;
+  /** Department or brigade-wide unit of the report. */
+  owner: ReportOwner;
   update: (change: (c: Content) => Content) => void;
   disabled: boolean;
 }) {
@@ -45,9 +46,10 @@ export function TimesSection({ content, incident, departmentId, update, disabled
     />
   );
   // Only persons who can write the report (account with permission) are offered; others would never see it.
-  const { data: writers } = useAuthors(disabled ? null : departmentId);
+  const { data: writers } = useAuthors(disabled ? null : owner);
   const candidates = writers ? new Set(writers) : null;
-  const authors = persons.filter((p) => (candidates ? candidates.has(p.id) : p.departmentIds.includes(departmentId)) || p.id === content.authorPersonId);
+  const member = (p: (typeof persons)[number]) => (owner.departmentId ? p.departmentIds.includes(owner.departmentId) : false);
+  const authors = persons.filter((p) => (candidates ? candidates.has(p.id) : member(p)) || p.id === content.authorPersonId);
   const authorCannotWrite = Boolean(candidates && content.authorPersonId && !candidates.has(content.authorPersonId));
 
   return (

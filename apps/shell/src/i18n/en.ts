@@ -288,6 +288,7 @@ export const en: typeof de = {
       'cost-recovery': 'Cost recovery by statute: facts, rates, calculation, notice, export to the treasury.',
       promotions: 'Promotion rules, yearly promotion list with decision and execution.',
       clothing: 'Clothing store: protective and service clothing, issue and return, sizes, washing and impregnation.',
+      'duty-officer': 'Duty officer: duty roster with daily flat rates and a duty officer report for every incident.',
     },
     noDescription: 'Additional module (plugin) without description.',
   },

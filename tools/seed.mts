@@ -2,7 +2,8 @@
  * Fills a running f.orga instance with demo data through the public API:
  * organization, one user per standard role (department roles linked to fitting persons of Musterstadt), groups, course
  * planning (runs, nominations, targets), bank accounts with made-up IBANs, persons and incidents, protective equipment of the clothing store (imported from generated files in the
- * format of the MP-Feuer exports `Personal.xlsx` and `MP-EXCEL.xlsx`) and a duty roster calendar.
+ * format of the MP-Feuer exports `Personal.xlsx` and `MP-EXCEL.xlsx`), a duty roster calendar and new incidents with the
+ * EvD report of the duty officer module.
  *
  * All persons and incidents are made up; a fixed random seed keeps them identical between runs, so running
  * the script again only updates what changed.
@@ -17,6 +18,7 @@ import ExcelJS from 'exceljs';
 import { VWV_2022_RULES } from '@forga/promotions-contracts';
 import { BW_TEMPLATE } from '@forga/cost-recovery-contracts';
 import { SAMPLE_STATUTE } from '@forga/compensation-contracts';
+import { DUTY_KIND_TEMPLATE } from '@forga/duty-officer-contracts';
 import { BW_MEMBERSHIP_TEMPLATE } from '@forga/masterdata-contracts';
 
 const BASE = (process.env['FORGA_URL'] ?? 'http://localhost:3000').replace(/\/$/, '');
@@ -495,6 +497,8 @@ async function users(persons: PersonRef[], departments: Map<string, string>): Pr
     ['member', ['breathing-apparatus']],
     ['department-commander', ['platoon-leader', 'group-leader']],
     ['group-leader', ['group-leader', 'squad-leader']],
+    // The duty officer of the demo: a group leader of Musterstadt, on the duty roster.
+    ['duty-officer', ['group-leader', 'platoon-leader']],
   ] as const) {
     if (chosen.has(username)) continue;
     const person = prefer(...qualifications);
@@ -525,6 +529,8 @@ async function users(persons: PersonRef[], departments: Map<string, string>): Pr
   const since = isoDate(new Date(new Date().getFullYear() - 3, 2, 1));
   const groupLeader = chosen.get('group-leader');
   if (groupLeader) await ensureQualification(groupLeader, 'group-leader', since);
+  const officerOfDuty = chosen.get('duty-officer');
+  if (officerOfDuty) await ensureQualification(officerOfDuty, 'group-leader', since);
   const equipmentOfficer = chosen.get('equipment-officer');
   if (equipmentOfficer) await ensureQualification(equipmentOfficer, 'equipment-officer', since);
   const apparatusOfficer = chosen.get('breathing-apparatus-officer');
@@ -977,6 +983,60 @@ async function clothing(persons: PersonRef[]): Promise<void> {
   console.log(`  ${issued.length} Stücke ausgegeben, ${stock} im Lager, ${replaced} getauscht, ${batches.size} Wäschen, ${inspections} Prüfungen, ${consumables} Verbrauchsartikel`);
 }
 
+/**
+ * Duty officer module: duty kinds from the template, the roster from a calendar (the demo user "duty-officer" takes
+ * every other week) and a few incidents created after enabling it, so they get their EvD report; the incidents
+ * imported from MP-Feuer get none.
+ */
+async function dutyOfficer(persons: PersonRef[], accounts: Map<string, PersonRef>, departments: Map<string, string>): Promise<void> {
+  const general = (await call<{ reportRequired?: boolean; dutyKinds?: unknown[] } | null>('GET', 'core/settings/duty-officer.general')) ?? {};
+  // Rates of the statute are a template the brigade takes over explicitly.
+  if (!general.dutyKinds?.length) await call('PUT', 'core/settings/duty-officer.general', { ...general, reportRequired: true, dutyKinds: DUTY_KIND_TEMPLATE });
+  const user = accounts.get('duty-officer');
+  const others = persons.filter((p) => p.id !== user?.id && (p.qualifications.includes('platoon-leader') || p.qualifications.includes('group-leader'))).slice(0, 3);
+  const officers = user ? others.flatMap((o) => [user, o]) : others;
+  if (officers.length) await importFile('evd.ics', dutyCalendar(officers), 'duty-officer.roster');
+
+  const musterstadt = departments.get('Abteilung Musterstadt')!;
+  const existing = new Set((await call<{ dispatchNumber: string }[]>('GET', `incidents/incidents?from=${daysAgo(30)}&to=${daysAgo(-1)}`)).map((i) => i.dispatchNumber));
+  const year = new Date().getFullYear();
+  const planned = [
+    { dispatchNumber: `${year}-EVD-1`, alarmKeyword: 'B2', days: 9, hour: 14, street: 'Hauptstraße', houseNumber: '17', message: 'Zimmerbrand, Person vermisst' },
+    { dispatchNumber: `${year}-EVD-2`, alarmKeyword: 'TH-VU', days: 5, hour: 7, street: 'B 311', houseNumber: '', message: 'VU PKW gegen LKW, eingeklemmte Person' },
+    { dispatchNumber: `${year}-EVD-3`, alarmKeyword: 'B-BMA', days: 2, hour: 21, street: 'Industriestraße', houseNumber: '4', message: 'BMA Muster Logistik GmbH' },
+  ];
+  let created = 0;
+  for (const [index, plan] of planned.entries()) {
+    if (existing.has(plan.dispatchNumber)) continue;
+    const alarm = new Date(`${daysAgo(plan.days)}T${pad(plan.hour)}:${pad(10 + index * 7)}:00`);
+    const incident = await call<{ id: string; reports: { id: string; unit: string | null; authorPersonId: string | null }[] }>('POST', 'incidents/incidents', {
+      dispatchNumber: plan.dispatchNumber,
+      alarmKeyword: plan.alarmKeyword,
+      alarmMessage: plan.message,
+      alarmedAt: alarm.toISOString(),
+      location: { street: plan.street, houseNumber: plan.houseNumber, city: 'Musterstadt' },
+      departmentIds: [musterstadt],
+    });
+    created++;
+    // The first EvD report is written and submitted by the duty officer of that day.
+    const evd = incident.reports.find((r) => r.unit === 'duty-officer');
+    if (index !== 0 || !evd) continue;
+    const report = await call<{ version: number; personnel: { personId: string | null; function: string | null }[] }>('GET', `incidents/reports/${evd.id}`);
+    const saved = await call<{ findings: { rule: string; level: string; subject: string | null; acknowledged: boolean }[] }>('PUT', `incidents/reports/${evd.id}`, {
+      version: report.version,
+      authorPersonId: evd.authorPersonId,
+      times: { alarmedAt: alarm.toISOString(), arrivedAt: addMinutes(alarm, 12).toISOString(), returnedAt: addMinutes(alarm, 95).toISOString() },
+      situation: 'Rauch aus Fenster im 1. OG, eine Person vermisst.',
+      actions: 'Einsatzleitung übernommen, Abschnitte gebildet, Lagemeldungen an die ILS.',
+      incidentCommander: 'EvD',
+      personnel: report.personnel.map((p) => ({ personId: p.personId, function: p.function })),
+    });
+    const acknowledgements = saved.findings.filter((f) => f.level === 'warning' && !f.acknowledged).map((f) => ({ rule: f.rule, subject: f.subject, reason: 'Demodaten' }));
+    if (!saved.findings.some((f) => f.level === 'error')) await call('POST', `incidents/reports/${evd.id}/submit`, { acknowledgements });
+  }
+  console.log(`  ${officers.length ? 'Dienstplan importiert, ' : ''}${created} neue Einsätze mit EvD-Bericht`);
+}
+
 /** Cost recovery: authority settings, a few false alarms of fire alarm systems as chargeable incidents with notices. */
 async function costRecovery(): Promise<void> {
   const general = (await call<Record<string, unknown> | null>('GET', 'core/settings/cost-recovery.general')) ?? {};
@@ -999,8 +1059,9 @@ async function costRecovery(): Promise<void> {
     console.log('  Bescheide vorhanden');
     return;
   }
-  const incidents = await call<{ id: string; alarmKeyword: string; version: number; reports: { id: string; primary: boolean }[] }[]>('GET', `incidents/incidents?from=${year - 1}-01-01&to=${year}-12-31`);
-  const alarms = incidents.filter((i) => /BMA/i.test(i.alarmKeyword)).slice(0, 3);
+  const incidents = await call<{ id: string; alarmKeyword: string; createdVia: string; version: number; reports: { id: string; primary: boolean }[] }[]>('GET', `incidents/incidents?from=${year - 1}-01-01&to=${year}-12-31`);
+  // Imported incidents only: the new ones of the duty officer step have drafts (and an EvD report) still being written.
+  const alarms = incidents.filter((i) => /BMA/i.test(i.alarmKeyword) && i.createdVia === 'import').slice(0, 3);
   for (const incident of alarms) {
     const primary = incident.reports.find((r) => r.primary) ?? incident.reports[0];
     if (!primary) continue;
@@ -1087,9 +1148,8 @@ async function main(): Promise<void> {
   console.log(`  ${incidents} Einsätze erzeugt`);
   await importFile('MP-EXCEL.xlsx', file, 'incidents.mp-feuer', { createKeywords: true });
 
-  console.log('Dienstplan (evd.ics) …');
-  const officers = persons.filter((p) => p.qualifications.includes('platoon-leader') || p.qualifications.includes('group-leader')).slice(0, 4);
-  if (officers.length) await importFile('evd.ics', dutyCalendar(officers), 'incidents.duty-roster');
+  console.log('Einsatzleiter vom Dienst (evd.ics, EvD-Berichte) …');
+  await dutyOfficer(persons, accounts, departments);
 
   console.log('Übungsdienst …');
   await training(members, departments);

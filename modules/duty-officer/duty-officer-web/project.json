@@ -1,0 +1,38 @@
+{
+  "name": "duty-officer-web",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/duty-officer/duty-officer-web/src",
+  "projectType": "application",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "command": "vite",
+        "cwd": "modules/duty-officer/duty-officer-web"
+      },
+      "readyWhen": {
+        "signal": true
+      },
+      "dependsOn": [
+        "shell:serve"
+      ]
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vite build",
+        "cwd": "modules/duty-officer/duty-officer-web"
+      }
+    },
+    "typecheck": {
+      "options": {
+        "command": "tsc --noEmit -p tsconfig.json"
+      }
+    }
+  },
+  "tags": [
+    "scope:module-duty-officer",
+    "type:web"
+  ]
+}

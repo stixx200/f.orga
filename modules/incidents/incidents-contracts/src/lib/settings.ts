@@ -14,23 +14,13 @@ export const CompensationRate = z.object({
 });
 export type CompensationRate = z.infer<typeof CompensationRate>;
 
-/** Optional extra amounts per person in a report, e.g. dirt allowance. Duty officer flat rates come from the duty roster. */
+/** Optional extra amounts per person in a report, e.g. dirt allowance. Duty officer flat rates come from the duty roster of the duty officer module. */
 export const Allowance = z.object({
   key: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
   name: LocalizedText,
   amount: z.number().min(0),
 });
 export type Allowance = z.infer<typeof Allowance>;
-
-/** Kind of special service from a duty roster with its rate per day. */
-export const DutyKind = z.object({
-  key: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
-  name: LocalizedText,
-  /** Which days of a duty period are paid: only full 24 hours, or every started day. */
-  unit: z.enum(['full-day', 'started-day']).default('full-day'),
-  rates: z.array(z.object({ amountPerDay: z.number().min(0), validFrom: z.iso.date() })).default([]),
-});
-export type DutyKind = z.infer<typeof DutyKind>;
 
 export const RuleLevel = z.enum(['error', 'warning']);
 export type RuleLevel = z.infer<typeof RuleLevel>;
@@ -119,15 +109,6 @@ export const IncidentSettings = z.object({
   /** Standby at the station is always compensated with this many hours (local practice). */
   standbyHours: z.number().min(0).default(1),
   allowances: z.array(Allowance).default([]),
-  /** Special services from the duty roster (example: duty officer 10 € per full day). */
-  dutyKinds: z.array(DutyKind).default([
-    {
-      key: 'duty-officer',
-      name: { de: 'Einsatzleiter vom Dienst (EvD)', en: 'Duty officer' },
-      unit: 'full-day',
-      rates: [{ amountPerDay: 10, validFrom: '2026-01-01' }],
-    },
-  ]),
   rules: z
     .record(z.string(), z.object({ enabled: z.boolean().default(true), level: RuleLevel.optional() }))
     .default({}),

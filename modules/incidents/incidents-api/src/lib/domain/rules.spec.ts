@@ -159,6 +159,12 @@ describe('evaluateRules', () => {
     expect(rules(base({ ...own, persons: facts(), personnel: [person('guest:Gast', { personId: null })] }))).toEqual([]);
   });
 
+  it('takes the persons of a brigade-wide unit (e.g. the duty officer) from every department, with a vehicle only if the unit needs one', () => {
+    const unit = { primary: false, statistics: null, departmentId: undefined, persons: facts({ departmentIds: ['ahornfeld'] }) };
+    expect(rules(base({ ...unit, unit: { vehicleRequired: false }, personnel: [person('jonas', { vehicleId: null })] }))).toEqual([]);
+    expect(rules(base({ ...unit, unit: { vehicleRequired: true }, personnel: [person('jonas', { vehicleId: null })] }))).toEqual(['error:vehicle-missing:jonas']);
+  });
+
   it('applies the rule settings', () => {
     const custom = IncidentSettings.parse({ rules: { 'report-empty': { enabled: false }, 'no-personnel': { level: 'warning' } } });
     expect(rules(base({ situation: '', actions: '', personnel: [] }), custom)).toEqual(['warning:no-personnel']);

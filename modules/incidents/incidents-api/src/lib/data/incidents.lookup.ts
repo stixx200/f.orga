@@ -7,6 +7,7 @@ import { AlarmKeywordEntity, IncidentEntity, ReportEntity } from '../incidents.e
 import { computeCompensation } from '../domain/compensation.js';
 import { ReportContextLoader } from '../reports/report-context.js';
 import { assignmentTimes } from '../reports/reports.service.js';
+import { IncidentUnitsRegistry } from '../units/units.registry.js';
 
 const POPULATE = ['reports', 'reports.personnel', 'reports.vehicles', 'reports.involvedParties'] as const;
 
@@ -15,7 +16,8 @@ export const locationText = (l: Location) => [[l.street, l.houseNumber].filter(B
 const toReference = (r: ReportEntity): ReportReference => ({
   reportId: r.id,
   reportNumber: r.number,
-  departmentId: r.departmentId,
+  departmentId: r.departmentId ?? null,
+  unit: r.unit ?? null,
   status: r.status,
   locked: r.locked,
   incidentId: r.incident.id,
@@ -38,6 +40,7 @@ export class IncidentsLookupService implements IncidentsLookup {
     private readonly em: EntityManager,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
     private readonly contexts: ReportContextLoader,
+    private readonly units: IncidentUnitsRegistry,
   ) {}
 
   private async summary(incident: IncidentEntity): Promise<ChargeableIncident> {
@@ -55,7 +58,7 @@ export class IncidentsLookupService implements IncidentsLookup {
       falseAlarmType: primary?.statistics?.falseAlarmType ?? keyword?.falseAlarmType ?? null,
       released: releaseLevel(reports) === 'billing',
       releaseLevel: releaseLevel(reports),
-      departmentIds: reports.map((r) => r.departmentId),
+      departmentIds: reports.flatMap((r) => (r.departmentId ? [r.departmentId] : [])),
       chargeableReason: incident.chargeableReason,
     };
   }
@@ -108,7 +111,8 @@ export class IncidentsLookupService implements IncidentsLookup {
       reports: reports.map((r) => ({
         reportId: r.id,
         reportNumber: r.number,
-        departmentId: r.departmentId,
+        departmentId: r.departmentId ?? null,
+        unit: r.unit ?? null,
         status: r.status,
         personnel: r.personnel.getItems().map((p) => {
           const times = assignmentTimes(p, r);
@@ -138,7 +142,9 @@ export class IncidentsLookupService implements IncidentsLookup {
       compensationKind: keyword?.compensationKind ?? 'incident',
       reports: incident.reports.getItems().toSorted((a, b) => Number(b.primary) - Number(a.primary)).map((r) => ({
         reportId: r.id,
-        departmentId: r.departmentId,
+        departmentId: r.departmentId ?? null,
+        unit: r.unit ?? null,
+        unitLabel: this.units.get(r.unit)?.shortLabel ?? null,
         status: r.status,
         number: r.number,
         situation: r.situation,

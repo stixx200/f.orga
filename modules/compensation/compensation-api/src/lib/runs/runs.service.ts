@@ -202,7 +202,8 @@ export class RunsService {
       personId: null,
       name: `${berlinDate(new Date(r.alarmedAt))} ${r.alarmKeyword} ${r.dispatchNumber}`,
       itemIds: [],
-      detail: `${r.reportNumber} (${departments.get(r.departmentId) ?? ''})`,
+      // Reports of brigade-wide units (e.g. `EvD-2026-001`) are recognised by their number.
+      detail: r.departmentId ? `${r.reportNumber} (${departments.get(r.departmentId) ?? ''})` : r.reportNumber,
     }));
   }
 

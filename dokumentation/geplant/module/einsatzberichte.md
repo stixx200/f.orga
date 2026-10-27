@@ -1,6 +1,6 @@
 # Modul Einsatzberichte
 
-Release 1. Benötigt: Stammdaten. Nutzt optional: Geräte, Atemschutz, Entschädigungen, Kostenersatz. Modul-ID `incidents`. Alle Oberflächen sind deutsch und englisch (siehe [Mehrsprachigkeit](../architektur.md#mehrsprachigkeit)).
+Release 1. Benötigt: Stammdaten. Nutzt optional: Geräte, Atemschutz, Entschädigungen, Kostenersatz, Einsatzleiter vom Dienst. Modul-ID `incidents`. Alle Oberflächen sind deutsch und englisch (siehe [Mehrsprachigkeit](../architektur.md#mehrsprachigkeit)).
 
 **Bereits umgesetzt (Backend)**, beschrieben in [implementiert/architektur.md](../../implementiert/architektur.md#modul-einsatzberichte-incidents) und [Schnittstellen](../../implementiert/schnittstellen.md#incidents):
 - Stichwort-Katalog mit BW-Vorlage, Einsätze mit Leitstellen- oder interner Nummer, Berichte je Abteilung mit allen Abschnitten, Hauptbericht-Eindeutigkeit
@@ -9,11 +9,12 @@ Release 1. Benötigt: Stammdaten. Nutzt optional: Geräte, Atemschutz, Entschäd
 - Versionen zum Rückgängigmachen beim automatischen Speichern ([E15](../entscheidungen.md#e15-automatisch-speichern-nachvollziehbar-und-rückgängig))
 - Prüfung vor der Entschädigungsauszahlung (nicht freigegebene Berichte, Personalprobleme)
 - Statistikmerkmale im Hauptbericht mit Vorschlag, Jahresstatistik für das Landesportal
-- externe API, MP-Feuer-Import der Einsätze, Listen, Abrechnungsexport, Dienstplan (Sonderdienste) mit iCal-Import, Fristen für Verfasser und Freigeber
+- externe API, MP-Feuer-Import der Einsätze, Listen, Abrechnungsexport, Fristen für Verfasser und Freigeber
+- Berichte gesamtwehrweiter Einheiten, z. B. der EvD-Bericht des Moduls [Einsatzleiter vom Dienst](../../implementiert/architektur.md#modul-einsatzleiter-vom-dienst-duty-officer)
 
 **Bereits umgesetzt (Oberfläche)**, beschrieben in [implementiert/architektur.md](../../implementiert/architektur.md#oberfläche-einsatzberichte): Einsatzliste mit Anlegen, Einsatzseite mit Berichtskarten und Hauptberichtswechsel, Berichtseditor mit sechs Abschnitten, automatischem Speichern, Versionen und Verlauf, Fertigmelden mit begründeten Warnungen, „Zur Prüfung“ mit Zurückgeben, zweistufiger Freigabe und Sperre aufheben, Kacheln auf der Startseite. Das Szenario Gruppenführer/Kommandant ist durch einen E2E-Test abgedeckt.
 
-Ebenso umgesetzt: Offene Berichte mit „Verfasser erinnern“, Entschädigung (Prüfung und Export), Dienstplan, Jahresstatistik und Einstellungen.
+Ebenso umgesetzt: Offene Berichte mit „Verfasser erinnern“, Entschädigung (Prüfung und Export), Jahresstatistik und Einstellungen.
 
 **Offen:**
 - Textbausteine, „Besatzung wie letzter Einsatz“, Vorschläge mit Qualifikationen und Doppelungen bei der Personensuche
@@ -51,7 +52,7 @@ Die folgenden Abschnitte beschreiben das Zielbild.
 
 ### Regeln für das Personal
 
-- Jede Person ist **entweder** einem Fahrzeug **oder** der Bereitschaft auf einer Wache zugeordnet. Ausnahmen: Berichte von Führungseinheiten und Sonderdiensten sowie Einsatzarten ohne Fahrzeugpflicht (z. B. Sicherheitsdienst). Diese Ausnahmen hängen am Abteilungstyp und am Stichwort-Katalog, nicht an festen Namen.
+- Jede Person ist **entweder** einem Fahrzeug **oder** der Bereitschaft auf einer Wache zugeordnet. Ausnahmen: Berichte von Führungseinheiten und Sonderdiensten, Berichte gesamtwehrweiter Einheiten ohne Fahrzeugpflicht (EvD) sowie Einsatzarten ohne Fahrzeugpflicht (z. B. Sicherheitsdienst). Diese Ausnahmen hängen am Abteilungstyp und am Stichwort-Katalog, nicht an festen Namen.
 - Die Besatzung eines Fahrzeugs darf die Besatzungsplätze nicht übersteigen (Warnung).
 - **Keine Doppelungen innerhalb eines Einsatzes**: Eine Person darf in den Berichten desselben Einsatzes nicht in sich überschneidenden Zeiträumen stehen. Das ist ein Fehler. Eine Person kann also nacheinander erst für Abteilung A und dann für B eingesetzt sein, aber nicht gleichzeitig.
 - **Überschneidung mit anderen Einsätzen** derselben Person ist eine Warnung, denn sie ergäbe eine doppelte Entschädigung. Zeiträume, die genau aneinander grenzen, gelten nicht als Überschneidung.
@@ -64,7 +65,7 @@ Für jede Person berechnet der Bericht die Entschädigung des Einsatzes:
 - **Einsatz**: angefangene Einsatzstunden × Stundensatz. Beispiel: 13:05–14:10 ergibt 2 Stunden.
 - **Bereitschaft auf der Wache**: immer genau 1 Stunde × Stundensatz.
 - **Sätze** sind konfigurierbar mit Gültigkeitszeitraum (z. B. 12,50 € bis 30.06.2025, ab 01.07.2025 15,00 €) und je Art (Einsatz, Bereitschaft, ggf. weitere Arten). Die Rundungsregel ist ebenfalls einstellbar (angefangene Stunde als Standard, halbe Stunde oder Minuten-Takt für andere Satzungen).
-- **Zuschläge** (z. B. Atemschutz-Zuschlag, Schmutzzulage) sind optionale Positionen je Person; die Standardeinstellung enthält keine. Eine Einsatzleiter-Pauschale gibt es im Bericht nicht: Pauschalen für den Einsatzleiter vom Dienst kommen aus dem Dienstplan (Sonderdienste, iCal-Import), siehe [E13](../entscheidungen.md#e13-einsatzleiter-pauschale-über-dienstplan).
+- **Zuschläge** (z. B. Atemschutz-Zuschlag, Schmutzzulage) sind optionale Positionen je Person; die Standardeinstellung enthält keine. Eine Einsatzleiter-Pauschale gibt es im Bericht nicht: Pauschalen für den Einsatzleiter vom Dienst kommen aus dem EvD-Dienstplan des Moduls Einsatzleiter vom Dienst, siehe [E13](../entscheidungen.md#e13-einsatzleiter-pauschale-über-dienstplan).
 - „Einsatz während der Arbeitszeit beim Dienstherrn“ ergibt keine Entschädigung. Bei dieser Markierung sind Verdienstausfall und Betrag gesperrt.
 - Der berechnete Betrag ist sichtbar, kann aber von Berechtigten mit Begründung überschrieben werden.
 - Die Auszahlungslisten und Personen-PDFs erzeugt das Modul [Entschädigungen](../../implementiert/architektur.md#modul-entschädigungen-compensation). In Release 1 gibt es dafür einen Excel-Export der freigegebenen Berichte eines Zeitraums, der die heutige `auswertung.py` ersetzt (Betrag pro Person, Summe je Abteilung, Einsätze, Sonderdienste, Hinweise, Überschneidungen).
@@ -184,19 +185,15 @@ Content-Type: application/json
 
 ## Rechte
 
-`incidents.reports.read`, `incidents.reports.write` (eigene Abteilung), `incidents.reports.release` (Kommandant), `incidents.reports.unlock`, `incidents.settings.manage` (Sätze, Stichworte, Regeln), `incidents.statistics` (Jahresstatistik abschließen und exportieren), `incidents.duty.manage` (Dienstplan), `incidents.compensation.export` (Abrechnungsexport), API-Bereich `incidents.api.create`.
-
-## Dienstplan (Sonderdienste)
-
-Sonderdienste wie der Einsatzleiter vom Dienst stehen nicht in Einsatzberichten. Sie werden aus einem Kalender (iCal) übernommen oder von Hand gepflegt und je vollem Tag entschädigt (Musterstadt: 10 € je Tag, Entschädigungssatzung § 4). Sie erscheinen im Abrechnungsexport. Umgesetzt, siehe [implementiert/architektur.md](../../implementiert/architektur.md#modul-einsatzberichte-incidents).
+`incidents.reports.read`, `incidents.reports.write` (eigene Abteilung), `incidents.reports.release` (Kommandant), `incidents.reports.unlock`, `incidents.settings.manage` (Sätze, Stichworte, Regeln), `incidents.statistics` (Jahresstatistik abschließen und exportieren), `incidents.compensation.export` (Abrechnungsexport), API-Bereich `incidents.api.create`.
 
 ## Einstellungen
 
-Umgesetzt: Stichwort-Katalog mit Zuordnung zu Einsatzhauptart und Unterkategorie, Gemeinden für „eigene Gemeinde/Überlandhilfe“, Entschädigungssätze mit Gültigkeit, Rundungsregel, zweistufige Freigabe an/aus, Bereitschaftsstunden, Zuschläge, Sonderdienstarten mit Tagessätzen, Prüfregeln (an/aus, Stufe). Offen: Kategorien für sonstige Kräfte, Beteiligtenrollen und Textbausteine als pflegbare Kataloge.
+Umgesetzt: Stichwort-Katalog mit Zuordnung zu Einsatzhauptart und Unterkategorie, Gemeinden für „eigene Gemeinde/Überlandhilfe“, Entschädigungssätze mit Gültigkeit, Rundungsregel, zweistufige Freigabe an/aus, Bereitschaftsstunden, Zuschläge, Prüfregeln (an/aus, Stufe). Offen: Kategorien für sonstige Kräfte, Beteiligtenrollen und Textbausteine als pflegbare Kataloge.
 
 ## Ereignisse
 
-`incidents.report.released` (mit Personal, Atemschutz-Einsätzen, Fahrzeugen, Geräten), `incidents.report.unlocked`. Das Modul Atemschutz zählt daraus die Realeinsätze unter Atemschutz. Das Modul Geräte markiert benutzte Geräte zur Prüfung.
+`incidents.incident.created`, `incidents.report.released` (mit Personal, Atemschutz-Einsätzen, Fahrzeugen, Geräten), `incidents.report.unlocked`. Das Modul Atemschutz zählt daraus die Realeinsätze unter Atemschutz. Das Modul Geräte markiert benutzte Geräte zur Prüfung.
 
 ## Import
 

@@ -46,7 +46,7 @@ import {
   Unlock,
 } from '@forga/incidents-contracts';
 import { AlarmKeywordEntity, IncidentEntity, ReportEntity, ReportPersonnelEntity, ReportRevisionEntity } from '../incidents.entities.js';
-import { DutyEvents } from '../duty/duty.js';
+import { ownerName } from '../units/units.registry.js';
 import { ReportPdf } from './report-pdf.js';
 import { ReportWriters } from './report-writers.js';
 import { COSTS, READ, RELEASE, REPORT_POPULATE, ReportsService, REVIEW, UNLOCK, WRITE } from './reports.service.js';
@@ -59,7 +59,9 @@ const MatchQuery = z.object({
   street: z.string().trim().optional(),
   city: z.string().trim().optional(),
 });
-const AuthorQuery = z.object({ departmentId: z.uuid() });
+const AuthorQuery = z
+  .object({ departmentId: z.uuid().optional(), unit: z.string().optional() })
+  .refine((q) => Boolean(q.departmentId) !== Boolean(q.unit), { message: 'Department or unit', path: ['departmentId'] });
 
 /** For comparing dispatch numbers and addresses: lowercase, without spaces. */
 const normalized = (value: string | undefined | null) => (value ?? '').toLowerCase().replace(/\s+/g, '');
@@ -109,7 +111,8 @@ export function toIncidentDto(incident: IncidentEntity): IncidentDto {
       .toSorted((a, b) => Number(b.primary) - Number(a.primary) || a.number.localeCompare(b.number))
       .map((r) => ({
         id: r.id,
-        departmentId: r.departmentId,
+        departmentId: r.departmentId ?? null,
+        unit: r.unit ?? null,
         number: r.number,
         primary: r.primary,
         status: r.status,
@@ -131,6 +134,10 @@ function errorCode(error: unknown): string {
 const canWriteFor = (user: AuthenticatedUser, departmentId: string) =>
   user.can(WRITE, departmentId) || user.grant(RELEASE) === 'brigade';
 
+/** The report owning the incident data: the primary report, else the first department report, else any. */
+export const incidentOwner = (reports: ReportEntity[]): ReportEntity | undefined =>
+  reports.find((r) => r.primary) ?? reports.find((r) => r.departmentId) ?? reports[0];
+
 @Controller('incidents')
 export class IncidentsController {
   private readonly logger = new Logger(IncidentsController.name);
@@ -140,7 +147,6 @@ export class IncidentsController {
     private readonly reports: ReportsService,
     private readonly mail: MailService,
     private readonly notifications: Notifications,
-    private readonly dutyEvents: DutyEvents,
     private readonly audit: Audit,
     private readonly pdf: ReportPdf,
     private readonly writers: ReportWriters,
@@ -162,9 +168,10 @@ export class IncidentsController {
     @Query('mine') mine?: string,
     @Query('withoutStatistics') withoutStatistics?: string,
   ): Promise<IncidentDto[]> {
-    const grant = user.grant(READ);
+    const readable = this.reports.readableFilter(user);
+    if (!readable) return [];
     const where: FilterQuery<IncidentEntity>[] = [];
-    if (grant !== 'brigade' && user.grant(RELEASE) !== 'brigade') where.push({ reports: { departmentId: { $in: grant ?? [] } } });
+    if (Object.keys(readable).length) where.push({ reports: readable });
     if (from) where.push({ alarmedAt: { $gte: berlinDayStart(from) } });
     if (to) where.push({ alarmedAt: { $lt: berlinDayAfter(to) } });
     if (departmentId) where.push({ reports: { departmentId } });
@@ -203,8 +210,10 @@ export class IncidentsController {
       await this.reports.createReport(em, incident, departmentId, departmentId === own ? user.personId : null);
     }
     await em.flush();
-    await em.populate(incident, ['reports']);
-    return toIncidentDto(incident);
+    // Other modules may add their reports (e.g. the duty officer); the answer contains them.
+    await this.reports.publishCreated(incident);
+    const created = await this.em.fork().findOneOrFail(IncidentEntity, incident.id, { populate: ['reports'] });
+    return toIncidentDto(created);
   }
 
   /**
@@ -248,24 +257,26 @@ export class IncidentsController {
         alarmedAt: i.alarmedAt.toISOString(),
         city: i.location.city,
         street: [i.location.street, i.location.houseNumber].filter(Boolean).join(' '),
-        departmentIds: i.reports.getItems().map((r) => r.departmentId),
+        departmentIds: i.reports.getItems().flatMap((r) => (r.departmentId ? [r.departmentId] : [])),
+        // Only department reports: the reports of brigade-wide units are not joined or opened from here.
         ownReports: i.reports
           .getItems()
-          .filter((r) => releaser || user.can(READ, r.departmentId))
-          .map((r) => ({ reportId: r.id, departmentId: r.departmentId })),
+          .flatMap((r) => (r.departmentId && (releaser || user.can(READ, r.departmentId)) ? [{ reportId: r.id, departmentId: r.departmentId }] : [])),
         sameDispatchNumber: Boolean(number) && normalized(i.dispatchNumber) === number,
       }));
   }
 
   /**
-   * Persons who may be the author of a report of the department: linked to an active account that may write the
-   * department's reports (or release reports). Others would never see the report in their tasks.
+   * Persons who may be the author of a report of the department (or the brigade-wide unit): linked to an active
+   * account that may write its reports (or release reports). Others would never see the report in their tasks.
    */
   @Get('authors')
-  @RequirePermissions(WRITE)
+  @RequirePermissions(READ)
   async authors(@Query(new ZodPipe(AuthorQuery)) query: z.infer<typeof AuthorQuery>, @CurrentUser() user: AuthenticatedUser): Promise<string[]> {
-    if (!canWriteFor(user, query.departmentId)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
-    return [...(await this.writers.index()).of(query.departmentId)];
+    const owner = { departmentId: query.departmentId ?? null, unit: query.unit ?? null };
+    if (!this.reports.canWrite(user, owner)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
+    const writers = await this.writers.index();
+    return [...(owner.departmentId ? writers.of(owner.departmentId) : writers.ofUnit(owner.unit as string))];
   }
 
   @Get('incidents/:id')
@@ -295,8 +306,8 @@ export class IncidentsController {
     const reports = incident.reports.getItems();
     if (reports.some((r) => r.status.startsWith('released'))) throw new ConflictException({ code: 'incidents.incidentReleased' });
     // The incident data belongs to the primary report: only its writers (and releasers) change them.
-    const owner = reports.find((r) => r.primary) ?? reports[0];
-    if (!owner || !canWriteFor(user, owner.departmentId)) throw new ForbiddenException({ code: 'incidents.notPrimaryWriter' });
+    const owner = incidentOwner(reports);
+    if (!owner || !this.reports.canWrite(user, owner)) throw new ForbiddenException({ code: 'incidents.notPrimaryWriter' });
     if (user.grant(RELEASE) !== 'brigade') {
       if (reports.some((r) => r.locked)) throw new ForbiddenException({ code: 'incidents.reportLocked' });
       // Submitted reports are checked against these data: the reviewers change them, or return the reports first.
@@ -376,7 +387,7 @@ export class IncidentsController {
 
   /** Saves the whole report content with the version the client loaded. Releasers lock the report by editing it. */
   @Put('reports/:id')
-  @RequirePermissions(WRITE)
+  @RequirePermissions(READ)
   async updateReport(
     @Param('id') id: string,
     @Body(new ZodPipe(ReportUpdate)) input: ReturnType<typeof ReportUpdate.parse>,
@@ -436,7 +447,11 @@ export class IncidentsController {
     if (!vehicleId) return none;
     const [latest] = await em.find(
       ReportPersonnelEntity,
-      { vehicleId, personId: { $ne: null }, report: { departmentId: report.departmentId, id: { $ne: report.id }, alarmedAt: { $lt: report.alarmedAt } } },
+      {
+        vehicleId,
+        personId: { $ne: null },
+        report: { ...(report.departmentId ? { departmentId: report.departmentId } : { unit: report.unit }), id: { $ne: report.id }, alarmedAt: { $lt: report.alarmedAt } },
+      },
       { populate: ['report.incident'], orderBy: { report: { alarmedAt: 'desc' } }, limit: 1 },
     );
     if (!latest) return none;
@@ -467,7 +482,7 @@ export class IncidentsController {
   /** Restores a saved state; this is a normal save and can itself be undone. */
   @Post('reports/:id/revisions/:revisionId/restore')
   @HttpCode(200)
-  @RequirePermissions(WRITE)
+  @RequirePermissions(READ)
   async restore(
     @Param('id') id: string,
     @Param('revisionId') revisionId: string,
@@ -486,7 +501,7 @@ export class IncidentsController {
   /** Assigns the author of a report without changing its content (and without locking it). */
   @Post('reports/:id/author')
   @HttpCode(200)
-  @RequirePermissions(WRITE)
+  @RequirePermissions(READ)
   async assignAuthor(
     @Param('id') id: string,
     @Body(new ZodPipe(AssignAuthor)) input: AssignAuthor,
@@ -494,7 +509,7 @@ export class IncidentsController {
   ): Promise<Report> {
     const em = this.em.fork();
     const report = await this.reports.load(em, id, user);
-    if (!canWriteFor(user, report.departmentId)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
+    if (!this.reports.canWrite(user, report)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
     if (report.status.startsWith('released')) throw new ForbiddenException({ code: 'incidents.reportReleased' });
     if (report.locked && user.grant(RELEASE) !== 'brigade') throw new ForbiddenException({ code: 'incidents.reportLocked' });
     if (input.authorPersonId && !(await this.directory.summaries([input.authorPersonId])).length) {
@@ -513,11 +528,12 @@ export class IncidentsController {
   @HttpCode(200)
   @RequirePermissions(READ)
   async remind(@Body(new ZodPipe(RemindAuthors)) input: ReturnType<typeof RemindAuthors.parse>, @CurrentUser() user: AuthenticatedUser): Promise<RemindResult> {
-    // Releasers remind for all departments, pre-reviewers (`incidents.reports.review`) for theirs.
-    if (user.grant(RELEASE) !== 'brigade' && !user.grant(REVIEW)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [RELEASE] });
+    // Releasers remind for all departments, pre-reviewers (`incidents.reports.review`) for theirs, those of a unit for its reports.
+    const unitReviewer = this.reports.units.all().some((u) => user.can(u.reviewPermission));
+    if (user.grant(RELEASE) !== 'brigade' && !user.grant(REVIEW) && !unitReviewer) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [RELEASE] });
     const em = this.em.fork();
     const reports = await em.find(ReportEntity, { status: 'draft', authorPersonId: { $in: input.personIds } }, { populate: REPORT_POPULATE, orderBy: { alarmedAt: 'asc' } });
-    const visible = reports.filter((r) => this.reports.canReview(user, r.departmentId));
+    const visible = reports.filter((r) => this.reports.canReview(user, r));
     const authors = await this.directory.summaries(input.personIds);
     const departments = new Map((await this.organization.departments()).map((d) => [d.id, d.name]));
     const sent: string[] = [];
@@ -536,7 +552,7 @@ export class IncidentsController {
         own.map(async (r) => {
           const findings = (await this.reports.findings(em, r, await this.reports.contextFor(r))).filter((f) => f.level === 'error' || !f.acknowledged);
           const date = this.date(r.incident.alarmedAt, language);
-          return `- ${date} ${r.incident.alarmKeyword} ${r.incident.dispatchNumber} (${departments.get(r.departmentId) ?? ''}): ${findings.length ? texts.openPoints(findings.length) : texts.ready}`;
+          return `- ${date} ${r.incident.alarmKeyword} ${r.incident.dispatchNumber} (${ownerName(r, departments, this.reports.units, language)}): ${findings.length ? texts.openPoints(findings.length) : texts.ready}`;
         }),
       );
       await this.mail.send({
@@ -552,7 +568,7 @@ export class IncidentsController {
 
   @Post('reports/:id/primary')
   @HttpCode(200)
-  @RequirePermissions(WRITE)
+  @RequirePermissions(READ)
   async makePrimary(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Report> {
     const em = this.em.fork();
     const report = await this.reports.load(em, id, user);
@@ -564,7 +580,7 @@ export class IncidentsController {
 
   @Post('reports/:id/submit')
   @HttpCode(200)
-  @RequirePermissions(WRITE)
+  @RequirePermissions(READ)
   async submit(
     @Param('id') id: string,
     @Body(new ZodPipe(Submit)) input: ReturnType<typeof Submit.parse>,
@@ -589,7 +605,7 @@ export class IncidentsController {
   ): Promise<Report> {
     const em = this.em.fork();
     const report = await this.reports.load(em, id, user);
-    if (!this.reports.canReview(user, report.departmentId)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [RELEASE] });
+    if (!this.reports.canReview(user, report)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [RELEASE] });
     await this.reports.returnToAuthor(report, input.comment, user);
     await em.flush();
     await this.tellAuthor(report, input.comment, user);
@@ -621,9 +637,9 @@ export class IncidentsController {
   @Post('reports/republish')
   @HttpCode(200)
   @RequirePermissions(RELEASE)
-  async republish(@Body(new ZodPipe(Period)) input: z.infer<typeof Period>, @CurrentUser() user: AuthenticatedUser): Promise<{ reports: number; duties: number }> {
+  async republish(@Body(new ZodPipe(Period)) input: z.infer<typeof Period>, @CurrentUser() user: AuthenticatedUser): Promise<{ reports: number }> {
     if (user.grant(RELEASE) !== 'brigade') throw new ForbiddenException({ code: 'auth.forbidden', permissions: [RELEASE] });
-    return { reports: await this.reports.republish(this.em.fork(), input.from, input.to), duties: await this.dutyEvents.republish(input.from, input.to) };
+    return { reports: await this.reports.republish(this.em.fork(), input.from, input.to) };
   }
 
   /**
@@ -678,28 +694,38 @@ export class IncidentsController {
   }
 
   /**
-   * Only drafts can be deleted; a primary report only as the last report of the incident. Deleting the last
-   * report deletes the incident as well, so no incident is left that nobody finds in the list.
+   * Only drafts of departments can be deleted; a primary report only as the last department report of the incident.
+   * Deleting the last department report deletes the incident as well, with the drafts of brigade-wide units, so no
+   * incident is left that nobody finds in the list. Reports of units are removed by their module (e.g. "no duty
+   * officer at this incident").
    */
   @Delete('reports/:id')
   @HttpCode(204)
-  @RequirePermissions(WRITE)
+  @RequirePermissions(READ)
   async deleteReport(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<void> {
     const em = this.em.fork();
     const report = await this.reports.load(em, id, user);
     this.reports.assertWrite(user, report);
+    if (report.unit) throw new ConflictException({ code: 'incidents.unitReportManaged' });
     if (report.status !== 'draft') throw new ConflictException({ code: 'incidents.invalidTransition', from: report.status });
-    const siblings = await em.count(ReportEntity, { incident: report.incident, id: { $ne: report.id } });
-    if (report.primary && siblings) throw new ConflictException({ code: 'incidents.primaryHasSiblings' });
+    const siblings = await em.find(ReportEntity, { incident: report.incident, id: { $ne: report.id } });
+    const departmentSiblings = siblings.filter((s) => s.departmentId);
+    if (report.primary && departmentSiblings.length) throw new ConflictException({ code: 'incidents.primaryHasSiblings' });
+    const lastReport = departmentSiblings.length === 0;
+    // Without department reports the reports of the units go as well, while they are unlocked drafts.
+    if (lastReport && siblings.some((s) => s.status !== 'draft' || s.locked)) throw new ConflictException({ code: 'incidents.primaryHasSiblings' });
     const incident = report.incident;
-    const deleted = { id: report.id, number: report.number, incident };
+    const deleted = [report, ...(lastReport ? siblings : [])].map((r) => ({ id: r.id, number: r.number, incident }));
     em.remove(report);
-    if (!siblings) em.remove(incident);
+    if (lastReport) {
+      for (const sibling of siblings) em.remove(sibling);
+      em.remove(incident);
+    }
     await em.flush();
-    await this.audit.log('incidents.report-deleted', { reportId: deleted.id, reportNumber: deleted.number, dispatchNumber: incident.dispatchNumber });
-    if (!siblings) await this.audit.log('incidents.incident-deleted', { incidentId: incident.id, dispatchNumber: incident.dispatchNumber });
-    // The draft may have been released before (and unlocked since): receivers withdraw what is left of it.
-    await this.reports.publishUnlocked(deleted, 'deleted');
+    for (const d of deleted) await this.audit.log('incidents.report-deleted', { reportId: d.id, reportNumber: d.number, dispatchNumber: incident.dispatchNumber });
+    if (lastReport) await this.audit.log('incidents.incident-deleted', { incidentId: incident.id, dispatchNumber: incident.dispatchNumber });
+    // The drafts may have been released before (and unlocked since): receivers withdraw what is left of them.
+    for (const d of deleted) await this.reports.publishUnlocked(d, 'deleted');
   }
 
   // ----- Helpers -----
@@ -720,7 +746,7 @@ export class IncidentsController {
 
   private visible(user: AuthenticatedUser, incident: IncidentEntity): boolean {
     if (user.grant(READ) === 'brigade' || user.grant(RELEASE) === 'brigade') return true;
-    return incident.reports.getItems().some((r) => user.can(READ, r.departmentId));
+    return incident.reports.getItems().some((r) => this.reports.canRead(user, r));
   }
 
   /** Language of the user linked to the person; German if there is none. */

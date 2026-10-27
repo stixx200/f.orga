@@ -1,9 +1,10 @@
 import { ActionIcon, Button, Group, MultiSelect, NumberInput, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { IconTrash } from '@tabler/icons-react';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { CompensationSettings, type CourseAllowance, PaidStatus, type FunctionAllowance, type Rounding, SAMPLE_STATUTE, statuteMissing, validIban } from '@forga/compensation-contracts';
-import { send, useLocalized, useTranslation } from '@forga/web-sdk';
+import { api, send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, Notice, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { keys, useCompensationSettings, useCourses, useDepartments, useOffices } from '../api';
 import { PreviewPanel } from './PreviewPanel';
@@ -47,6 +48,9 @@ function Form({ value }: { value: CompensationSettings }) {
   const { t } = useTranslation('compensation');
   const { t: common } = useTranslation('common');
   const [form, setForm] = useState(value);
+  // The EvD reports exist only with the duty officer module.
+  const { data: modules = [] } = useQuery({ queryKey: ['compensation', 'active-modules'], queryFn: () => api<{ id: string }[]>('core/modules') });
+  const dutyOfficer = modules.some((m) => m.id === 'duty-officer');
   const [template, setTemplate] = useState(false);
   const localized = useLocalized();
   const { data: offices = [] } = useOffices();
@@ -102,7 +106,11 @@ function Form({ value }: { value: CompensationSettings }) {
             decimalScale={2}
             suffix=" €"
           />
-          <div />
+          {dutyOfficer ? (
+            <Switch label={t('settings.dutyOfficerReportPaid')} description={t('settings.dutyOfficerReportPaidHint')} checked={form.dutyOfficerReportPaid} onChange={(e) => set('dutyOfficerReportPaid', e.currentTarget.checked)} />
+          ) : (
+            <div />
+          )}
           <NumberInput label={t('settings.maxPerService')} value={form.maxPerService ?? ''} onChange={(v) => set('maxPerService', optional(v))} min={0} decimalScale={2} suffix=" €" placeholder={t('settings.noLimit')} />
           <NumberInput label={t('settings.maxPerDay')} value={form.maxPerDay ?? ''} onChange={(v) => set('maxPerDay', optional(v))} min={0} decimalScale={2} suffix=" €" placeholder={t('settings.noLimit')} />
         </SimpleGrid>

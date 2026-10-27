@@ -174,7 +174,9 @@ export class ReportPdf {
     };
     const incident = report.incident;
     const keyword = context.keywords.get(incident.alarmKeyword);
-    const department = context.departments.get(report.departmentId)?.name ?? '';
+    // The report of a brigade-wide unit (e.g. the duty officer) carries the name of the unit instead of a department.
+    const unit = this.reports.unitOf(report);
+    const department = report.departmentId ? (context.departments.get(report.departmentId)?.name ?? '') : (unit?.label[language] ?? report.unit ?? '');
 
     const field = (label: string, value: string) => [{ text: label, color: '#6B6B6B' }, { text: value || t.none }];
     const facts = (rows: [string, string][]) => ({
@@ -185,7 +187,7 @@ export class ReportPdf {
 
     const content: unknown[] = [
       { text: t.title(report.number), style: 'title' },
-      { text: `${department} · ${report.primary ? t.primary : t.secondary} · ${t.statusNames[dto.status]}`, style: 'small', margin: [0, 0, 0, 8] },
+      { text: [department, ...(unit ? [] : [report.primary ? t.primary : t.secondary]), t.statusNames[dto.status]].join(' · '), style: 'small', margin: [0, 0, 0, 8] },
       heading(t.incident),
       facts([
         [t.dispatchNumber, incident.dispatchNumber],

@@ -2,7 +2,8 @@ import { BadRequestException, ConflictException, ForbiddenException, Inject, Inj
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { type AuthenticatedUser, berlinDate, DomainEvents, SettingsService } from '@forga/core-api';
 import { billableHours, CompensationSettings, incidentPayout, type CompensationStatute, type IncidentRate, type Item, ItemAmountInput, type ItemKind, type ItemSource, ManualItemInput, type MyCompensation, type MyItemState, round2, type Rounding, trainingRateOn } from '@forga/compensation-contracts';
-import { type DutyChangedEvent, INCIDENTS_EVENTS, IncidentSettings, type ReportReleasedEvent, type ReportUnlockedEvent } from '@forga/incidents-contracts';
+import { DUTY_OFFICER_EVENTS, DUTY_OFFICER_UNIT, type DutyChangedEvent } from '@forga/duty-officer-contracts';
+import { INCIDENTS_EVENTS, IncidentSettings, type ReportReleasedEvent, type ReportUnlockedEvent } from '@forga/incidents-contracts';
 import { type CoursePassedEvent, type CourseRevokedEvent, MASTERDATA_EVENTS, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { type SessionClosedEvent, type SessionReopenedEvent, TRAINING_EVENTS } from '@forga/training-contracts';
 import { ItemEntity } from '../compensation.entities.js';
@@ -77,7 +78,7 @@ export class ItemsService implements OnModuleInit, CompensationStatute {
     this.events.subscribe<SessionClosedEvent>(TRAINING_EVENTS.sessionClosed, (e) => this.fromTraining(e));
     // Reopened: open items disappear, amounts already paid out are reversed until it is closed again.
     this.events.subscribe<SessionReopenedEvent>(TRAINING_EVENTS.sessionReopened, (e) => this.apply('training', e.sessionId, []));
-    this.events.subscribe<DutyChangedEvent>(INCIDENTS_EVENTS.dutyChanged, (e) => this.fromDuty(e));
+    this.events.subscribe<DutyChangedEvent>(DUTY_OFFICER_EVENTS.dutyChanged, (e) => this.fromDuty(e));
     this.events.subscribe<CoursePassedEvent>(MASTERDATA_EVENTS.coursePassed, (e) => this.fromCourse(e));
     // A deleted course attendance: an open allowance disappears, one already paid out is reversed by a correction item.
     this.events.subscribe<CourseRevokedEvent>(MASTERDATA_EVENTS.courseRevoked, (e) => this.apply('course', e.attendanceId, []));
@@ -205,19 +206,26 @@ export class ItemsService implements OnModuleInit, CompensationStatute {
 
   /**
    * Released incident report: one item per person (at most `maxPerService`), plus an open loss-of-earnings item where
-   * claimed and the refreshment allowance for long incidents when the statute names an amount.
+   * claimed and the refreshment allowance for long incidents when the statute names an amount. The items of a report
+   * of a brigade-wide unit (e.g. the EvD report) belong to the person's primary department; the hours of EvD reports
+   * are not paid if the statute covers them with the duty flat rate (`dutyOfficerReportPaid`).
    */
   async fromIncident(e: ReportReleasedEvent): Promise<void> {
     const config = await this.config();
     const label = `${e.dispatchNumber} · ${e.alarmKeyword}`;
+    const hoursPaid = e.unit !== DUTY_OFFICER_UNIT || config.dutyOfficerReportPaid;
+    const primary = e.departmentId
+      ? new Map<string, string | null>()
+      : new Map((await this.directory.snapshots([...new Set(e.personnel.map((p) => p.personId))], berlinDate(new Date(e.alarmedAt)))).map((p) => [p.id, p.primaryDepartmentId]));
     const rows = e.personnel.flatMap((p): DesiredItem[] => {
-      const base = { personId: p.personId, departmentId: e.departmentId, label, date: berlinDate(new Date(p.from)), from: new Date(p.from), to: new Date(p.to), workingHours: p.duringWorkingHours };
+      const departmentId = e.departmentId ?? primary.get(p.personId) ?? null;
+      const base = { personId: p.personId, departmentId, label, date: berlinDate(new Date(p.from)), from: new Date(p.from), to: new Date(p.to), workingHours: p.duringWorkingHours };
       const payout = incidentPayout(p, config);
       // Unpaid during working hours (unless the incidents settings compensate them).
       const unpaid = p.duringWorkingHours && p.amount === 0;
-      const items: DesiredItem[] = [{ ...base, kind: 'compensation', hours: unpaid ? 0 : p.hours, rate: unpaid ? null : p.rate, amount: payout.amount }];
+      const items: DesiredItem[] = hoursPaid ? [{ ...base, kind: 'compensation', hours: unpaid ? 0 : p.hours, rate: unpaid ? null : p.rate, amount: payout.amount }] : [];
       if (p.lossOfEarnings) items.push({ ...base, kind: 'loss-of-earnings', label: `${label} · Verdienstausfall`, hours: null, rate: null, amount: null, workingHours: false });
-      if (payout.refreshment !== null) items.push({ ...base, kind: 'flat-rate', label: `${label} · Erfrischungszuschuss`, hours: null, rate: null, amount: payout.refreshment, workingHours: false });
+      if (hoursPaid && payout.refreshment !== null) items.push({ ...base, kind: 'flat-rate', label: `${label} · Erfrischungszuschuss`, hours: null, rate: null, amount: payout.refreshment, workingHours: false });
       return items;
     });
     await this.apply('incident', e.reportId, rows);

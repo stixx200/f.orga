@@ -141,6 +141,7 @@ export class MpFeuerIncidentsImport {
     const persons = await this.directory.memberPeriods();
     const results: ImportRowResult[] = [];
     const handled = new Map<string, Set<string>>();
+    const createdIncidents: IncidentEntity[] = [];
 
     // One report per department, incident number and begin.
     const groups = new Map<string, ImportRow[]>();
@@ -198,6 +199,7 @@ export class MpFeuerIncidentsImport {
           'import',
         );
         incident.internalNumber = !first['dispatchNumber']?.trim();
+        createdIncidents.push(incident);
       }
       const current: IncidentEntity = incident;
 
@@ -292,7 +294,11 @@ export class MpFeuerIncidentsImport {
       addCrewVehicles(em, report);
     }
 
-    if (!dryRun) await em.flush();
+    if (!dryRun) {
+      await em.flush();
+      // `createdVia: import`: modules adding their own reports to new incidents leave imported (historic) ones alone.
+      for (const incident of createdIncidents) await this.reports.publishCreated(incident);
+    }
     const counts = { create: 0, update: 0, unchanged: 0, error: 0 };
     for (const r of results) counts[r.action]++;
     return { dryRun, counts, rows: results.toSorted((a, b) => a.row - b.row) };

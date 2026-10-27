@@ -1,17 +1,14 @@
-import { BadRequestException, Controller, Get, Inject, Query, Res } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/core';
+import { BadRequestException, Controller, Get, Inject, Optional, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import ExcelJS from 'exceljs';
 import { z } from 'zod';
-import { addStyledSheet, Audit, type AuthenticatedUser, berlinDayAfter, berlinDayStart, CurrentUser, formatCell, RequirePermissions, SettingsService } from '@forga/core-api';
+import { addStyledSheet, Audit, type AuthenticatedUser, CurrentUser, formatCell, ModuleStateService, RequirePermissions, SettingsService } from '@forga/core-api';
 import type { BrigadeSettings, Language } from '@forga/core-contracts';
 import type { CompensationCheck, CompensationProblem } from '@forga/incidents-contracts';
+import { DUTY_ROSTER, type DutyRoster } from '@forga/duty-officer-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
-import { dutyCompensation } from '../domain/compensation.js';
 import { overlaps } from '../domain/rules.js';
 import { CompensationChecker } from './compensation-check.js';
-import { DutyAssignmentEntity } from '../incidents.entities.js';
-import { ReportContextLoader } from '../reports/report-context.js';
 import { type AssignmentLine, AssignmentLines } from './assignments.js';
 
 const ExportQuery = z.object({
@@ -27,7 +24,7 @@ const SHEETS = {
   en: { perPerson: 'Amount per person', perDepartment: 'Total per department', assignments: 'Assignments', duties: 'Special services', problems: 'Notes', overlaps: 'Overlaps' },
 } as const;
 
-/** A special service from the duty roster within the period. */
+/** A special service from the duty roster (duty officer module) within the period. */
 export interface DutyLine {
   personId: string;
   name: string;
@@ -188,35 +185,32 @@ export class CompensationExportController {
     private readonly lines: AssignmentLines,
     private readonly settings: SettingsService,
     private readonly audit: Audit,
-    private readonly em: EntityManager,
-    private readonly contexts: ReportContextLoader,
     private readonly checker: CompensationChecker,
+    private readonly modules: ModuleStateService,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
     @Inject(ORGANIZATION) private readonly organization: Organization,
+    @Optional() @Inject(DUTY_ROSTER) private readonly roster?: DutyRoster,
   ) {}
 
-  /** Special services starting within the period. */
+  /** Special services of the duty roster starting within the period; none without the active duty officer module. */
   private async duties(from: string, to: string, language: Language): Promise<DutyLine[]> {
-    const list = await this.em.fork().find(
-      DutyAssignmentEntity,
-      { from: { $gte: berlinDayStart(from), $lt: berlinDayAfter(to) } },
-      { orderBy: { from: 'asc' } },
-    );
+    if (!this.roster || (await this.modules.inactiveIds()).has('duty-officer')) return [];
+    const list = await this.roster.startingIn(from, to);
     if (!list.length) return [];
-    const settings = await this.contexts.settingsOnly();
     const persons = new Map((await this.directory.snapshots([...new Set(list.map((d) => d.personId))], to)).map((p) => [p.id, p]));
     const departments = new Map((await this.organization.departments()).map((d) => [d.id, d.name]));
     return list.map((d) => {
       const person = persons.get(d.personId);
-      const compensation = dutyCompensation({ from: d.from.toISOString(), to: d.to.toISOString(), kind: d.kind }, settings.dutyKinds);
       return {
         personId: d.personId,
         name: person ? `${person.lastName}, ${person.firstName}` : d.personId,
         personDepartment: departments.get(person?.primaryDepartmentId ?? '') ?? '',
-        kind: settings.dutyKinds.find((k) => k.key === d.kind)?.name[language] ?? d.kind,
-        from: d.from.toISOString(),
-        to: d.to.toISOString(),
-        ...compensation,
+        kind: d.kindName[language],
+        from: d.from,
+        to: d.to,
+        days: d.days,
+        rate: d.rate,
+        amount: d.amount,
       };
     });
   }
@@ -238,7 +232,7 @@ export class CompensationExportController {
     if (!parsed.success) throw new BadRequestException({ code: 'validation.failed', issues: parsed.error.issues });
     const { from, to, includeUnreleased } = parsed.data;
     const language = parsed.data.lang ?? user.language;
-    const lines = await this.lines.load(user, { from, to }, { releasedOnly: includeUnreleased !== 'true' });
+    const lines = await this.lines.load(user, { from, to }, { releasedOnly: includeUnreleased !== 'true', language });
     const brigade = (await this.settings.get<BrigadeSettings>('brigade'))?.name ?? '';
     const duties = await this.duties(from, to, language);
     const check = await this.checker.check(user, from, to);
