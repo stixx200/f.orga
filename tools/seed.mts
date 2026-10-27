@@ -529,8 +529,8 @@ async function users(persons: PersonRef[], departments: Map<string, string>): Pr
   const since = isoDate(new Date(new Date().getFullYear() - 3, 2, 1));
   const groupLeader = chosen.get('group-leader');
   if (groupLeader) await ensureQualification(groupLeader, 'group-leader', since);
-  const dutyOfficer = chosen.get('duty-officer');
-  if (dutyOfficer) await ensureQualification(dutyOfficer, 'group-leader', since);
+  const officerOfDuty = chosen.get('duty-officer');
+  if (officerOfDuty) await ensureQualification(officerOfDuty, 'group-leader', since);
   const equipmentOfficer = chosen.get('equipment-officer');
   if (equipmentOfficer) await ensureQualification(equipmentOfficer, 'equipment-officer', since);
   const apparatusOfficer = chosen.get('breathing-apparatus-officer');
