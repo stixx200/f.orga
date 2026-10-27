@@ -178,7 +178,7 @@ Unbekannte Katalogschlüssel ergeben `400` mit `catalog.unknownKey`.
 
 ## Incidents
 
-Abteilungsbezogene Rechte gelten für die Abteilung des Berichts. Wer `incidents.reports.release` für die Gesamtwehr hat, liest und schreibt alle Berichte.
+Abteilungsbezogene Rechte gelten für die Abteilung des Berichts. Wer `incidents.reports.release` für die Gesamtwehr hat, liest und schreibt alle Berichte. Berichte gesamtwehrweiter Einheiten (z. B. EvD-Bericht, `departmentId: null`, `unit`) liest, wer `incidents.reports.read` für die Gesamtwehr oder ein Recht der Einheit hat; „Schreibrecht“ heißt bei ihnen das Schreibrecht der Einheit, Vorprüfen ihr Prüfrecht.
 
 | Methode | Pfad | Recht | Zweck |
 | --- | --- | --- | --- |
@@ -186,33 +186,32 @@ Abteilungsbezogene Rechte gelten für die Abteilung des Berichts. Wer `incidents
 | `POST`, `PUT` | `/incidents/keywords`, `/incidents/keywords/:id` | `incidents.settings.manage` | Stichwort anlegen/ändern (`AlarmKeywordInput`); der Schlüssel bleibt fest. Fehler: `catalog.keyTaken` |
 | `POST` | `/incidents/keywords/templates/bw` | `incidents.settings.manage` | Fehlende Stichworte der BW-Vorlage anlegen, Antwort `{ added }` |
 | `GET` | `/incidents/incidents?from&to&departmentId&status&mine&withoutStatistics` | `incidents.reports.read` | Einsätze mit mindestens einem lesbaren Bericht, neueste zuerst (höchstens 500); `withoutStatistics=true`: Hauptbericht eines gezählten Stichworts ohne Statistik |
-| `POST` | `/incidents/incidents` | `incidents.reports.write` für jede genannte Abteilung | Einsatz (`CreateIncident`: `IncidentInput` und `departmentIds`) mit je einem Berichtsentwurf anlegen; ohne Abteilung nur für Freigeber. Fehler: `incidents.departmentRequired`, `incidents.dispatchNumberTaken` (`409`), `incidents.unknownKeyword` |
+| `POST` | `/incidents/incidents` | `incidents.reports.write` für jede genannte Abteilung | Einsatz (`CreateIncident`: `IncidentInput` und `departmentIds`) mit je einem Berichtsentwurf anlegen; ohne Abteilung nur für Freigeber. Sendet `incidents.incident.created`; die Antwort enthält auch die daraufhin angelegten Berichte anderer Module (z. B. EvD-Bericht). Fehler: `incidents.departmentRequired`, `incidents.dispatchNumberTaken` (`409`), `incidents.unknownKeyword` |
 | `GET` | `/incidents/incidents/matches?dispatchNumber&alarmKeyword&alarmedAt&street&city` | `incidents.reports.write` | Vorhandene Einsätze mit derselben Nummer (Groß-/Kleinschreibung egal) oder ±2 h mit demselben Stichwort oder Ort, auch nicht lesbare, nur Mindestdaten und die lesbaren Berichte (`IncidentMatch[]` mit `ownReports`) |
-| `GET` | `/incidents/authors?departmentId` | Schreibrecht für die Abteilung | Personen, die Verfasser sein können (aktives Konto mit Schreibrecht für die Abteilung oder Freigaberecht), als ID-Liste |
+| `GET` | `/incidents/authors?departmentId` bzw. `?unit` | Schreibrecht für die Abteilung bzw. Einheit | Personen, die Verfasser sein können (aktives Konto mit Schreibrecht für die Abteilung bzw. Einheit oder Freigaberecht), als ID-Liste |
+| `GET` | `/incidents/units` | angemeldet | Gesamtwehrweite Einheiten mit eigenen Berichten (`IncidentUnit[]`: Name, Kurzname, Nummernpräfix, Rechte, Fahrzeugpflicht) |
 | `GET` | `/incidents/incidents/:id` | `incidents.reports.read` | Einsatz mit Berichtsübersicht (je Bericht auch `hasStatistics`) |
 | `PUT` | `/incidents/incidents/:id` | Schreibrecht für den Hauptbericht | Einsatzdaten ändern (`IncidentUpdate` mit `version`); Schreiber nur, solange alle Berichte ungesperrte Entwürfe sind. Fehler: `conflict.stale`, `incidents.reportLocked`, `incidents.incidentSubmitted` (`403`), `incidents.incidentReleased` (`409`, ein Bericht ist freigegeben), `incidents.dispatchNumberTaken` |
 | `PUT` | `/incidents/incidents/:id/costs` | `incidents.costs` | Kosten und Bemerkungen des ganzen Einsatzes (`IncidentCosts`: `chargeable`, `chargeableReason` – Pflicht, wenn kostenpflichtig –, `notes`, `version`); auch nach der Freigabe der Berichte |
 | `POST` | `/incidents/incidents/:id/reports` | `incidents.reports.write` für die Abteilung | Bericht für eine weitere Abteilung anlegen (`NewReportInput`), auch bei einem Einsatz, den der Benutzer noch nicht lesen darf. Fehler: `incidents.reportExists` (`409`) |
 | `GET` | `/incidents/reports/:id` | `incidents.reports.read` | Bericht (`Report`) mit Entschädigung je Person, `compensationTotal`, `findings`, `statisticsSuggestion`. Ohne Leserecht `404` |
-| `PUT` | `/incidents/reports/:id` | Schreibrecht | Inhalt speichern (`ReportUpdate`: `ReportInput` mit Pflichtfeld `version`). Fehler: `conflict.stale`, `incidents.reportReleased`, `incidents.reportLocked`, `incidents.notDraft` (`403`), `incidents.unknownPerson`, `incidents.unknownVehicle`, `incidents.personTwiceInReport` |
+| `PUT` | `/incidents/reports/:id` | `incidents.reports.read`, Schreibrecht am Bericht | Inhalt speichern (`ReportUpdate`: `ReportInput` mit Pflichtfeld `version`). Fehler: `conflict.stale`, `incidents.reportReleased`, `incidents.reportLocked`, `incidents.notDraft` (`403`), `incidents.unknownPerson`, `incidents.unknownVehicle`, `incidents.personTwiceInReport` |
 | `GET` | `/incidents/reports/:id/pdf?lang` | `incidents.reports.read` | Bericht als PDF |
 | `GET` | `/incidents/reports/:id/previous-crew?vehicleId` | `incidents.reports.read` | Besatzung des Fahrzeugs im letzten früheren Bericht der Abteilung (`PreviousCrew`) |
 | `PUT` | `/incidents/reports/:id/statistics` | `incidents.reports.release` (Gesamtwehr) | Statistik eines Hauptberichts ohne neue Freigabe ändern oder entfernen (`StatisticsUpdate`: `statistics` oder `null`, `version`). Fehler: `incidents.notPrimary`, `incidents.statisticsNotCounted` (`400`), `conflict.stale` |
 | `GET` | `/incidents/me?year` | `incidents.self` | Eigene Einsätze des Jahres (`MyIncidents`) der verknüpften Person |
 | `GET` | `/incidents/reports/:id/revisions` | `incidents.reports.read` | Versionen des Berichts, neueste zuerst (`ReportRevision[]`: `id`, `savedAt`, `userName`, `personnelCount`) |
-| `POST` | `/incidents/reports/:id/revisions/:revisionId/restore` | Schreibrecht | Version wiederherstellen; wie Speichern (neue Version, Sperre durch Freigeber). Fehler wie `PUT` |
-| `POST` | `/incidents/reports/:id/primary` | Schreibrecht | Zum Hauptbericht machen. Fehler: `incidents.reportReleased` (der Bericht oder der bisherige Hauptbericht ist freigegeben) |
-| `POST` | `/incidents/reports/:id/submit` | Schreibrecht | Fertig melden (`Submit` mit `acknowledgements`). Fehler: `incidents.findingsOpen`, `incidents.warningsNotAcknowledged` (`400`), `incidents.invalidTransition` (`409`) |
-| `POST` | `/incidents/reports/:id/return` | `incidents.reports.release` (Gesamtwehr) oder `incidents.reports.review` für die Abteilung | Zurückgeben (`ReturnToAuthor`); gesperrte Berichte nur Freigeber (`incidents.reportLocked`), die Sperre fällt nur mit `incidents.reports.unlock` |
+| `POST` | `/incidents/reports/:id/revisions/:revisionId/restore` | `incidents.reports.read`, Schreibrecht am Bericht | Version wiederherstellen; wie Speichern (neue Version, Sperre durch Freigeber). Fehler wie `PUT` |
+| `POST` | `/incidents/reports/:id/primary` | `incidents.reports.read`, Schreibrecht am Bericht | Zum Hauptbericht machen. Fehler: `incidents.reportReleased` (der Bericht oder der bisherige Hauptbericht ist freigegeben), `incidents.unitReportNotPrimary` (`400`, Bericht einer Einheit) |
+| `POST` | `/incidents/reports/:id/submit` | `incidents.reports.read`, Schreibrecht am Bericht | Fertig melden (`Submit` mit `acknowledgements`). Fehler: `incidents.findingsOpen`, `incidents.warningsNotAcknowledged` (`400`), `incidents.invalidTransition` (`409`) |
+| `POST` | `/incidents/reports/:id/return` | `incidents.reports.release` (Gesamtwehr) oder `incidents.reports.review` für die Abteilung (bei Einheiten ihr Prüfrecht) | Zurückgeben (`ReturnToAuthor`); gesperrte Berichte nur Freigeber (`incidents.reportLocked`), die Sperre fällt nur mit `incidents.reports.unlock` |
 | `POST` | `/incidents/reports/:id/release` | `incidents.reports.release` | Freigeben (`Release`: `compensation` nur aus `review`, `billing` aus `review` oder `released-compensation`). Fehler: `incidents.findingsOpen`, `incidents.invalidTransition`, `incidents.compensationReleaseDisabled` (`400`, wenn `compensationRelease` aus ist) |
 | `POST` | `/incidents/reports/release` | `incidents.reports.release` | Mehrere Berichte freigeben (`ReleaseMany`), Antwort `ReleaseManyResult` (`released`, `failed` mit Fehlercode) |
 | `POST` | `/incidents/reports/:id/unlock` | `incidents.reports.unlock` | Sperre aufheben (`Unlock`: `reason`, `toStatus`; ein gesperrter Entwurf nur nach `draft`). Fehler: `incidents.notLocked`, `incidents.invalidTransition` |
-| `DELETE` | `/incidents/reports/:id` | Schreibrecht | Entwurf löschen (`204`, Ereignis `incidents.report.unlocked` mit Grund `deleted`); der letzte Bericht löscht den Einsatz mit. Fehler: `incidents.invalidTransition`, `incidents.primaryHasSiblings` |
+| `DELETE` | `/incidents/reports/:id` | `incidents.reports.read`, Schreibrecht am Bericht | Entwurf eines Abteilungsberichts löschen (`204`, Ereignis `incidents.report.unlocked` mit Grund `deleted`); der letzte Abteilungsbericht löscht den Einsatz und die Entwürfe der Einheiten mit. Fehler: `incidents.invalidTransition`, `incidents.primaryHasSiblings`, `incidents.unitReportManaged` (`409`, Bericht einer Einheit: nur über ihr Modul) |
 | `POST` | `/incidents/v1/incidents` | `incidents.api.create` | Externe API (`ExternalIncidentInput`), idempotent über die Leitstellennummer. Antwort `ExternalIncidentResult` mit `warnings` |
 | `GET` | `/incidents/compensation/check?from&to` | `incidents.compensation.export` | Prüfung vor der Auszahlung (`CompensationCheck`: nicht freigegebene Berichte und Personalprobleme) |
 | `GET` | `/incidents/compensation/export?from&to&includeUnreleased&lang` | `incidents.compensation.export` | Abrechnungsexport als Excel; Blatt „Hinweise“ mit dem Ergebnis der Prüfung |
-| `GET` | `/incidents/duty?from&to` | `incidents.duty.manage` | Sonderdienste mit Tagen, Satz und Betrag (`DutyAssignment[]`) |
-| `POST`, `PUT`, `DELETE` | `/incidents/duty`, `/incidents/duty/:id` | `incidents.duty.manage` | Sonderdienst pflegen (`DutyAssignmentInput`). Fehler: `incidents.duty.unknownKind`, `incidents.unknownPerson` |
 | `GET` | `/incidents/statistics/:year` | `incidents.statistics` | Jahresstatistik (`AnnualStatistics`: Werte mit berechnet/korrigiert/gültig, Prüfungen, Abschluss) |
 | `PUT` | `/incidents/statistics/:year/corrections` | `incidents.statistics` | Korrekturen (`StatisticsCorrections`, Schlüssel `F121:D`, `null` entfernt). Fehler: `incidents.statisticsClosed` (`409`) |
 | `POST` | `/incidents/statistics/:year/close`, `/incidents/statistics/:year/reopen` | `incidents.statistics` | Abschließen (`CloseStatistics`: `force` bei offenen Prüfungen, sonst `incidents.statisticsChecksOpen`; speichert die Werte) bzw. wieder öffnen |
@@ -222,9 +221,28 @@ Abteilungsbezogene Rechte gelten für die Abteilung des Berichts. Wer `incidents
 
 **Importprofil `incidents.mp-feuer`** (Recht `incidents.reports.release`, MP-Feuer-Personalexport `.xlsx`/`.csv`, Option `createKeywords`), Meldungscodes je Zeile: `masterdata.import.unknownDepartment`, `imports.invalidDate`, `incidents.unknownKeyword`, `incidents.import.unknownPerson`, `incidents.personTwiceInReport`, `incidents.api.unknownVehicle`, `incidents.import.reportEdited`.
 
-**Importprofil `incidents.duty-roster`** (Recht `incidents.duty.manage`, Datei `.ics`), Meldungscodes je Zeile: `imports.invalidDate`, `incidents.duty.unknownPerson`, `incidents.duty.ambiguousPerson`, `incidents.duty.noKind`.
+**Einstellungsabschnitt** `incidents.general`: `homeMunicipalities`, `rates`, `rounding`, `compensationRelease`, `standbyHours`, `allowances`, `rules`.
 
-**Einstellungsabschnitt** `incidents.general`: `homeMunicipalities`, `rates`, `rounding`, `compensationRelease`, `standbyHours`, `allowances`, `dutyKinds`, `rules`.
+**Verträge für andere Module:** `INCIDENTS_LOOKUP`, `INCIDENT_UNITS` (Einheit anmelden), `INCIDENTS_UNIT_REPORTS` (Berichte einer Einheit anlegen, löschen – nur ungesperrter Entwurf, sonst `incidents.unitReportNotDraft` –, abfragen). Ereignisse: `incidents.incident.created` (`IncidentCreatedEvent` mit `createdVia`), `incidents.report.released` (mit `departmentId` oder `unit`), `incidents.report.unlocked`.
+
+## Duty officer
+
+Alle Rechte gelten für die Gesamtwehr.
+
+| Methode | Pfad | Recht | Zweck |
+| --- | --- | --- | --- |
+| `GET` | `/duty-officer/roster?from&to` | `duty-officer.read` oder `duty-officer.roster.manage` | Sonderdienste mit Tagen, Satz und Betrag (`DutyAssignment[]`) |
+| `POST`, `PUT`, `DELETE` | `/duty-officer/roster`, `/duty-officer/roster/:id` | `duty-officer.roster.manage` | Sonderdienst pflegen (`DutyAssignmentInput`). Fehler: `duty-officer.unknownKind`, `duty-officer.unknownPerson` |
+| `POST` | `/duty-officer/roster/republish` | `duty-officer.roster.manage` | `duty-officer.duty.changed` für die Dienste eines Zeitraums erneut senden (`{ from, to }`), Antwort `{ duties }` |
+| `GET` | `/duty-officer/incidents/:incidentId` | `duty-officer.read`, `.reports.write` oder `.reports.manage` | EvD-Stand eines Einsatzes (`IncidentDutyOfficer`: `reportRequired`, `expected`, `report`, `exemption`, `onDuty`, `missing`) |
+| `POST` | `/duty-officer/incidents/:incidentId/exemption` | `duty-officer.reports.manage` | „Kein EvD bei diesem Einsatz“ (`ExemptionInput`: `reason`); löscht den Entwurf des EvD-Berichts. Fehler: `incidents.unitReportNotDraft` (`409`) |
+| `POST` | `/duty-officer/incidents/:incidentId/report` | `duty-officer.reports.manage` | „EvD-Bericht anlegen“: Ausnahme aufheben und EvD-Bericht anlegen |
+
+**Importprofil `duty-officer.roster`** (Recht `duty-officer.roster.manage`, Datei `.ics`), Meldungscodes je Zeile: `imports.invalidDate`, `duty-officer.unknownPerson`, `duty-officer.ambiguousPerson`, `duty-officer.noKind`.
+
+**Einstellungsabschnitt** `duty-officer.general`: `reportRequired`, `dutyKinds`.
+
+**Verträge für andere Module:** `DUTY_ROSTER` (`startingIn(from, to)`), Ereignis `duty-officer.duty.changed` (`DutyChangedEvent`).
 
 ## Clothing
 

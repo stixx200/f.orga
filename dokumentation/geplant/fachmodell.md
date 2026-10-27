@@ -23,7 +23,8 @@ Feuerwehr (Gesamtwehr, genau eine je Installation)
 | Begriff | Bedeutung |
 | --- | --- |
 | Einsatz | Ein Ereignis der Leitstelle mit einer Leitstellennummer. Mehrere Abteilungen können beteiligt sein. |
-| Einsatzbericht | Der Bericht **einer** Abteilung zu einem Einsatz. Genau einer je Einsatz ist der Hauptbericht. |
+| Einsatzbericht | Der Bericht **einer** Abteilung zu einem Einsatz. Genau einer je Einsatz ist der Hauptbericht. Daneben gibt es Berichte gesamtwehrweiter Einheiten (z. B. den EvD-Bericht), die keiner Abteilung angehören und nie Hauptbericht sind. |
+| Einsatzleiter vom Dienst (EvD) | Führungskraft, die nach Dienstplan für die ganze Feuerwehr Bereitschaft hat. Er bekommt je Diensttag eine Pauschale und schreibt zu jedem Einsatz einen eigenen EvD-Bericht. |
 | Kosten und Bemerkungen | Gelten für den ganzen Einsatz, nicht je Bericht: kostenpflichtig mit Begründung, Bemerkungen und der Tatbestand für den Kostenersatz. Der Kommandant (oder wer das Recht hat) trägt sie ein. |
 | Funktion | Rolle einer Person im Einsatz: Einsatzleiter, Gruppenführer, Maschinist, Angriffstrupp, … (konfigurierbarer Katalog) |
 | Qualifikation | Was eine Person kann oder darf, mit optionalem Ablaufdatum: Atemschutzgeräteträger, Maschinist, Führerschein C, … Sie entsteht aus einem bestandenen Lehrgang oder wird direkt eingetragen. |
@@ -98,7 +99,8 @@ Die Grundausstattung an Rollen ist umgesetzt: Core und Module bringen Rollenvorl
 | Lehrgangsbeauftragter | `course-coordinator` | Personen lesen, Lehrgänge planen: Vormerkungen und Anmeldungen pflegen, Teilnahmen mit Ergebnis eintragen. Den Lehrgangskatalog pflegt weiter der Administrator. |
 | Atemschutzgerätewart | `breathing-apparatus-officer` | Personen und Berichte lesen; Atemschutznachweise mit dem Modul Atemschutz |
 | Gerätewart | `equipment-officer` | Personen lesen; Geräte und Prüfungen mit dem Modul Geräte |
-| Verwaltung / Kasse | `administration` | Entschädigungsexport, Dienstplan, Jahresstatistik, Listen |
+| Verwaltung / Kasse | `administration` | Entschädigungsexport, EvD-Dienstplan, Jahresstatistik, Listen |
+| Einsatzleiter vom Dienst | `duty-officer` | EvD-Berichte schreiben, Einsatzberichte aller Abteilungen und den EvD-Dienstplan lesen |
 | Mitglied | `member` | „Mein Bereich“: eigene Daten, Kontaktdaten ändern, eigene Dienste mit Entschuldigung, eigene Atemschutz-Nachweise, Mängel melden |
 
 ## Glossar Fachbegriff ↔ Code
@@ -150,6 +152,9 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Vorprüfung (Abteilungskommandant) | review, Recht `incidents.reports.review` |
 | Sperre | lock |
 | Ende bestätigt | `endConfirmed` |
+| Gesamtwehrweite Einheit (schreibt eigene Berichte, z. B. EvD) | `IncidentUnit`, Register `INCIDENT_UNITS`, Feld `unit` am Bericht |
+| Bericht einer Einheit (z. B. EvD-Bericht) | unit report (`departmentId: null`, `unit`), Dienst `INCIDENTS_UNIT_REPORTS` |
+| Einsatz angelegt (Ereignis) | `incidents.incident.created` (`createdVia`: `ui`, `api`, `import`) |
 
 ### Nachweise und Fristen
 
@@ -199,6 +204,20 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Kleiderwart | Rollenvorlage `clothing-officer` |
 | Was eine Person noch hält | `PERSON_HOLDINGS` (Stammdaten-Vertrag) |
 
+### Einsatzleiter vom Dienst
+
+| Fachbegriff | Code |
+| --- | --- |
+| Einsatzleiter vom Dienst (EvD) | duty officer, Modul `duty-officer`, Rollenvorlage `duty-officer` |
+| EvD-Dienst, Dienstplan | duty roster (`DutyAssignment`, `DutyAssignmentEntity`) |
+| Sonderdienst (Art eines Dienstes im Dienstplan) | duty kind (`DutyKind`, Einstellung `dutyKinds`) |
+| EvD-Pauschale je Diensttag | duty compensation (`dutyCompensation`), Ereignis `duty-officer.duty.changed` |
+| EvD-Bericht | Bericht der Einheit `duty-officer` (`DUTY_OFFICER_UNIT`) |
+| „EvD-Bericht für jeden Einsatz anlegen“ | `reportRequired` (Einstellung `duty-officer.general`) |
+| „Kein EvD bei diesem Einsatz“ | incident exemption (`IncidentExemptionEntity`) |
+| erwarteter EvD-Bericht | `ExpectedReportEntity` |
+| „EvD-Bericht fehlt“ | Frist `evd-report-missing` |
+
 ### Modul-IDs
 
 Die Modul-ID ist zugleich das Präfix der Berechtigungen und der Pfad in API und Oberfläche. Das Datenbankschema heißt wie die ID, mit `_` statt `-`.
@@ -215,3 +234,4 @@ Die Modul-ID ist zugleich das Präfix der Berechtigungen und der Pfad in API und
 | Kostenersatz | `cost-recovery` |
 | Beförderungen | `promotions` |
 | Kleiderkammer | `clothing` |
+| Einsatzleiter vom Dienst | `duty-officer` |
