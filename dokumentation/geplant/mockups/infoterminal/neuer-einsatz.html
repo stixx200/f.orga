@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neuer Einsatz · f.orga</title>
+<link rel="stylesheet" href="../assets/mockup.css">
+<script src="../assets/i18n.js" defer></script>
+<script src="../assets/mockup.js" defer></script>
+</head>
+<body>
+<div class="tk"><div class="mockup-hinweis">Mockup · nicht funktionsfähig · <a href="../index.html">Übersicht aller Mockups</a></div><header class="tk-kopf"><img src="../assets/logo.svg" alt="Wappen"><div class="tk-wache"><span class="kicker">Infoterminal · Freiwillige Feuerwehr Musterstadt</span><strong>Feuerwehrhaus Musterstadt</strong></div><span class="tk-uhr" translate="no">14:32</span><div class="sprache" role="group" aria-label="Sprache">
+  <button type="button" data-sprache="de" aria-pressed="true" lang="de" title="Deutsch">DE</button><button type="button" data-sprache="en" aria-pressed="false" lang="en" title="English">EN</button>
+</div></header><main class="tk-inhalt" id="inhalt"><a class="tk-zurueck" href="start.html">‹ Übersicht</a>
+<div class="tk-titel"><h1>Neuer Einsatz</h1><span class="meta">Legt den Einsatz und den Bericht der Abteilung Musterstadt an</span></div>
+<section class="tk-abschnitt">
+  <div class="feld"><label for="f1" class="pflicht">Stichwort</label><select id="f1"><option>– bitte wählen –</option><option selected>TH-Wasser · Wasser im Gebäude / Unwetter</option><option>B1 · Kleinbrand</option><option>B2 · Brand Wohnung</option><option>TH1 · Technische Hilfe klein</option><option>B-BMA · Brandmeldeanlage</option></select></div>
+  <div class="felder zwei">
+    <div class="feld"><label for="f2" class="pflicht">Alarm</label><input id="f2" type="time" value="13:58"><div class="hilfe">heute, höchstens 12 Stunden zurück</div></div>
+    <div class="feld"><label for="f3">Leitstellennummer</label><input id="f3" type="text" placeholder="falls bekannt, z. B. 2026-104950"></div>
+  </div>
+  <div class="felder zwei">
+    <div class="feld"><label for="f4">Straße und Hausnummer</label><input id="f4" type="text" value="Mühlweg 7"></div>
+    <div class="feld"><label for="f5">Ort</label><input id="f5" type="text" value="Musterstadt"></div>
+  </div>
+</section>
+<div class="meldung info"><span class="ic">i</span><span>Den Bericht schreibt danach ein Verfasser der Abteilung in f.orga. Ein Einsatz von der Leitstelle (Schnittstelle) erscheint ohne dieses Formular auf der Übersicht.</span></div>
+<div class="tk-leiste"><a class="knopf" href="start.html">Abbrechen</a><button type="button" class="knopf primaer gross" data-dialog="d-treffer">Weiter</button></div>
+</main><footer class="fuss">
+  <p>Freiwillige Feuerwehr Musterstadt · Feuerwehrstraße 1 · 12345 Musterstadt</p>
+  <p>Telefon 01234/5678-0 · Fax 01234/5678-99 · www.feuerwehr-musterstadt.example</p>
+</footer></div>
+<dialog class="dialog" id="d-treffer" aria-labelledby="d-treffer-titel">
+  <form method="dialog">
+    <div class="dialog-kopf"><h2 id="d-treffer-titel">Gibt es den Einsatz schon?</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dialog-inhalt">
+<p>Ein passender Einsatz ist schon angelegt (gleiches Stichwort, Alarm innerhalb von 2 Stunden):</p>
+<section class="karte" style="margin-bottom:8px"><strong>TH-Wasser · Wasser im Gebäude / Unwetter</strong><br><span class="meta">Alarm 13:51 · Musterstadt, Mühlweg 5 · Berichte: Birkenhain</span>
+<div class="formular-fuss" style="justify-content:flex-start"><a class="knopf sekundaer" href="personen.html">Unseren Bericht hinzufügen</a></div></section>
+<p class="meta">Gezeigt werden nur Stichwort, Alarm, Ort und beteiligte Abteilungen. Die Abteilung Musterstadt bekommt einen eigenen Bericht (Nebenbericht) zu diesem Einsatz.</p></div>
+    <div class="dialog-fuss"><a class="knopf" href="personen.html">Nein, neuen Einsatz anlegen</a></div>
+  </form>
+</dialog>
+</body>
+</html>

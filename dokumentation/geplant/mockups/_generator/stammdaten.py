@@ -293,7 +293,7 @@ seite('stammdaten/person-neu.html', 'Person anlegen', '''
 
 # ---------- Organisation ----------
 def abt(name, art, kdt, n, wachen, fahrzeuge, offen=False, kinder=''):
-    w = ''.join(f'<li class="blatt">{sym("start")}<span>{x}</span></li>' for x in wachen)
+    w = ''.join(f'<li class="blatt">{sym("start")}<a href="#wache">{x}</a></li>' for x in wachen)
     f = ''.join(f'<li class="blatt">{sym("fahrzeug")}<a href="fahrzeug.html">{x}</a></li>' for x in fahrzeuge)
     gew = ' class="gewaehlt"' if offen else ''
     return f'''<li><details{" open" if offen else ""}><summary{gew}><strong>{name}</strong> <span class="plakette">{art}</span><span class="meta">{kdt} · {n} Mitglieder</span></summary>
@@ -317,6 +317,7 @@ seite('stammdaten/organisation.html', 'Organisation', '''
   </ul></details></li>
   </ul>
 </section>
+<div class="stapel-abstand">
 <section class="karte">
   <div class="karte-kopf"><h2>Abteilung Musterstadt</h2><a class="knopf klein" href="#">Bearbeiten</a></div>
   <dl class="daten">
@@ -335,6 +336,24 @@ seite('stammdaten/organisation.html', 'Organisation', '''
   </div>
   <div class="formular-fuss" style="justify-content:flex-start"><a class="knopf klein" href="#">+ Wache</a><a class="knopf klein" href="fahrzeug.html">+ Fahrzeug</a><a class="knopf klein" href="#">+ Unterabteilung</a></div>
 </section>
+<section class="karte" id="wache">
+  <div class="karte-kopf"><h2>Wache Feuerwehrhaus Musterstadt</h2><a class="knopf klein" href="#">Bearbeiten</a></div>
+  <dl class="daten">
+    <dt>Anschrift</dt><dd>Feuerwehrstraße 1, 12345 Musterstadt</dd>
+    <dt>Abteilung</dt><dd>Abteilung Musterstadt</dd>
+    <dt>Ständig besetzt</dt><dd>nein</dd>
+    <dt>Fahrzeuge</dt><dd>5</dd>
+  </dl>
+  <hr class="trenner">
+  <h3>Infoterminal</h3>
+  <ul class="liste">
+    <li><span>''' + sym('terminal') + '''</span><span><strong>Tablet Fahrzeughalle</strong><br><span class="meta">zuletzt gesehen heute 14:31</span></span><span class="rechts plakette ok">aktiv</span></li>
+    <li><span>''' + sym('terminal') + '''</span><span><strong>PC Funkraum</strong><br><span class="meta">zuletzt gesehen 21.10.2026 19:02</span></span><span class="rechts plakette ok">aktiv</span></li>
+  </ul>
+  <p class="meta">Mitglieder tragen sich dort nach Einsätzen und Diensten ein. Der geheime Link wird nur beim Einrichten angezeigt.</p>
+  <div class="formular-fuss" style="justify-content:flex-start"><a class="knopf klein" href="{P}infoterminal/verwaltung.html">Infoterminals verwalten</a><a class="knopf klein sekundaer" href="{P}infoterminal/verwaltung.html#d-link">Dieses Gerät als Infoterminal einrichten …</a></div>
+</section>
+</div>
 </div>''', brot=[('Stammdaten', None), ('Organisation', None)], aktionen='<a class="knopf primaer" href="#">+ Abteilung anlegen</a>')
 
 # ---------- Fahrzeug ----------

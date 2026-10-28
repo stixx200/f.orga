@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eintragen · f.orga</title>
+<link rel="stylesheet" href="../assets/mockup.css">
+<script src="../assets/i18n.js" defer></script>
+<script src="../assets/mockup.js" defer></script>
+</head>
+<body>
+<div class="tk"><div class="mockup-hinweis">Mockup · nicht funktionsfähig · <a href="../index.html">Übersicht aller Mockups</a></div><header class="tk-kopf"><img src="../assets/logo.svg" alt="Wappen"><div class="tk-wache"><span class="kicker">Infoterminal · Freiwillige Feuerwehr Musterstadt</span><strong>Feuerwehrhaus Musterstadt</strong></div><span class="tk-uhr" translate="no">14:32</span><div class="sprache" role="group" aria-label="Sprache">
+  <button type="button" data-sprache="de" aria-pressed="true" lang="de" title="Deutsch">DE</button><button type="button" data-sprache="en" aria-pressed="false" lang="en" title="English">EN</button>
+</div></header><main class="tk-inhalt" id="inhalt"><a class="tk-zurueck" href="personen.html">‹ Andere Person</a>
+<div class="tk-titel"><div><span class="meta">B3 Brand Scheune · Alarm 13:12</span><h1>Jana Fischer eintragen</h1></div></div>
+<section class="tk-abschnitt">
+  <h2>Wo waren Sie?</h2>
+  <div class="wahl "><label><input type="radio" name="wo" value="lf" checked><span>LF 20/16 · Florian Musterstadt 1/44 (Musterstadt)<small>5 von 9 Plätzen</small></span></label><label><input type="radio" name="wo" value="dla"><span>DLA(K) 23-12 · Florian Musterstadt 1/33 (Musterstadt)<small>1 von 3 Plätzen</small></span></label><label><input type="radio" name="wo" value="elw"><span>ELW 1 · Florian Musterstadt 1/11 (Musterstadt)<small>0 von 4 Plätzen</small></span></label><label><input type="radio" name="wo" value="mlf"><span>MLF 10/6 · Florian Musterstadt 1/42 (Musterstadt)<small>0 von 6 Plätzen</small></span></label><label><input type="radio" name="wo" value="mtw"><span>MTW · Florian Musterstadt 1/19 (Musterstadt)<small>0 von 9 Plätzen</small></span></label><label><input type="radio" name="wo" value="be"><span>Bereitschaft<small>Feuerwehrhaus Musterstadt · pauschal 1 h</small></span></label></div>
+  <details style="margin-top:12px"><summary class="knopf text">Anderes Fahrzeug …</summary>
+    <div class="feld" style="margin-top:8px"><label for="f1">Fahrzeug einer anderen Wache oder Abteilung</label><select id="f1">
+      <option>– bitte wählen –</option><option>LF 8/6 · Florian Musterstadt 2/43 (Birkenhain)</option><option>MTW · Florian Musterstadt 2/19 (Birkenhain)</option>
+      <option>MLF 10/6 · Florian Musterstadt 3/42 (Weidenhain)</option><option>TSF · Florian Musterstadt 4/47 (Pappelhain)</option></select></div>
+  </details>
+</section>
+<section class="tk-abschnitt">
+  <h2>Funktion</h2>
+  <div class="wahl eng"><label><input type="radio" name="fkt" value="gf"><span>Gruppenführer</span></label><label><input type="radio" name="fkt" value="ma"><span>Maschinist</span></label><label><input type="radio" name="fkt" value="me" checked><span>Melder</span></label><label><input type="radio" name="fkt" value="at"><span>Angriffstrupp</span></label><label><input type="radio" name="fkt" value="wt"><span>Wassertrupp</span></label><label><input type="radio" name="fkt" value="st"><span>Schlauchtrupp</span></label><label><input type="radio" name="fkt" value="el"><span>Einsatzleiter</span></label><label><input type="radio" name="fkt" value="ohne"><span>keine Angabe</span></label></div>
+</section>
+<section class="tk-abschnitt">
+  <h2>Weitere Angaben</h2>
+  <div class="schalter-liste">
+    <label class="schalter"><input type="checkbox"> Unter Atemschutz</label>
+    <label class="schalter"><input type="checkbox"> Verdienstausfall beim Arbeitgeber</label>
+    <label class="schalter"><input type="checkbox"> Einsatz während der Arbeitszeit beim Dienstherrn</label>
+    <label class="schalter"><input type="checkbox" checked> Ich war nicht die ganze Zeit dabei</label>
+  </div>
+  <div class="felder zwei" style="margin-top:8px">
+    <div class="feld"><label for="f2">Von</label><input id="f2" type="time" value="13:40"></div>
+    <div class="feld"><label for="f3">Bis</label><input id="f3" type="time" value=""><div class="hilfe">Leer: bis zum Ende des Einsatzes</div></div>
+  </div>
+  <p class="meta" style="margin:0">Beträge, Atemschutzminuten und Verletzungen trägt der Verfasser im Bericht ein.</p>
+</section>
+<div class="tk-leiste"><span class="status">Kommt in den Bericht der Abteilung Musterstadt, markiert „vom Infoterminal“.</span><a class="knopf" href="personen.html">Abbrechen</a><button type="button" class="knopf primaer gross" data-dialog="d-eingetragen">Eintragen</button></div>
+</main><footer class="fuss">
+  <p>Freiwillige Feuerwehr Musterstadt · Feuerwehrstraße 1 · 12345 Musterstadt</p>
+  <p>Telefon 01234/5678-0 · Fax 01234/5678-99 · www.feuerwehr-musterstadt.example</p>
+</footer></div>
+<dialog class="dialog" id="d-eingetragen" aria-labelledby="d-eingetragen-titel">
+  <form method="dialog">
+    <div class="dialog-kopf"><h2 id="d-eingetragen-titel">Eingetragen</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dialog-inhalt">
+<div class="tk-erfolg"><div class="haken" aria-hidden="true">✓</div>
+<p><strong>Jana Fischer</strong><br>LF 20/16 · Florian Musterstadt 1/44 (Musterstadt)<br>Melder · ab 13:40</p>
+<p class="meta">B3 Brand Scheune · Bericht Abteilung Musterstadt. Ändern oder Austragen bis 01:12 hier am Terminal. Zurück zur Übersicht in 10 s.</p></div></div>
+    <div class="dialog-fuss"><a class="knopf" href="eingetragen.html">Eingetragene ansehen</a><a class="knopf primaer" href="start.html">Fertig</a></div>
+  </form>
+</dialog>
+</body>
+</html>

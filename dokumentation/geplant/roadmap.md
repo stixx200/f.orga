@@ -108,3 +108,12 @@ Umgesetzt, mit Oberflächen ohne eigene Mockups; die Geräteseite (QR-Code) funk
 ## Release 4 – Beförderungen und Erweiterbarkeit
 
 Umgesetzt, mit Oberflächen ohne eigene Mockups: Beförderungen, Urkunden (Beförderung, Ehrung), Anmeldung per OIDC, Mitglieder-Self-Service („Mein Bereich“) und signierte Plugin-Pakete. Release 4 ist vollständig umgesetzt.
+
+## Infoterminal
+
+Noch keinem Release zugeordnet. Konzept: [Modul Infoterminal](module/infoterminal.md).
+
+1. Konzept und Mockups (`mockups/infoterminal/`, Karte an der Wache in `stammdaten/organisation.html`) freigeben, offene Entscheidungen klären.
+2. Vorarbeiten in bestehenden Modulen: `vehicleLabel()` in `masterdata-contracts`, Erweiterungspunkt `masterdata.station.sections`, Eintragungen ohne Versionskonflikt im Einsatzbericht (`bookedVia`, Abgleich beim Speichern, Editor lädt nach), `createdVia: 'terminal'`, `checkedInVia` bei der Anwesenheit, öffentliche Kiosk-Route in der Shell.
+3. Modul `info-terminal`: Terminals mit Geräteschlüssel, Verwaltung, Kiosk-Seite für Einsätze und „Neuer Einsatz“.
+4. Dienste am Terminal (mit Modul Dienste).

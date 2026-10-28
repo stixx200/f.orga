@@ -32,6 +32,7 @@ Feuerwehr (Gesamtwehr, genau eine je Installation)
 | Lehrgangsvormerkung | Eine Person ist für einen Lehrgang vorgesehen. Grundlage der Lehrgangsplanung. |
 | Nachweis | Ein datiertes Ereignis mit Gültigkeit: Eignungsuntersuchung, Belastungsübung, Unterweisung, Geräteprüfung. |
 | Erinnerung | Hinweis auf einen fällig werdenden Nachweis. |
+| Infoterminal | Gerät an einer Wache, an dem sich Einsatzkräfte ohne Benutzerkonto während und bis kurz nach einem Einsatz oder Dienst selbst eintragen (geplant, siehe [Modul Infoterminal](module/infoterminal.md)). |
 
 ## Querschnittsthemen
 
@@ -242,6 +243,18 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | erwarteter EvD-Bericht | `ExpectedReportEntity` |
 | „EvD-Bericht fehlt“ | Frist `evd-report-missing` |
 
+### Infoterminal
+
+| Fachbegriff | Code |
+| --- | --- |
+| Infoterminal (Gerät an einer Wache) | terminal (`TerminalEntity`), Modul `info-terminal` |
+| Geräteschlüssel, Einrichtungslink | device key (`fit_…`, gespeichert als `keyHash`, `keyPrefix`), Cookie `forga_terminal` |
+| Eintragung am Terminal | booking; im Einsatzbericht `bookedVia: 'info-terminal'`, in der Anwesenheit `checkedInVia: 'info-terminal'` |
+| Zeitfenster | booking window (`afterEndMinutes`, `openEndHours`) |
+| Neuer Einsatz am Terminal | `createdVia: 'terminal'` |
+| Kiosk-Seite | kiosk, API `/api/info-terminal/kiosk/…` |
+| Fahrzeugbeschriftung „Bezeichnung · Funkrufname (Abteilung)“ | `vehicleLabel(vehicle, departmentShortName)` |
+
 ### Modul-IDs
 
 Die Modul-ID ist zugleich das Präfix der Berechtigungen und der Pfad in API und Oberfläche. Das Datenbankschema heißt wie die ID, mit `_` statt `-`.
@@ -259,3 +272,4 @@ Die Modul-ID ist zugleich das Präfix der Berechtigungen und der Pfad in API und
 | Beförderungen | `promotions` |
 | Kleiderkammer | `clothing` |
 | Einsatzleiter vom Dienst | `duty-officer` |
+| Infoterminal (geplant) | `info-terminal` |

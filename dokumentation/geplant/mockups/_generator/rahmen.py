@@ -28,6 +28,8 @@ SYMBOLE = {
     'schloss': '<rect x="5" y="11" width="14" height="10" rx="1"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
     'abmelden': '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
     'schliessen': '<path d="M6 6l12 12M18 6L6 18"/>',
+    'terminal': '<rect x="4" y="3" width="16" height="13" rx="1"/><path d="M9 21h6M12 16v5"/><path d="M8 8h3M8 11h8"/>',
+    'qr': '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v1M14 20h1M18 18h3v3"/>',
 }
 
 
@@ -59,6 +61,7 @@ NAVIGATION = [
         ('shell/rollen.html', 'rollen', 'Rollen', None),
         ('shell/module.html', 'module', 'Module', None),
         ('shell/api-tokens.html', 'token', 'API-Tokens', None),
+        ('infoterminal/verwaltung.html', 'terminal', 'Infoterminals', None),
         ('shell/einstellungen.html', 'einstellungen', 'Einstellungen', None),
     ]),
 ]
