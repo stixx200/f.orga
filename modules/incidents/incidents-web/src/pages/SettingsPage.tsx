@@ -4,7 +4,7 @@ import { IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 import { type AlarmKeyword, type AlarmKeywordInput, DEFAULT_RULE_LEVELS, IncidentSettings, RATE_TEMPLATE, RULE_IDS } from '@forga/incidents-contracts';
 import { extensionsOf, send, useLocalized, useTranslation } from '@forga/web-sdk';
-import { DataTable, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
+import { AliasesInput, DataTable, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { useKeywords, useSettings } from '../api';
 
 const SETTINGS_KEY = ['core', 'settings', 'incidents.general'];
@@ -22,6 +22,7 @@ function KeywordDialog({ keyword, onClose }: { keyword?: AlarmKeyword; onClose: 
     requiresVehicle: keyword?.requiresVehicle ?? true,
     compensationKind: keyword?.compensationKind ?? 'incident',
     active: keyword?.active ?? true,
+    aliases: keyword?.aliases ?? [],
   }));
   const save = useAction(
     () => {
@@ -85,6 +86,7 @@ function KeywordDialog({ keyword, onClose }: { keyword?: AlarmKeyword; onClose: 
         <Switch label={t('settingsPage.requiresVehicle')} checked={form.requiresVehicle} onChange={(e) => setForm({ ...form, requiresVehicle: e.currentTarget.checked })} />
         <Switch label={t('settingsPage.active')} checked={form.active} onChange={(e) => setForm({ ...form, active: e.currentTarget.checked })} />
       </Group>
+      <AliasesInput value={form.aliases} onChange={(aliases) => setForm({ ...form, aliases })} mt="md" />
     </ResponsiveDialog>
   );
 }

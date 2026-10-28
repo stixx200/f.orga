@@ -210,6 +210,7 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Importprofil | `ImportProfile` |
 | Nicht zugeordnete Bezeichnung (Import) | `ImportUnmatched`, Zuordnung `mappings` |
 | Nachschlageliste (Import) | `ImportLookup` |
+| Alias (weitere Bezeichnung für Importe, gemerkte Zuordnung) | `aliases`, `ImportLookup.remember` |
 
 ### Kleiderkammer
 

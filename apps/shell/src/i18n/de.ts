@@ -531,6 +531,7 @@ export const de = {
       title: 'Nicht zugeordnete Bezeichnungen',
       hint: 'Diese Bezeichnungen aus der Datei passen zu keinem Eintrag. Wählen Sie einen vorhandenen Eintrag aus oder legen Sie einen neuen an. Ohne Auswahl wird die Bezeichnung ignoriert und wie in den Hinweisen beschrieben behandelt.',
       hintTransfer: 'Diese Bezeichnungen aus MP-Feuer passen zu keinem Eintrag. Wählen Sie einen vorhandenen Eintrag aus oder legen Sie einen neuen an. Ohne Auswahl wird die Bezeichnung ignoriert und wie in den Hinweisen beschrieben behandelt. Die Zuordnung gilt für alle Transferdateien und die folgenden Schritte.',
+      remembered: 'Beim Importieren wird die Zuordnung als Alias des gewählten Eintrags gespeichert, damit der nächste Import die Bezeichnung von selbst erkennt. Aliasse können Sie beim Eintrag bearbeiten.',
       value: 'Bezeichnung in der Datei',
       kind: 'Art',
       entry: 'Zugeordneter Eintrag',

@@ -1,12 +1,12 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261027165604_initial extends Migration {
+export class Migration20261028103733_initial extends Migration {
 
-  override name = 'Migration20261027165604_initial';
+  override name = 'Migration20261028103733_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"incidents\";");
-    this.addSql("create table \"incidents\".\"alarm_keyword\" (\"id\" uuid not null, \"key\" varchar(255) not null, \"name\" jsonb not null, \"main_type\" varchar(255) null, \"technical_category\" varchar(255) null, \"false_alarm_type\" varchar(255) null, \"requires_vehicle\" boolean not null default true, \"compensation_kind\" varchar(255) not null default 'incident', \"active\" boolean not null default true, \"version\" int not null default 1, primary key (\"id\"));");
+    this.addSql("create table \"incidents\".\"alarm_keyword\" (\"id\" uuid not null, \"key\" varchar(255) not null, \"name\" jsonb not null, \"main_type\" varchar(255) null, \"technical_category\" varchar(255) null, \"false_alarm_type\" varchar(255) null, \"requires_vehicle\" boolean not null default true, \"compensation_kind\" varchar(255) not null default 'incident', \"active\" boolean not null default true, \"aliases\" jsonb not null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"incidents\".\"alarm_keyword\" add constraint \"alarm_keyword_key_unique\" unique (\"key\");");
     this.addSql("create table \"incidents\".\"incident\" (\"id\" uuid not null, \"dispatch_number\" varchar(255) not null, \"internal_number\" boolean not null default false, \"alarm_keyword\" varchar(255) not null, \"alarm_message\" text not null default '', \"alarmed_at\" timestamptz not null, \"location\" jsonb not null, \"created_via\" varchar(255) not null default 'ui', \"chargeable\" boolean not null default false, \"chargeable_reason\" text not null default '', \"notes\" text not null default '', \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"incidents\".\"incident\" add constraint \"incident_dispatch_number_unique\" unique (\"dispatch_number\");");

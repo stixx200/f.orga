@@ -24,7 +24,7 @@ function profile(seen: string[]): ImportProfile {
   };
 }
 
-function registry(): ImportRegistry {
+function registry(remembered: string[] = []): ImportRegistry {
   const result = new ImportRegistry();
   result.registerLookup('test', {
     kind: 'color',
@@ -32,6 +32,9 @@ function registry(): ImportRegistry {
     keyFormat: 'slug',
     entries: async () => [{ key: 'red', name }, { key: 'blue', name }],
     create: { permission: 'test.manage', run: async ({ key }) => ({ key, name }) },
+    remember: async (key, value) => {
+      remembered.push(`${value}→${key}`);
+    },
   });
   return result;
 }
@@ -54,6 +57,16 @@ describe('ImportRegistry.run', () => {
     const result = await registry().run(profile(seen), rows, { user, options: {}, dryRun: true, mappings: { color: { Grün: 'blue' } } });
     expect(seen).toEqual(['red', 'blue', 'blue', 'blue']);
     expect(result.unmatched).toEqual([{ kind: 'color', value: 'Gelb', count: 1 }]);
+  });
+
+  it('remembers the used choices after an apply, not after a dry run', async () => {
+    const mappings = { color: { Grün: 'blue', Lila: 'red' } };
+    const preview: string[] = [];
+    await registry(preview).run(profile([]), rows, { user, options: {}, dryRun: true, mappings });
+    expect(preview).toEqual([]);
+    const applied: string[] = [];
+    await registry(applied).run(profile([]), rows, { user, options: {}, dryRun: false, mappings });
+    expect(applied).toEqual(['Grün→blue']);
   });
 
   it('rejects unknown lookups and target keys', async () => {

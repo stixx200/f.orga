@@ -12,6 +12,10 @@ const ids: Record<string, string> = {};
 
 const post = (path: string, body: unknown) => test.http.post(`/api${path}`).set('Cookie', admin).set(UI).send(body as object);
 const get = (path: string) => test.http.get(`/api${path}`).set('Cookie', admin);
+const put = (path: string, body: unknown) => test.http.put(`/api${path}`).set('Cookie', admin).set(UI).send(body as object);
+
+type Aliased = { id: string; key: string; aliases: string[] };
+const catalogEntry = async (kind: string, key: string) => ((await get(`/masterdata/catalog?kind=${kind}`).expect(200)).body as Aliased[]).find((e) => e.key === key)!;
 
 const personId = async (lastName: string) =>
   ((await get('/masterdata/persons?includeLeft=true')).body as { id: string; lastName: string }[]).find((p) => p.lastName === lastName)?.id;
@@ -347,6 +351,9 @@ describe('MP-Feuer data transfer with entries chosen for unknown names', () => {
     expect((await post('/core/imports/lookups/qualification', { key: 'Kein Schlüssel', name: 'X' }).expect(400)).body).toMatchObject({ code: 'validation.failed' });
 
     const mappings = { qualification: { Drohnenpilot: 'drone-pilot' }, rank: { Brandmeisteranwärter: 'bm' } };
+    // The dry run remembers nothing.
+    await run('masterdata.career', false, mappings);
+    expect((await catalogEntry('rank', 'bm')).aliases).toEqual([]);
     const applied = await run('masterdata.career', true, mappings);
     expect(applied.body.counts).toMatchObject({ create: 2, error: 1 });
     expect(applied.body.unmatched).toEqual([{ kind: 'honor', value: 'Vereinsnadel in Gold', count: 1 }]);
@@ -357,6 +364,37 @@ describe('MP-Feuer data transfer with entries chosen for unknown names', () => {
     expect(eva.qualifications).toMatchObject([{ qualification: 'drone-pilot', acquiredOn: '2023-05-01' }]);
     expect(eva.ranks).toMatchObject([{ rank: 'bm', since: '2024-01-01' }]);
     expect(eva.honors).toEqual([]);
+
+    // The choice is remembered as alias of the entry, unless the value is its name anyway.
+    expect((await catalogEntry('rank', 'bm')).aliases).toEqual(['Brandmeisteranwärter']);
+    expect((await catalogEntry('qualification', 'drone-pilot')).aliases).toEqual([]);
+  });
+
+  it('matches remembered aliases in the next import without asking', async () => {
+    const again = await run('masterdata.career', false);
+    expect(again.body.counts).toMatchObject({ create: 0, unchanged: 2, error: 1 });
+    expect(again.body.unmatched).toEqual([{ kind: 'honor', value: 'Vereinsnadel in Gold', count: 1 }]);
+    expect((await catalogEntry('exit-reason', 'own-request')).aliases).toEqual(['Berufliche Gründe']);
+  });
+
+  it('edits aliases of catalog entries; an alias points to one entry only', async () => {
+    const { aliases: _aliases, ...body } = await catalogEntry('rank', 'bm');
+    const bm = body;
+    // Omitted aliases stay as they are.
+    expect((await put(`/masterdata/catalog/${bm.id}`, body).expect(200)).body.aliases).toEqual(['Brandmeisteranwärter']);
+    // Duplicates and the own name are dropped.
+    expect((await put(`/masterdata/catalog/${bm.id}`, { ...body, aliases: ['Brandmeisteranwärter', 'brandmeister-anwärter', 'BM'] }).expect(200)).body.aliases).toEqual(['Brandmeisteranwärter']);
+    const other = ((await get('/masterdata/catalog?kind=rank')).body as Aliased[]).find((e) => e.key !== 'bm')!;
+    const taken = await put(`/masterdata/catalog/${other.id}`, { ...other, aliases: ['Brandmeister-Anwärter'] }).expect(409);
+    expect(taken.body).toMatchObject({ code: 'masterdata.aliasTaken', alias: 'Brandmeister-Anwärter' });
+    expect((await post('/masterdata/catalog', { kind: 'rank', key: 'bm-2', name: { de: 'BM 2', en: 'BM 2' }, aliases: ['Brandmeisteranwärter'] }).expect(409)).body).toMatchObject({ code: 'masterdata.aliasTaken' });
+
+    // Removing a wrong alias: the name is unmatched again.
+    await put(`/masterdata/catalog/${bm.id}`, { ...body, aliases: [] }).expect(200);
+    expect((await run('masterdata.career', false)).body.unmatched).toEqual(
+      expect.arrayContaining([{ kind: 'rank', value: 'Brandmeisteranwärter', count: 1 }]),
+    );
+    await put(`/masterdata/catalog/${bm.id}`, { ...body, aliases: ['Brandmeisteranwärter'] }).expect(200);
   });
 
   it('uses a chosen session type for unknown types', async () => {
@@ -366,6 +404,16 @@ describe('MP-Feuer data transfer with entries chosen for unknown names', () => {
     expect((await run('training.sessions', true, { 'session-type': { Jugendprobe: 'lesson' } })).body).toMatchObject({ counts: { create: 2, error: 0 }, unmatched: [] });
     const [session] = (await get('/training/sessions?from=2025-07-07&to=2025-07-07')).body as { type: string; title: string }[];
     expect(session).toMatchObject({ type: 'lesson', title: 'Knoten und Stiche' });
+
+    const types = (await get('/training/types').expect(200)).body as (Aliased & Record<string, unknown>)[];
+    const lesson = types.find((t) => t.key === 'lesson')!;
+    expect(lesson.aliases).toEqual(['Jugendprobe']);
+    expect((await run('training.sessions', false)).body.unmatched).toEqual([]);
+
+    const other = types.find((t) => t.key === 'exercise')!;
+    const taken = await put(`/training/types/${other.id}`, { ...other, aliases: ['jugend-probe'] }).expect(409);
+    expect(taken.body).toMatchObject({ code: 'training.aliasTaken', alias: 'jugend-probe' });
+    expect((await put(`/training/types/${lesson.id}`, { ...lesson, aliases: ['Jugendprobe', 'Jugenddienst'] }).expect(200)).body.aliases).toEqual(['Jugendprobe', 'Jugenddienst']);
   });
 
   it('assigns chosen functions, vehicles and keywords of incident personnel', async () => {
@@ -393,6 +441,28 @@ describe('MP-Feuer data transfer with entries chosen for unknown names', () => {
     expect(incident.alarmKeyword).toBe('B2');
     const report = (await get(`/incidents/reports/${incident.reports[0].id}`)).body;
     expect(report.personnel).toMatchObject([{ personId: await personId('Neu'), vehicleId: ids.lf, function: 'hose-team' }]);
+
+    const keywords = (await get('/incidents/keywords').expect(200)).body as (Aliased & Record<string, unknown>)[];
+    const b2 = keywords.find((k) => k.key === 'B2')!;
+    expect(b2.aliases).toEqual(['B 2 Wohnung']);
+    const lf = ((await get('/masterdata/vehicles?includeRetired=true')).body as Aliased[]).find((v) => v.id === ids.lf)!;
+    expect(lf.aliases).toEqual(['MTW alt']);
+    expect((await catalogEntry('function', 'hose-team')).aliases).toEqual(['Schlauchträger']);
+
+    // The next import matches without asking.
+    const again = await run('incidents.mp-feuer', false);
+    expect(again.body).toMatchObject({ counts: { error: 0 }, unmatched: [] });
+    expect((again.body.rows as { messages: unknown[] }[]).flatMap((r) => r.messages)).toEqual([]);
+
+    const other = keywords.find((k) => k.key !== 'B2')!;
+    const taken = await put(`/incidents/keywords/${other.id}`, { ...other, aliases: ['b2 wohnung'] }).expect(409);
+    expect(taken.body).toMatchObject({ code: 'incidents.aliasTaken', alias: 'b2 wohnung' });
+
+    // Vehicles: an alias equal to the designation is dropped; removing the alias makes the name unknown again.
+    const designation = (lf as Aliased & { designation: string }).designation;
+    expect((await put(`/masterdata/vehicles/${lf.id}`, { ...lf, aliases: ['MTW alt', designation] }).expect(200)).body.aliases).toEqual(['MTW alt']);
+    await put(`/masterdata/vehicles/${lf.id}`, { ...lf, aliases: [] }).expect(200);
+    expect((await run('incidents.mp-feuer', false)).body.unmatched).toEqual([{ kind: 'vehicle', value: 'MTW alt', count: 1 }]);
   });
 });
 

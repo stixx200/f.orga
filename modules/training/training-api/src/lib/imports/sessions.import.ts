@@ -1,11 +1,12 @@
 import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { berlinTime, type ImportContext, type ImportLookup, type ImportProfile, type ImportRow, type ImportRunResult, normalizeHeading, parseDate, parseLocalDateTime, ZodPipe } from '@forga/core-api';
+import { berlinTime, findByAlias, type ImportContext, type ImportLookup, type ImportProfile, type ImportRow, type ImportRunResult, normalizeHeading, parseDate, parseLocalDateTime, ZodPipe } from '@forga/core-api';
 import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
 import { type AttendanceStatus, SessionTypeInput } from '@forga/training-contracts';
 import { membersOnDate, ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { AttendanceEntity, SessionEntity, SessionTypeEntity } from '../training.entities.js';
 import { PLAN, SETTINGS } from '../sessions/sessions.service.js';
+import { rememberTypeAlias } from '../sessions/type-aliases.js';
 import { readSessions } from './sessions.transfer.js';
 
 const field = (key: string, de: string, en: string, aliases: string[], required = false) => ({ key, label: { de, en }, required, aliases });
@@ -72,11 +73,12 @@ export class SessionsImport {
           const em = this.em.fork();
           if (await em.count(SessionTypeEntity, { key })) throw new ConflictException({ code: 'catalog.keyTaken', key });
           const last = await em.findOne(SessionTypeEntity, {}, { orderBy: { sortOrder: 'desc' } });
-          const type = em.create(SessionTypeEntity, new ZodPipe(SessionTypeInput).transform({ key, name: { de: name, en: name }, sortOrder: (last?.sortOrder ?? 0) + 10 }));
+          const type = em.create(SessionTypeEntity, { ...new ZodPipe(SessionTypeInput).transform({ key, name: { de: name, en: name }, sortOrder: (last?.sortOrder ?? 0) + 10 }), aliases: [] });
           await em.flush();
           return { key: type.key, name: type.name };
         },
       },
+      remember: (key, value) => rememberTypeAlias(this.em.fork(), key, value),
     };
   }
 
@@ -113,8 +115,12 @@ export class SessionsImport {
       // Unknown types become exercises unless the user chose a type for them.
       const typeSource = (first['type'] ?? '').trim();
       const typeText = normalizeHeading(typeSource);
-      const chosen = typeSource ? mapped('session-type', typeSource) : undefined;
-      const matched = typeText ? types.find((t) => t.key === typeText || normalizeHeading(t.name.de) === typeText || normalizeHeading(t.name.en) === typeText) ?? types.find((t) => t.key === chosen) : undefined;
+      // Names first, then aliases (earlier choices of the user); the user is asked only if neither matches.
+      const matched = typeText
+        ? (types.find((t) => t.key === typeText || normalizeHeading(t.name.de) === typeText || normalizeHeading(t.name.en) === typeText) ??
+          findByAlias(types, typeSource) ??
+          types.find((t) => t.key === mapped('session-type', typeSource)))
+        : undefined;
       const type = matched ?? types.find((t) => t.key === 'exercise') ?? types[0];
       if (!type) { fail('training.unknownType', { key: typeSource }); continue; }
       const startsAt = time(date, first['start'], '19:00');

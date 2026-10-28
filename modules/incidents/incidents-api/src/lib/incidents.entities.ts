@@ -30,6 +30,8 @@ export const AlarmKeywordSchema = defineEntity({
     requiresVehicle: p.boolean().default(true),
     compensationKind: p.string().$type<CompensationKind>().default('incident'),
     active: p.boolean().default(true),
+    /** Other names imports match the keyword by; unique among the keywords. */
+    aliases: p.json<string[]>(),
     version: p.integer().version(),
   },
 });

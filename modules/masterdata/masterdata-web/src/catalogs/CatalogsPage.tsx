@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { ActiveModule } from '@forga/core-contracts';
 import { type CatalogEntry, CatalogKind, type CatalogUsage, type Course, type CourseInput, type PersonStatus, VEHICLE_STATISTICS_CATEGORIES } from '@forga/masterdata-contracts';
 import { api, ApiError, send, useLocalized, useTranslation } from '@forga/web-sdk';
-import { DataTable, Notice, notifySuccess, PageHeader, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { AliasesInput, DataTable, Notice, notifySuccess, PageHeader, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { useCatalog, useDepartments } from '../api';
 import { useCourses } from '../persons/CoursesTab';
 
@@ -32,10 +32,11 @@ function EntryDialog({ kind, entry, onClose }: { kind: CatalogKind; entry?: Cata
     sortOrder: entry?.sortOrder ?? 0,
     active: entry?.active ?? true,
     attributes: { ...entry?.attributes } as Record<string, unknown>,
+    aliases: entry?.aliases ?? [],
   }));
   const save = useAction(
     () => {
-      const body = { kind, key: form.key, name: { de: form.de, en: form.en || form.de }, sortOrder: form.sortOrder, active: form.active, attributes: form.attributes };
+      const body = { kind, key: form.key, name: { de: form.de, en: form.en || form.de }, sortOrder: form.sortOrder, active: form.active, attributes: form.attributes, aliases: form.aliases };
       return entry ? send('PUT', `masterdata/catalog/${entry.id}`, body) : send('POST', 'masterdata/catalog', body);
     },
     { success: t('catalogs.saved'), invalidate: [['masterdata', 'catalog', kind]], onSuccess: onClose },
@@ -80,6 +81,7 @@ function EntryDialog({ kind, entry, onClose }: { kind: CatalogKind; entry?: Cata
           <NumberInput label={t('catalogs.sortOrder')} value={form.sortOrder} onChange={(v) => setForm({ ...form, sortOrder: Number(v) || 0 })} />
         </SimpleGrid>
         <Switch label={t('catalogs.active')} description={t('catalogs.activeHint')} checked={form.active} onChange={(e) => setForm({ ...form, active: e.currentTarget.checked })} />
+        <AliasesInput value={form.aliases} onChange={(aliases) => setForm({ ...form, aliases })} />
       </Stack>
     </ResponsiveDialog>
   );

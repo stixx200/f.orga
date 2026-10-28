@@ -24,6 +24,11 @@ export const common = {
       hidden: 'ausgeblendet (fehlende Berechtigung)',
       action: { created: 'Angelegt', updated: 'Geändert', deleted: 'Gelöscht' },
     },
+    aliases: {
+      label: 'Aliasse',
+      hint: 'Weitere Bezeichnungen, unter denen Importe diesen Eintrag erkennen. Zuordnungen aus einem Import werden hier gespeichert; eine falsche Zuordnung können Sie entfernen.',
+      placeholder: 'Bezeichnung eingeben und mit Enter übernehmen',
+    },
     attachments: {
       title: 'Anhänge',
       add: 'Datei anhängen',
@@ -179,6 +184,11 @@ export const common = {
       impersonated: '{{admin}} as {{user}}',
       hidden: 'hidden (missing permission)',
       action: { created: 'Created', updated: 'Changed', deleted: 'Deleted' },
+    },
+    aliases: {
+      label: 'Aliases',
+      hint: 'Other names imports recognize this entry by. Mappings chosen during an import are stored here; you can remove a wrong mapping.',
+      placeholder: 'Type a name and press Enter',
     },
     attachments: {
       title: 'Attachments',

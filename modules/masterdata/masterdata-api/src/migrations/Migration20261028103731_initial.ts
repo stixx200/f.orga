@@ -1,12 +1,12 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261027165602_initial extends Migration {
+export class Migration20261028103731_initial extends Migration {
 
-  override name = 'Migration20261027165602_initial';
+  override name = 'Migration20261028103731_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"masterdata\";");
-    this.addSql("create table \"masterdata\".\"catalog_entry\" (\"id\" uuid not null, \"kind\" varchar(255) not null, \"key\" varchar(255) not null, \"name\" jsonb not null, \"sort_order\" int not null default 0, \"active\" boolean not null default true, \"attributes\" jsonb not null, \"version\" int not null default 1, primary key (\"id\"));");
+    this.addSql("create table \"masterdata\".\"catalog_entry\" (\"id\" uuid not null, \"kind\" varchar(255) not null, \"key\" varchar(255) not null, \"name\" jsonb not null, \"sort_order\" int not null default 0, \"active\" boolean not null default true, \"attributes\" jsonb not null, \"aliases\" jsonb not null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"masterdata\".\"catalog_entry\" add constraint \"catalog_entry_kind_key_unique\" unique (\"kind\", \"key\");");
     this.addSql("create table \"masterdata\".\"course\" (\"id\" uuid not null, \"key\" varchar(255) not null, \"name\" jsonb not null, \"level\" varchar(255) not null, \"grants_qualifications\" jsonb not null, \"prerequisites\" jsonb not null, \"required_qualifications\" jsonb not null, \"minimum_age\" int null, \"allowed_statuses\" jsonb not null, \"targets\" jsonb not null, \"active\" boolean not null default true, \"sort_order\" int not null default 0, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"masterdata\".\"course\" add constraint \"course_key_unique\" unique (\"key\");");
@@ -25,7 +25,7 @@ export class Migration20261027165602_initial extends Migration {
     this.addSql("create table \"masterdata\".\"rank_assignment\" (\"id\" uuid not null, \"person_id\" uuid not null, \"rank\" varchar(255) not null, \"since\" date not null, \"notes\" text not null default '', primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"rest_period\" (\"id\" uuid not null, \"person_id\" uuid not null, \"reason\" varchar(255) not null, \"from\" date not null, \"to\" date null, \"notes\" text not null default '', primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"station\" (\"id\" uuid not null, \"name\" varchar(255) not null, \"department_id\" uuid not null, \"street\" varchar(255) not null default '', \"postal_code\" varchar(255) not null default '', \"city\" varchar(255) not null default '', \"permanently_staffed\" boolean not null default false, \"notes\" text not null default '', \"version\" int not null default 1, primary key (\"id\"));");
-    this.addSql("create table \"masterdata\".\"vehicle\" (\"id\" uuid not null, \"designation\" varchar(255) not null, \"radio_call_sign\" varchar(255) not null default '', \"license_plate\" varchar(255) not null default '', \"vehicle_type\" varchar(255) not null, \"department_id\" uuid not null, \"station_id\" uuid null, \"seats\" int not null, \"year_built\" int null, \"commissioned_on\" date null, \"decommissioned_on\" date null, \"cost_recovery_category\" varchar(255) null, \"statistics_category\" varchar(255) not null, \"status\" varchar(255) not null default 'in-service', \"notes\" text not null default '', \"version\" int not null default 1, primary key (\"id\"));");
+    this.addSql("create table \"masterdata\".\"vehicle\" (\"id\" uuid not null, \"designation\" varchar(255) not null, \"radio_call_sign\" varchar(255) not null default '', \"license_plate\" varchar(255) not null default '', \"vehicle_type\" varchar(255) not null, \"department_id\" uuid not null, \"station_id\" uuid null, \"seats\" int not null, \"year_built\" int null, \"commissioned_on\" date null, \"decommissioned_on\" date null, \"cost_recovery_category\" varchar(255) null, \"statistics_category\" varchar(255) not null, \"status\" varchar(255) not null default 'in-service', \"notes\" text not null default '', \"aliases\" jsonb not null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"masterdata\".\"course_run\" add constraint \"course_run_course_id_foreign\" foreign key (\"course_id\") references \"masterdata\".\"course\" (\"id\");");
     this.addSql("alter table \"masterdata\".\"office_assignment\" add constraint \"office_assignment_person_id_foreign\" foreign key (\"person_id\") references \"masterdata\".\"person\" (\"id\") on delete cascade;");
     this.addSql("alter table \"masterdata\".\"honor_award\" add constraint \"honor_award_person_id_foreign\" foreign key (\"person_id\") references \"masterdata\".\"person\" (\"id\") on delete cascade;");

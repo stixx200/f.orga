@@ -1,6 +1,6 @@
 import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Audit, type AuthenticatedUser, CurrentUser, RequirePermissions, SettingsService, ZodPipe } from '@forga/core-api';
+import { assertAliasesFree, Audit, type AuthenticatedUser, cleanAliases, CurrentUser, RequirePermissions, SettingsService, ZodPipe } from '@forga/core-api';
 import {
   type Department as DepartmentDto,
   DepartmentInput,
@@ -55,6 +55,11 @@ export function toStationDto(s: Station): StationDto {
   };
 }
 
+/** What imports match a vehicle by besides its aliases. */
+export function vehicleNames(v: Pick<Vehicle, 'designation' | 'radioCallSign'>): string[] {
+  return [v.designation, v.radioCallSign].filter(Boolean);
+}
+
 export function toVehicleDto(v: Vehicle): VehicleDto {
   return {
     id: v.id,
@@ -72,6 +77,7 @@ export function toVehicleDto(v: Vehicle): VehicleDto {
     statisticsCategory: v.statisticsCategory,
     status: v.status,
     notes: v.notes,
+    aliases: v.aliases,
     version: v.version,
   };
 }
@@ -252,7 +258,7 @@ export class OrganizationController {
   ): Promise<VehicleDto> {
     requireDepartment(user, MANAGE, input.departmentId);
     const em = this.em.fork();
-    const vehicle = em.create(Vehicle, await this.vehicleFields(em, input));
+    const vehicle = em.create(Vehicle, await this.vehicleFields(em, input, null));
     await em.flush();
     return toVehicleDto(vehicle);
   }
@@ -269,7 +275,7 @@ export class OrganizationController {
     if (!vehicle) throw new NotFoundException();
     requireDepartment(user, MANAGE, vehicle.department.id);
     requireDepartment(user, MANAGE, input.departmentId);
-    em.assign(vehicle, await this.vehicleFields(em, input));
+    em.assign(vehicle, await this.vehicleFields(em, input, vehicle));
     await em.flush();
     return toVehicleDto(vehicle);
   }
@@ -328,8 +334,14 @@ export class OrganizationController {
   }
 
   /** Seats and statistics category default to the values of the vehicle type. */
-  private async vehicleFields(em: EntityManager, input: ParsedVehicle) {
+  /** Throws `409 masterdata.aliasTaken` if an alias is a designation, radio call sign or alias of another vehicle. */
+  private async vehicleFields(em: EntityManager, input: ParsedVehicle, own: Vehicle | null) {
     const type = await this.catalogs.requireKey('vehicle-type', input.vehicleType, em);
+    const aliases = cleanAliases(input.aliases ?? own?.aliases ?? [], vehicleNames(input));
+    if (aliases.length) {
+      const others = (await em.find(Vehicle, {})).filter((v) => v.id !== own?.id);
+      assertAliasesFree('masterdata.aliasTaken', aliases, others.map((v) => ({ names: vehicleNames(v), aliases: v.aliases })));
+    }
     const statisticsCategory = input.statisticsCategory ?? (type.attributes['statisticsCategory'] as string | null);
     if (!statisticsCategory) throw new BadRequestException({ code: 'masterdata.statisticsCategoryRequired' });
     const { departmentId, stationId, ...rest } = input;
@@ -337,6 +349,7 @@ export class OrganizationController {
     if (stationId && !station) throw new BadRequestException({ code: 'masterdata.unknownStation', stationId });
     return {
       ...rest,
+      aliases,
       seats: input.seats ?? Number(type.attributes['seats'] ?? 0),
       statisticsCategory,
       department: await this.department(em, departmentId),

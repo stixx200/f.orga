@@ -533,6 +533,7 @@ export const en: typeof de = {
       title: 'Unassigned names',
       hint: 'These names from the file match no entry. Choose an existing entry or add a new one. Without a choice the name is ignored and handled as the messages describe.',
       hintTransfer: 'These names from MP-Feuer match no entry. Choose an existing entry or add a new one. Without a choice the name is ignored and handled as the messages describe. The assignment applies to all transfer files and the following steps.',
+      remembered: 'When importing, the assignment is stored as an alias of the chosen entry, so the next import recognizes the name by itself. You can edit aliases at the entry.',
       value: 'Name in the file',
       kind: 'Kind',
       entry: 'Assigned entry',
