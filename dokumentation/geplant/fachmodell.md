@@ -71,6 +71,7 @@ Offen:
 - **Weitere Inhalte der MP-Feuer-Transferdateien** (die [Datenübernahme](../implementiert/architektur.md#datenübernahme-aus-mp-feuer) liest Personen, Lehrgänge, Dienstgrade, Ehrungen, G26, Belastungsübungen, Dienste und Einsätze): Fahrzeuge (`FZG_*`) und Geräte (`GAS_*`, `GSO_*`, `GFU_*` usw. mit Prüfungen) für Stammdaten und Gerätewartung, Fahrzeuge je Einsatz ohne Besatzung (`EIN_FAHRZ`), Funktionen und Dienststellungen aus `PER_HIST`, Atemschutz-Heißausbildung (`AS-BÜC`) und Atemschutzeinsätze aus `PER_PRUEF`, Einsatzwachen (`EIW_*`), Vergütungen (`VPE_*`), Kleiderkammer (`KLD_*`, `PER_AUSR`)
 - Audit-Eintrag für Vollexporte
 - **Parallelbetrieb mit MP-Feuer** (umgesetzt ist der [Grundablauf](../implementiert/parallelbetrieb-mp-feuer.md)), offen:
+  - MP-Feuer-Dateien über einen eigenen Dienst übernehmen statt in f.orga: [MP-Feuer-Brücke](module/mp-feuer-bruecke.md)
   - in MP-Feuer gelöschte Einsätze und Berichte erkennen: Berichte aus MP-Feuer im Zeitraum der Transferdateien, die nicht mehr vorkommen, nach der Übernahme zur Prüfung auflisten (nicht automatisch löschen)
   - Hinweis am Kostenbescheid, wenn sich ein Bericht des Einsatzes nach dem Erlass durch eine Datenübernahme geändert hat (Anlass für einen Änderungsbescheid)
   - in MP-Feuer gesperrte Berichte (`EIN_SPERR_DATUM`) ohne Freigabe als „zur Prüfung“ übernehmen, damit sie nach der Umstellung gesammelt in f.orga freigegeben werden können
@@ -229,6 +230,10 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Alias (weitere Bezeichnung für Importe, gemerkte Zuordnung) | `aliases`, `ImportLookup.remember` |
 | Zusatzziel einer Nachschlageliste (z. B. „Keine Funktion – Verdienstausfall“) | `ImportLookupExtras`, `registerLookupExtras` |
 | Gemerkte Regel für Funktionstexte ohne Funktion (MP-Feuer-Import) | `ImportFunctionRules`, `ImportFunctionTarget`, Einstellungsabschnitt `incidents.importFunctionRules` |
+| MP-Feuer-Brücke (geplant, eigener Dienst für MP-Feuer-Dateien) | `mp-feuer-bridge` (`apps/mp-feuer-bridge`) |
+| Zielsystem der Brücke (Echt-, Testsystem) | target |
+| Lauf der Brücke (Probelauf oder Übernahme) | run, `runId`, Teil = chunk |
+| Importzeilen ohne Datei (geplant) | `POST /core/imports/rows`, `ImportRowsRequest` |
 
 ### Kleiderkammer
 

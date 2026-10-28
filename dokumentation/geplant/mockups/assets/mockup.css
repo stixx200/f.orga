@@ -693,3 +693,30 @@ a.tk-ereignis:hover { box-shadow: var(--e4); border-color: var(--dienst); }
   .tk-leiste .knopf { flex: 1 1 auto; }
   .tk-leiste .status { flex-basis: 100%; }
 }
+
+/* ---------- MP-Feuer-Brücke ---------- */
+/* Zielleiste unter dem Kopf: Umschalter Echt-/Testsystem, beim Testsystem gelbes Band. */
+.ziel-leiste { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 8px 24px; background: var(--flaeche); border-bottom: 1px solid var(--gitter); }
+.ziel-leiste.test { background: var(--hinweis); border-bottom: 2px solid #a67c00; }
+.ziel-label { font-weight: bold; font-size: .875rem; color: var(--neben); }
+.ziel-schalter { display: inline-flex; border: 1px solid var(--feldrand); border-radius: var(--radius); overflow: hidden; background: var(--flaeche); }
+.ziel-schalter a { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 16px; text-decoration: none; color: var(--text); font-size: .875rem; font-weight: bold; text-transform: uppercase; letter-spacing: .03em; }
+.ziel-schalter a + a { border-left: 1px solid var(--feldrand); }
+.ziel-schalter a.aktiv { background: var(--dienst); color: #fff; }
+.punkt { width: 10px; height: 10px; border-radius: 50%; background: var(--meta); flex: none; }
+.punkt.ok { background: #2e7d47; box-shadow: 0 0 0 2px #fff; }
+.ziel-info { color: var(--meta); font-size: .875rem; }
+.ziel-band { font-weight: bold; color: var(--hinweis-text); font-size: .9rem; }
+tbody tr.grau td { color: var(--meta); background: var(--grau); }
+.ablage { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 16px; border: 2px dashed var(--feldrand); border-radius: var(--radius); text-align: center; background: var(--wechsel); }
+.ablage > .sym { width: 36px; height: 36px; color: var(--dienst); }
+.balken { height: 8px; background: var(--grau); border-radius: 2px; overflow: hidden; margin: 6px 0; }
+.balken > span { display: block; height: 100%; background: var(--dienst); }
+.liste > li.fortschritt { display: block; }
+.fortschritt-kopf { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 860px) {
+  .ziel-leiste { padding: 8px 12px; }
+  .ziel-schalter { flex: 1 1 100%; }
+  .ziel-schalter a { flex: 1; justify-content: center; min-height: 44px; }
+  .ziel-info { display: none; }
+}

@@ -9,7 +9,7 @@ import sys
 from html.parser import HTMLParser
 
 sys.path.insert(0, os.path.dirname(__file__))
-import shell, stammdaten, einsatzberichte, infoterminal  # noqa: F401,E401  (erzeugen Seiten beim Import)
+import shell, stammdaten, einsatzberichte, infoterminal, bruecke  # noqa: F401,E401  (erzeugen Seiten beim Import)
 from rahmen import ZIEL, FUSS, SPRACHE, mockup_hinweis, schreiben, kopf_html
 from uebersetzung import EN, MUSTER, GLEICH
 
@@ -30,6 +30,12 @@ GRUPPEN = [
                       ('infoterminal/neuer-einsatz.html', 'Neuer Einsatz mit passenden Einsätzen'), ('infoterminal/dienst.html', 'Dienst eintragen'),
                       ('infoterminal/leer.html', 'Nichts offen'), ('infoterminal/gesperrt.html', 'Nicht freigeschaltet'),
                       ('infoterminal/verwaltung.html', 'Verwaltung der Infoterminals'), ('stammdaten/organisation.html#wache', 'Wache mit Infoterminal')]),
+    ('MP-Feuer-Brücke', [('mp-feuer-bruecke/anmeldung.html', 'Anmeldung an der Brücke'), ('mp-feuer-bruecke/start.html', 'Übersicht mit Ziel und Verbindung'),
+                         ('mp-feuer-bruecke/start-test.html', 'Übersicht im Testsystem'), ('mp-feuer-bruecke/uebernahme.html', 'Dateien und Archive zuordnen'),
+                         ('mp-feuer-bruecke/probelauf.html', 'Datensätze und Probelauf'), ('mp-feuer-bruecke/zuordnung.html', 'Nicht zugeordnete Bezeichnungen'),
+                         ('mp-feuer-bruecke/lauf.html', 'Übernahme mit Fortschritt'), ('mp-feuer-bruecke/ergebnis.html', 'Ergebnisbericht'),
+                         ('mp-feuer-bruecke/verlauf.html', 'Verlauf der Läufe'), ('mp-feuer-bruecke/einstellungen.html', 'Einstellungen: Ziele, Token, Gemerktes'),
+                         ('mp-feuer-bruecke/export.html', 'Export nach MP-Feuer (in Vorbereitung)'), ('mp-feuer-bruecke/forga-import.html', 'f.orga: Import ohne MP-Feuer-Datenübernahme')]),
 ]
 
 karten = ''.join(
