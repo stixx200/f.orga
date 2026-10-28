@@ -6,6 +6,7 @@ import {
   effectiveTimes,
   IncidentInput,
   type Finding,
+  type Incident,
   type IncidentCreatedEvent,
   INCIDENTS_EVENTS,
   type IncidentUnit,
@@ -32,6 +33,7 @@ import {
   ReportPersonnelEntity,
   ReportRevisionEntity,
   ReportVehicleEntity,
+  StatisticsYearEntity,
   type StoredAcknowledgement,
 } from '../incidents.entities.js';
 import { IncidentUnitsRegistry } from '../units/units.registry.js';
@@ -83,7 +85,6 @@ export function reportToInput(report: ReportEntity): ParsedReportInput {
     actions: report.actions,
     cause: report.cause,
     incidentCommander: report.incidentCommander,
-    statistics: report.statistics ?? null,
     weather: report.weather,
     equipment: report.equipment,
     personnel: report.personnel.getItems().map((p) => ({
@@ -146,10 +147,9 @@ export function assignmentTimes(entry: ReportPersonnelEntity, report: ReportEnti
 }
 
 /** Uses the keyword and the incident city to pre-fill the statistics. */
-export function suggestStatistics(incident: IncidentEntity, context: ReportContext): StatisticsSuggestion {
-  const keyword = context.keywords.get(incident.alarmKeyword);
+export function suggestStatistics(incident: IncidentEntity, keyword: AlarmKeywordEntity | undefined, homeMunicipalities: readonly string[]): StatisticsSuggestion {
   const city = incident.location.city.trim().toLowerCase();
-  const own = context.settings.homeMunicipalities.map((m) => m.toLowerCase());
+  const own = homeMunicipalities.map((m) => m.toLowerCase());
   return {
     ownMunicipality: own.length === 0 || !city || own.includes(city),
     mainType: keyword?.mainType ?? null,
@@ -220,8 +220,8 @@ export class ReportsService {
   }
 
   /**
-   * Released reports are changed by nobody (only their statistics, see `setStatistics`): they are unlocked first, so
-   * the receivers of the release learn about the change. Otherwise releasers may edit; writers of the department
+   * Released reports are changed by nobody: they are unlocked first, so the receivers of the release learn about the
+   * change. Otherwise releasers may edit; writers of the department
    * only drafts that are not locked.
    */
   assertWrite(user: AuthenticatedUser, report: ReportEntity): void {
@@ -296,7 +296,7 @@ export class ReportsService {
   /**
    * New draft report of an operational department or (with `{ unit }`) of a brigade-wide unit. Primary report: the
    * first department report of an incident; while an incident has no department report, its first unit report. The
-   * first department report takes over the primary role (and the statistics) from a unit report. Times default to
+   * first department report takes over the primary role from a unit report. Times default to
    * alarm + 1 h, with the end unconfirmed until the author confirms or changes it.
    */
   async createReport(em: EntityManager, incident: IncidentEntity, owner: string | { unit: string }, authorPersonId: string | null): Promise<ReportEntity> {
@@ -397,7 +397,6 @@ export class ReportsService {
       actions: input.actions,
       cause: input.cause,
       incidentCommander: input.incidentCommander,
-      statistics: input.statistics,
       weather: input.weather,
       equipment: input.equipment,
     });
@@ -525,7 +524,7 @@ export class ReportsService {
         incidentAlarmedAt: incident.alarmedAt.toISOString(),
         situation: report.situation,
         actions: report.actions,
-        statistics: report.statistics ?? null,
+        incidentHasStatistics: Boolean(incident.statistics),
         departmentId: report.departmentId ?? undefined,
         unit: report.unit ? { vehicleRequired: this.unitOf(report)?.vehicleRequired ?? false } : undefined,
         keyword: keyword ? { mainType: keyword.mainType ?? null, requiresVehicle: keyword.requiresVehicle } : null,
@@ -614,8 +613,6 @@ export class ReportsService {
       actions: report.actions,
       cause: report.cause,
       incidentCommander: report.incidentCommander,
-      statistics: report.statistics ?? null,
-      statisticsSuggestion: report.primary && !report.statistics ? suggestStatistics(report.incident, ctx) : null,
       weather: report.weather,
       equipment: report.equipment,
       personnel,
@@ -671,13 +668,10 @@ export class ReportsService {
       throw new BadRequestException({ code: 'incidents.unitReportNotPrimary' });
     }
     const current = await em.findOne(ReportEntity, { incident: report.incident, primary: true });
-    // The statistics of a released primary report do not move away: it is unlocked first.
+    // A released primary report keeps its role: it is unlocked first. The statistics stay with the incident.
     if (!force && current?.status.startsWith('released')) throw new ForbiddenException({ code: 'incidents.reportReleased' });
     if (current) {
       current.primary = false;
-      // Secondary reports carry no statistics; keep them on the new primary report if it has none.
-      report.statistics ??= current.statistics ?? null;
-      current.statistics = null;
       // The unique index allows one primary report; switch in two steps.
       await em.flush();
     }
@@ -824,19 +818,90 @@ export class ReportsService {
     await this.events.publish<ReportUnlockedEvent>(INCIDENTS_EVENTS.reportUnlocked, { reportId: report.id, incidentId: report.incident.id, reason });
   }
 
+  // ----- Incident -----
+
+  /** Whether the annual statistics of the incident's year (Europe/Berlin) are closed: then its statistics are fixed. */
+  async statisticsClosed(em: EntityManager, incident: IncidentEntity): Promise<boolean> {
+    const year = Number(localDate(incident.alarmedAt.toISOString()).slice(0, 4));
+    return Boolean((await em.findOne(StatisticsYearEntity, year))?.closedAt);
+  }
+
   /**
-   * Statistics of a primary report changed or removed (`null`) by a releaser, also after the release: no new
-   * release, no lock and no events (compensation and respiratory protection do not depend on them). Only keywords
-   * counted in the statistics (with a main type) carry statistics.
+   * Who changes the statistics of an incident (apart from a closed year): releasers always, writers of a report of
+   * the incident (its department or unit) while one of those reports is an unlocked draft.
    */
-  async setStatistics(em: EntityManager, report: ReportEntity, statistics: IncidentStatistics | null, version: number): Promise<void> {
-    assertVersion(report, version);
-    if (!report.primary) throw new BadRequestException({ code: 'incidents.notPrimary' });
+  statisticsAccess(user: AuthenticatedUser, reports: readonly ReportEntity[]): 'write' | 'submitted' | 'none' {
+    if (user.grant(RELEASE) === 'brigade') return 'write';
+    const own = reports.filter((r) => this.canWrite(user, r));
+    if (!own.length) return 'none';
+    return own.some((r) => r.status === 'draft' && !r.locked) ? 'write' : 'submitted';
+  }
+
+  /**
+   * Sets or removes (`null`) the statistics of an incident. Changes nothing else: no lock, no new release and no
+   * events (compensation and respiratory protection do not depend on them). Only keywords counted in the statistics
+   * (with a main type) carry statistics; a closed year keeps its statistics.
+   */
+  async setStatistics(em: EntityManager, incident: IncidentEntity, statistics: IncidentStatistics | null, version: number, user: AuthenticatedUser): Promise<void> {
+    await em.populate(incident, ['reports']);
+    const access = this.statisticsAccess(user, incident.reports.getItems());
+    if (access === 'none') throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
+    if (access === 'submitted') throw new ForbiddenException({ code: 'incidents.statisticsSubmitted' });
+    if (await this.statisticsClosed(em, incident)) throw new ConflictException({ code: 'incidents.statisticsClosed' });
+    assertVersion(incident, version);
     if (statistics) {
-      const keyword = await em.findOne(AlarmKeywordEntity, { key: report.incident.alarmKeyword });
-      if (!keyword?.mainType) throw new BadRequestException({ code: 'incidents.statisticsNotCounted', keyword: report.incident.alarmKeyword });
+      const keyword = await em.findOne(AlarmKeywordEntity, { key: incident.alarmKeyword });
+      if (!keyword?.mainType) throw new BadRequestException({ code: 'incidents.statisticsNotCounted', keyword: incident.alarmKeyword });
     }
-    report.statistics = statistics;
+    incident.statistics = statistics;
+  }
+
+  /** Incidents as the API returns them, with the statistics and what the user may do with them; needs `reports`. */
+  async incidentDtos(em: EntityManager, incidents: readonly IncidentEntity[], user: AuthenticatedUser): Promise<Incident[]> {
+    if (!incidents.length) return [];
+    const [keywords, settings, closed] = await Promise.all([
+      em.find(AlarmKeywordEntity, { key: { $in: [...new Set(incidents.map((i) => i.alarmKeyword))] } }),
+      this.contexts.settingsOnly(),
+      em.find(StatisticsYearEntity, { closedAt: { $ne: null } }, { fields: ['year'] }),
+    ]);
+    const byKey = new Map(keywords.map((k) => [k.key, k]));
+    const closedYears = new Set(closed.map((y) => y.year));
+    return incidents.map((incident) => {
+      const keyword = byKey.get(incident.alarmKeyword);
+      const counted = Boolean(keyword?.mainType);
+      const reports = incident.reports.getItems();
+      const year = Number(localDate(incident.alarmedAt.toISOString()).slice(0, 4));
+      return {
+        id: incident.id,
+        dispatchNumber: incident.dispatchNumber,
+        internalNumber: incident.internalNumber,
+        alarmKeyword: incident.alarmKeyword,
+        alarmMessage: incident.alarmMessage,
+        alarmedAt: incident.alarmedAt.toISOString(),
+        location: incident.location,
+        createdVia: incident.createdVia,
+        chargeable: incident.chargeable,
+        chargeableReason: incident.chargeableReason,
+        notes: incident.notes,
+        statistics: incident.statistics ?? null,
+        statisticsSuggestion: counted && !incident.statistics ? suggestStatistics(incident, keyword, settings.homeMunicipalities) : null,
+        statisticsCounted: counted,
+        statisticsEditable: !closedYears.has(year) && this.statisticsAccess(user, reports) === 'write',
+        reports: reports
+          .toSorted((a, b) => Number(b.primary) - Number(a.primary) || a.number.localeCompare(b.number))
+          .map((r) => ({
+            id: r.id,
+            departmentId: r.departmentId ?? null,
+            unit: r.unit ?? null,
+            number: r.number,
+            primary: r.primary,
+            status: r.status,
+            locked: r.locked,
+            authorPersonId: r.authorPersonId ?? null,
+          })),
+        version: incident.version,
+      };
+    });
   }
 
   /**

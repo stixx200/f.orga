@@ -1,7 +1,6 @@
 import {
   DEFAULT_RULE_LEVELS,
   type IncidentSettings,
-  type IncidentStatistics,
   hasCrewTimes,
   inheritedTimes,
   type MainType,
@@ -47,7 +46,8 @@ export interface RuleInput {
   incidentAlarmedAt?: string;
   situation: string;
   actions: string;
-  statistics: IncidentStatistics | null;
+  /** The incident has its statistics features (they belong to the incident, not to a report). */
+  incidentHasStatistics: boolean;
   /** Department of the report (always operational); unset for the report of a unit. */
   departmentId?: string;
   /**
@@ -132,9 +132,9 @@ export function evaluateRules(input: RuleInput, settings: IncidentSettings): Raw
   if (!input.incidentHasPrimary) add('primary-missing');
   if (!input.situation.trim() && !input.actions.trim()) add('report-empty');
 
+  // The statistics of the incident are missing: reported on its primary report, so it cannot be released without them.
   const counted = input.keyword?.mainType !== null && input.keyword !== null;
-  if (input.primary && counted && !input.statistics) add('statistics-missing');
-  if (input.statistics && (!input.primary || !counted)) add('statistics-not-allowed');
+  if (input.primary && counted && !input.incidentHasStatistics) add('statistics-missing');
 
   if (input.personnel.length === 0) add('no-personnel');
 

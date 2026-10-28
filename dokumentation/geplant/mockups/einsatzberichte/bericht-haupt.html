@@ -71,7 +71,7 @@
 
 <div class="plaketten" style="margin:-8px 0 14px"><span class="plakette haupt">Hauptbericht</span><span class="plakette gelb">Entwurf</span><span class="plakette">B2 Brand Wohnung · 2026-104711</span><span class="plakette">Verfasser: Sabine Hagel</span></div>
 <div data-reitergruppe>
-<ol class="schritte" aria-label="Abschnitte des Berichts"><li><button type="button" class="fertig" data-reiter="s1"><span class="nr">✓</span><span class="text">Zeiten &amp; Ort<span class="zustand">vollständig</span></span></button></li><li><button type="button" class="fertig" data-reiter="s2"><span class="nr">✓</span><span class="text">Personal &amp; Fahrzeuge<span class="zustand">8 Personen</span></span></button></li><li><button type="button" class="fertig" data-reiter="s3"><span class="nr">✓</span><span class="text">Lage &amp; Verlauf<span class="zustand">vollständig</span></span></button></li><li><button type="button" class="aktiv" data-reiter="s4" aria-current="step"><span class="nr">4</span><span class="text">Statistik<span class="zustand">bitte prüfen</span></span></button></li><li><button type="button" class="fertig" data-reiter="s5"><span class="nr">✓</span><span class="text">Beteiligte &amp; Sonstiges<span class="zustand">optional</span></span></button></li><li><button type="button" class="" data-reiter="s6"><span class="nr">6</span><span class="text">Prüfen</span></button></li></ol><p class="schritt-titel" aria-hidden="true">Statistik</p>
+<ol class="schritte" aria-label="Abschnitte des Berichts"><li><button type="button" class="fertig" data-reiter="s1"><span class="nr">✓</span><span class="text">Zeiten &amp; Ort<span class="zustand">vollständig</span></span></button></li><li><button type="button" class="fertig" data-reiter="s2"><span class="nr">✓</span><span class="text">Personal &amp; Fahrzeuge<span class="zustand">8 Personen</span></span></button></li><li><button type="button" class="fertig" data-reiter="s3"><span class="nr">✓</span><span class="text">Lage &amp; Verlauf<span class="zustand">vollständig</span></span></button></li><li><button type="button" class="fertig" data-reiter="s5"><span class="nr">✓</span><span class="text">Beteiligte &amp; Sonstiges<span class="zustand">optional</span></span></button></li><li><button type="button" class="aktiv" data-reiter="s6" aria-current="step"><span class="nr">5</span><span class="text">Prüfen</span></button></li></ol><p class="schritt-titel" aria-hidden="true">Prüfen</p>
 
 <div class="reiter-inhalt" id="s1">
 <div class="raster zwei">
@@ -137,59 +137,7 @@
     <div class="feld"><label for="f19">Wetterlage</label><select id="f19"><option>kein Einfluss</option><option>Regen</option><option>Schnee</option><option>Glätte</option><option>Sturm</option><option>Hitze</option><option>Gewitter</option><option>Nebel</option></select></div>
   </div>
 </section>
-<div class="formular-fuss" style="justify-content:space-between;margin-top:8px"><button type="button" class="knopf" data-reiter="s2" data-nach-oben>‹ Personal &amp; Fahrzeuge</button><button type="button" class="knopf sekundaer" data-reiter="s4" data-nach-oben>Weiter: Statistik ›</button></div>
-</div>
-
-<div class="reiter-inhalt aktiv" id="s4">
-
-<div class="meldung info"><span class="ic">i</span><span>Vorbefüllt aus dem Stichwort <strong>B2</strong> und der Anschrift. Bitte prüfen und bei Bedarf ändern. Diese Angaben zählen für die Jahresstatistik der Gesamtwehr.</span></div>
-<section class="karte">
-  <div class="stat-block">
-    <h3>Einsatzort</h3><p class="meta">Weidenhain liegt in der eigenen Gemeinde (Stadt Musterstadt).</p>
-    <div class="wahl eng" id="wahl-ort"><label><input type="radio" name="ort" value="eigen" checked><span>Eigene Gemeinde</span></label><label><input type="radio" name="ort" value="ueberland"><span>Überlandhilfe<small>außerhalb der Gemeinde</small></span></label></div>
-  </div>
-  <div class="stat-block">
-    <h3>Einsatzhauptart</h3><p class="meta">Genau eine Art.</p>
-    <div class="wahl eng" id="wahl-art"><label><input type="radio" name="art" value="brand" checked><span>Brand / Explosion</span></label><label><input type="radio" name="art" value="th"><span>Technische Hilfe</span></label><label><input type="radio" name="art" value="fehl"><span>Fehlalarm</span></label><label><input type="radio" name="art" value="sonst"><span>Sonstiges</span></label></div>
-  </div>
-  <div class="stat-block bedingt" data-wenn="art=brand">
-    <h3>Brandgröße</h3><p class="meta">Nach den eingesetzten Löschmitteln.</p>
-    <div class="wahl " id="wahl-bg"><label><input type="radio" name="bg" value="ka"><span>Kleinbrand A<small>Kleinlöschgeräte, kein Strahlrohr</small></span></label><label><input type="radio" name="bg" value="kb"><span>Kleinbrand B<small>höchstens 1 C-Rohr</small></span></label><label><input type="radio" name="bg" value="mittel" checked><span>Mittelbrand<small>2–3 C-Rohre</small></span></label><label><input type="radio" name="bg" value="gross"><span>Großbrand<small>mehr als 3 C-Rohre</small></span></label></div>
-  </div>
-  <div class="stat-block bedingt" data-wenn="art=th" hidden>
-    <h3>Art der Technischen Hilfe</h3><p class="meta">Alles ankreuzen, was zutrifft. Es zählt die kleinste Nummer.</p>
-    <div class="wahl" id="th-gruppe"><label><input type="checkbox" name="th" value="1"><span class="rang">1</span><span class="th-name">Menschenrettung</span></label><label><input type="checkbox" name="th" value="2"><span class="rang">2</span><span class="th-name">Gefahrstoff (ohne Ölspur)</span></label><label><input type="checkbox" name="th" value="3"><span class="rang">3</span><span class="th-name">Ölspur</span></label><label><input type="checkbox" name="th" value="4"><span class="rang">4</span><span class="th-name">Tierrettung (ohne Insekten)</span></label><label><input type="checkbox" name="th" value="5"><span class="rang">5</span><span class="th-name">Insekten</span></label><label><input type="checkbox" name="th" value="6"><span class="rang">6</span><span class="th-name">Hochwasser / Unwetter</span></label><label><input type="checkbox" name="th" value="7"><span class="rang">7</span><span class="th-name">Sturm</span></label><label><input type="checkbox" name="th" value="8"><span class="rang">8</span><span class="th-name">sonstige Technische Hilfe</span></label></div>
-    <p class="ergebnis">Zählt als: <strong data-rang-ergebnis="th-gruppe">–</strong></p>
-  </div>
-  <div class="stat-block bedingt" data-wenn="art=fehl" hidden>
-    <h3>Fehlalarm</h3>
-    <div class="wahl eng" id="wahl-fa"><label><input type="radio" name="fa" value="gut" checked><span>in gutem Glauben</span></label><label><input type="radio" name="fa" value="boes"><span>böswillig</span></label><label><input type="radio" name="fa" value="bma"><span>Brandmeldeanlage</span></label></div>
-  </div>
-  <div class="stat-block">
-    <h3>Kennzeichen</h3>
-    <div class="wahl">
-      <label><input type="checkbox" name="kz"><span>Fahrzeugbrand</span></label>
-      <label><input type="checkbox" name="kz"><span>Verkehrsunfall</span></label>
-      <label><input type="checkbox" name="kz"><span>Katastrophen-Voralarm</span></label>
-      <label><input type="checkbox" name="kz"><span>Katastrophen-Einsatz</span></label>
-    </div>
-  </div>
-  <div class="stat-block">
-    <h3>Personen und Tiere</h3>
-    <div class="felder">
-      <div class="feld"><label>Gerettete Personen</label><div class="zaehler"><button type="button" data-zaehler="-1" aria-label="weniger">−</button><input type="number" inputmode="numeric" min="0" value="1"><button type="button" data-zaehler="1" aria-label="mehr">+</button></div></div><div class="feld"><label>davon mit Rauchgasvergiftung</label><div class="zaehler"><button type="button" data-zaehler="-1" aria-label="weniger">−</button><input type="number" inputmode="numeric" min="0" value="1"><button type="button" data-zaehler="1" aria-label="mehr">+</button></div><div class="hilfe">höchstens so viele wie gerettet</div></div><div class="feld"><label>Tote Personen</label><div class="zaehler"><button type="button" data-zaehler="-1" aria-label="weniger">−</button><input type="number" inputmode="numeric" min="0" value="0"><button type="button" data-zaehler="1" aria-label="mehr">+</button></div></div><div class="feld"><label>Gerettete Tiere</label><div class="zaehler"><button type="button" data-zaehler="-1" aria-label="weniger">−</button><input type="number" inputmode="numeric" min="0" value="0"><button type="button" data-zaehler="1" aria-label="mehr">+</button></div></div>
-    </div>
-  </div>
-  <div class="stat-block">
-    <h3>Eigene Einsatzkräfte</h3>
-    <dl class="daten"><dt>verletzt</dt><dd>0</dd><dt>tödlich verunglückt</dt><dd>0</dd></dl>
-    <p class="meta" style="margin:6px 0 0">Aus dem Personal aller Berichte dieses Einsatzes. Eintragen bei der Person im Abschnitt Personal.</p>
-  </div>
-</section>
-<section class="karte">
-  <h3>Aus allen Berichten des Einsatzes</h3>
-  <dl class="daten"><dt>Einsatzkräfte</dt><dd>29 (ohne Doppelungen)</dd><dt>Fahrzeuge</dt><dd>5</dd><dt>unter Atemschutz</dt><dd>6</dd><dt>Dauer</dt><dd>3 h 15 min</dd></dl>
-</section><div class="formular-fuss" style="justify-content:space-between;margin-top:8px"><button type="button" class="knopf" data-reiter="s3" data-nach-oben>‹ Lage &amp; Verlauf</button><button type="button" class="knopf sekundaer" data-reiter="s5" data-nach-oben>Weiter: Beteiligte &amp; Sonstiges ›</button></div>
+<div class="formular-fuss" style="justify-content:space-between;margin-top:8px"><button type="button" class="knopf" data-reiter="s2" data-nach-oben>‹ Personal &amp; Fahrzeuge</button><button type="button" class="knopf sekundaer" data-reiter="s5" data-nach-oben>Weiter: Beteiligte &amp; Sonstiges ›</button></div>
 </div>
 
 <div class="reiter-inhalt" id="s5">
@@ -212,13 +160,14 @@
   <div class="feld" style="margin-top:10px"><span class="label">Anhänge</span><div class="plaketten"><span class="plakette">Alarmfax.pdf</span><span class="plakette">Foto_1.jpg</span><button type="button" class="knopf klein">+ Datei oder Foto</button></div></div>
 </section>
 </div>
-<div class="formular-fuss" style="justify-content:space-between;margin-top:8px"><button type="button" class="knopf" data-reiter="s4" data-nach-oben>‹ Statistik</button><button type="button" class="knopf sekundaer" data-reiter="s6" data-nach-oben>Weiter: Prüfen ›</button></div>
+<div class="formular-fuss" style="justify-content:space-between;margin-top:8px"><button type="button" class="knopf" data-reiter="s3" data-nach-oben>‹ Lage &amp; Verlauf</button><button type="button" class="knopf sekundaer" data-reiter="s6" data-nach-oben>Weiter: Prüfen ›</button></div>
 </div>
 
-<div class="reiter-inhalt" id="s6">
+<div class="reiter-inhalt aktiv" id="s6">
 <section class="karte">
   <h2>Prüfung vor dem Fertigmelden</h2>
-  <div class="meldung ok"><span class="ic">✓</span><span>Keine Fehler und keine Warnungen. Zeiten plausibel · Personal vollständig zugeordnet · Statistikmerkmale vollständig.</span></div>
+  <div class="meldung ok"><span class="ic">✓</span><span>Keine Fehler und keine Warnungen. Zeiten plausibel · Personal vollständig zugeordnet · Statistik des Einsatzes vollständig.</span></div>
+  <p class="meta" style="margin:0">Fehlt die Statistik des Einsatzes, meldet der Hauptbericht einen Fehler mit „Zum Einsatz“; sie steht auf der Seite des Einsatzes.</p>
 </section>
 <div class="formular-fuss" style="justify-content:space-between;margin-top:8px"><button type="button" class="knopf" data-reiter="s5" data-nach-oben>‹ Beteiligte &amp; Sonstiges</button></div>
 </div>
@@ -237,7 +186,7 @@
     <div class="dialog-kopf"><h2 id="d-versionen-titel">Versionen des Berichts</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="dialog-inhalt">
   <p class="meta">Jede automatische Speicherung legt eine Version an. Was sich geändert hat, steht in der Historie des Berichts.</p>
-  <div class="tabelle-huelle"><table class="stapel"><thead><tr><th scope="col">Zeitpunkt</th><th scope="col">Benutzer</th><th scope="col">Änderung</th><th scope="col"></th></tr></thead><tbody><tr class="haupt"><td data-label="Zeitpunkt"><div class="zelle">22.10.2026 14:05</div></td><td data-label="Benutzer"><div class="zelle">Sabine Hagel</div></td><td data-label="Änderung"><div class="zelle">Statistik: Brandgröße Mittelbrand</div></td><td><span class="plakette ok">aktuell</span></td></tr><tr><td data-label="Zeitpunkt"><div class="zelle">22.10.2026 13:48</div></td><td data-label="Benutzer"><div class="zelle">Sabine Hagel</div></td><td data-label="Änderung"><div class="zelle">Statistik: 1 gerettete Person</div></td><td><button class="knopf klein sekundaer" value="ok">Wiederherstellen</button></td></tr><tr><td data-label="Zeitpunkt"><div class="zelle">21.10.2026 20:30</div></td><td data-label="Benutzer"><div class="zelle">Sabine Hagel</div></td><td data-label="Änderung"><div class="zelle">Lage und Verlauf geändert</div></td><td><button class="knopf klein sekundaer" value="ok">Wiederherstellen</button></td></tr><tr><td data-label="Zeitpunkt"><div class="zelle">21.10.2026 17:10</div></td><td data-label="Benutzer"><div class="zelle">Sabine Hagel</div></td><td data-label="Änderung"><div class="zelle">Bericht angelegt</div></td><td><button class="knopf klein sekundaer" value="ok">Wiederherstellen</button></td></tr></tbody></table></div>
+  <div class="tabelle-huelle"><table class="stapel"><thead><tr><th scope="col">Zeitpunkt</th><th scope="col">Benutzer</th><th scope="col">Änderung</th><th scope="col"></th></tr></thead><tbody><tr class="haupt"><td data-label="Zeitpunkt"><div class="zelle">22.10.2026 14:05</div></td><td data-label="Benutzer"><div class="zelle">Sabine Hagel</div></td><td data-label="Änderung"><div class="zelle">Personal geändert (8 Personen)</div></td><td><span class="plakette ok">aktuell</span></td></tr><tr><td data-label="Zeitpunkt"><div class="zelle">21.10.2026 20:30</div></td><td data-label="Benutzer"><div class="zelle">Sabine Hagel</div></td><td data-label="Änderung"><div class="zelle">Lage und Verlauf geändert</div></td><td><button class="knopf klein sekundaer" value="ok">Wiederherstellen</button></td></tr><tr><td data-label="Zeitpunkt"><div class="zelle">21.10.2026 17:10</div></td><td data-label="Benutzer"><div class="zelle">Sabine Hagel</div></td><td data-label="Änderung"><div class="zelle">Bericht angelegt</div></td><td><button class="knopf klein sekundaer" value="ok">Wiederherstellen</button></td></tr></tbody></table></div>
   <p class="meta" style="margin:16px 0 0">Wiederherstellen legt eine neue Version mit dem alten Stand an. Die aktuelle Version bleibt erhalten und lässt sich ebenso zurückholen.</p></div>
     <div class="dialog-fuss"><button class="knopf" value="abbrechen">Schließen</button></div>
   </form>

@@ -26,6 +26,7 @@ Feuerwehr (Gesamtwehr, genau eine je Installation)
 | Einsatzbericht | Der Bericht **einer** Einsatzabteilung zu einem Einsatz; andere Abteilungen (Jugend, Alters-, Führungseinheiten, Sonderdienste) schreiben keine. Genau einer je Einsatz ist der Hauptbericht. Daneben gibt es Berichte gesamtwehrweiter Einheiten (z. B. den EvD-Bericht), die keiner Abteilung angehören; Hauptbericht ist ein solcher nur, solange der Einsatz keinen Abteilungsbericht hat. |
 | Einsatzleiter vom Dienst (EvD) | Führungskraft, die nach Dienstplan für die ganze Feuerwehr Bereitschaft hat. Er bekommt je Diensttag eine Pauschale und schreibt zu jedem Einsatz einen eigenen EvD-Bericht. |
 | Kosten und Bemerkungen | Gelten für den ganzen Einsatz, nicht je Bericht: kostenpflichtig mit Begründung, Bemerkungen und der Tatbestand für den Kostenersatz. Der Kommandant (oder wer das Recht hat) trägt sie ein. |
+| Statistikmerkmale | Merkmale der Feuerwehrstatistik (Einsatzart, Brandgröße, Art der Technischen Hilfe, Gerettete, …). Sie gelten für den ganzen Einsatz, nicht je Bericht, und zählen einmal in der Jahresstatistik. Eintragen können die Schreiber der Berichte des Einsatzes und die Freigeber. |
 | Funktion | Rolle einer Person im Einsatz: Einsatzleiter, Gruppenführer, Maschinist, Angriffstrupp, … (konfigurierbarer Katalog) |
 | Qualifikation | Was eine Person kann oder darf, mit optionalem Ablaufdatum: Atemschutzgeräteträger, Maschinist, Führerschein C, … Sie entsteht aus einem bestandenen Lehrgang oder wird direkt eingetragen. |
 | Lehrgang | Eintrag im Lehrgangskatalog (vom Administrator gepflegt). Eine **Lehrgangsteilnahme** hat Datum, Ergebnis (bestanden/nicht bestanden) und verweist auf den Katalogeintrag. |
@@ -146,6 +147,7 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Leitstellennummer | `dispatchNumber` |
 | Einsatzstichwort | `alarmKeyword` |
 | Kosten und Bemerkungen des Einsatzes | `IncidentCosts` (`chargeable`, `chargeableReason`, `notes`), Recht `incidents.costs` |
+| Statistikmerkmale des Einsatzes | `IncidentStatistics` (`Incident.statistics`, ändern mit `StatisticsUpdate`) |
 | Bereitschaft (auf der Wache) | standby |
 | Alarmiert (Nachalarmierung) / Ausgerückt / Eingerückt eines Fahrzeugs im Bericht | `alarmedAt` / `departedAt` / `returnedAt` am Fahrzeug des Berichts (`ReportVehicleEntity`) |
 | Eigene Zeiten (Person oder Fahrzeug), geerbte Zeiten | own times (`from`/`to` bzw. `departedAt`/`returnedAt`, `null` = geerbt), `inheritedTimes`, wirksame Zeiten `effectiveTimes` |

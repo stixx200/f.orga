@@ -3,27 +3,26 @@ import { notifications } from '@mantine/notifications';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
-import type { IncidentStatisticsInput, Report } from '@forga/incidents-contracts';
+import type { Report } from '@forga/incidents-contracts';
 import { apiUrl, can, extensionsOf, formatDateTime, formatMoney, formatTime, send, useSession, useTranslation } from '@forga/web-sdk';
 import { ActionBar, Attachments, ConfirmDialog, DataTable, EmptyState, HistoryTimeline, Notice, notifyError, notifySuccess, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, RELEASE, useIncident, useNames, useReport, useReportAccess, useRevisions } from '../api';
 import { DepartmentBadge, ReportStatusBadge } from '../parts';
 import { WorkflowActions } from '../WorkflowActions';
 import { CheckSection } from './CheckSection';
-import { completeStatistics, type Content, STEPS, type StepId, stepOf, useReportEditor, useStoredReasons } from './editor';
+import { type Content, STEPS, type StepId, stepOf, useReportEditor, useStoredReasons } from './editor';
 import { blocking, findingKey, mergeFindings, openWarnings } from './findings';
 import { NarrativeSection } from './NarrativeSection';
 import { OtherSection } from './OtherSection';
 import { PersonnelSection } from './PersonnelSection';
 import classes from './report.module.css';
-import { StatisticsSection } from './StatisticsSection';
 import { TimesSection } from './TimesSection';
 
-function stepState(step: StepId, content: Content, report: Report, statisticsIncomplete: boolean): { state: 'done' | 'error' | 'open'; text: string; count?: number } {
-  // Unfinished statistics are not saved yet: the step must not look complete.
-  if (step === 'statistics' && statisticsIncomplete) return { state: 'error', text: 'incomplete' };
-  const errors = blocking(mergeFindings(report.findings)).filter((f) => stepOf(f) === step).length;
-  const warnings = openWarnings(mergeFindings(report.findings)).filter((f) => stepOf(f) === step).length;
+function stepState(step: StepId, content: Content, report: Report): { state: 'done' | 'error' | 'open'; text: string; count?: number } {
+  // Findings fixed on the page of the incident (its statistics) count for the check step.
+  const at = (f: Report['findings'][number]) => stepOf(f) === step || (step === 'check' && stepOf(f) === 'incident');
+  const errors = blocking(mergeFindings(report.findings)).filter(at).length;
+  const warnings = openWarnings(mergeFindings(report.findings)).filter(at).length;
   if (step === 'check') return { state: errors || warnings ? 'open' : 'done', text: '' };
   if (errors) return { state: 'error', text: 'errors', count: errors };
   if (warnings) return { state: 'open', text: 'warnings', count: warnings };
@@ -32,8 +31,6 @@ function stepState(step: StepId, content: Content, report: Report, statisticsInc
       return content.personnel.length ? { state: 'done', text: 'persons', count: content.personnel.length } : { state: 'open', text: 'missing' };
     case 'narrative':
       return content.situation.trim() && content.actions.trim() ? { state: 'done', text: 'complete' } : { state: 'open', text: 'missing' };
-    case 'statistics':
-      return !report.primary ? { state: 'done', text: 'inPrimary' } : content.statistics ? { state: 'done', text: 'complete' } : { state: 'open', text: 'missing' };
     case 'other':
       return { state: 'done', text: 'optional' };
     default:
@@ -49,7 +46,6 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
   const { data: incident } = useIncident(report.incidentId);
   const { content, update, flush, reset, saveState, restorable, restoreLocal, discardLocal, loadServer, keepMine } = useReportEditor(report, userId);
   const [step, setStep] = useState<StepId>('times');
-  const [statisticsDraft, setStatisticsDraft] = useState<IncidentStatisticsInput | null>(null);
   const { reasons, setReason, clearReasons } = useStoredReasons(userId, report.id);
   const [dialog, setDialog] = useState<'submit' | 'versions' | 'history' | 'takeOver' | null>(null);
   // Releasers read drafts of authors; editing one locks it for the author, so it needs a confirmation.
@@ -62,9 +58,6 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
   const ownDraft = Boolean(session?.user.personId) && report.authorPersonId === session?.user.personId;
   const draftOfAuthor = releaser && report.status === 'draft' && !report.locked && !takenOver && !ownDraft;
   const editable = releaser ? !report.status.startsWith('released') && !draftOfAuthor : writer && report.status === 'draft' && !report.locked;
-  // Releasers complete the statistics of a released primary report without releasing it again.
-  const statisticsSeparately = releaser && report.primary && report.status.startsWith('released');
-  const statisticsIncomplete = Boolean(statisticsDraft) && !completeStatistics(statisticsDraft);
   const errors = blocking(mergeFindings(report.findings));
   const warnings = openWarnings(mergeFindings(report.findings));
   const missingReasons = warnings.filter((f) => !reasons[findingKey(f)]?.trim());
@@ -105,28 +98,10 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
     onSuccess: (restored) => {
       queryClient.setQueryData(keys.report(report.id), restored);
       reset(restored);
-      setStatisticsDraft(null);
       setDialog(null);
     },
   });
-  const saveStatistics = useAction(
-    (statistics: IncidentStatisticsInput | null) => send<Report>('PUT', `incidents/reports/${report.id}/statistics`, { statistics, version: report.version }),
-    {
-      success: t('statistics.saved'),
-      invalidate: [keys.incidents],
-      onSuccess: (saved) => {
-        queryClient.setQueryData(keys.report(report.id), saved);
-        reset(saved);
-        setStatisticsDraft(null);
-      },
-    },
-  );
   const askSubmit = () => {
-    if (statisticsIncomplete) {
-      goTo('statistics');
-      notifications.show({ color: 'brand', message: t('statistics.incomplete') });
-      return;
-    }
     if (errors.length || missingReasons.length) {
       goTo('check');
       notifications.show({ color: 'brand', message: t(errors.length ? 'editor.fixErrorsFirst' : 'editor.reasonsMissing') });
@@ -145,7 +120,6 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
         : saveState.savedAt
           ? t('editor.savedAt', { time: formatTime(saveState.savedAt.toISOString(), i18n.language) })
           : t('editor.upToDate');
-  const primaryReport = incident?.reports.find((r) => r.primary);
   const department = names.ownerName(report);
 
   return (
@@ -185,6 +159,11 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
           {t('editor.readOnlyDraft')}
         </Notice>
       )}
+      {report.findings.some((f) => f.rule === 'statistics-missing') && (
+        <Notice kind="warning" action={<Button component={Link} to={`/incidents/incidents/${report.incidentId}`} size="xs" variant="outline">{t('check.toIncident')}</Button>}>
+          {t('editor.statisticsOnIncident')}
+        </Notice>
+      )}
       {report.status === 'draft' && report.returnComment && <Notice kind="warning">{t('editor.returned', { comment: report.returnComment })}</Notice>}
       {report.status === 'review' && !releaser && <Notice kind="info">{t('editor.inReview')}</Notice>}
       {report.locked && <Notice kind="info">{t('editor.lockedBy', { by: report.lockedBy ?? '', at: formatDateTime(report.lockedAt, i18n.language) })}</Notice>}
@@ -192,7 +171,7 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
 
       <ol className={classes.steps} aria-label={t('editor.sections')}>
         {STEPS.map((s, index) => {
-          const state = stepState(s, content, report, statisticsIncomplete);
+          const state = stepState(s, content, report);
           return (
             <li key={s}>
               <button type="button" className={classes.step} data-state={state.state} aria-current={s === step ? 'step' : undefined} onClick={() => setStep(s)}>
@@ -210,19 +189,6 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
       {step === 'times' && incident && <TimesSection content={content} incident={incident} owner={report} update={update} disabled={!editable} />}
       {step === 'personnel' && <PersonnelSection content={content} report={report} update={update} disabled={!editable} findings={report.findings} />}
       {step === 'narrative' && <NarrativeSection content={content} update={update} disabled={!editable} />}
-      {step === 'statistics' && (
-        <StatisticsSection
-          content={content}
-          report={report}
-          draft={statisticsDraft}
-          setDraft={setStatisticsDraft}
-          update={update}
-          disabled={!editable && !statisticsSeparately}
-          primaryReportId={primaryReport?.id}
-          onSaveSeparately={statisticsSeparately ? (statistics) => saveStatistics.mutate(statistics) : undefined}
-          saving={saveStatistics.isPending}
-        />
-      )}
       {step === 'other' && <OtherSection content={content} update={update} disabled={!editable} />}
       {step === 'other' && (
         <Notice kind="info" action={<Button component={Link} to={`/incidents/incidents/${report.incidentId}`} variant="subtle" size="xs">{t('other.toIncident')}</Button>}>
@@ -249,7 +215,7 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
             />
           ))}
       {step === 'check' && (
-        <CheckSection findings={report.findings} reasons={reasons} setReason={setReason} goTo={goTo} editable={editable && report.status === 'draft'} statisticsIncomplete={statisticsIncomplete} />
+        <CheckSection findings={report.findings} reasons={reasons} setReason={setReason} goTo={goTo} editable={editable && report.status === 'draft'} incidentId={report.incidentId} />
       )}
 
       <Group justify="space-between">

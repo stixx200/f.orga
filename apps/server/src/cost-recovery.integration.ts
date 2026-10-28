@@ -20,6 +20,11 @@ async function releaseForBilling(reportId: string): Promise<void> {
   await post(`/incidents/reports/${reportId}/release`, { level: 'billing' }).expect(200);
 }
 const T = (time: string) => `2026-10-21T${time}:00+02:00`;
+/** False alarm of a fire alarm system: the statistics of the incident (not of a report). */
+const falseAlarm = async (incidentId: string) => {
+  const { version } = (await get(`/incidents/incidents/${incidentId}`).expect(200)).body;
+  await put(`/incidents/incidents/${incidentId}/statistics`, { statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' }, version }).expect(200);
+};
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date());
 const germanToday = today.split('-').toReversed().join('.');
 const configure = async (changes: object) => {
@@ -72,8 +77,8 @@ beforeAll(async () => {
     personnel: [{ personId: ids.jonas, vehicleId: ids.mtw }, { personId: ids.max, vehicleId: ids.mtw }, { guestName: 'Gast Nachbarwehr', vehicleId: ids.mtw }],
     vehicles: [{ vehicleId: ids.lf, departedAt: T('10:04'), returnedAt: T('10:50') }, { vehicleId: ids.mtw }],
     involvedParties: [{ role: 'owner', name: 'Muster GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
-    statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
   }).expect(200);
+  await falseAlarm(ids.incident);
   // Chargeable is a matter of the whole incident, not of a report.
   await put(`/incidents/incidents/${ids.incident}/costs`, { chargeable: true, chargeableReason: 'Täuschungsalarm BMA' }).expect(200);
 });
@@ -218,8 +223,8 @@ describe('cost recovery', () => {
       personnel: [{ personId: ids.jonas, vehicleId: ids.lf }, { personId: carla, vehicleId: ids.lf }],
       vehicles: [{ vehicleId: ids.lf }],
       involvedParties: [{ role: 'owner', name: 'Muster GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
-      statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
     }).expect(200);
+    await falseAlarm(incident.id);
     await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Verursacher bekannt' }).expect(200);
     const settings = (await get('/core/settings/cost-recovery.general').expect(200)).body ?? {};
     await configure({ personnelRates: [...(settings.personnelRates ?? []), { kind: 'career-intermediate', validFrom: '2026-01-01', amount: 70 }] });
@@ -319,8 +324,8 @@ describe('cost recovery', () => {
       situation: 'BMA', actions: 'Erkundung',
       personnel: [{ personId: ids.jonas, vehicleId: ids.lf }],
       involvedParties: [owner],
-      statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
     }).expect(200);
+    await falseAlarm(incident.id);
     expect(saved.body.vehicles).toEqual([expect.objectContaining({ vehicleId: ids.lf, departedAt: null, returnedAt: null })]);
     // The other department's report lists the same LF with own, longer times, and the same owner.
     await put(`/incidents/reports/${support.id}`, {
@@ -379,8 +384,8 @@ describe('cost recovery', () => {
       personnel: [{ guestName: 'Gast Nachbarwehr', vehicleId: ids.lf }],
       vehicles: [{ vehicleId: ids.lf }],
       involvedParties: [{ role: 'owner', name: 'Muster GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
-      statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
     }).expect(200);
+    await falseAlarm(incident.id);
     await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Täuschungsalarm' }).expect(200);
     const notice = (await post('/cost-recovery/notices', { incidentId: incident.id }).expect(201)).body;
     ids.fourEyes = notice.id;

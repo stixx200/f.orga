@@ -35,11 +35,11 @@ Die folgenden Abschnitte beschreiben das Zielbild.
 | F1–F11 | Stammdaten, Organisation | Abteilungen nach Typ, Sonderaufgaben-Kennzeichen der Abteilung (Rettungsdienst, NAW, Strahlenschutz, Gefahrstoff, Höhenrettung, Tauchdienst, Führungseinheit ab Stufe C), Wachen mit Kennzeichen „ständig besetzt“ |
 | F12–F25 | Stammdaten, Personen | Status und Mitgliedschaft am Stichtag, Abteilungstyp, Geschlecht, Beschäftigungsart, Führerschein C/CE, Qualifikationen Atemschutzgeräteträger, Gruppenführer und Zugführer, Kennzeichen Musiker |
 | F26–F27 | Einsatzberichte, Dienste | verletzte bzw. tödlich verunglückte eigene Einsatzkräfte aus Einsätzen; Verletzte aus abgeschlossenen Diensten (F26). Tödliche Unfälle außerhalb von Einsätzen manuell. |
-| F28–F62 | Einsatzberichte | Statistikmerkmale der Hauptberichte (siehe [Einsatzberichte](module/einsatzberichte.md#statistikmerkmale-feuerwehrstatistik-bw)). Rettungsdienst und Krankentransport (F46–F49) erfasst die Feuerwehr nicht; diese Felder bleiben leer ([E12](entscheidungen.md#e12-rettungsdienst-und-krankentransport-nicht-erfassen)). |
+| F28–F62 | Einsatzberichte | Statistikmerkmale der Einsätze (siehe [Einsatzberichte](module/einsatzberichte.md#statistikmerkmale-feuerwehrstatistik-bw)). Rettungsdienst und Krankentransport (F46–F49) erfasst die Feuerwehr nicht; diese Felder bleiben leer ([E12](entscheidungen.md#e12-rettungsdienst-und-krankentransport-nicht-erfassen)). |
 | F63–F120 | Stammdaten, Fahrzeuge | Fahrzeuge im Dienst am Stichtag, gruppiert nach ihrer **Statistik-Kategorie** |
 | F121–F129 | manuell | Funkgeräte und Meldeempfänger, bis das Modul [Geräte](../implementiert/architektur.md#modul-geräte-equipment) den Bestand liefert |
 
-**Zählung der Einsätze.** Jeder Einsatz zählt genau einmal, über seinen Hauptbericht. Personenschäden und eigene Verletzte werden aus allen Berichten des Einsatzes summiert. Doppelte Personen werden dabei nicht doppelt gezählt.
+**Zählung der Einsätze.** Jeder Einsatz zählt genau einmal, mit seinen Statistikmerkmalen. Personenschäden und eigene Verletzte werden aus allen Berichten des Einsatzes summiert. Doppelte Personen werden dabei nicht doppelt gezählt.
 
 ## Nötige Daten in den Modulen
 
@@ -49,7 +49,7 @@ Die folgenden Abschnitte beschreiben das Zielbild.
 | Stammdaten, Wache | Kennzeichen „ständig besetzt“ |
 | Stammdaten, Person | Geschlecht, Beschäftigungsart (ehrenamtlich, hauptberuflich mit Laufbahn, Beschäftigte Feuerwehrdienst, Beschäftigte Verwaltung), Führerscheinklassen, Kennzeichen Musiker |
 | Stammdaten, Fahrzeug | Statistik-Kategorie aus einem Katalog der Positionen F63–F120 |
-| Einsatzberichte | Statistikmerkmale des Hauptberichts, eigene Verletzte und Tote |
+| Einsatzberichte | Statistikmerkmale des Einsatzes, eigene Verletzte und Tote |
 | Einstellungen | Einwohnerzahl der Gemeinde (für die CSV), Bestand an Funkgeräten und Meldeempfängern |
 
 ## Ablauf
@@ -64,7 +64,7 @@ Die folgenden Abschnitte beschreiben das Zielbild.
    | Technische Hilfe | F37 = F38 + … + F45 |
    | Fehlalarme | F51 = F52 + F53 + F54 |
    | „davon“-Werte | kein „davon“ größer als seine Summe (z. B. F14 ≤ F13, F19–F24 ≤ F13, F56 ≤ F55, F57 ≤ F55, F60 ≤ F59, F62 ≤ F61, F11 ≤ F10) |
-   | Hauptberichte | jeder Einsatz des Jahres hat einen Hauptbericht mit vollständigen Statistikmerkmalen |
+   | Hauptberichte | jeder Einsatz des Jahres hat einen Hauptbericht und vollständige Statistikmerkmale |
    | Fahrzeuge | jedes Fahrzeug im Dienst hat eine Statistik-Kategorie |
 
    Offene Prüfungen verlinken direkt auf den betroffenen Bericht oder Datensatz.

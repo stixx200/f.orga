@@ -52,10 +52,16 @@ test('group leader writes a report, commander reviews and releases it', async ({
   await gf.getByLabel('Lage bei Eintreffen').fill('Brennender Müllcontainer neben Garage');
   await gf.getByLabel('Maßnahmen / Verlauf').fill('Ablöschen mit 1 C-Rohr, Nachkontrolle mit Wärmebildkamera');
 
-  // Statistics: accept the suggestion from the keyword, then the fire size.
-  await section(gf, 'Statistik');
+  // Statistics of the incident (on the incident page): accept the suggestion from the keyword, then the fire size.
+  await section(gf, 'Prüfen');
+  await expect(gf.getByText(/^Die Statistikmerkmale des Einsatzes fehlen/).first()).toBeVisible();
+  await gf.getByRole('link', { name: 'Zum Einsatz' }).first().click();
+  await expect(gf).toHaveURL(/\/incidents\/incidents\//);
   await gf.getByRole('button', { name: 'Vorschlag übernehmen' }).click();
   await gf.getByLabel('Kleinbrand B').check();
+  await gf.getByRole('button', { name: 'Statistik speichern' }).click();
+  await expect(gf.getByText('Statistik gespeichert.')).toBeVisible();
+  await gf.goto(reportUrl);
 
   // Check and submit.
   // Warnings (e.g. the same persons in an earlier test run at the same time) need a reason; errors must not be open.

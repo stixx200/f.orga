@@ -7,6 +7,7 @@ import { api, apiUrl, can, extensionsOf, formatDateTime, formatMoney, fromLocalI
 import { ConfirmDialog, EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { COSTS, keys, useDepartments, useIncident, useKeywords, useNames, useReportAccess, useSettings } from '../api';
 import { DepartmentBadge, keywordLabel, locationLabel, notifyReleaseResult, ReportStatusBadge } from '../parts';
+import { StatisticsPanel } from './StatisticsPanel';
 
 function EditIncidentDialog({ incident, onClose }: { incident: Incident; onClose: () => void }) {
   const { t } = useTranslation('incidents');
@@ -253,6 +254,8 @@ export function IncidentPage() {
           />
         ))}
       </SimpleGrid>
+      {/* Re-mounted with each saved version, so the form starts from the stored values. */}
+      <StatisticsPanel key={`statistics-${incident.version}`} incident={incident} />
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
         {/* Re-mounted with each saved version, so the form starts from the stored values. */}
         <CostsPanel key={incident.version} incident={incident} editable={can(session, COSTS)} />

@@ -299,7 +299,6 @@ export class MpFeuerIncidentsImport {
           actions,
           cause: first['cause'] ?? '',
           incidentCommander: first['commander'] ?? '',
-          statistics: statistics ?? report.statistics ?? null,
           status,
           locked: status !== 'draft',
           lockedBy: status !== 'draft' ? 'MP-Feuer' : null,
@@ -312,8 +311,8 @@ export class MpFeuerIncidentsImport {
         const otherDepartments = current.reports.getItems().some((r) => r !== report && r.departmentId);
         if (group.some((r) => yes(r.values['primary'])) && !(unit && otherDepartments)) await this.reports.setPrimary(em, report, true);
         else if (otherDepartments) report.primary = false;
-        // Statistics belong to the primary report only.
-        if (!report.primary) report.statistics = null;
+        // The statistics belong to the incident; MP-Feuer keeps them with the primary report.
+        if (report.primary && statistics) current.statistics = statistics;
 
         for (const item of report.personnel.getItems()) em.remove(item);
         report.personnel.removeAll();

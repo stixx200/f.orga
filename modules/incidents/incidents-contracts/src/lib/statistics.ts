@@ -38,7 +38,7 @@ export function technicalCategoryByPrecedence(categories: readonly TechnicalCate
 
 const count = z.number().int().min(0).default(0);
 
-/** Statistics features of a primary report (questions F26–F62 of the state template). */
+/** Statistics features of an incident, counted once per incident (questions F26–F62 of the state template). */
 export const IncidentStatistics = z
   .object({
     /** `false` = assistance in another municipality (Überlandhilfe). */

@@ -10,7 +10,7 @@ const COLUMNS = ['D', 'F', 'G', 'H'] as const;
 type Column = (typeof COLUMNS)[number];
 /** Checks about reports lead to the incidents concerned. */
 const CHECK_LINKS: Record<string, (year: string) => string> = {
-  'statistics.primaryReportsWithoutStatistics': (year) => `/incidents/incidents?view=withoutStatistics&year=${year}`,
+  'statistics.incidentsWithoutStatistics': (year) => `/incidents/incidents?view=withoutStatistics&year=${year}`,
   'statistics.unreleasedPrimaryReports': () => '/incidents/review',
 };
 

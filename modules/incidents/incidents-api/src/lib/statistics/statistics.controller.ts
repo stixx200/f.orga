@@ -6,7 +6,7 @@ import { Audit, type AuthenticatedUser, berlinDayStart, CurrentUser, RequirePerm
 import { type AnnualStatistics, CloseStatistics, type StatisticsCheck, StatisticsCorrections, type StatisticsValue } from '@forga/incidents-contracts';
 import { TRAINING_CASUALTIES, type TrainingCasualties } from '@forga/training-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
-import { AlarmKeywordEntity, ReportEntity, StatisticsYearEntity } from '../incidents.entities.js';
+import { AlarmKeywordEntity, IncidentEntity, ReportEntity, StatisticsYearEntity } from '../incidents.entities.js';
 import { checkAnnualStatistics, computeAnnualStatistics } from './annual-statistics.js';
 import { STATE_TEMPLATE_BASE64 } from './state-template.js';
 
@@ -147,6 +147,10 @@ export class StatisticsController {
     const typeOf = new Map(departments.map((d) => [d.id, d.type]));
     // Only keywords counted in the statistics (with a main type) count, not e.g. statistics left on a fire watch.
     const counted = new Set(keywords.map((k) => k.key));
+    // Each incident counts once, with its statistics, if it has a primary report (as every incident with reports has).
+    const incidents = (await em.find(IncidentEntity, { alarmedAt: { $gte: start, $lt: end } }, { populate: ['reports'] })).filter(
+      (i) => counted.has(i.alarmKeyword) && i.reports.getItems().some((r) => r.primary),
+    );
 
     const computed = computeAnnualStatistics({
       referenceDate,
@@ -155,7 +159,7 @@ export class StatisticsController {
       permanentlyStaffedStations: stations.filter((s) => s.permanentlyStaffed).length,
       members,
       vehicles,
-      primaryReports: reports.filter((r) => r.primary && r.statistics && counted.has(r.incident.alarmKeyword)).map((r) => r.statistics!),
+      incidents: incidents.flatMap((i) => (i.statistics ? [i.statistics] : [])),
       ownCasualties: reports.flatMap((r) =>
         r.personnel
           .getItems()
@@ -186,11 +190,11 @@ export class StatisticsController {
 
     const primary = reports.filter((r) => r.primary);
     // Only keywords counted in the statistics need statistics (not e.g. fire watch).
-    const withoutStatistics = primary.filter((r) => !r.statistics && counted.has(r.incident.alarmKeyword));
+    const withoutStatistics = incidents.filter((i) => !i.statistics);
     const checks = [
       ...checkAnnualStatistics((key) => lookup.get(key) ?? 0),
       {
-        code: 'statistics.primaryReportsWithoutStatistics',
+        code: 'statistics.incidentsWithoutStatistics',
         ok: withoutStatistics.length === 0,
         params: { count: withoutStatistics.length },
       },

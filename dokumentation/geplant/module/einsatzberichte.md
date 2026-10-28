@@ -8,11 +8,11 @@ Release 1. Benötigt: Stammdaten. Nutzt optional: Geräte, Atemschutz, Entschäd
 - Ablauf mit Fertigmelden, Zurückgeben, zweistufiger Freigabe (erst Entschädigung, dann Abrechnung; erste Stufe abschaltbar, [E16](../entscheidungen.md#e16-freigabe-zweistufig-prüfung-vor-auszahlung)), Sperre und Sperre aufheben
 - Versionen zum Rückgängigmachen beim automatischen Speichern ([E15](../entscheidungen.md#e15-automatisch-speichern-nachvollziehbar-und-rückgängig))
 - Prüfung vor der Entschädigungsauszahlung (nicht freigegebene Berichte, Personalprobleme)
-- Statistikmerkmale im Hauptbericht mit Vorschlag, Jahresstatistik für das Landesportal
+- Statistikmerkmale je Einsatz mit Vorschlag, Jahresstatistik für das Landesportal
 - externe API, MP-Feuer-Import der Einsätze, Listen, Abrechnungsexport, Fristen für Verfasser und Freigeber
 - Berichte gesamtwehrweiter Einheiten, z. B. der EvD-Bericht des Moduls [Einsatzleiter vom Dienst](../../implementiert/architektur.md#modul-einsatzleiter-vom-dienst-duty-officer)
 
-**Bereits umgesetzt (Oberfläche)**, beschrieben in [implementiert/architektur.md](../../implementiert/architektur.md#oberfläche-einsatzberichte): Einsatzliste mit Anlegen, Einsatzseite mit Berichtskarten und Hauptberichtswechsel, Berichtseditor mit sechs Abschnitten, automatischem Speichern, Versionen und Verlauf, Fertigmelden mit begründeten Warnungen, „Zur Prüfung“ mit Zurückgeben, zweistufiger Freigabe und Sperre aufheben, Kacheln auf der Startseite. Das Szenario Gruppenführer/Kommandant ist durch einen E2E-Test abgedeckt.
+**Bereits umgesetzt (Oberfläche)**, beschrieben in [implementiert/architektur.md](../../implementiert/architektur.md#oberfläche-einsatzberichte): Einsatzliste mit Anlegen, Einsatzseite mit Berichtskarten, Statistik und Hauptberichtswechsel, Berichtseditor mit fünf Abschnitten, automatischem Speichern, Versionen und Verlauf, Fertigmelden mit begründeten Warnungen, „Zur Prüfung“ mit Zurückgeben, zweistufiger Freigabe und Sperre aufheben, Kacheln auf der Startseite. Das Szenario Gruppenführer/Kommandant ist durch einen E2E-Test abgedeckt.
 
 Ebenso umgesetzt: Offene Berichte mit „Verfasser erinnern“, Entschädigung (Prüfung und Export), Jahresstatistik und Einstellungen.
 
@@ -28,7 +28,8 @@ Die folgenden Abschnitte beschreiben das Zielbild.
 
 - **Einsatz**: Ereignis der Leitstelle, eindeutig über die **Leitstellennummer**. Einsätze ohne Leitstellennummer (z. B. Brandsicherheitsdienst, Selbstalarmierung) bekommen eine interne Nummer.
 - **Einsatzbericht**: Bericht **einer** Abteilung zu einem Einsatz. Je Einsatz und Abteilung gibt es höchstens einen Bericht.
-- **Hauptbericht**: Genau ein Bericht je Einsatz. Er trägt die Statistikmerkmale für die Gesamtwehr. Alle anderen sind Nebenberichte. Wird ein Bericht zum Hauptbericht, verliert der bisherige Hauptbericht diese Eigenschaft in derselben Aktion. Die Datenbank sichert die Eindeutigkeit über einen partiellen Unique-Index.
+- **Hauptbericht**: Genau ein Bericht je Einsatz. Er zählt den Einsatz in der Jahresstatistik; ohne die Statistikmerkmale des Einsatzes wird er nicht freigegeben. Alle anderen sind Nebenberichte.
+- **Statistikmerkmale**: gehören zum Einsatz, nicht zu einem Bericht. Sie werden einmal je Einsatz erfasst. Wird ein Bericht zum Hauptbericht, verliert der bisherige Hauptbericht diese Eigenschaft in derselben Aktion. Die Datenbank sichert die Eindeutigkeit über einen partiellen Unique-Index.
 
 ## Inhalt eines Einsatzberichts
 
@@ -39,7 +40,6 @@ Die folgenden Abschnitte beschreiben das Zielbild.
 | Einsatzort | Straße, Hausnummer, PLZ, Ort, Ortsteil, Objekt, Zusatz, optional Koordinaten |
 | Alarmierung | Einsatzstichwort (Katalog der Leitstelle, z. B. „B2 Brand Wohnhaus“, „TH1 Person in Not“), Alarmiert durch, Meldebild |
 | Lage und Verlauf | Lage bei Eintreffen, Maßnahmen/Verlauf, Ursache (soweit bekannt), Einsatzleiter. Freitext mit Bausteinen. |
-| Statistik | Merkmale der Feuerwehrstatistik BW, vorbefüllt (siehe unten), nur im Hauptbericht Pflicht |
 | Personal | Person, Fahrzeug **oder** „Bereitschaft auf Wache“ (Wache wählbar), Funktion, unter Atemschutz ja/nein (mit Dauer, optional), von/bis (Standard aus den Berichtszeiten, je Person änderbar), Verdienstausfall, „Einsatz während Arbeitszeit beim Dienstherrn“ |
 | Fahrzeuge | Fahrzeug, Ausrücken/Einrücken (Standard aus den Berichtszeiten), km, Besatzung ergibt sich aus dem Personal |
 | Geräte | Verwendete Geräte und Verbrauchsmaterial. Mit Modul Geräte: Auswahl aus dem Bestand und Rückmeldung „Prüfung nach Einsatz nötig“. Ohne Modul: Freitext. |
@@ -106,8 +106,7 @@ Die Regeln stammen aus der heutigen Prüf-App (siehe [Altanwendungen](../../rech
 | --- | --- | --- |
 | Hauptbericht fehlt | Fehler (beim Freigeben) | Einsatz hat keinen Hauptbericht |
 | Bericht leer | Fehler | Lage/Verlauf leer |
-| Statistik fehlt | Fehler | Hauptbericht ohne Statistikmerkmale, außer bei Einsatzarten ohne Statistik |
-| Statistik bei Sonderdienst | Fehler | Nebenbericht eines Sonderdienstes oder Stichwort „Sonstiges“ mit Statistikmerkmalen |
+| Statistik fehlt | Fehler | Einsatz ohne Statistikmerkmale, außer bei Einsatzarten ohne Statistik; gemeldet am Hauptbericht |
 | Kein Personal | Fehler | Bericht ohne Personal |
 | Fahrzeug fehlt | Fehler | Person ohne Fahrzeug und ohne Bereitschaft (mit Ausnahmen, siehe oben) |
 | Personaldoppelung im Einsatz | Fehler | siehe Regeln für das Personal |
@@ -122,7 +121,7 @@ Die Liste **Offene Berichte** gruppiert nach Verfasser und Abteilung und zeigt d
 
 ## Statistikmerkmale (Feuerwehrstatistik BW)
 
-Die Merkmale entsprechen den Fragen F26–F62 der Import-Vorlage des Landesportals (siehe [Jahresstatistik BW](../../recherche/jahresstatistik-bw.md)). Sie werden **nur im Hauptbericht** erfasst und sind dort Pflicht; ein Nebenbericht mit Statistik ergibt einen Fehler.
+Die Merkmale entsprechen den Fragen F26–F62 der Import-Vorlage des Landesportals (siehe [Jahresstatistik BW](../../recherche/jahresstatistik-bw.md)). Sie werden **einmal je Einsatz** auf der Einsatzseite erfasst, nicht je Bericht, und sind für Einsätze gezählter Stichworte Pflicht. Eintragen dürfen die Schreiber der Berichte des Einsatzes, solange einer ihrer Berichte in Bearbeitung ist, und die Freigeber bis zum Abschluss der Jahresstatistik.
 
 | Merkmal | Werte | Fragen |
 | --- | --- | --- |
@@ -145,8 +144,8 @@ Die Merkmale entsprechen den Fragen F26–F62 der Import-Vorlage des Landesporta
   - Der Stichwort-Katalog ordnet jedem Stichwort Einsatzhauptart und Unterkategorie zu, z. B. B2 → Brand; TH1 Person in Not → TH 1; BMA → Fehlalarm Brandmeldeanlage.
   - Ob der Einsatzort in der eigenen Gemeinde liegt, ergibt sich aus der Anschrift und der Gemeinde in den Einstellungen.
   - Die Brandgröße schlägt das System aus den eingesetzten Rohren vor, sobald das Modul Geräte installiert ist. Sonst wählt der Verfasser.
-- Der Verfasser bestätigt oder korrigiert die Vorbefüllung.
-- **Zählung**: Jeder Einsatz zählt in der Jahresstatistik genau einmal, über seinen Hauptbericht. Nebenberichte tragen keine Statistikmerkmale. Eigene verletzte Einsatzkräfte werden aus allen Berichten des Einsatzes gezählt.
+- Die Schreiber der Berichte bestätigen oder korrigieren die Vorbefüllung.
+- **Zählung**: Jeder Einsatz zählt in der Jahresstatistik genau einmal, mit seinen Statistikmerkmalen. Eigene verletzte Einsatzkräfte werden aus allen Berichten des Einsatzes gezählt.
 - Die **Jahresstatistik** erzeugt die Abgabedatei für das Landesportal. Sie ist modulübergreifend beschrieben in [Jahresstatistik](../jahresstatistik.md).
 
 ## API für externe Systeme
@@ -177,8 +176,8 @@ Content-Type: application/json
 ## Oberfläche
 
 - **Einsatzliste**: Tabelle mit Datum, Leitstellennummer, Stichwort, Ort, beteiligte Abteilungen (Plaketten, Hauptbericht hervorgehoben mit `#F3E4E2`), Status. Filter: Zeitraum, Abteilung, Status, „nur meine“.
-- **Einsatz-Ansicht**: Kopf mit den Einsatzdaten, darunter die Berichte der Abteilungen als Karten. Aktion „Bericht für Abteilung anlegen“, „zum Hauptbericht machen“.
-- **Berichtseditor**: Abschnitte als Schritte (Zeiten & Ort → Personal & Fahrzeuge → Lage & Verlauf → Statistik → Beteiligte & Sonstiges → Prüfen). Jeder Abschnitt zeigt seine Hinweise direkt. Zwischenspeichern automatisch. Auf dem Handy einspaltig.
+- **Einsatz-Ansicht**: Kopf mit den Einsatzdaten, darunter die Berichte der Abteilungen als Karten und die Statistik des Einsatzes. Aktion „Bericht für Abteilung anlegen“, „zum Hauptbericht machen“.
+- **Berichtseditor**: Abschnitte als Schritte (Zeiten & Ort → Personal & Fahrzeuge → Lage & Verlauf → Beteiligte & Sonstiges → Prüfen). Jeder Abschnitt zeigt seine Hinweise direkt. Zwischenspeichern automatisch. Auf dem Handy einspaltig.
 - **Personal-Erfassung**: Fahrzeuge als Spalten oder Karten, Personen per Suche oder Ziehen zuordnen, Bereitschaft als eigene Karte je Wache. Besatzungsstärke im Format 1/8 sichtbar.
 - **Prüfansicht für den Kommandanten**: Liste „Zur Prüfung“, Bericht lesen, direkt korrigieren, freigeben (Entschädigung oder Abrechnung) mit einem Klick.
 - **Auswertungen**: Offene Berichte, Jahresstatistik (Landesportal, siehe [Jahresstatistik](../jahresstatistik.md)), Einsätze je Abteilung, Einsatzstunden je Person, Abrechnungsexport.

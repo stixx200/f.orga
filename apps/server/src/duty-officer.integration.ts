@@ -266,8 +266,9 @@ describe('EvD reports', () => {
       actions: 'Erkundung',
       personnel: [{ personId: ids.max, vehicleId: ids.lf }],
       involvedParties: [{ role: 'owner', name: 'Muster GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
-      statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
     }).then((r) => expect(r.status).toBe(200));
+    const { version } = (await get(`/incidents/incidents/${created.id}`).expect(200)).body;
+    await put(`/incidents/incidents/${created.id}/statistics`, { statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' }, version }).expect(200);
     await save(evd, { times: { alarmedAt: T('10:00'), returnedAt: T('11:10') }, situation: 'BMA', actions: 'Einsatzleitung', personnel: [{ personId: ids.jonas, vehicleId: ids.elw }] }, officer).then((r) => expect(r.status).toBe(200));
     await put(`/incidents/incidents/${created.id}/costs`, { chargeable: true, chargeableReason: 'Täuschungsalarm BMA' }).expect(200);
 
@@ -288,17 +289,22 @@ describe('EvD reports', () => {
     const evd = evdOf(created)!;
     expect(created.reports).toEqual([expect.objectContaining({ unit: 'duty-officer', primary: true })]);
     expect((await get(`/incidents/reports/${evd.id}`, officer).expect(200)).body.findings.map((f: { rule: string }) => f.rule)).toContain('statistics-missing');
+    // The duty officer writes the only report: he enters the statistics of the incident.
     const statistics = { mainType: 'fire', fireSize: 'medium' };
-    const saved = await save(evd.id, { times: { alarmedAt: T('13:05'), returnedAt: T('14:00') }, situation: 'Lage', actions: 'Leitung', personnel: [{ personId: ids.jonas }], statistics }, officer);
+    const { version } = (await get(`/incidents/incidents/${created.id}`, officer).expect(200)).body;
+    expect((await put(`/incidents/incidents/${created.id}/statistics`, { statistics, version }, officer).expect(200)).body.statistics).toMatchObject(statistics);
+    const saved = await save(evd.id, { times: { alarmedAt: T('13:05'), returnedAt: T('14:00') }, situation: 'Lage', actions: 'Leitung', personnel: [{ personId: ids.jonas }] }, officer);
     expect(saved.status).toBe(200);
-    expect(saved.body.findings.map((f: { rule: string }) => f.rule)).not.toContain('statistics-not-allowed');
+    expect(saved.body.findings.map((f: { rule: string }) => f.rule)).not.toContain('statistics-missing');
     // "No duty officer" would leave the incident without reports.
     expect((await post(`/duty-officer/incidents/${created.id}/exemption`, { reason: 'Kein EvD' }).expect(409)).body.code).toBe('incidents.unitReportOnlyReport');
 
-    // The first department report takes over the primary role with the statistics.
+    // The first department report takes over the primary role; the statistics stay with the incident.
     const department = (await post(`/incidents/incidents/${created.id}/reports`, { departmentId: ids.musterstadt }, writer).expect(201)).body;
-    expect(department).toMatchObject({ primary: true, statistics: expect.objectContaining(statistics) });
-    expect((await get(`/incidents/reports/${evd.id}`).expect(200)).body).toMatchObject({ primary: false, statistics: null });
+    expect(department.primary).toBe(true);
+    expect(department.findings.map((f: { rule: string }) => f.rule)).not.toContain('statistics-missing');
+    expect((await get(`/incidents/reports/${evd.id}`).expect(200)).body.primary).toBe(false);
+    expect((await get(`/incidents/incidents/${created.id}`).expect(200)).body.statistics).toMatchObject(statistics);
     expect((await post(`/incidents/reports/${evd.id}/primary`, {}).expect(400)).body.code).toBe('incidents.unitReportNotPrimary');
     // Now the EvD report may go.
     await post(`/duty-officer/incidents/${created.id}/exemption`, { reason: 'Kein EvD' }).expect(200);
