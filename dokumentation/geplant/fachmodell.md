@@ -290,6 +290,43 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Kiosk-Seite | kiosk, Shell-Route `/terminal` (`frontend.kiosk` im Manifest), API `/api/info-terminal/kiosk/…` |
 | Fahrzeugbeschriftung „Bezeichnung · Funkrufname (Abteilung)“ | `vehicleLabel(vehicle, departmentShortName)` |
 
+### Führerscheinkontrolle (geplant)
+
+| Fachbegriff | Code |
+| --- | --- |
+| Führerschein (Klassen mit Befristung) | `driverLicense.classes` (`{ class, expiresOn }`), `documentExpiresOn` |
+| Führerscheinkontrolle | `DriverLicenseCheck` (`method`: `in-person`, `transponder`, `barcode`, `legacy`; `originalPresented`, `checkedBy`) |
+| Ersterfassung | erste Kontrolle `in-person`, Frist `driver-license-first-check` |
+| Erneute Vorlage (aus konkretem Anlass) | `DriverLicenseRequest`, Frist `driver-license-request` |
+| Anlassbezogen / zusätzlich regelmäßig | Einstellung `masterdata.driverLicense.mode`: `on-occasion` / `periodic` |
+| Selbstkontrolle, Selbsterklärung | self-check (`MASTERDATA_LICENSE_SELF_CHECK`), `selfDeclaration` |
+| Transponder, Barcode-Aufkleber | `DriverLicenseToken` (`kind`: `nfc`, `barcode`; `codeHash`) |
+| Recht „Führerscheine kontrollieren“ | `masterdata.licenses.check` |
+
+### Datensicherung (geplant)
+
+| Fachbegriff | Code |
+| --- | --- |
+| Datensicherung (Modul) | `backup` |
+| Sicherung | backup (`backup.run`, Datei `*.forgabackup`) |
+| Sicherheitssicherung (vor einer Wiederherstellung) | trigger `safety` |
+| Prüfen, Wiederherstellung testen | verify, `restoreTest` |
+| Wiederherstellung | restore (`backup.restore`) |
+| Wartungsmodus | maintenance (`503 maintenance`) |
+| Zielordner, Wurzel | `targetPath`, `FORGA_BACKUP_ROOT` |
+| Passphrase, Kennwert der Passphrase | passphrase, passphrase fingerprint |
+
+### Aufbewahrung (geplant)
+
+| Fachbegriff | Code |
+| --- | --- |
+| Aufbewahrungsfrist je Datenkategorie | retention rule (`privacy.retention`), Kategorie `RetentionCategory` |
+| Aktion nach Ablauf | `offer-archive`, `anonymize`, `delete`, `none`; nach Entscheidung `afterDecision` |
+| Sonderfall prüfen | `specialCase` |
+| Aussonderung, Aussonderungsfall | disposal, `core.retention_case` |
+| Dem Archiv anbieten, angeboten | offer, `offered` |
+| Übernommen, kassiert, zurückgestellt | `taken`, `rejected`, `deferred` |
+
 ### Modul-IDs
 
 Die Modul-ID ist zugleich das Präfix der Berechtigungen und der Pfad in API und Oberfläche. Das Datenbankschema heißt wie die ID, mit `_` statt `-`.
@@ -308,3 +345,4 @@ Die Modul-ID ist zugleich das Präfix der Berechtigungen und der Pfad in API und
 | Kleiderkammer | `clothing` |
 | Einsatzleiter vom Dienst | `duty-officer` |
 | Infoterminal | `info-terminal` |
+| Datensicherung (geplant) | `backup` |

@@ -49,7 +49,7 @@ seite('shell/start.html', 'Guten Morgen, Markus', '''
     <ul class="liste aufgaben">
       ''' + aufgabe('überfällig', 'warn', 'Eignungsuntersuchung Atemschutz', 'Jonas Keller · fällig seit 02.10.', '{P}stammdaten/person.html') + '''
       ''' + aufgabe('überfällig', 'warn', 'Probezeit endet – Aufnahme beschließen', 'Lukas Maier · Probezeit bis 31.10. · Ausschuss am 28.10.', '{P}stammdaten/person.html') + '''
-      ''' + aufgabe('in 12 Tagen', 'gelb', 'Führerscheinkontrolle', 'Lena Brenner · 04.11.', '{P}stammdaten/person.html') + '''
+      ''' + aufgabe('in 7 Tagen', 'gelb', 'Führerscheinkontrolle fällig', 'Lena Brenner · Klasse CE läuft am 04.11. ab', '{P}stammdaten/person-fuehrerschein.html') + '''
       ''' + aufgabe('in 30 Tagen', 'gelb', 'Eignungsuntersuchung Atemschutz', 'Tobias Rief · 22.11.', '{P}stammdaten/person.html') + '''
       ''' + aufgabe('in 41 Tagen', 'gelb', 'Gruppenführer-Lehrgang: Meldung an den Kreis', '3 Vormerkungen · Meldeschluss 03.12.', '{P}stammdaten/lehrgangsplanung.html') + '''
     </ul>
@@ -257,7 +257,8 @@ seite('shell/einstellungen.html', 'Einstellungen', '''
       <div class="feld"><label>Ausgeschiedene Mitglieder anonymisieren nach</label><select><option>5 Jahren</option><option selected>10 Jahren</option><option>nie</option></select></div>
       <div class="feld"><label>Audit-Log aufbewahren</label><select><option selected>2 Jahre</option><option>5 Jahre</option></select></div>
     </div>
-    <div class="formular-fuss"><a class="knopf primaer" href="#">Speichern</a></div>
+    <p class="meta">Geplant: Fristen je Datenkategorie mit „dem Archiv anbieten“.</p>
+    <div class="formular-fuss"><a class="knopf" href="aufbewahrung.html">Aufbewahrungsfristen</a><a class="knopf primaer" href="#">Speichern</a></div>
   </section>
 </div>
 <div class="reiter-inhalt" id="r-export">
