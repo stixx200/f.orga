@@ -185,6 +185,8 @@
     if (h) {
       var el = document.getElementById(h);
       if (el && el.tagName === 'DIALOG' && el.showModal) el.showModal();
+      // #id einer Auswahl (z. B. #bereitschaft) wählt sie aus und zeigt die passende Variante
+      if (el && el.tagName === 'INPUT') { el.checked = true; aktualisiereBedingt(); }
       var schritt = document.querySelector('[data-reiter="' + h + '"]');
       if (schritt) schritt.click();
     }

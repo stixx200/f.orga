@@ -9,7 +9,7 @@ import sys
 from html.parser import HTMLParser
 
 sys.path.insert(0, os.path.dirname(__file__))
-import shell, stammdaten, einsatzberichte  # noqa: F401,E401  (erzeugen Seiten beim Import)
+import shell, stammdaten, einsatzberichte, infoterminal  # noqa: F401,E401  (erzeugen Seiten beim Import)
 from rahmen import ZIEL, FUSS, SPRACHE, mockup_hinweis, schreiben, kopf_html
 from uebersetzung import EN, MUSTER, GLEICH
 
@@ -23,6 +23,13 @@ GRUPPEN = [
                          ('einsatzberichte/bericht.html', 'Berichtseditor (Nebenbericht)'), ('einsatzberichte/bericht-haupt.html', 'Berichtseditor (Hauptbericht, Statistik)'),
                          ('einsatzberichte/pruefung.html', 'Prüfung und Freigabe'), ('einsatzberichte/offene-berichte.html', 'Offene Berichte'),
                          ('einsatzberichte/jahresstatistik.html', 'Jahresstatistik'), ('einsatzberichte/einstellungen.html', 'Einstellungen')]),
+    ('Infoterminal', [('infoterminal/start.html', 'Startbildschirm der Wache'), ('infoterminal/start-jugend.html', 'Ansicht Jugendfeuerwehr (nur Dienste)'),
+('infoterminal/personen.html', 'Wer sind Sie? (Namen und Suche)'),
+                      ('infoterminal/buchung.html', 'Eintragen mit Fahrzeug und Funktion'), ('infoterminal/buchung.html#bereitschaft', 'Eintragen mit Bereitschaft'),
+('infoterminal/eingetragen.html', 'Eingetragene mit Ändern und Austragen'),
+                      ('infoterminal/neuer-einsatz.html', 'Neuer Einsatz mit passenden Einsätzen'), ('infoterminal/dienst.html', 'Dienst eintragen'),
+                      ('infoterminal/leer.html', 'Nichts offen'), ('infoterminal/gesperrt.html', 'Nicht freigeschaltet'),
+                      ('infoterminal/verwaltung.html', 'Verwaltung der Infoterminals'), ('stammdaten/organisation.html#wache', 'Wache mit Infoterminal')]),
 ]
 
 karten = ''.join(

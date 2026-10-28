@@ -591,3 +591,98 @@ hr.trenner { border: 0; border-top: 1px solid var(--gitter); margin: 16px 0; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* ---------- Infoterminal (Kiosk-Ansicht ohne Shell-Rahmen) ----------
+   Große Touch-Ziele (mindestens 48 px, Kacheln 64–88 px), wenig Text, eine rote Hauptaktion je Ansicht. */
+.tk { min-height: 100vh; display: flex; flex-direction: column; background: var(--grund); font-size: 17px; }
+.tk-kopf { display: flex; align-items: center; gap: 12px; padding: 8px 24px; min-height: 72px; background: var(--flaeche); box-shadow: var(--e4); position: sticky; top: 0; z-index: 20; }
+.tk-kopf img { width: 44px; height: 44px; flex: none; }
+.tk-kopf .tk-wache { min-width: 0; }
+.tk-kopf .tk-wache .kicker { display: block; color: var(--dienst); font-weight: bold; font-size: .8rem; letter-spacing: .02em; }
+.tk-kopf .tk-wache strong { display: block; font-size: 1.15rem; line-height: 1.2; overflow-wrap: break-word; }
+.tk-kopf .tk-uhr { margin-left: auto; font-size: 1.6rem; font-weight: bold; color: var(--neben); font-variant-numeric: tabular-nums; }
+.tk-inhalt { flex: 1; width: 100%; max-width: 1180px; margin: 0 auto; padding: 24px 24px 48px; }
+.tk-zurueck { display: inline-flex; align-items: center; min-height: 48px; margin-bottom: 8px; font-weight: bold; text-decoration: none; }
+.tk-titel { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 16px; margin-bottom: 16px; }
+.tk-titel h1 { margin: 0; font-size: 1.9rem; }
+.tk-titel .meta { font-size: .95rem; }
+.tk .knopf { min-height: 48px; font-size: .95rem; }
+.tk .knopf.gross { min-height: 64px; font-size: 1.05rem; padding: 12px 32px; }
+.tk .knopf.klein { min-height: 44px; }
+.tk input[type=text], .tk input[type=search], .tk input[type=time], .tk input[type=date], .tk input[type=number], .tk select { min-height: 52px; font-size: 1.05rem; }
+.tk .schalter { min-height: 52px; font-size: 1rem; }
+.tk .schalter input { width: 26px; height: 26px; }
+/* Umschalter der Abteilungen (Segmented Control) */
+.tk-abteilungen { display: flex; flex-wrap: wrap; margin: 0 0 16px; border: 1px solid var(--dienst); border-radius: var(--radius); overflow: hidden; background: var(--flaeche); }
+.tk-abteilungen a { flex: 1 1 0; display: flex; align-items: center; justify-content: center; min-height: 56px; padding: 8px 16px; color: var(--dienst); font-weight: bold; text-align: center; text-decoration: none; }
+.tk-abteilungen a + a { border-left: 1px solid var(--dienst); }
+.tk-abteilungen a:hover { background: var(--wechsel); }
+.tk-abteilungen a.aktiv { background: var(--dienst); color: #fff; }
+/* Karten der offenen Einsätze und Dienste */
+.tk-ereignisse { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.tk-ereignis { display: flex; flex-direction: column; gap: 4px; padding: 20px 24px; min-height: 140px; background: var(--flaeche); border: 1px solid var(--gitter); border-left: 6px solid var(--dienst); border-radius: var(--radius); box-shadow: var(--e1); color: var(--text); text-decoration: none; }
+a.tk-ereignis:hover { box-shadow: var(--e4); border-color: var(--dienst); }
+.tk-ereignis .art { font-size: .8rem; font-weight: bold; letter-spacing: .06em; text-transform: uppercase; color: var(--dienst); }
+.tk-ereignis strong { font-size: 1.35rem; line-height: 1.25; }
+.tk-ereignis .fuss-zeile { margin-top: auto; padding-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.tk-ereignis.dienst { border-left-color: var(--meta); }
+.tk-ereignis.dienst .art { color: var(--neben); }
+.tk-ereignis.zu { background: var(--grau); border-left-color: var(--feldrand); box-shadow: none; color: var(--neben); }
+.tk-neu { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 140px; border: 2px dashed var(--dienst); border-radius: var(--radius); background: var(--flaeche); color: var(--dienst); font-weight: bold; font-size: 1.2rem; text-transform: uppercase; letter-spacing: .04em; text-decoration: none; }
+.tk-neu:hover { background: var(--wechsel); }
+/* Namenskacheln */
+.tk-buchstaben { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 16px; }
+.tk-buchstaben a { display: inline-flex; align-items: center; justify-content: center; min-width: 48px; min-height: 48px; border: 1px solid var(--gitter); border-radius: var(--radius); background: var(--flaeche); color: var(--text); font-weight: bold; text-decoration: none; }
+.tk-buchstaben a.aktiv { background: var(--dienst); border-color: var(--dienst); color: #fff; }
+.tk-namen { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.tk-name { position: relative; display: flex; flex-direction: column; justify-content: center; min-height: 88px; padding: 12px 16px; background: var(--flaeche); border: 1px solid var(--feldrand); border-radius: var(--radius); color: var(--text); text-decoration: none; box-shadow: var(--e1); overflow-wrap: anywhere; }
+.tk-name:hover { border-color: var(--dienst); box-shadow: var(--e4); }
+.tk-name strong { font-size: 1.2rem; line-height: 1.2; }
+.tk-name .meta { font-size: .85rem; }
+.tk-name.gebucht { background: var(--erledigt); border-color: var(--erledigt-rand); }
+.tk-name.gebucht::after { content: "✓"; position: absolute; top: 8px; right: 12px; color: var(--erledigt-text); font-weight: bold; font-size: 1.2rem; }
+.tk-name.gesperrt { background: var(--grau); border-color: var(--gitter); color: var(--neben); box-shadow: none; cursor: not-allowed; }
+/* Auswahl im Buchungsformular: größer als im Berichtseditor */
+.tk .wahl { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.tk .wahl.eng { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.tk .wahl label { min-height: 64px; padding: 14px 16px; font-size: 1rem; align-items: center; }
+.tk .wahl label > span { hyphens: manual; overflow-wrap: break-word; }
+.tk .wahl input { width: 24px; height: 24px; }
+.tk-abschnitt { background: var(--flaeche); border: 1px solid var(--gitter); border-radius: var(--radius); box-shadow: var(--e1); padding: 20px 24px; margin-bottom: 16px; }
+.tk-abschnitt h2 { font-size: 1.25rem; }
+.tk-leiste { position: sticky; bottom: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: flex-end; padding: 12px 24px; background: var(--flaeche); box-shadow: var(--e4-oben); }
+.tk-leiste .status { margin-right: auto; color: var(--neben); }
+.tk-erfolg { text-align: center; padding: 8px 0; }
+.tk-erfolg .haken { display: inline-flex; width: 72px; height: 72px; border-radius: 50%; align-items: center; justify-content: center; background: var(--erledigt); color: var(--erledigt-text); font-size: 2.4rem; font-weight: bold; margin-bottom: 8px; }
+.tk-zentriert { max-width: 640px; margin: 48px auto; text-align: center; }
+.tk-zentriert .symbol-gross { display: inline-flex; width: 88px; height: 88px; border-radius: 50%; align-items: center; justify-content: center; background: var(--haupt); color: var(--dienst); margin-bottom: 16px; }
+.tk-zentriert .symbol-gross .sym { width: 44px; height: 44px; }
+.tk-besatzung { list-style: none; margin: 0; padding: 0; }
+.tk-besatzung li { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; min-height: 64px; padding: 8px 0; border-top: 1px solid var(--gitter); }
+.tk-besatzung li:first-child { border-top: 0; }
+.tk-besatzung .wer { flex: 1 1 220px; min-width: 0; }
+.tk-besatzung .wer strong { font-size: 1.1rem; }
+.qr { width: 184px; height: 184px; display: block; margin: 8px auto; background: #fff; padding: 8px; border: 1px solid var(--gitter); }
+.geheim { display: block; padding: 8px 12px; background: var(--grau); border-radius: var(--radius); font-size: .85rem; word-break: break-all; }
+@media (max-width: 640px) {
+  .tk { font-size: 16px; }
+  .tk-kopf { padding: 8px 16px; min-height: 64px; }
+  .tk-kopf { gap: 8px; }
+  .tk-kopf img { width: 36px; height: 36px; }
+  .tk-kopf .tk-wache .kicker { display: none; }
+  .tk-kopf .tk-wache strong { font-size: 1rem; }
+  .tk-kopf .tk-uhr { font-size: 1.1rem; }
+  .tk-kopf .sprache button { min-width: 40px; padding: 0 8px; }
+  .tk-inhalt { padding: 16px 16px 40px; }
+  .tk-titel h1 { font-size: 1.45rem; }
+  .tk-abteilungen a { min-height: 48px; padding: 6px 8px; font-size: .85rem; }
+  .tk-ereignisse { grid-template-columns: minmax(0, 1fr); }
+  .tk-namen { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tk-name { min-height: 76px; padding: 10px 12px; }
+  .tk-name strong { font-size: 1.05rem; }
+  .tk .wahl, .tk .wahl.eng { grid-template-columns: minmax(0, 1fr); }
+  .tk-abschnitt { padding: 16px; }
+  .tk-leiste { padding: 12px 16px; }
+  .tk-leiste .knopf { flex: 1 1 auto; }
+  .tk-leiste .status { flex-basis: 100%; }
+}
