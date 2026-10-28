@@ -142,7 +142,11 @@ export function TransferImport({ profiles }: { profiles: ImportProfileInfo[] }) 
                       key={o.key}
                       label={localized(o.label)}
                       checked={options[dataset.profile]?.[o.key] ?? false}
-                      onChange={(e) => setOptions((v) => ({ ...v, [dataset.profile]: { ...v[dataset.profile], [o.key]: e.currentTarget.checked } }))}
+                      onChange={(e) => {
+                        // Read before the update: React calls the updater later, when `currentTarget` is gone.
+                        const checked = e.currentTarget.checked;
+                        setOptions((v) => ({ ...v, [dataset.profile]: { ...v[dataset.profile], [o.key]: checked } }));
+                      }}
                     />
                   ))}
                 </Stack>
