@@ -81,6 +81,7 @@ Im Frontend kommt eine vierte Stelle hinzu: die **Erweiterungspunkte**. Ein Modu
 | Beförderungen `promotions` | masterdata | Beförderungslisten, Ausnahmen | `promotions.*` | 2 | – |
 | Kleiderkammer `clothing` | masterdata | Artikel, Kleidungsstücke, Ausgaben, Pflege, Prüfungen, Größenprofile, Verbrauchsmaterial | `clothing.settings` | 2 | – |
 | Einsatzleiter vom Dienst `duty-officer` | masterdata, incidents; optional compensation | Dienstplan, erwartete EvD-Berichte, Ausnahmen | `duty-officer.general` | 1 | Dienstplan (iCal) |
+| Infoterminal `info-terminal` | masterdata, incidents; optional training | Terminals (Geräte an Wachen) | `info-terminal.general` | – | – |
 
 Jedes Modul liefert außerdem ein Manifest mit Rechten, Rollenvorlagen und Navigation. Es meldet seine historisierten Entitäten, eine Migration `initial` und ein Frontend mit eigenen Übersetzungen.
 
@@ -88,21 +89,21 @@ Jedes Modul liefert außerdem ein Manifest mit Rechten, Rollenvorlagen und Navig
 
 Die Module melden ihre Beiträge beim Start an die Registries des Core. Die Shell und die Endpunkte des Core fassen sie zusammen.
 
-| Registry (Core) | Zusammengeführt in | masterdata | incidents | training | respiratory-protection | compensation | equipment | cost-recovery | promotions | clothing | duty-officer |
-| --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| `PermissionRegistry` (Manifest) | Rollen, Rechteprüfung | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| Einstellungen (`settings`) | Verwaltung → Einstellungen, Einrichtungsliste | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| `HistoryAccessRegistry` | Historie je Datensatz | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| `ExportRegistry` | Vollexport | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| `ListRegistry` | Listen (PDF, Excel, CSV) | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| `DeadlineRegistry` | Aufgaben, Glocke, Sammel-E-Mail | ● | ● | ● | ● | ● | ● | ● | | ● | ● |
-| `ImportRegistry` | Import-Assistent, MP-Feuer-Übernahme | ● | ● | ● | ● | | ● | ● | | | ● |
-| `SearchRegistry` | Globale Suche | ● | ● | ● | | | ● | ● | | ● | |
-| `CodeRegistry` | Code-Scan (Etiketten) | | | | | | ● | | | ● | |
-| `PersonDataRegistry` | Anonymisieren von Personen | ruft auf | | ● | ● | | | | ● | ● | |
-| `RetentionRegistry` | Täglicher Aufbewahrungslauf | ● | | | | | | | | | |
-| `Notifications` | Sofortige E-Mails | | ● | | ● | | ● | | | | |
-| `OrganizationDirectory` | Rechte je Abteilung, Einrichtungsliste | stellt bereit | nutzt | | | | | | | | |
+| Registry (Core) | Zusammengeführt in | masterdata | incidents | training | respiratory-protection | compensation | equipment | cost-recovery | promotions | clothing | duty-officer | info-terminal |
+| --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| `PermissionRegistry` (Manifest) | Rollen, Rechteprüfung | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| Einstellungen (`settings`) | Verwaltung → Einstellungen, Einrichtungsliste | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| `HistoryAccessRegistry` | Historie je Datensatz | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| `ExportRegistry` | Vollexport | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | |
+| `ListRegistry` | Listen (PDF, Excel, CSV) | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | |
+| `DeadlineRegistry` | Aufgaben, Glocke, Sammel-E-Mail | ● | ● | ● | ● | ● | ● | ● | | ● | ● | |
+| `ImportRegistry` | Import-Assistent, MP-Feuer-Übernahme | ● | ● | ● | ● | | ● | ● | | | ● | |
+| `SearchRegistry` | Globale Suche | ● | ● | ● | | | ● | ● | | ● | | |
+| `CodeRegistry` | Code-Scan (Etiketten) | | | | | | ● | | | ● | | |
+| `PersonDataRegistry` | Anonymisieren von Personen | ruft auf | | ● | ● | | | | ● | ● | | |
+| `RetentionRegistry` | Täglicher Aufbewahrungslauf | ● | | | | | | | | | | |
+| `Notifications` | Sofortige E-Mails | | ● | | ● | | ● | | | | | |
+| `OrganizationDirectory` | Rechte je Abteilung, Einrichtungsliste | stellt bereit | nutzt | | | | | | | | | |
 
 ## Zusammenlauf zwischen Modulen
 
@@ -111,7 +112,7 @@ Die Stammdaten sind die gemeinsame Grundlage. Alle anderen Module erhalten über
 | Token (masterdata) | Gemeldet von | Wirkung |
 | --- | --- | --- |
 | `CATALOG_REFERENCES` | incidents, respiratory-protection, compensation, equipment, promotions, duty-officer | Benutzte Katalogeinträge lassen sich nicht löschen |
-| `ORGANIZATION_REFERENCES` | incidents, equipment, clothing | Benutzte Abteilungen, Standorte und Fahrzeuge lassen sich nicht löschen |
+| `ORGANIZATION_REFERENCES` | incidents, equipment, clothing, info-terminal | Benutzte Abteilungen, Standorte und Fahrzeuge lassen sich nicht löschen |
 | `PERSON_HOLDINGS` | clothing | Austritt oder Wechsel in die Altersabteilung erst nach Rückgabe |
 
 Die fachlichen Module verbinden sich über Service-Tokens (durchgezogen, synchroner Aufruf) und Ereignisse (gestrichelt, nach dem Commit).
@@ -126,6 +127,7 @@ flowchart LR
   EQ["Geräte<br/>equipment"]
   CR["Kostenersatz<br/>cost-recovery"]
   DO["EvD<br/>duty-officer"]
+  IT["Infoterminal<br/>info-terminal"]
 
   INC -- "COMPENSATION_STATUTE<br/>Sätze der Satzung" --> COMP
   INC -- "RESPIRATORY_PROTECTION_FITNESS<br/>Ampel der Träger" --> RP
@@ -133,6 +135,8 @@ flowchart LR
   INC -- "DUTY_ROSTER<br/>EvD am Einsatztag" --> DO
   DO -- "INCIDENT_UNITS · INCIDENTS_UNIT_REPORTS<br/>Einheit EvD, EvD-Berichte" --> INC
   EQ -- "TRAINING_SESSIONS" --> TRN
+  IT -- "INCIDENTS_TERMINAL_BOOKING<br/>Eintragungen, Neuer Einsatz" --> INC
+  IT -- "TRAINING_TERMINAL_CHECK_IN<br/>Anwesenheit" --> TRN
   CR -- "EQUIPMENT_USAGE<br/>Verbrauchsmaterial" --> EQ
   COMP & CR & EQ & RP -- "INCIDENTS_LOOKUP" --> INC
 
@@ -165,6 +169,7 @@ flowchart LR
     RS["incidents.report.sections<br/>Bericht"]
     SR["incidents.settings.rates<br/>Einstellungen Einsatzberichte"]
     SS["training.session.sections<br/>Dienst"]
+    WS["masterdata.station.sections<br/>Wache"]
   end
 
   MD[masterdata] --> ME
@@ -177,6 +182,7 @@ flowchart LR
   PR[promotions] --> PT
   CR[cost-recovery] --> IS
   DO[duty-officer] --> IS
+  IT[info-terminal] --> WS
 ```
 
 Daneben gibt es Punkte innerhalb eines Moduls, z. B. `masterdata.import.ambiguous` und `cost-recovery.import.*` für Rückfragen im Import-Assistenten.

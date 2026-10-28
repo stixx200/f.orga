@@ -77,6 +77,12 @@
     },
     {
       "path": "./modules/duty-officer/duty-officer-api"
+    },
+    {
+      "path": "./modules/info-terminal/info-terminal-contracts"
+    },
+    {
+      "path": "./modules/info-terminal/info-terminal-api"
     }
   ],
   "compilerOptions": {}

@@ -41,6 +41,9 @@
       "path": "../../modules/compensation/compensation-contracts/tsconfig.lib.json"
     },
     {
+      "path": "../../modules/info-terminal/info-terminal-api/tsconfig.lib.json"
+    },
+    {
       "path": "../../modules/duty-officer/duty-officer-api/tsconfig.lib.json"
     },
     {

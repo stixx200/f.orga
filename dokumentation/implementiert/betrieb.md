@@ -39,6 +39,7 @@ docker compose -f docker/compose.yml up -d --build
 | `FORGA_PLUGINS_ALLOW_UNSIGNED` | `true`: auch unsignierte Plugin-Pakete annehmen. Nur für die Entwicklung. | `false` |
 | `FORGA_TRUST_PROXY` | Reverse Proxy vor f.orga, dem `X-Forwarded-For` geglaubt wird (Express `trust proxy`): `true` (jeder), Anzahl der Proxys (z. B. `1`) oder Adressen/Netze, kommagetrennt (z. B. `loopback`, `10.0.0.0/8`). Nur dann gelten Anfragebegrenzung und Anmeldesperre für die Adresse des Benutzers statt für die des Proxys. Nur setzen, wenn wirklich ein Proxy davor steht, sonst kann jeder seine Adresse fälschen. | aus |
 | `FORGA_PUBLIC_URL` | Adresse von f.orga, falls nicht in den Einstellungen (`brigade.publicUrl`); für Links in E-Mails und die Rücksprungadresse der OIDC-Anmeldung. In den Einstellungen nur `https://…` (`http://` nur für `localhost`). | – |
+| `FORGA_SECRET_KEY` | Server-Schlüssel (32 Byte, Base64, z. B. `openssl rand -base64 32`). Verschlüsselt die Geräteschlüssel der Infoterminals (AES-256-GCM), damit sich ihr Link wieder anzeigen lässt. **Pflicht für das Modul Infoterminal:** Ohne ihn lässt sich kein Terminal anlegen (`info-terminal.noSecretKey`). Wird er geändert, lassen sich vorhandene Links nicht mehr anzeigen; die Geräte arbeiten weiter, bis ein neuer Link erzeugt wird. Je System ein eigener Wert. | – |
 
 **Echt- und Testsystem nebeneinander** (`docker/compose.stages.yml`): zwei getrennte Instanzen aus demselben Image, jede mit eigener Datenbank und eigenen Volumes. Das Echtsystem ist für echte Daten (z. B. die MP-Feuer-Datenübernahme), das Testsystem für Demodaten. Gewechselt wird über die Adresse; Sitzungen und Daten bleiben getrennt.
 
@@ -50,8 +51,8 @@ FORGA_URL=http://localhost:8081 FORGA_SETUP_TOKEN=<FORGA_SETUP_TOKEN_TEST> npm r
 
 | System | Adresse | Variablen |
 | --- | --- | --- |
-| Echtsystem | `http://<server>:8080` | `POSTGRES_PASSWORD_REAL`, `FORGA_SETUP_TOKEN_REAL`, `FORGA_REAL_PORT` |
-| Testsystem | `http://<server>:8081` | `POSTGRES_PASSWORD_TEST`, `FORGA_SETUP_TOKEN_TEST`, `FORGA_TEST_PORT` |
+| Echtsystem | `http://<server>:8080` | `POSTGRES_PASSWORD_REAL`, `FORGA_SETUP_TOKEN_REAL`, `FORGA_SECRET_KEY_REAL`, `FORGA_REAL_PORT` |
+| Testsystem | `http://<server>:8081` | `POSTGRES_PASSWORD_TEST`, `FORGA_SETUP_TOKEN_TEST`, `FORGA_SECRET_KEY_TEST`, `FORGA_TEST_PORT` |
 
 Die Datei hat den eigenen Projektnamen `forga-stages` und feste Volumenamen (`forga_real_db`, `forga_test_db` …), damit sie nicht mit `docker/compose.dev.yml` im selben Verzeichnis kollidiert. Das Testsystem lässt sich jederzeit neu aufsetzen, ohne das Echtsystem zu berühren: `docker compose -f docker/compose.stages.yml rm -sf forga-test db-test && docker volume rm forga_test_db`, danach `up -d` und erneut `npm run seed`.
 

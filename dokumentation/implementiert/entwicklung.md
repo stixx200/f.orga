@@ -12,7 +12,7 @@ npm install
 docker compose -f docker/compose.dev.yml up -d   # PostgreSQL auf Port 5433
 ```
 
-Nx lädt beim Start des Servers die Datei `apps/server/.env` mit `DATABASE_URL`. Ausstehende Migrationen spielt der Server beim Start selbst ein.
+Nx lädt beim Start des Servers die Datei `apps/server/.env` mit `DATABASE_URL`, dem Einrichtungsschlüssel und einem festen Server-Schlüssel `FORGA_SECRET_KEY` nur für die Entwicklung (für die Links der Infoterminals). Ausstehende Migrationen spielt der Server beim Start selbst ein.
 
 ## Starten
 

@@ -111,8 +111,4 @@ Umgesetzt, mit Oberflächen ohne eigene Mockups: Beförderungen, Urkunden (Befö
 
 ## Infoterminal
 
-Noch keinem Release zugeordnet. Konzept: [Modul Infoterminal](module/infoterminal.md). Konzept und Mockups (`mockups/infoterminal/`, Karte an der Wache in `stammdaten/organisation.html`) sind freigegeben.
-
-1. Vorarbeiten in bestehenden Modulen: `vehicleLabel()` in `masterdata-contracts`, Erweiterungspunkt `masterdata.station.sections`, Eintragungen ohne Versionskonflikt im Einsatzbericht (`bookedVia`, Abgleich beim Speichern, Editor lädt nach), `createdVia: 'terminal'`, `checkedInVia` bei der Anwesenheit, öffentliche Kiosk-Route in der Shell.
-2. Modul `info-terminal`: Terminals mit Geräteschlüssel (verschlüsselt mit `FORGA_SECRET_KEY`, Link jederzeit anzeigbar) und mehreren Abteilungen je Terminal, Verwaltung, Kiosk-Seite mit Abteilungsumschalter für Einsätze und „Neuer Einsatz“.
-3. Dienste am Terminal (mit Modul Dienste).
+Umgesetzt, siehe [Modul Infoterminal](../implementiert/architektur.md#modul-infoterminal-info-terminal) nach den freigegebenen Mockups (`mockups/infoterminal/`, Karte an der Wache in `stammdaten/organisation.html`). Offen sind nur die Punkte in [module/infoterminal.md](module/infoterminal.md).

@@ -73,6 +73,8 @@ export const AttendanceSchema = defineEntity({
     passed: p.boolean().nullable(),
     injured: p.boolean().default(false),
     checkedInAt: p.datetime().nullable(),
+    /** How the person checked in: QR code (`qr`) or at an info terminal (`info-terminal`). */
+    checkedInVia: p.string().$type<'qr' | 'info-terminal'>().nullable(),
     /** `false` after a QR check-in until someone with the attendance permission saves the list. */
     confirmed: p.boolean().default(true),
     /** Reason of an excuse sent by the member. */

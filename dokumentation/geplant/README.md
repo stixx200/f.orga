@@ -19,4 +19,4 @@ Alles in diesem Ordner ist noch nicht umgesetzt. Was fertig ist, steht in [`../i
 | Shell (Core) | 1 | [shell.md](module/shell.md) |
 | Stammdaten | 1 | [stammdaten.md](module/stammdaten.md) |
 | Einsatzberichte | 1 | [einsatzberichte.md](module/einsatzberichte.md) |
-| Infoterminal | offen | [infoterminal.md](module/infoterminal.md) |
+| Infoterminal | umgesetzt (offene Punkte) | [infoterminal.md](module/infoterminal.md) |

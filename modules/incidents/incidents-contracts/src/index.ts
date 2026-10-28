@@ -10,3 +10,4 @@ export * from './lib/units.js';
 export * from './lib/statistics-questions.js';
 export * from './lib/lookup.js';
 export * from './lib/assignment-times.js';
+export * from './lib/terminal-booking.js';

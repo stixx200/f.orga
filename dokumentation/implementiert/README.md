@@ -7,6 +7,7 @@ Was hier steht, existiert im Code. Umgesetzt sind:
 - das Backend der Stammdaten
 - das Backend der Einsatzberichte mit Prüfregeln, Entschädigung, Freigabe, externer API, Abrechnungsexport, Jahresstatistik und Berichten gesamtwehrweiter Einheiten
 - das Modul Einsatzleiter vom Dienst mit EvD-Dienstplan und EvD-Bericht zu jedem Einsatz
+- das Modul Infoterminal: Selbsteintragung an der Wache in Einsatzberichte und Dienste (Kiosk-Seite `/terminal`)
 - die Module Übungsdienst, Atemschutz, Entschädigungen, Geräte, Kostenersatz, Beförderungen und Kleiderkammer
 - Plugins (signierte Zusatzmodule)
 - die Mehrsprachigkeit (Deutsch/Englisch)

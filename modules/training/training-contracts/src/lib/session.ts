@@ -152,8 +152,10 @@ export const Attendance = z.object({
   kilojoules: z.number().nullable(),
   passed: z.boolean().nullable(),
   injured: z.boolean(),
-  /** Set when the person checked in via QR code. */
+  /** Set when the person checked in via QR code or at an info terminal. */
   checkedInAt: z.string().nullable(),
+  /** `qr` or `info-terminal`; `null` without a check-in. */
+  checkedInVia: z.enum(['qr', 'info-terminal']).nullable(),
   /** `false` after a QR check-in until the attendance list is saved (confirmed). */
   confirmed: z.boolean(),
   /** Reason given with an excuse in "My area". */

@@ -1,7 +1,7 @@
 import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { Attachments, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
-import { INCIDENT_UNITS, INCIDENTS_LOOKUP, INCIDENTS_MANIFEST, INCIDENTS_SETTINGS, INCIDENTS_UNIT_REPORTS } from '@forga/incidents-contracts';
+import { INCIDENT_UNITS, INCIDENTS_LOOKUP, INCIDENTS_MANIFEST, INCIDENTS_SETTINGS, INCIDENTS_TERMINAL_BOOKING, INCIDENTS_UNIT_REPORTS } from '@forga/incidents-contracts';
 import { CATALOG_REFERENCES, type CatalogReferences, ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
 import { INCIDENTS_MIGRATIONS } from '../migrations/index.js';
 import { ExternalController } from './api/external.controller.js';
@@ -34,8 +34,9 @@ import { RELEASE, ReportsService } from './reports/reports.service.js';
 import { UnitReportsService } from './units/unit-reports.service.js';
 import { IncidentUnitsRegistry } from './units/units.registry.js';
 import { UnitsController } from './units/units.controller.js';
+import { TerminalBookingService } from './terminal/terminal-booking.service.js';
 
-/** Global, so other modules can inject `INCIDENTS_LOOKUP`, `INCIDENT_UNITS` and `INCIDENTS_UNIT_REPORTS`. */
+/** Global, so other modules can inject `INCIDENTS_LOOKUP`, `INCIDENT_UNITS`, `INCIDENTS_UNIT_REPORTS` and `INCIDENTS_TERMINAL_BOOKING`. */
 @Global()
 @Module({
   controllers: [KeywordsController, IncidentsController, PersonAssignmentsController, MyIncidentsController, ExternalController, CompensationExportController, StatisticsController, UnitsController],
@@ -44,8 +45,9 @@ import { UnitsController } from './units/units.controller.js';
     IncidentsLookupService, { provide: INCIDENTS_LOOKUP, useExisting: IncidentsLookupService },
     IncidentUnitsRegistry, { provide: INCIDENT_UNITS, useExisting: IncidentUnitsRegistry },
     UnitReportsService, { provide: INCIDENTS_UNIT_REPORTS, useExisting: UnitReportsService },
+    TerminalBookingService, { provide: INCIDENTS_TERMINAL_BOOKING, useExisting: TerminalBookingService },
   ],
-  exports: [INCIDENTS_LOOKUP, INCIDENT_UNITS, INCIDENTS_UNIT_REPORTS],
+  exports: [INCIDENTS_LOOKUP, INCIDENT_UNITS, INCIDENTS_UNIT_REPORTS, INCIDENTS_TERMINAL_BOOKING],
 })
 export class IncidentsModule implements OnModuleInit {
   constructor(

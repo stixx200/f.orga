@@ -1,7 +1,7 @@
 import { Global, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { Attachments, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry, SearchRegistry } from '@forga/core-api';
-import { TRAINING_CASUALTIES, TRAINING_MANIFEST, TRAINING_SESSIONS, TRAINING_SETTINGS } from '@forga/training-contracts';
+import { TRAINING_CASUALTIES, TRAINING_MANIFEST, TRAINING_SESSIONS, TRAINING_SETTINGS, TRAINING_TERMINAL_CHECK_IN } from '@forga/training-contracts';
 import { TRAINING_MIGRATIONS } from '../migrations/index.js';
 import { TrainingData } from './data/training.data.js';
 import { SessionsImport } from './imports/sessions.import.js';
@@ -9,14 +9,17 @@ import { TrainingLists } from './lists/training.lists.js';
 import { SessionsController } from './sessions/sessions.controller.js';
 import { TrainingSelfController } from './sessions/self.controller.js';
 import { ATTENDANCE, PLAN, READ, SessionsService } from './sessions/sessions.service.js';
+import { TerminalCheckInService } from './sessions/terminal-check-in.service.js';
 import { AttendanceEntity, SessionEntity, SessionTypeEntity } from './training.entities.js';
 
-/** Global, so other modules can inject `TRAINING_CASUALTIES` and `TRAINING_SESSIONS`. */
+/** Global, so other modules can inject `TRAINING_CASUALTIES`, `TRAINING_SESSIONS` and `TRAINING_TERMINAL_CHECK_IN`. */
 @Global()
 @Module({
   controllers: [SessionsController, TrainingSelfController],
-  providers: [SessionsService, TrainingLists, TrainingData, SessionsImport, { provide: TRAINING_CASUALTIES, useExisting: SessionsService }, { provide: TRAINING_SESSIONS, useExisting: SessionsService }],
-  exports: [TRAINING_CASUALTIES, TRAINING_SESSIONS],
+  providers: [SessionsService, TrainingLists, TrainingData, SessionsImport, { provide: TRAINING_CASUALTIES, useExisting: SessionsService }, { provide: TRAINING_SESSIONS, useExisting: SessionsService },
+    TerminalCheckInService, { provide: TRAINING_TERMINAL_CHECK_IN, useExisting: TerminalCheckInService },
+  ],
+  exports: [TRAINING_CASUALTIES, TRAINING_SESSIONS, TRAINING_TERMINAL_CHECK_IN],
 })
 export class TrainingModule implements OnModuleInit {
   constructor(

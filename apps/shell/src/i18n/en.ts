@@ -8,6 +8,7 @@ export const en: typeof de = {
   serverUnavailable: 'Server unavailable',
   moduleUnavailable: 'Module {{name}} unavailable',
   notFound: 'This page does not exist.',
+  kioskInactive: 'This page is switched off: the module is not active.',
   nav: {
     overview: 'Overview',
     start: 'Start page',
@@ -289,6 +290,7 @@ export const en: typeof de = {
       promotions: 'Promotion rules, yearly promotion list with decision and execution.',
       clothing: 'Clothing store: protective and service clothing, issue and return, sizes, washing and impregnation.',
       'duty-officer': 'Duty officer: duty roster with daily flat rates and a duty officer report for every incident.',
+      'info-terminal': 'Info terminal at the station: members book themselves into incidents and sessions, with vehicle, function and details for the compensation.',
     },
     noDescription: 'Additional module (plugin) without description.',
   },

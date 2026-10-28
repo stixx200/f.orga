@@ -1,6 +1,6 @@
 import { loadRemote, registerRemotes } from '@module-federation/runtime';
-import type { ActiveModule } from '@forga/core-contracts';
-import { addTranslations, api, registerExtensions, type WebModule } from '@forga/web-sdk';
+import type { ActiveModule, KioskFrontend } from '@forga/core-contracts';
+import { addTranslations, api, type KioskModule, registerExtensions, type WebModule } from '@forga/web-sdk';
 
 export interface LoadedModule {
   info: ActiveModule;
@@ -36,4 +36,17 @@ export async function loadModules(): Promise<LoadedModule[]> {
       }
     }),
   );
+}
+
+/** Pages without shell frame and login, served by a module (`frontend.kiosk` of its manifest). */
+export const KIOSK_PATHS = ['terminal'];
+
+/** Loads the kiosk page of the module serving `/<path>`; fails with `modules.inactive` while the module is off. */
+export async function loadKiosk(path: string): Promise<KioskModule> {
+  const kiosk = await api<KioskFrontend>(`core/modules/kiosk/${path}`);
+  registerRemotes([{ name: kiosk.remote, entry: kiosk.entry, type: 'module' }]);
+  const loaded = await loadRemote<{ default: KioskModule }>(`${kiosk.remote}/${kiosk.exposed.replace(/^\.\//, '')}`);
+  if (!loaded?.default) throw new Error(`Kiosk page of ${kiosk.moduleId} not found`);
+  addTranslations(kiosk.moduleId, loaded.default.translations);
+  return loaded.default;
 }

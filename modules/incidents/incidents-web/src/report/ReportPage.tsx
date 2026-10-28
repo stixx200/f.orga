@@ -44,7 +44,7 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
   const session = useSession().data;
   const names = useNames();
   const { data: incident } = useIncident(report.incidentId);
-  const { content, update, flush, reset, saveState, restorable, restoreLocal, discardLocal, loadServer, keepMine } = useReportEditor(report, userId);
+  const { content, update, flush, reset, saveState, restorable, restoreLocal, discardLocal, loadServer, keepMine, newBookings, dismissBookings } = useReportEditor(report, userId);
   const [step, setStep] = useState<StepId>('times');
   const { reasons, setReason, clearReasons } = useStoredReasons(userId, report.id);
   const [dialog, setDialog] = useState<'submit' | 'versions' | 'history' | 'takeOver' | 'mpFeuer' | null>(null);
@@ -189,6 +189,11 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
       {report.findings.some((f) => f.rule === 'statistics-missing') && (
         <Notice kind="warning" action={<Button component={Link} to={`/incidents/incidents/${report.incidentId}`} size="xs" variant="outline">{t('check.toIncident')}</Button>}>
           {t('editor.statisticsOnIncident')}
+        </Notice>
+      )}
+      {newBookings > 0 && (
+        <Notice kind="info" action={<Button size="xs" variant="default" onClick={dismissBookings}>{t('editor.newBookingsSeen')}</Button>}>
+          {t('editor.newBookings', { count: newBookings })}
         </Notice>
       )}
       {report.status === 'draft' && report.returnComment && <Notice kind="warning">{t('editor.returned', { comment: report.returnComment })}</Notice>}

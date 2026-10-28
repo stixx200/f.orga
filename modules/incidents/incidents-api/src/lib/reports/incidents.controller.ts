@@ -50,7 +50,7 @@ import { UnitReportsService } from '../units/unit-reports.service.js';
 import { ownerName } from '../units/units.registry.js';
 import { ReportPdf } from './report-pdf.js';
 import { ReportWriters } from './report-writers.js';
-import { COSTS, READ, RELEASE, REPORT_POPULATE, ReportsService, REVIEW, UNLOCK, WRITE } from './reports.service.js';
+import { COSTS, normalized, READ, RELEASE, REPORT_POPULATE, ReportsService, REVIEW, UNLOCK, WRITE } from './reports.service.js';
 
 const Period = z.object({ from: z.iso.date(), to: z.iso.date() });
 const MatchQuery = z.object({
@@ -64,11 +64,7 @@ const AuthorQuery = z
   .object({ departmentId: z.uuid().optional(), unit: z.string().optional() })
   .refine((q) => Boolean(q.departmentId) !== Boolean(q.unit), { message: 'Department or unit', path: ['departmentId'] });
 
-/** For comparing dispatch numbers and addresses: lowercase, without spaces. */
-const normalized = (value: string | undefined | null) => (value ?? '').toLowerCase().replace(/\s+/g, '');
-
 type ParsedCreateIncident = ReturnType<typeof CreateIncident.parse>;
-const MATCH_WINDOW_MS = 2 * 3_600_000;
 
 /** Texts of the e-mails to authors, in the language of the recipient. */
 const MAIL = {
@@ -208,31 +204,9 @@ export class IncidentsController {
   @Get('incidents/matches')
   @RequirePermissions(WRITE)
   async matches(@Query(new ZodPipe(MatchQuery)) query: z.infer<typeof MatchQuery>, @CurrentUser() user: AuthenticatedUser): Promise<IncidentMatch[]> {
-    const alarmedAt = new Date(query.alarmedAt);
     const number = normalized(query.dispatchNumber);
-    const street = normalized(query.street);
-    const city = normalized(query.city);
-    const em = this.em.fork();
-    const nearby = await em.find(
-      IncidentEntity,
-      { alarmedAt: { $gte: new Date(alarmedAt.getTime() - MATCH_WINDOW_MS), $lte: new Date(alarmedAt.getTime() + MATCH_WINDOW_MS) } },
-      { populate: ['reports'], orderBy: { alarmedAt: 'desc' }, limit: 200 },
-    );
-    const sameNumber = number ? await this.findByDispatchNumber(em, query.dispatchNumber as string) : [];
-    const samePlace = (i: IncidentEntity) => {
-      const otherStreet = normalized(i.location.street);
-      const otherCity = normalized(i.location.city);
-      if (street && otherStreet) return street === otherStreet && (!city || !otherCity || city === otherCity);
-      return Boolean(city) && city === otherCity;
-    };
-    const found = new Map<string, IncidentEntity>();
-    for (const i of sameNumber) found.set(i.id, i);
-    for (const i of nearby) if ((query.alarmKeyword && i.alarmKeyword === query.alarmKeyword) || samePlace(i)) found.set(i.id, i);
     const releaser = user.grant(RELEASE) === 'brigade';
-    return [...found.values()]
-      .toSorted((a, b) => b.alarmedAt.getTime() - a.alarmedAt.getTime())
-      .slice(0, 10)
-      .map((i) => ({
+    return (await this.reports.matchingIncidents(this.em.fork(), query)).map((i) => ({
         id: i.id,
         dispatchNumber: i.dispatchNumber,
         alarmKeyword: i.alarmKeyword,
@@ -301,7 +275,7 @@ export class IncidentsController {
     }
     await this.reports.requireKeyword(em, input.alarmKeyword);
     if (input.dispatchNumber && input.dispatchNumber !== incident.dispatchNumber) {
-      if ((await this.findByDispatchNumber(em, input.dispatchNumber)).some((i) => i.id !== incident.id)) {
+      if ((await this.reports.findByDispatchNumber(em, input.dispatchNumber)).some((i) => i.id !== incident.id)) {
         throw new ConflictException({ code: 'incidents.dispatchNumberTaken' });
       }
       incident.dispatchNumber = input.dispatchNumber;
@@ -483,7 +457,9 @@ export class IncidentsController {
     this.reports.assertWrite(user, report);
     const revision = await em.findOne(ReportRevisionEntity, { id: revisionId, report });
     if (!revision) throw new NotFoundException();
-    await this.save(em, report, ReportInput.parse({ ...revision.content, version: undefined }), user);
+    // A restored version replaces the personnel as a whole; its entries belong to the author.
+    const content = ReportInput.parse({ ...revision.content, version: undefined });
+    await this.save(em, report, { ...content, personnel: content.personnel.map((p) => ({ ...p, bookedAt: null })) }, user);
     await em.flush();
     return this.reports.toDto(em, report);
   }
@@ -740,13 +716,6 @@ export class IncidentsController {
     const em = this.em.fork();
     const [dto] = await this.reports.incidentDtos(em, [await em.findOneOrFail(IncidentEntity, id, { populate: ['reports'] })], user);
     return dto;
-  }
-
-  /** Incidents with the dispatch number, ignoring case and spaces. */
-  private async findByDispatchNumber(em: EntityManager, dispatchNumber: string): Promise<IncidentEntity[]> {
-    const pattern = dispatchNumber.trim().replace(/[\\%_]/g, (c) => `\\${c}`).replace(/\s+/g, '%');
-    const candidates = await em.find(IncidentEntity, { dispatchNumber: { $ilike: pattern } }, { populate: ['reports'], limit: 20 });
-    return candidates.filter((i) => normalized(i.dispatchNumber) === normalized(dispatchNumber));
   }
 
   /** The department of the creator among the given ones (his membership; else the first one he chose). */

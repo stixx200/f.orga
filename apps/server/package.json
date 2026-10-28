@@ -106,7 +106,8 @@
     "@forga/cost-recovery-api": "*",
     "@forga/promotions-api": "*",
     "@forga/clothing-api": "*",
-    "@forga/duty-officer-api": "*"
+    "@forga/duty-officer-api": "*",
+    "@forga/info-terminal-api": "*"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.0",
