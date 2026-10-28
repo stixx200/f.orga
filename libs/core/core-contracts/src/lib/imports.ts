@@ -48,6 +48,31 @@ export const ImportUpload = z.object({
 export type ImportUpload = z.infer<typeof ImportUpload>;
 
 /**
+ * Step 1 from an address instead of a file: an iCalendar file (`https://`, `http://`, `webcal://`, `webcals://`).
+ * Without `url` the address the user remembered is loaded again.
+ */
+export const ImportUrlRequest = z.object({
+  url: z.string().trim().min(1).max(2048).optional(),
+  /** Remember the address (encrypted, only for this user) for the next import. */
+  remember: z.boolean().default(false),
+});
+export type ImportUrlRequest = z.input<typeof ImportUrlRequest>;
+
+/** The calendar address the user remembered; the full address is never sent back, it may contain a secret token. */
+export const ImportRememberedUrl = z.object({
+  /** The server can remember addresses (`FORGA_SECRET_KEY` is set). */
+  canRemember: z.boolean(),
+  remembered: z
+    .object({
+      /** Scheme and host only, e.g. `https://calendar.example.org/…`. */
+      display: z.string(),
+      savedAt: z.string(),
+    })
+    .nullable(),
+});
+export type ImportRememberedUrl = z.infer<typeof ImportRememberedUrl>;
+
+/**
  * Entries chosen for values of the file that match no entry: lookup kind (e.g. `qualification`, `function`)
  * → value as in the file → key of the chosen entry.
  */

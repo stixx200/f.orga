@@ -531,6 +531,18 @@ export const en: typeof de = {
     messages: 'Notes',
     actions: { create: 'new', update: 'changed', unchanged: 'unchanged', error: 'error' },
     modes: { file: 'Import a file', transfer: 'MP-Feuer data transfer' },
+    url: {
+      title: 'Load calendar from an address',
+      or: 'or',
+      address: 'Calendar address',
+      hint: 'iCal subscription with https://, http:// or webcal://, e.g. the duty officer roster from an online calendar. f.orga loads the calendar itself.',
+      load: 'Load',
+      remember: 'Remember the address for the next import (encrypted, only for you)',
+      remembered: 'Saved address: {{address}}',
+      reload: 'Load saved calendar',
+      forget: 'Forget',
+      forgotten: 'The calendar address was forgotten.',
+    },
     unmatched: {
       title: 'Unassigned names',
       hint: 'These names from the file match no entry. Choose an existing entry or add a new one. Without a choice the name is ignored and handled as the messages describe.',

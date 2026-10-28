@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
@@ -20,16 +21,20 @@ import {
   ImportLookupEntryInput,
   type ImportLookupInfo,
   type ImportProfileInfo,
+  type ImportRememberedUrl,
   ImportRequest,
   type ImportResult,
   type ImportUpload,
+  ImportUrlRequest,
 } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { CurrentUser } from '../security/decorators.js';
+import { decryptSecret, encryptSecret, serverKey } from '../security/server-key.js';
 import { ZodPipe } from '../zod.pipe.js';
 import { ImportRegistry, type ImportRow } from './import-registry.js';
-import { parseCsv, parseIcs, parseXlsx } from './parse.js';
+import { type ParsedTable, parseCsv, parseIcs, parseXlsx } from './parse.js';
+import { displayUrl, fetchCalendar, UrlImportError } from './url-fetch.js';
 
 const MAX_SIZE = 10 * 1024 * 1024;
 /** Uploads and data transfers are removed after a day, also when never imported (retention run). */
@@ -52,7 +57,31 @@ export const ImportUploadSchema = defineEntity({
 export class ImportUploadEntity extends ImportUploadSchema.class {}
 ImportUploadSchema.setClass(ImportUploadEntity);
 
+/**
+ * The calendar address a user loaded last and chose to remember, encrypted with `FORGA_SECRET_KEY`
+ * (it may contain a secret token). One per user; only that user can use it, and never reads it back in full.
+ */
+export const ImportUrlSchema = defineEntity({
+  name: 'ImportUrlEntity',
+  schema: 'core',
+  tableName: 'import_url',
+  properties: {
+    userId: p.string().primary(),
+    /** AES-256-GCM, see `encryptSecret`. */
+    url: p.text(),
+    /** Scheme and host, for display. */
+    display: p.string(),
+    savedAt: p.datetime(),
+  },
+});
+export class ImportUrlEntity extends ImportUrlSchema.class {}
+ImportUrlSchema.setClass(ImportUrlEntity);
+
 type ParsedRequest = ReturnType<typeof ImportRequest.parse>;
+type ParsedUrlRequest = ReturnType<typeof ImportUrlRequest.parse>;
+
+/** `FORGA_IMPORT_URL_ALLOW_PRIVATE=true`: calendars may also be loaded from local and private addresses. */
+const allowPrivateAddresses = () => process.env['FORGA_IMPORT_URL_ALLOW_PRIVATE'] === 'true';
 
 /** The part of a multer file the import needs. */
 interface UploadedFileData {
@@ -79,6 +108,49 @@ export class ImportService {
           ? parseIcs(file.buffer.toString('utf8'))
           : null;
     if (!table) throw new BadRequestException({ code: 'imports.unsupportedFormat' });
+    return this.store(user, name, table);
+  }
+
+  /** Step 1 from an address: fetches an iCalendar file server side and stores it like an upload. */
+  async fromUrl(user: AuthenticatedUser, request: ParsedUrlRequest): Promise<ImportUpload> {
+    const em = this.em.fork();
+    const key = serverKey();
+    let url = request.url;
+    if (!url) {
+      const remembered = await em.findOne(ImportUrlEntity, { userId: user.id });
+      url = (remembered && key && decryptSecret(remembered.url, key)) || undefined;
+      if (!url) throw new NotFoundException({ code: 'imports.urlNotRemembered' });
+    }
+    let fetched: Awaited<ReturnType<typeof fetchCalendar>>;
+    try {
+      fetched = await fetchCalendar(url, { allowPrivate: allowPrivateAddresses() });
+    } catch (error) {
+      if (error instanceof UrlImportError) throw new BadRequestException({ code: error.code, ...error.params });
+      throw error;
+    }
+    const display = displayUrl(url);
+    if (request.url && request.remember && key) {
+      await em.upsert(ImportUrlEntity, { userId: user.id, url: encryptSecret(request.url, key), display, savedAt: new Date() });
+    }
+    return this.store(user, display, parseIcs(fetched.text));
+  }
+
+  /** The remembered address of the user, masked. */
+  async remembered(user: AuthenticatedUser): Promise<ImportRememberedUrl> {
+    const entry = await this.em.fork().findOne(ImportUrlEntity, { userId: user.id });
+    return {
+      canRemember: serverKey() !== null,
+      remembered: entry ? { display: entry.display, savedAt: entry.savedAt.toISOString() } : null,
+    };
+  }
+
+  /** Forgets the remembered address of the user. */
+  async forget(user: AuthenticatedUser): Promise<void> {
+    await this.em.fork().nativeDelete(ImportUrlEntity, { userId: user.id });
+  }
+
+  /** Keeps a parsed file until the import and returns the suggestions per profile. */
+  private async store(user: AuthenticatedUser, name: string, table: ParsedTable): Promise<ImportUpload> {
     if (!table.headers.length) throw new BadRequestException({ code: 'imports.empty' });
 
     const em = this.em.fork();
@@ -193,6 +265,31 @@ export class ImportsController {
   upload(@UploadedFile() file: UploadedFileData | undefined, @CurrentUser() user: AuthenticatedUser): Promise<ImportUpload> {
     if (!this.registry.available(user).length) throw new NotFoundException({ code: 'imports.unknownProfile' });
     return this.imports.upload(user, file);
+  }
+
+  /** Step 1 from an address: an iCalendar file (`https://`, `http://`, `webcal://`), fetched by the server. */
+  @Post('url')
+  @HttpCode(201)
+  fromUrl(
+    @Body(new ZodPipe(ImportUrlRequest)) request: ParsedUrlRequest,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ImportUpload> {
+    if (!this.registry.available(user).length) throw new NotFoundException({ code: 'imports.unknownProfile' });
+    return this.imports.fromUrl(user, request);
+  }
+
+  /** The calendar address the user remembered (masked). */
+  @Get('url')
+  remembered(@CurrentUser() user: AuthenticatedUser): Promise<ImportRememberedUrl> {
+    if (!this.registry.available(user).length) throw new NotFoundException({ code: 'imports.unknownProfile' });
+    return this.imports.remembered(user);
+  }
+
+  /** Forgets the remembered calendar address. */
+  @Delete('url')
+  @HttpCode(204)
+  forget(@CurrentUser() user: AuthenticatedUser): Promise<void> {
+    return this.imports.forget(user);
   }
 
   /** Step 2: dry run with mapping and options; changes nothing. */

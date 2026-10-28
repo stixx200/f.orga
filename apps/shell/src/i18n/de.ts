@@ -529,6 +529,18 @@ export const de = {
     messages: 'Hinweise',
     actions: { create: 'neu', update: 'geändert', unchanged: 'unverändert', error: 'Fehler' },
     modes: { file: 'Datei importieren', transfer: 'MP-Feuer-Datenübernahme' },
+    url: {
+      title: 'Kalender von Adresse laden',
+      or: 'oder',
+      address: 'Kalenderadresse',
+      hint: 'iCal-Abonnement mit https://, http:// oder webcal://, z. B. der EvD-Dienstplan aus einem Online-Kalender. f.orga lädt den Kalender selbst.',
+      load: 'Laden',
+      remember: 'Adresse für den nächsten Import merken (verschlüsselt, nur für Sie)',
+      remembered: 'Gespeicherte Adresse: {{address}}',
+      reload: 'Gespeicherten Kalender laden',
+      forget: 'Vergessen',
+      forgotten: 'Die Kalenderadresse wurde vergessen.',
+    },
     unmatched: {
       title: 'Nicht zugeordnete Bezeichnungen',
       hint: 'Diese Bezeichnungen aus der Datei passen zu keinem Eintrag. Wählen Sie einen vorhandenen Eintrag aus oder legen Sie einen neuen an. Ohne Auswahl wird die Bezeichnung ignoriert und wie in den Hinweisen beschrieben behandelt.',
