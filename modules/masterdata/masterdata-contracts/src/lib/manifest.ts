@@ -37,7 +37,7 @@ export const MASTERDATA_MANIFEST = {
     { label: { de: 'Fahrzeuge', en: 'Vehicles' }, path: 'vehicles', icon: 'truck' },
     { label: { de: 'Lehrgangsplanung', en: 'Course planning' }, path: 'courses', permission: 'masterdata.courses.plan', icon: 'school' },
     { label: { de: 'Kataloge', en: 'Catalogs' }, path: 'catalogs', permission: 'masterdata.catalogs.manage', icon: 'catalog', section: 'administration' },
-    { label: { de: 'Feuerwehrsatzung', en: 'Fire brigade statute' }, path: 'settings', permission: 'masterdata.settings.manage', icon: 'settings', section: 'administration' },
+    { label: { de: 'Feuerwehrsatzung', en: 'Fire brigade statute' }, path: 'settings', permission: 'masterdata.settings.manage', icon: 'settings', section: 'settings' },
   ],
   roles: [
     { key: 'member', permissions: ['masterdata.self'] },

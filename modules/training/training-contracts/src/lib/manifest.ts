@@ -17,7 +17,7 @@ export const TRAINING_MANIFEST = {
   navigation: [
     { label: { de: 'Dienste', en: 'Sessions' }, path: 'sessions', permission: 'training.read', icon: 'calendar' },
     { label: { de: 'Dienstbeteiligung', en: 'Participation' }, path: 'participation', permission: 'training.read', icon: 'chart' },
-    { label: { de: 'Dienste', en: 'Services' }, path: 'settings', permission: 'training.settings.manage', icon: 'settings', section: 'administration' },
+    { label: { de: 'Dienste', en: 'Services' }, path: 'settings', permission: 'training.settings.manage', icon: 'settings', section: 'settings' },
   ],
   roles: [
     { key: 'member', permissions: ['training.self'] },

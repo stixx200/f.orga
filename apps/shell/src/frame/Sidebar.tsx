@@ -26,7 +26,7 @@ function ModuleSection({ module, session, onNavigate }: { module: LoadedModule; 
   // oxlint-disable-next-line react/rules-of-hooks
   const badges = useBadges();
   const entries: Entry[] = module.info.navigation
-    .filter((n) => n.section !== 'administration' && (!n.permission || can(session, n.permission)))
+    .filter((n) => (n.section ?? 'module') === 'module' && (!n.permission || can(session, n.permission)))
     .map((n) => ({ to: `/${module.info.id}/${n.path}`, label: localized(n.label), icon: n.icon, badge: badges[n.path] }));
   return <Section title={localized(module.info.name)} entries={entries} onNavigate={onNavigate} />;
 }
@@ -50,6 +50,13 @@ function Section({ title, entries, onNavigate }: { title: string; entries: Entry
   );
 }
 
+/** Settings pages of the modules the user may open; shown on the page „Verwaltung → Module“, not in the menu. */
+export function moduleSettings(modules: LoadedModule[], session: Session) {
+  return modules.flatMap((m) =>
+    m.info.navigation.filter((n) => n.section === 'settings' && (!n.permission || can(session, n.permission))).map((n) => ({ module: m.info.id, entry: n })),
+  );
+}
+
 /** Flat navigation: overview, one section per module, administration (depending on permissions). */
 export function Sidebar({ modules, session, onNavigate }: { modules: LoadedModule[]; session: Session; onNavigate?: () => void }) {
   const { t } = useTranslation('shell');
@@ -66,7 +73,8 @@ export function Sidebar({ modules, session, onNavigate }: { modules: LoadedModul
   const administration: Entry[] = [
     can(session, 'core.users.manage') && { to: '/admin/users', label: t('nav.users'), icon: 'users' },
     can(session, 'core.roles.manage') && { to: '/admin/roles', label: t('nav.roles'), icon: 'roles' },
-    can(session, 'core.modules.manage') && { to: '/admin/modules', label: t('nav.modules'), icon: 'modules' },
+    // Also for those who only manage the settings of a module: the settings pages are found there.
+    (can(session, 'core.modules.manage') || moduleSettings(modules, session).length > 0) && { to: '/admin/modules', label: t('nav.modules'), icon: 'modules' },
     can(session, 'core.tokens.manage') && { to: '/admin/tokens', label: t('nav.tokens'), icon: 'tokens' },
     can(session, 'core.settings.manage') && { to: '/admin/settings', label: t('nav.settings'), icon: 'settings' },
     can(session, 'core.audit.read') && { to: '/admin/audit', label: t('nav.audit'), icon: 'audit' },

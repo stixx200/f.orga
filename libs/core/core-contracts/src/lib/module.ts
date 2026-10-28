@@ -19,8 +19,11 @@ export const NavigationEntry = z.object({
   permission: z.string().optional(),
   /** Icon key known to the shell, e.g. `users`, `truck`, `check`, `chart`. */
   icon: z.string().optional(),
-  /** `administration`: shown in the section "Verwaltung" with the global settings instead of the module section. */
-  section: z.enum(['module', 'administration']).optional(),
+  /**
+   * `administration`: shown in the section "Verwaltung" instead of the module section (e.g. catalogs).
+   * `settings`: settings page of the module; not in the side menu but on the page "Verwaltung → Module" at its module.
+   */
+  section: z.enum(['module', 'administration', 'settings']).optional(),
 });
 export type NavigationEntry = z.infer<typeof NavigationEntry>;
 

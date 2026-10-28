@@ -21,7 +21,7 @@ export const CLOTHING_MANIFEST = {
     { label: { de: 'Wäsche', en: 'Washing' }, path: 'care', permission: 'clothing.issue', icon: 'wash' },
     { label: { de: 'Prüfung', en: 'Inspection' }, path: 'inspections', permission: 'clothing.issue', icon: 'check' },
     { label: { de: 'Bestand', en: 'Stock' }, path: 'stock', permission: 'clothing.read', icon: 'list' },
-    { label: { de: 'Kleiderkammer', en: 'Clothing store' }, path: 'articles', permission: 'clothing.manage', icon: 'settings', section: 'administration' },
+    { label: { de: 'Kleiderkammer', en: 'Clothing store' }, path: 'articles', permission: 'clothing.manage', icon: 'settings', section: 'settings' },
   ],
   roles: [
     ...SELF_ROLES.map((key) => ({ key, permissions: ['clothing.self'] })),

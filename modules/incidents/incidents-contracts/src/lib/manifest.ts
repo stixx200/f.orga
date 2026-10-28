@@ -62,7 +62,7 @@ export const INCIDENTS_MANIFEST = {
       icon: 'coins',
     },
     { label: { de: 'Jahresstatistik', en: 'Annual statistics' }, path: 'statistics', permission: 'incidents.statistics', icon: 'chart' },
-    { label: { de: 'Einsatzberichte', en: 'Incident reports' }, path: 'settings', permission: 'incidents.settings.manage', icon: 'settings', section: 'administration' },
+    { label: { de: 'Einsatzberichte', en: 'Incident reports' }, path: 'settings', permission: 'incidents.settings.manage', icon: 'settings', section: 'settings' },
   ],
   roles: [
     { key: 'commander', permissions: ['incidents.*'] },

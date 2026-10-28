@@ -11,6 +11,7 @@ import { ConfirmEmailPage } from './auth/ConfirmEmailPage';
 import { ResetPasswordPage } from './auth/ResetPasswordPage';
 import { SetupPage } from './auth/SetupPage';
 import { AppFrame } from './frame/AppFrame';
+import { moduleSettings } from './frame/Sidebar';
 import { KIOSK_PATHS, type LoadedModule, loadKiosk, loadModules } from './modules';
 import { AuditPage } from './pages/admin/AuditPage';
 import { ModulesPage } from './pages/admin/ModulesPage';
@@ -52,7 +53,10 @@ function Router({ modules, session }: { modules: LoadedModule[]; session: Sessio
             { path: 'import', element: <ImportPage /> },
             { path: 'admin/users', element: <Guard session={session} permission="core.users.manage"><UsersPage /></Guard> },
             { path: 'admin/roles', element: <Guard session={session} permission="core.roles.manage"><RolesPage modules={modules} /></Guard> },
-            { path: 'admin/modules', element: <Guard session={session} permission="core.modules.manage"><ModulesPage /></Guard> },
+            {
+              path: 'admin/modules',
+              element: can(session, 'core.modules.manage') || moduleSettings(modules, session).length ? <ModulesPage modules={modules} session={session} /> : <Guard session={session} permission="core.modules.manage"><ModulesPage modules={modules} session={session} /></Guard>,
+            },
             { path: 'admin/tokens', element: <Guard session={session} permission="core.tokens.manage"><TokensPage /></Guard> },
             { path: 'admin/settings', element: <Guard session={session} permission="core.settings.manage"><SettingsPage modules={modules} /></Guard> },
             { path: 'admin/audit', element: <Guard session={session} permission="core.audit.read"><AuditPage /></Guard> },
