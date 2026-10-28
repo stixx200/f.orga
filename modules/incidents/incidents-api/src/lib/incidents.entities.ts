@@ -170,6 +170,8 @@ export const ReportVehicleSchema = defineEntity({
     id: p.uuid().primary().onCreate(() => uuidv7()),
     report: () => p.manyToOne(ReportEntity).deleteRule('cascade'),
     vehicleId: p.string(),
+    /** Alarm of the vehicle (start of its crew); `null` = alarm of the report, likewise for the other times. */
+    alarmedAt: p.datetime().nullable(),
     departedAt: p.datetime().nullable(),
     returnedAt: p.datetime().nullable(),
     kilometres: p.integer().nullable(),

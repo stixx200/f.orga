@@ -2,6 +2,7 @@ import {
   DEFAULT_RULE_LEVELS,
   type IncidentSettings,
   type IncidentStatistics,
+  hasCrewTimes,
   inheritedTimes,
   type MainType,
   type RuleId,
@@ -150,15 +151,19 @@ export function evaluateRules(input: RuleInput, settings: IncidentSettings): Raw
     if (input.primary ? reportFrom !== incidentAlarm : reportFrom < incidentAlarm) add('incident-time-differs');
   }
 
-  // Vehicles with own times: departed before returned (else an error) and within the times of the report.
+  // Vehicles with own times: alarm, departure and return in this order (else an error), alarm and return within the
+  // times of the report. Missing times are those of the report.
   const vehicleName = (id: string) => input.vehicles.get(id)?.designation ?? id;
   const ownVehicleTimes = new Map<string, VehicleTimes>();
   for (const v of input.vehicleTimes ?? []) {
-    if (!v.departedAt && !v.returnedAt) continue;
-    ownVehicleTimes.set(v.vehicleId, v);
+    if (!v.alarmedAt && !v.departedAt && !v.returnedAt) continue;
+    if (hasCrewTimes(v)) ownVehicleTimes.set(v.vehicleId, v);
     const window = inheritedTimes(input.times, v);
-    if (time(window.to)! <= time(window.from)!) add('vehicle-times-invalid', v.vehicleId, { vehicle: vehicleName(v.vehicleId) });
-    else if (reportTo > reportFrom && (time(window.from)! < reportFrom || time(window.to)! > reportTo)) {
+    const [alarm, end] = [time(window.from)!, time(window.to)!];
+    const departed = time(v.departedAt);
+    if (end <= alarm || (departed !== null && (departed < alarm || departed > end))) {
+      add('vehicle-times-invalid', v.vehicleId, { vehicle: vehicleName(v.vehicleId) });
+    } else if (reportTo > reportFrom && (alarm < reportFrom || end > reportTo)) {
       add('vehicle-times-outside', v.vehicleId, { vehicle: vehicleName(v.vehicleId) });
     }
   }

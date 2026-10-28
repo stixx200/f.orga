@@ -161,7 +161,7 @@ export class IncidentsLookupService implements IncidentsLookup {
           ...assignmentTimes(p, r),
           standby: Boolean(p.standbyStationId),
         })),
-        vehicles: r.vehicles.getItems().map((v) => ({ vehicleId: v.vehicleId, departedAt: v.departedAt?.toISOString() ?? null, returnedAt: v.returnedAt?.toISOString() ?? null })),
+        vehicles: r.vehicles.getItems().map((v) => ({ vehicleId: v.vehicleId, alarmedAt: v.alarmedAt?.toISOString() ?? null, departedAt: v.departedAt?.toISOString() ?? null, returnedAt: v.returnedAt?.toISOString() ?? null })),
         parties: r.involvedParties.getItems().map((p) => ({ role: p.role, name: p.name, street: p.street, postalCode: p.postalCode, city: p.city })),
       })),
     };

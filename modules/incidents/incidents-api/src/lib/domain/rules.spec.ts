@@ -142,8 +142,8 @@ describe('evaluateRules', () => {
   });
 
   it('checks the own times of vehicles against the report and the times of their crew against the vehicle', () => {
-    const later = { vehicleTimes: [{ vehicleId: 'lf', departedAt: T('14:00'), returnedAt: null }] };
-    // The crew follows the vehicle (the effective times come from the service).
+    const later = { vehicleTimes: [{ vehicleId: 'lf', alarmedAt: T('14:00'), departedAt: T('14:05'), returnedAt: null }] };
+    // The crew follows the alarm of the vehicle (the effective times come from the service).
     expect(rules(base({ ...later, personnel: [person('jonas', { from: T('14:00') })] }))).toEqual([]);
     // Own times of a person outside the vehicle's times: warning naming the vehicle.
     const early = evaluateRules(base({ ...later, personnel: [person('jonas', { from: T('13:30') })] }), settings);
@@ -151,19 +151,24 @@ describe('evaluateRules', () => {
     expect(early[0].params).toEqual({ person: 'jonas', vehicle: 'LF 20' });
     // Persons on standby are compared with the report, not with a vehicle.
     expect(rules(base({ ...later, personnel: [person('jonas', { vehicleId: null, standbyStationId: 'station', from: T('13:30') })] }))).toEqual([]);
-    // Vehicle times outside the report (warning) or in the wrong order (error).
-    expect(rules(base({ vehicleTimes: [{ vehicleId: 'lf', departedAt: T('13:00'), returnedAt: null }], personnel: [person('jonas', { from: T('13:00') })] }))).toEqual([
+    // A departure alone does not change the crew's times.
+    expect(rules(base({ vehicleTimes: [{ vehicleId: 'lf', alarmedAt: null, departedAt: T('13:10'), returnedAt: null }] }))).toEqual([]);
+    // Vehicle alarm or return outside the report (warning).
+    expect(rules(base({ vehicleTimes: [{ vehicleId: 'lf', alarmedAt: T('13:00'), returnedAt: null }], personnel: [person('jonas', { from: T('13:00') })] }))).toEqual([
       'warning:vehicle-times-outside:lf',
     ]);
-    expect(rules(base({ vehicleTimes: [{ vehicleId: 'lf', departedAt: null, returnedAt: T('16:30') }], personnel: [] }))).toEqual([
+    expect(rules(base({ vehicleTimes: [{ vehicleId: 'lf', alarmedAt: null, returnedAt: T('16:30') }], personnel: [] }))).toEqual([
       'error:no-personnel',
       'warning:vehicle-times-outside:lf',
     ]);
-    const invalid = evaluateRules(base({ vehicleTimes: [{ vehicleId: 'lf', departedAt: T('15:00'), returnedAt: T('14:00') }], personnel: [] }), settings);
+    // Alarm, departure and return in the wrong order (error).
+    const invalid = evaluateRules(base({ vehicleTimes: [{ vehicleId: 'lf', alarmedAt: T('15:00'), returnedAt: T('14:00') }], personnel: [] }), settings);
     expect(invalid.map((f) => `${f.level}:${f.rule}`)).toEqual(['error:no-personnel', 'error:vehicle-times-invalid']);
     expect(invalid[1].params).toEqual({ vehicle: 'LF 20' });
+    expect(rules(base({ vehicleTimes: [{ vehicleId: 'lf', alarmedAt: T('14:00'), departedAt: T('13:50'), returnedAt: null }], personnel: [] }))).toEqual(['error:no-personnel', 'error:vehicle-times-invalid:lf']);
+    expect(rules(base({ vehicleTimes: [{ vehicleId: 'lf', alarmedAt: null, departedAt: T('15:55'), returnedAt: T('15:00') }], personnel: [] }))).toEqual(['error:no-personnel', 'error:vehicle-times-invalid:lf']);
     // Vehicles without own times are not checked.
-    expect(rules(base({ vehicleTimes: [{ vehicleId: 'lf', departedAt: null, returnedAt: null }] }))).toEqual([]);
+    expect(rules(base({ vehicleTimes: [{ vehicleId: 'lf', alarmedAt: null, departedAt: null, returnedAt: null }] }))).toEqual([]);
   });
 
   it('checks status, membership and age of persons on the incident date', () => {

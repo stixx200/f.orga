@@ -68,12 +68,8 @@ beforeAll(async () => {
     situation: 'BMA ausgelöst, Täuschungsalarm',
     actions: 'Erkundung, Rückstellung der BMA',
     incidentCommander: 'Jonas Test',
-    // The crew of the LF stays until the end of the report: own times win over those of the vehicle.
-    personnel: [
-      { personId: ids.jonas, vehicleId: ids.lf, from: T('10:00'), to: T('11:10') },
-      { personId: ids.max, vehicleId: ids.lf, from: T('10:00'), to: T('11:10') },
-      { guestName: 'Gast Nachbarwehr', vehicleId: ids.lf },
-    ],
+    // The crew rides the MTW, which follows the times of the report; the LF returned earlier.
+    personnel: [{ personId: ids.jonas, vehicleId: ids.mtw }, { personId: ids.max, vehicleId: ids.mtw }, { guestName: 'Gast Nachbarwehr', vehicleId: ids.mtw }],
     vehicles: [{ vehicleId: ids.lf, departedAt: T('10:04'), returnedAt: T('10:50') }, { vehicleId: ids.mtw }],
     involvedParties: [{ role: 'owner', name: 'Muster GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
     statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },

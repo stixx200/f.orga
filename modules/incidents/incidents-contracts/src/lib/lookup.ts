@@ -52,7 +52,7 @@ export interface IncidentForCostRecovery extends ChargeableIncident {
     incidentCommander: string;
     returnedAt: string;
     personnel: { personId: string | null; name: string; vehicleId: string | null; from: string; to: string; standby: boolean }[];
-    vehicles: { vehicleId: string; departedAt: string | null; returnedAt: string | null }[];
+    vehicles: { vehicleId: string; alarmedAt: string | null; departedAt: string | null; returnedAt: string | null }[];
     parties: { role: PartyRole; name: string; street: string; postalCode: string; city: string }[];
   }[];
 }

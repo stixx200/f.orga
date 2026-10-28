@@ -63,7 +63,7 @@ export function addCrewVehicles(em: EntityManager, report: ReportEntity): void {
   for (const p of report.personnel.getItems()) {
     if (!p.vehicleId || listed.has(p.vehicleId)) continue;
     listed.add(p.vehicleId);
-    report.vehicles.add(em.create(ReportVehicleEntity, { report, vehicleId: p.vehicleId, departedAt: null, returnedAt: null, kilometres: null }));
+    report.vehicles.add(em.create(ReportVehicleEntity, { report, vehicleId: p.vehicleId, alarmedAt: null, departedAt: null, returnedAt: null, kilometres: null }));
   }
 }
 
@@ -107,6 +107,7 @@ export function reportToInput(report: ReportEntity): ParsedReportInput {
     })),
     vehicles: report.vehicles.getItems().map((v) => ({
       vehicleId: v.vehicleId,
+      alarmedAt: iso(v.alarmedAt),
       departedAt: iso(v.departedAt),
       returnedAt: iso(v.returnedAt),
       kilometres: v.kilometres ?? null,
@@ -129,7 +130,7 @@ type ParsedReportInput = ReturnType<typeof ReportInput.parse>;
 export function vehicleTimes(report: ReportEntity, vehicleId: string | null | undefined): VehicleTimes | null {
   if (!vehicleId) return null;
   const vehicle = report.vehicles.getItems().find((v) => v.vehicleId === vehicleId);
-  return vehicle ? { departedAt: iso(vehicle.departedAt), returnedAt: iso(vehicle.returnedAt) } : null;
+  return vehicle ? { alarmedAt: iso(vehicle.alarmedAt), departedAt: iso(vehicle.departedAt), returnedAt: iso(vehicle.returnedAt) } : null;
 }
 
 /**
@@ -431,6 +432,7 @@ export class ReportsService {
         em.create(ReportVehicleEntity, {
           report,
           vehicleId: v.vehicleId,
+          alarmedAt: v.alarmedAt ? new Date(v.alarmedAt) : null,
           departedAt: v.departedAt ? new Date(v.departedAt) : null,
           returnedAt: v.returnedAt ? new Date(v.returnedAt) : null,
           kilometres: v.kilometres,
@@ -536,7 +538,7 @@ export class ReportsService {
         otherIncidents: others.flatMap((o) =>
           o.personId ? [{ dispatchNumber: o.report.incident.dispatchNumber, personId: o.personId, ...assignmentTimes(o, o.report) }] : [],
         ),
-        vehicleTimes: report.vehicles.getItems().map((v) => ({ vehicleId: v.vehicleId, departedAt: iso(v.departedAt), returnedAt: iso(v.returnedAt) })),
+        vehicleTimes: report.vehicles.getItems().map((v) => ({ vehicleId: v.vehicleId, alarmedAt: iso(v.alarmedAt), departedAt: iso(v.departedAt), returnedAt: iso(v.returnedAt) })),
         vehicles: new Map([...context.vehicles.values()].map((v) => [v.id, { seats: v.seats, designation: v.designation }])),
         qualifications: new Map([...context.persons.values()].map((p) => [p.id, p.qualifications])),
         persons: new Map([...context.persons.values()].map((p) => [p.id, { status: p.status, departmentIds: p.departmentIds, birthDate: p.birthDate }])),
@@ -620,6 +622,7 @@ export class ReportsService {
       vehicles: report.vehicles.getItems().map((v) => ({
         id: v.id,
         vehicleId: v.vehicleId,
+        alarmedAt: iso(v.alarmedAt),
         departedAt: iso(v.departedAt),
         returnedAt: iso(v.returnedAt),
         kilometres: v.kilometres ?? null,
@@ -851,6 +854,7 @@ export class ReportsService {
         if (p.from && p.from.getTime() === previous.getTime()) p.from = next;
       }
       for (const v of report.vehicles.isInitialized() ? report.vehicles.getItems() : []) {
+        if (v.alarmedAt && v.alarmedAt.getTime() === previous.getTime()) v.alarmedAt = next;
         if (v.departedAt && v.departedAt.getTime() === previous.getTime()) v.departedAt = next;
       }
     }
