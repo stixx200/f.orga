@@ -61,3 +61,6 @@ __pycache__/
 
 # Module Federation build diagnostics
 .mf/
+
+# Backups of docker/backup.sh (personal data)
+/backup/
