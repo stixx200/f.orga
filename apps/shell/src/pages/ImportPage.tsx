@@ -162,7 +162,10 @@ export function ImportPage() {
               {profile.options.length > 0 && (
                 <Stack gap="xs" mt="md">
                   {profile.options.map((o) => (
-                    <Checkbox key={o.key} label={localized(o.label)} checked={options[o.key] ?? false} onChange={(e) => setOptions((v) => ({ ...v, [o.key]: e.currentTarget.checked }))} />
+                    <Checkbox key={o.key} label={localized(o.label)} checked={options[o.key] ?? false} onChange={(e) => {
+                      const checked = e.currentTarget.checked;
+                      setOptions((v) => ({ ...v, [o.key]: checked }));
+                    }} />
                   ))}
                 </Stack>
               )}

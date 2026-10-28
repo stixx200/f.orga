@@ -215,7 +215,10 @@ export function IssuePage() {
                     {article?.sizes.length ? (
                       <Select label={t('items.size')} data={article.sizes} value={consumable.size || null} onChange={(v) => setConsumable((c) => ({ ...c, size: v ?? '' }))} />
                     ) : (
-                      <TextInput label={t('items.size')} value={consumable.size} onChange={(e) => setConsumable((c) => ({ ...c, size: e.currentTarget.value }))} />
+                      <TextInput label={t('items.size')} value={consumable.size} onChange={(e) => {
+                        const size = e.currentTarget.value;
+                        setConsumable((c) => ({ ...c, size }));
+                      }} />
                     )}
                     <NumberInput label={t('history.quantity')} value={consumable.quantity} min={1} max={100} onChange={(v) => setConsumable((c) => ({ ...c, quantity: Number(v) || 1 }))} />
                   </Group>
