@@ -186,6 +186,14 @@ export class NoticesController {
     return this.notices.discard(id, input.reason);
   }
 
+  /** Deletes a draft; submitted or issued notices are discarded or lifted instead. */
+  @Delete('notices/:id')
+  @HttpCode(204)
+  @RequirePermissions(WRITE)
+  async remove(@Param('id') id: string): Promise<void> {
+    await this.notices.remove(id);
+  }
+
   /** Lifts an issued notice (Aufhebung). */
   @Post('notices/:id/cancel')
   @HttpCode(200)
