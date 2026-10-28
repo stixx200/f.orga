@@ -7,16 +7,18 @@ Was hier steht, existiert im Code. Umgesetzt sind:
 - das Backend der Stammdaten
 - das Backend der Einsatzberichte mit Prüfregeln, Entschädigung, Freigabe, externer API, Abrechnungsexport, Jahresstatistik und Berichten gesamtwehrweiter Einheiten
 - das Modul Einsatzleiter vom Dienst mit EvD-Dienstplan und EvD-Bericht zu jedem Einsatz
+- die Module Übungsdienst, Atemschutz, Entschädigungen, Geräte, Kostenersatz, Beförderungen und Kleiderkammer
+- Plugins (signierte Zusatzmodule)
 - die Mehrsprachigkeit (Deutsch/Englisch)
 - die Oberfläche der Shell: Rahmen, Startseite, Profil, Listen, Import-Assistent, Benutzer, Rollen, Module, API-Tokens, Einstellungen, Audit-Log
+- die Oberflächen aller Module
 - Demodaten für die Entwicklung (`npm run seed`)
-
-Die Oberflächen der Stammdaten und Einsatzberichte folgen als Nächstes.
 
 Der Code ist durchgehend englisch, die Dokumentation deutsch. Die Zuordnung der Begriffe steht im [Glossar](../geplant/fachmodell.md#glossar-fachbegriff--code).
 
 | Dokument | Inhalt |
 | --- | --- |
+| [gesamtbild.md](gesamtbild.md) | Diagramme: Laufzeit, Pakete eines Moduls, Beiträge je Modul, Zusammenlauf im Core, zwischen Modulen und im Frontend |
 | [architektur.md](architektur.md) | Aufbau des Repositorys, Modulvertrag, Datenhaltung, Historie, Sicherheit, Mehrsprachigkeit, Modulgrenzen |
 | [schnittstellen.md](schnittstellen.md) | Vorhandene HTTP-Endpunkte mit Rechten |
 | [entwicklung.md](entwicklung.md) | Entwicklungsumgebung, Befehle, Tests, Migrationen, CI |
