@@ -84,14 +84,25 @@
   border-bottom: 1px solid var(--forga-grid);
 }
 
+/* A person: the row opens the person dialog, the quick action beside it puts the person on standby. */
+.personRow {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--forga-grid);
+}
+
+.personRow[data-problem] {
+  background: var(--forga-warning);
+}
+
 .person {
   display: grid;
   grid-template-columns: 44px 1fr auto;
   gap: 8px;
   align-items: center;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--forga-grid);
   min-height: 44px;
 }
 
@@ -99,8 +110,10 @@
   background: var(--forga-alternate);
 }
 
-.person[data-problem] {
-  background: var(--forga-warning);
+.quick {
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
 }
 
 .fn {

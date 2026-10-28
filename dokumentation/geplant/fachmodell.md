@@ -66,7 +66,7 @@ Offen:
 - **Vollexport** je Modul als JSON (versioniertes Format, IDs bleiben erhalten) für Umzug, Sicherung auf Fachebene und Auswertungen außerhalb; Import solcher Dateien
 - **MP-Feuer-Migration der Einsätze**: Profil für den Berichtsexport `Einsatzberichte_Zusatz.xlsx` (Wetter, Sachschaden, Brandfläche; Spalten siehe [Altanwendungen](../recherche/altanwendungen.md)). Der Personalexport `Einsaetze_Personal.xlsx` wird schon übernommen.
 - **Jugendfeuerwehr aus MP-Feuer**: Erziehungsberechtigte (`JUG_EB_1/2_*`) und Jugendgruppen (`Einheiten`) aus dem Export bzw. der Transferdatei der Jugendfeuerwehr
-- **Weitere Inhalte der MP-Feuer-Transferdateien** (die [Datenübernahme](../implementiert/architektur.md#datenübernahme-aus-mp-feuer) liest Personen, Lehrgänge, Dienstgrade, Ehrungen, G26, Belastungsübungen, Dienste und Einsätze): Fahrzeuge (`FZG_*`) und Geräte (`GAS_*`, `GSO_*`, `GFU_*` usw. mit Prüfungen) für Stammdaten und Gerätewartung, Fahrzeuge je Einsatz (`EIN_FAHRZ`), Funktionen und Dienststellungen aus `PER_HIST`, Atemschutz-Heißausbildung (`AS-BÜC`) und Atemschutzeinsätze aus `PER_PRUEF`, Einsatzwachen (`EIW_*`), Vergütungen (`VPE_*`), Kleiderkammer (`KLD_*`, `PER_AUSR`)
+- **Weitere Inhalte der MP-Feuer-Transferdateien** (die [Datenübernahme](../implementiert/architektur.md#datenübernahme-aus-mp-feuer) liest Personen, Lehrgänge, Dienstgrade, Ehrungen, G26, Belastungsübungen, Dienste und Einsätze): Fahrzeuge (`FZG_*`) und Geräte (`GAS_*`, `GSO_*`, `GFU_*` usw. mit Prüfungen) für Stammdaten und Gerätewartung, Fahrzeuge je Einsatz ohne Besatzung (`EIN_FAHRZ`), Funktionen und Dienststellungen aus `PER_HIST`, Atemschutz-Heißausbildung (`AS-BÜC`) und Atemschutzeinsätze aus `PER_PRUEF`, Einsatzwachen (`EIW_*`), Vergütungen (`VPE_*`), Kleiderkammer (`KLD_*`, `PER_AUSR`)
 - Audit-Eintrag für Vollexporte
 
 ### Konfigurierbarkeit der Satzungsregeln
@@ -146,6 +146,8 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Einsatzstichwort | `alarmKeyword` |
 | Kosten und Bemerkungen des Einsatzes | `IncidentCosts` (`chargeable`, `chargeableReason`, `notes`), Recht `incidents.costs` |
 | Bereitschaft (auf der Wache) | standby |
+| Ausgerückt / Eingerückt eines Fahrzeugs im Bericht | `departedAt` / `returnedAt` am Fahrzeug des Berichts (`ReportVehicleEntity`) |
+| Eigene Zeiten (Person oder Fahrzeug), geerbte Zeiten | own times (`from`/`to` bzw. `departedAt`/`returnedAt`, `null` = geerbt), `inheritedTimes`, wirksame Zeiten `effectiveTimes` |
 | Entschädigung | `Compensation` |
 | Verdienstausfall | `lossOfEarnings` |
 | Beteiligte | involved parties |

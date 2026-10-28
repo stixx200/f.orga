@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Finding, IncidentStatisticsInput, Report, ReportInput } from '@forga/incidents-contracts';
+import { type Finding, type IncidentStatisticsInput, inheritedTimes, type Report, type ReportInput, type VehicleTimes } from '@forga/incidents-contracts';
 import { api, ApiError, send, useSession } from '@forga/web-sdk';
 import { notifyError } from '@forga/web-ui';
 import { keys } from '../api';
@@ -13,9 +13,20 @@ const DEBOUNCE_MS = 800;
 /** Waiting times before a failed save is tried again in the background. */
 const RETRY_MS = [5_000, 15_000, 30_000, 60_000];
 
-/** Personnel times equal to the report times are stored as `null`, so they follow later changes of the report times. */
+/** Own times of the vehicle of a person in the content; `null` for standby, without vehicle or without own times. */
+export function vehicleOf(content: Pick<Content, 'vehicles'>, entry: Pick<Personnel, 'vehicleId' | 'standbyStationId'>): VehicleTimes | null {
+  if (!entry.vehicleId || entry.standbyStationId) return null;
+  const vehicle = content.vehicles.find((v) => v.vehicleId === entry.vehicleId);
+  return vehicle ? { departedAt: vehicle.departedAt ?? null, returnedAt: vehicle.returnedAt ?? null } : null;
+}
+
+/**
+ * Personnel times equal to those the person inherits (from the vehicle, else from the report) are stored as `null`,
+ * so they follow later changes of these times.
+ */
 export function toContent(report: Report): Content {
   const { times } = report;
+  const vehicles = report.vehicles.map(({ id: _id, ...v }) => v);
   return {
     endConfirmed: report.endConfirmed,
     authorPersonId: report.authorPersonId,
@@ -27,12 +38,11 @@ export function toContent(report: Report): Content {
     statistics: report.statistics,
     weather: report.weather,
     equipment: report.equipment,
-    personnel: report.personnel.map(({ id: _id, compensation: _c, from, to, ...p }) => ({
-      ...p,
-      from: from === times.alarmedAt ? null : from,
-      to: to === times.returnedAt ? null : to,
-    })),
-    vehicles: report.vehicles.map(({ id: _id, ...v }) => v),
+    personnel: report.personnel.map(({ id: _id, compensation: _c, from, to, ...p }) => {
+      const inherited = inheritedTimes(times, vehicleOf({ vehicles }, p));
+      return { ...p, from: from === inherited.from ? null : from, to: to === inherited.to ? null : to };
+    }),
+    vehicles,
     involvedParties: report.involvedParties.map(({ id: _id, ...p }) => p),
     otherAgencies: report.otherAgencies.map(({ id: _id, ...a }) => a),
   };

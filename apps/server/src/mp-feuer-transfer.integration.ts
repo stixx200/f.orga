@@ -119,7 +119,11 @@ const musterstadt = transferZip({
   EIN_PERS: [
     // A second MP-Feuer report of the department for the same dispatch number: merged into the one report.
     { EIN_ID: 'EP2', EIN_INDEX: 'E3', EIN_PER_INDEX: 'P-KARL-OLD', EIN_PER_NR: '0003', EIN_PER_NAME: 'Alt Karl', EIN_PER_ZEIT_V: '2025-06-01 10:30:00.000', EIN_PER_ZEIT_B: '2025-06-01 12:00:00.000', EIN_PER_MERKMAL_BE: 0, EIN_PER_MERKMAL_AS: 0, EIN_PER_MERKMAL_VA: 0, EIN_PER_AUFGABE: '', EIN_FZG_RUFNAME: '', EIN_FZG_BEZEICHNUNG: '' },
-    { EIN_ID: 'EP1', EIN_INDEX: 'E1', EIN_PER_INDEX: 'P-ANNA', EIN_PER_NR: '0001', EIN_PER_NAME: 'Probe Anna', EIN_PER_ZEIT_V: '2025-06-01 10:00:00.000', EIN_PER_ZEIT_B: '2025-06-01 11:30:00.000', EIN_PER_MERKMAL_BE: 0, EIN_PER_MERKMAL_AS: 1, EIN_PER_MERKMAL_VA: 0, EIN_PER_AUFGABE: 'Maschinist', EIN_FZG_RUFNAME: '', EIN_FZG_BEZEICHNUNG: 'LF 20/16' },
+    { EIN_ID: 'EP1', EIN_INDEX: 'E1', EIN_PER_INDEX: 'P-ANNA', EIN_PER_NR: '0001', EIN_PER_NAME: 'Probe Anna', EIN_PER_ZEIT_V: '2025-06-01 10:00:00.000', EIN_PER_ZEIT_B: '2025-06-01 11:30:00.000', EIN_PER_MERKMAL_BE: 0, EIN_PER_MERKMAL_AS: 1, EIN_PER_MERKMAL_VA: 0, EIN_PER_AUFGABE: 'Maschinist', EIN_FZG_INDEX: 'F-LF', EIN_FZG_RUFNAME: '', EIN_FZG_BEZEICHNUNG: 'LF 20/16' },
+  ],
+  // The vehicle of the report with its own times and kilometres.
+  EIN_FAHRZ: [
+    { EIN_ID: 'EF1', EIN_INDEX: 'E1', EIN_FZG_INDEX: 'F-LF', EIN_FZG_BEZEICHNUNG: 'LF 20/16', EIN_FZG_ZEIT_ALARM: '2025-06-01 10:00:00.000', EIN_FZG_ZEIT_AUS: '2025-06-01 10:05:00.000', EIN_FZG_ZEIT_EIN: '2025-06-01 11:15:00.000', EIN_FZG_KILOMETER: '12' },
   ],
 });
 
@@ -236,10 +240,12 @@ describe('MP-Feuer data transfer', () => {
     expect(report.times.returnedAt).toBe('2025-06-01T10:00:00.000Z');
     expect(report).toMatchObject({ situation: 'Mülleimer in Vollbrand', actions: 'Abgelöscht\n\nMit Kübelspritze gelöscht.', incidentCommander: 'Probe Anna' });
     expect(report.statistics).toMatchObject({ mainType: 'fire', fireSize: 'small-a' });
+    // Anna keeps her own times of MP-Feuer although her vehicle has times of its own.
     expect(report.personnel).toMatchObject([
-      { personId: await personId('Probe'), vehicleId: ids.lf, breathingApparatus: true, function: 'machinist' },
+      { personId: await personId('Probe'), vehicleId: ids.lf, breathingApparatus: true, function: 'machinist', from: '2025-06-01T08:00:00.000Z', to: '2025-06-01T09:30:00.000Z' },
       { personId: await personId('Alt'), from: '2025-06-01T08:30:00.000Z' },
     ]);
+    expect(report.vehicles).toMatchObject([{ vehicleId: ids.lf, departedAt: '2025-06-01T08:05:00.000Z', returnedAt: '2025-06-01T09:15:00.000Z', kilometres: 12 }]);
 
     const again = await run('incidents.mp-feuer', true);
     expect(again.body.counts).toMatchObject({ create: 0, update: 5, error: 0 });

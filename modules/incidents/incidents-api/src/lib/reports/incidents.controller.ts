@@ -315,7 +315,7 @@ export class IncidentsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<IncidentDto> {
     const em = this.em.fork();
-    const incident = await em.findOne(IncidentEntity, id, { populate: ['reports', 'reports.personnel'] });
+    const incident = await em.findOne(IncidentEntity, id, { populate: ['reports', 'reports.personnel', 'reports.vehicles'] });
     if (!incident || !this.visible(user, incident)) throw new NotFoundException();
     assertVersion(incident, input.version);
     const reports = incident.reports.getItems();

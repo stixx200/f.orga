@@ -1,14 +1,16 @@
 import { Button, Group, MultiSelect, Paper, Select, SimpleGrid, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
-import { IconPlus, IconUsersGroup } from '@tabler/icons-react';
+import { IconClock, IconPlus, IconUsersGroup } from '@tabler/icons-react';
 import { useState } from 'react';
 import type { Finding, PreviousCrew, Report } from '@forga/incidents-contracts';
-import { api, formatDate, formatMoney, useLocalized, useTranslation } from '@forga/web-sdk';
+import { api, formatDate, formatMoney, formatTime, useLocalized, useTranslation } from '@forga/web-sdk';
 import { Notice, notifyError, notifySuccess, Panel, StatusBadge } from '@forga/web-ui';
 import { personName, useFunctions, useNames, usePersons, useStations, useVehicles } from '../api';
 import type { Content, Personnel } from './editor';
 import { mergeFindings, useFindingText } from './findings';
 import { PersonDialog, placeOf, type Target, targetOf } from './PersonDialog';
 import classes from './report.module.css';
+import { StandbyAction } from './StandbyAction';
+import { type VehicleEntry, VehicleDialog } from './VehicleDialog';
 
 const blank = (place: Pick<Personnel, 'vehicleId' | 'standbyStationId'>): Personnel => ({
   personId: null,
@@ -55,12 +57,19 @@ export function PersonnelSection({ content, report, update, disabled, findings }
   const [fn, setFn] = useState<string | null>(null);
   const [loadingCrew, setLoadingCrew] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
+  const [editingVehicle, setEditingVehicle] = useState<string | null>(null);
 
   // A brigade-wide unit (e.g. the duty officer) uses the vehicles and stations of every department.
   const ownVehicles = vehicles.filter((v) => !report.departmentId || v.departmentId === report.departmentId);
   const usedVehicleIds = [...new Set([...content.vehicles.map((v) => v.vehicleId), ...content.personnel.flatMap((p) => (p.vehicleId ? [p.vehicleId] : []))])];
   const ownStations = stations.filter((s) => !report.departmentId || s.departmentId === report.departmentId);
   const usedStationIds = [...new Set(content.personnel.flatMap((p) => (p.standbyStationId ? [p.standbyStationId] : [])))];
+  const standbyStations = ownStations.map((s) => ({ id: s.id, name: s.name }));
+  const vehicleEntry = (vehicleId: string): VehicleEntry =>
+    content.vehicles.find((v) => v.vehicleId === vehicleId) ?? { vehicleId, departedAt: null, returnedAt: null, kilometres: null };
+  /** Puts a person on standby at a station (one click from the person row). */
+  const toStandby = (index: number, stationId: string) =>
+    update((c) => ({ ...c, personnel: c.personnel.map((p, i) => (i === index ? { ...p, vehicleId: null, standbyStationId: stationId } : p)) }));
   const targets: Target[] = [
     ...[...new Set([...usedVehicleIds, ...ownVehicles.map((v) => v.id)])].map((id) => ({ value: `v:${id}`, label: names.vehicle(id) || id })),
     ...[...new Set([...usedStationIds, ...ownStations.map((s) => s.id)])].map((id) => ({ value: `s:${id}`, label: t('personnel.standbyAt', { station: stations.find((s) => s.id === id)?.name ?? '' }) })),
@@ -129,13 +138,14 @@ export function PersonnelSection({ content, report, update, disabled, findings }
   const groups = [
     ...usedVehicleIds.map((id) => {
       const vehicle = vehicles.find((v) => v.id === id);
-      return { key: `v:${id}`, title: vehicle?.designation ?? id, subtitle: [vehicle?.radioCallSign, vehicle && vehicle.departmentId !== report.departmentId ? names.department(vehicle.departmentId) : ''].filter(Boolean).join(' · '), seats: vehicle?.seats, standby: false };
+      return { key: `v:${id}`, vehicleId: id, title: vehicle?.designation ?? id, subtitle: [vehicle?.radioCallSign, vehicle && vehicle.departmentId !== report.departmentId ? names.department(vehicle.departmentId) : ''].filter(Boolean).join(' · '), seats: vehicle?.seats, standby: false };
     }),
-    ...usedStationIds.map((id) => ({ key: `s:${id}`, title: t('personnel.standby'), subtitle: stations.find((s) => s.id === id)?.name ?? '', seats: undefined, standby: true })),
-    ...(content.personnel.some((p) => !targetOf(p)) ? [{ key: '', title: t('personnel.withoutPlace'), subtitle: '', seats: undefined, standby: false }] : []),
+    ...usedStationIds.map((id) => ({ key: `s:${id}`, vehicleId: null, title: t('personnel.standby'), subtitle: stations.find((s) => s.id === id)?.name ?? '', seats: undefined, standby: true })),
+    ...(content.personnel.some((p) => !targetOf(p)) ? [{ key: '', vehicleId: null, title: t('personnel.withoutPlace'), subtitle: '', seats: undefined, standby: false }] : []),
   ];
   const personnelFindings = mergeFindings(findings).filter((f) => (f.level === 'error' || !f.acknowledged) && (f.subject !== null || ['no-personnel', 'crew-exceeded'].includes(f.rule)));
   const editingEntry = editing !== null ? content.personnel[editing] : undefined;
+  const timeOf = (iso: string) => formatTime(iso, i18n.language);
 
   return (
     <Stack gap="md">
@@ -195,23 +205,40 @@ export function PersonnelSection({ content, report, update, disabled, findings }
       <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="md">
         {groups.map((group) => {
           const members = content.personnel.map((p, index) => ({ p, index })).filter(({ p }) => targetOf(p) === group.key);
+          const own = group.vehicleId ? vehicleEntry(group.vehicleId) : null;
           return (
             <Paper key={group.key} className={classes.vehicle} data-standby={group.standby || undefined}>
               <Group justify="space-between" align="start" className={classes.vehicleHead}>
                 <div>
                   <Text fw={700}>{group.title}</Text>
                   {group.subtitle && <Text size="xs" c="dimmed">{group.subtitle}</Text>}
+                  {own && (own.departedAt || own.returnedAt) && (
+                    <Group gap={4} mt={2}>
+                      <StatusBadge>{t('personnel.vehicleOwnTimes')}</StatusBadge>
+                      <Text size="xs" c="dimmed">
+                        {timeOf(own.departedAt ?? content.times.departedAt ?? content.times.alarmedAt)} – {timeOf(own.returnedAt ?? content.times.returnedAt)}
+                      </Text>
+                    </Group>
+                  )}
                 </div>
-                <Text fw={700} c={group.seats && members.length > group.seats ? 'brand' : undefined}>
-                  {group.seats ? t('personnel.seats', { count: members.length, seats: group.seats }) : t('personnel.count', { count: members.length })}
-                </Text>
+                <Stack gap={2} align="end">
+                  <Text fw={700} c={group.seats && members.length > group.seats ? 'brand' : undefined}>
+                    {group.seats ? t('personnel.seats', { count: members.length, seats: group.seats }) : t('personnel.count', { count: members.length })}
+                  </Text>
+                  {group.vehicleId && (
+                    <Button size="compact-sm" variant="subtle" leftSection={<IconClock size={14} />} onClick={() => setEditingVehicle(group.vehicleId)}>
+                      {t('personnel.vehicleTimes')}
+                    </Button>
+                  )}
+                </Stack>
               </Group>
               {!members.length && <Text size="sm" c="dimmed" p="sm">{t('personnel.emptyVehicle')}</Text>}
               {members.map(({ p, index }) => {
                 const problems = findings.filter((f) => f.subject === (p.personId ?? `guest:${p.guestName}`));
                 const compensation = compensationOf(index);
                 return (
-                  <UnstyledButton key={`${p.personId ?? p.guestName}-${index}`} className={classes.person} data-problem={problems.some((f) => f.level === 'error') || undefined} onClick={() => setEditing(index)}>
+                  <div key={`${p.personId ?? p.guestName}-${index}`} className={classes.personRow} data-problem={problems.some((f) => f.level === 'error') || undefined}>
+                    <UnstyledButton className={classes.person} onClick={() => setEditing(index)}>
                     <span className={classes.fn}>{functionAbbreviation(p.function)}</span>
                     <span className={classes.name}>
                       {nameOf(p)}
@@ -222,7 +249,13 @@ export function PersonnelSection({ content, report, update, disabled, findings }
                       {(p.from || p.to) && <StatusBadge>{t('personnel.ownTimes')}</StatusBadge>}
                     </span>
                     <span className={classes.amount}>{compensation ? `${compensation.hours} h · ${formatMoney(compensation.amount, i18n.language)}` : '…'}</span>
-                  </UnstyledButton>
+                    </UnstyledButton>
+                    {!disabled && !p.standbyStationId && (
+                      <span className={classes.quick}>
+                        <StandbyAction variant="icon" stations={standbyStations} onChoose={(id) => toStandby(index, id)} />
+                      </span>
+                    )}
+                  </div>
                 );
               })}
             </Paper>
@@ -238,8 +271,10 @@ export function PersonnelSection({ content, report, update, disabled, findings }
           name={nameOf(editingEntry)}
           entry={editingEntry}
           targets={targets}
+          standbyStations={standbyStations}
           compensation={compensationOf(editing)}
           times={content.times}
+          vehicles={content.vehicles}
           disabled={disabled}
           onClose={() => setEditing(null)}
           onRemove={() => {
@@ -254,6 +289,25 @@ export function PersonnelSection({ content, report, update, disabled, findings }
               return { ...c, vehicles: used, personnel: c.personnel.map((p, i) => (i === editing ? entry : p)) };
             });
             setEditing(null);
+          }}
+        />
+      )}
+      {editingVehicle && (
+        <VehicleDialog
+          key={editingVehicle}
+          name={names.vehicle(editingVehicle) || editingVehicle}
+          entry={vehicleEntry(editingVehicle)}
+          times={content.times}
+          disabled={disabled}
+          onClose={() => setEditingVehicle(null)}
+          onSave={(entry) => {
+            update((c) => ({
+              ...c,
+              vehicles: c.vehicles.some((v) => v.vehicleId === entry.vehicleId)
+                ? c.vehicles.map((v) => (v.vehicleId === entry.vehicleId ? entry : v))
+                : [...c.vehicles, entry],
+            }));
+            setEditingVehicle(null);
           }}
         />
       )}

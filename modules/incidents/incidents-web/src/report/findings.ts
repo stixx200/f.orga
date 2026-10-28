@@ -22,7 +22,10 @@ export function findingText(finding: Finding, t: T, unit: (key: string) => strin
     params['second'] = t(`times.${String(params['second'])}`);
   }
   if (finding.rule === 'person-not-operational') params['status'] = t(`personStatus.${String(params['status'])}`);
-  return t(`rules.${finding.rule}${finding.rule === 'times-invalid' && finding.params['person'] ? '-person' : ''}`, params);
+  // Variants: the times of a person (not of the report), compared with the vehicle (not with the report).
+  const variant =
+    finding.rule === 'times-invalid' && finding.params['person'] ? '-person' : finding.rule === 'personnel-times-outside' && finding.params['vehicle'] ? '-vehicle' : '';
+  return t(`rules.${finding.rule}${variant}`, params);
 }
 
 /** `findingText` with the translations of the module and the names of the units. */
