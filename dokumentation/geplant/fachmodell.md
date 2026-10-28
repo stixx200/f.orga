@@ -70,6 +70,13 @@ Offen:
 - **Jugendfeuerwehr aus MP-Feuer**: Erziehungsberechtigte (`JUG_EB_1/2_*`) und Jugendgruppen (`Einheiten`) aus dem Export bzw. der Transferdatei der Jugendfeuerwehr
 - **Weitere Inhalte der MP-Feuer-Transferdateien** (die [Datenübernahme](../implementiert/architektur.md#datenübernahme-aus-mp-feuer) liest Personen, Lehrgänge, Dienstgrade, Ehrungen, G26, Belastungsübungen, Dienste und Einsätze): Fahrzeuge (`FZG_*`) und Geräte (`GAS_*`, `GSO_*`, `GFU_*` usw. mit Prüfungen) für Stammdaten und Gerätewartung, Fahrzeuge je Einsatz ohne Besatzung (`EIN_FAHRZ`), Funktionen und Dienststellungen aus `PER_HIST`, Atemschutz-Heißausbildung (`AS-BÜC`) und Atemschutzeinsätze aus `PER_PRUEF`, Einsatzwachen (`EIW_*`), Vergütungen (`VPE_*`), Kleiderkammer (`KLD_*`, `PER_AUSR`)
 - Audit-Eintrag für Vollexporte
+- **Parallelbetrieb mit MP-Feuer** (umgesetzt ist der [Grundablauf](../implementiert/parallelbetrieb-mp-feuer.md)), offen:
+  - in MP-Feuer gelöschte Einsätze und Berichte erkennen: Berichte aus MP-Feuer im Zeitraum der Transferdateien, die nicht mehr vorkommen, nach der Übernahme zur Prüfung auflisten (nicht automatisch löschen)
+  - Hinweis am Kostenbescheid, wenn sich ein Bericht des Einsatzes nach dem Erlass durch eine Datenübernahme geändert hat (Anlass für einen Änderungsbescheid)
+  - in MP-Feuer gesperrte Berichte (`EIN_SPERR_DATUM`) ohne Freigabe als „zur Prüfung“ übernehmen, damit sie nach der Umstellung gesammelt in f.orga freigegeben werden können
+  - unveränderte Berichte im Ergebnis als „unverändert“ zählen (Vergleich über `EIN_UPDATED_TS` oder den Inhalt), damit die Routine-Übernahme nur die Änderungen zeigt
+  - führendes System je Abteilung statt für die ganze Feuerwehr (z. B. eine Abteilung arbeitet schon in f.orga)
+  - Personen: Abgleich, der Austritte und Abteilungswechsel aus MP-Feuer als Vorschlag anbietet, solange MP-Feuer die Personen führt
 
 ### Konfigurierbarkeit der Satzungsregeln
 
@@ -163,6 +170,9 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Gesamtwehrweite Einheit (schreibt eigene Berichte, z. B. EvD) | `IncidentUnit`, Register `INCIDENT_UNITS`, Feld `unit` am Bericht |
 | Bericht einer Einheit (z. B. EvD-Bericht) | unit report (`departmentId: null`, `unit`), Dienst `INCIDENTS_UNIT_REPORTS` |
 | Einsatz angelegt (Ereignis) | `incidents.incident.created` (`createdVia`: `ui`, `api`, `import`) |
+| Parallelbetrieb mit MP-Feuer, führendes System | parallel operation, Einstellung `externalLeading` (`mp-feuer`), `externalEventsFrom` |
+| Bericht aus MP-Feuer (von MP-Feuer geführt) | `managedBy: 'mp-feuer'` (`api`: von der externen API angelegt) |
+| In f.orga weiterführen | take over (`POST …/reports/:id/take-over`) |
 
 ### Nachweise und Fristen
 

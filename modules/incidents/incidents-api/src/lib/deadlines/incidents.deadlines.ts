@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/core';
+import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import type { DeadlineInput, DeadlineProvider } from '@forga/core-api';
 import type { ReportStatus } from '@forga/incidents-contracts';
 import { localDate } from '../domain/compensation.js';
@@ -19,6 +19,7 @@ const DAY = 86_400_000;
  *   drafts for the writers of the department and the releasers,
  * - reports for review for the releasers and the pre-reviewers of the department,
  * - with the two-step release, reports released for compensation for the releasers (release for billing).
+ * Reports of a leading MP-Feuer (setting `externalLeading`) are no work items in f.orga.
  */
 @Injectable()
 export class IncidentsDeadlines implements DeadlineProvider {
@@ -32,9 +33,12 @@ export class IncidentsDeadlines implements DeadlineProvider {
   ) {}
 
   async deadlines(asOf: string): Promise<DeadlineInput[]> {
-    const twoSteps = (await this.contexts.settingsOnly()).compensationRelease;
-    const statuses: ReportStatus[] = twoSteps ? ['draft', 'review', 'released-compensation'] : ['draft', 'review'];
-    const reports = await this.em.fork().find(ReportEntity, { status: { $in: statuses } }, { populate: ['incident'] });
+    const settings = await this.contexts.settingsOnly();
+    const statuses: ReportStatus[] = settings.compensationRelease ? ['draft', 'review', 'released-compensation'] : ['draft', 'review'];
+    // While MP-Feuer leads, its reports are completed and released there: no work items in f.orga.
+    const where: FilterQuery<ReportEntity> = { status: { $in: statuses } };
+    if (settings.externalLeading === 'mp-feuer') where.$or = [{ managedBy: null }, { managedBy: { $ne: 'mp-feuer' } }];
+    const reports = await this.em.fork().find(ReportEntity, where, { populate: ['incident'] });
     const writers = await this.writers.index();
     return reports.map((report): DeadlineInput => {
       const subject = {

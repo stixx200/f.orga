@@ -288,6 +288,8 @@ export class IncidentsController {
     if (!incident || !this.visible(user, incident)) throw new NotFoundException();
     assertVersion(incident, input.version);
     const reports = incident.reports.getItems();
+    // The incident data of MP-Feuer come again with the next import.
+    for (const report of reports) await this.reports.assertNotLedExternally(report);
     if (reports.some((r) => r.status.startsWith('released'))) throw new ConflictException({ code: 'incidents.incidentReleased' });
     // The incident data belongs to the primary report: only its writers (and releasers) change them.
     const owner = incidentOwner(reports);
@@ -500,6 +502,7 @@ export class IncidentsController {
     if (!this.reports.canWrite(user, report)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
     if (report.status.startsWith('released')) throw new ForbiddenException({ code: 'incidents.reportReleased' });
     if (report.locked && user.grant(RELEASE) !== 'brigade') throw new ForbiddenException({ code: 'incidents.reportLocked' });
+    await this.reports.assertNotLedExternally(report);
     if (input.authorPersonId && !(await this.directory.summaries([input.authorPersonId])).length) {
       throw new BadRequestException({ code: 'incidents.unknownPerson' });
     }
@@ -561,6 +564,7 @@ export class IncidentsController {
     const em = this.em.fork();
     const report = await this.reports.load(em, id, user);
     this.reports.assertWrite(user, report);
+    await this.reports.assertNotLedExternally(report);
     await this.reports.setPrimary(em, report);
     await em.flush();
     return this.reports.toDto(em, report);
@@ -667,6 +671,18 @@ export class IncidentsController {
     return this.reports.toDto(em, report);
   }
 
+  /** Parallel operation with MP-Feuer: a releaser continues an imported report in f.orga; later imports leave it alone. */
+  @Post('reports/:id/take-over')
+  @HttpCode(200)
+  @RequirePermissions(RELEASE)
+  async takeOver(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Report> {
+    if (user.grant(RELEASE) !== 'brigade') throw new ForbiddenException({ code: 'auth.forbidden', permissions: [RELEASE] });
+    const em = this.em.fork();
+    const report = await this.reports.load(em, id, user);
+    await this.reports.takeOver(em, report);
+    return this.reports.toDto(em, report);
+  }
+
   @Post('reports/:id/unlock')
   @HttpCode(200)
   @RequirePermissions(UNLOCK)
@@ -695,6 +711,7 @@ export class IncidentsController {
     const report = await this.reports.load(em, id, user);
     this.reports.assertWrite(user, report);
     if (report.unit) throw new ConflictException({ code: 'incidents.unitReportManaged' });
+    await this.reports.assertNotLedExternally(report);
     if (report.status !== 'draft') throw new ConflictException({ code: 'incidents.invalidTransition', from: report.status });
     const siblings = await em.find(ReportEntity, { incident: report.incident, id: { $ne: report.id } });
     const departmentSiblings = siblings.filter((s) => s.departmentId);

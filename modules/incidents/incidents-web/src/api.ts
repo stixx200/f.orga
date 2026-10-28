@@ -134,6 +134,11 @@ export function useSettings() {
   });
 }
 
+/** Parallel operation: reports of the MP-Feuer import are changed in MP-Feuer while it leads (setting `externalLeading`). */
+export function ledByMpFeuer(settings: IncidentSettings | undefined, report: { managedBy: string | null }): boolean {
+  return settings?.externalLeading === 'mp-feuer' && report.managedBy === 'mp-feuer';
+}
+
 export function useDepartments() {
   return useQuery({ queryKey: ['masterdata', 'departments'], queryFn: () => api<Department[]>('masterdata/departments'), staleTime: LONG });
 }

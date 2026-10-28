@@ -86,7 +86,7 @@ export class ExternalController {
       if (results.has(departmentId)) continue;
       const commander = departments.find((d) => d.id === departmentId)?.commanderId ?? null;
       const report = await this.reports.createReport(em, incident, departmentId, commander);
-      report.externallyManaged = true;
+      report.managedBy = 'api';
       results.set(departmentId, { report, created: true, updated: false });
     }
 
@@ -103,7 +103,7 @@ export class ExternalController {
         warnings.push({ code: 'incidents.api.unknownDepartment', value: entry.department ?? '' });
         continue;
       }
-      if (!target.report.externallyManaged) continue;
+      if (target.report.managedBy !== 'api') continue;
       await em.populate(target.report, ['personnel', 'vehicles']);
       if (target.report.personnel.getItems().some((p) => p.personId === person.id)) continue;
       const vehicle = entry.vehicle ? findVehicle(vehicles, entry.vehicle) : undefined;

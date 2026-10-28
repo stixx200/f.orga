@@ -111,6 +111,16 @@ export const IncidentSettings = z.object({
   /** Standby at the station is always compensated with this many hours (local practice). */
   standbyHours: z.number().min(0).default(1),
   allowances: z.array(Allowance).default([]),
+  /**
+   * Parallel operation: incidents and reports are kept in MP-Feuer and come with the data transfer. Imported reports
+   * are then read-only in f.orga until a releaser takes one over (`null`: f.orga leads).
+   */
+  externalLeading: z.enum(['mp-feuer']).nullable().default(null),
+  /**
+   * Releases taken over by the MP-Feuer import for incidents from this day on are announced to the other modules
+   * (compensation items, respiratory protection, equipment); `null`: imports announce nothing.
+   */
+  externalEventsFrom: z.iso.date().nullable().default(null),
   rules: z
     .record(z.string(), z.object({ enabled: z.boolean().default(true), level: RuleLevel.optional() }))
     .default({}),

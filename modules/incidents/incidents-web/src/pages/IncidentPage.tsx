@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import type { Incident, ReleaseManyResult, Report } from '@forga/incidents-contracts';
 import { api, apiUrl, can, extensionsOf, formatDateTime, formatMoney, fromLocalInput, send, toLocalInput, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
-import { COSTS, keys, useDepartments, useIncident, useKeywords, useNames, useReportAccess, useSettings } from '../api';
+import { COSTS, keys, ledByMpFeuer, useDepartments, useIncident, useKeywords, useNames, useReportAccess, useSettings } from '../api';
 import { DepartmentBadge, keywordLabel, locationLabel, notifyReleaseResult, ReportStatusBadge } from '../parts';
 import { StatisticsPanel } from './StatisticsPanel';
 
@@ -212,13 +212,16 @@ export function IncidentPage() {
   // A unit report may be primary only while the incident has no department report.
   const hasDepartmentReport = incident.reports.some((r) => r.departmentId);
   const target = incident.reports.find((r) => r.id === primaryFor);
-  const forReview = incident.reports.filter((r) => r.status === 'review');
+  const forReview = incident.reports.filter((r) => r.status === 'review' && !ledByMpFeuer(settings, r));
   // The incident data belong to the writers of the primary report while all reports are unlocked drafts; releasers
   // change them until a report is released.
   const owner = primary ?? incident.reports.find((r) => r.departmentId) ?? incident.reports[0];
+  // While MP-Feuer leads, the incident data of its reports come with the next import.
+  const fromMpFeuer = incident.reports.some((r) => ledByMpFeuer(settings, r));
   const editable =
     Boolean(owner) &&
     access.write(owner) &&
+    !fromMpFeuer &&
     (releaser ? !incident.reports.some((r) => r.status.startsWith('released')) : incident.reports.every((r) => r.status === 'draft' && !r.locked));
 
   return (
@@ -237,6 +240,7 @@ export function IncidentPage() {
         </SimpleGrid>
         <Text size="xs" c="dimmed" mt="sm">{t(`incident.createdVia.${incident.createdVia}`)}</Text>
       </Panel>
+      {fromMpFeuer && <Notice kind="info">{t('incident.ledByMpFeuer')}</Notice>}
       {!primary && incident.reports.length > 0 && <Notice kind="error">{t('incident.noPrimary')}</Notice>}
       {releaser && forReview.length > 1 && (
         <Notice kind="info" action={<Button size="xs" onClick={() => setReleasingAll(true)}>{t('incident.releaseAll', { count: forReview.length })}</Button>}>
@@ -250,7 +254,7 @@ export function IncidentPage() {
             summary={summary}
             report={reports[index]?.data}
             readable={access.read(summary)}
-            onMakePrimary={!summary.primary && (summary.departmentId ? canWrite(summary.departmentId) : !hasDepartmentReport && access.write(summary)) && !summary.locked && !summary.status.startsWith('released') && !primary?.status.startsWith('released') ? () => setPrimaryFor(summary.id) : undefined}
+            onMakePrimary={!summary.primary && !ledByMpFeuer(settings, summary) && (summary.departmentId ? canWrite(summary.departmentId) : !hasDepartmentReport && access.write(summary)) && !summary.locked && !summary.status.startsWith('released') && !primary?.status.startsWith('released') ? () => setPrimaryFor(summary.id) : undefined}
           />
         ))}
       </SimpleGrid>

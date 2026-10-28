@@ -144,7 +144,7 @@ Immer gilt zusätzlich:
 - **Berichte gesamtwehrweiter Einheiten (EvD):** am Terminal **nicht** eintragbar. Der EvD schreibt seinen Bericht selbst; Einheiten haben keine Wache.
 - **Einsätze nur für Einsatzabteilungen:** In der Ansicht einer anderen Abteilung (Jugendfeuerwehr, Altersabteilung, Musik, Sonderdienst, Führungseinheit) gibt es nur Dienste, keine Einsätze und kein „Neuer Einsatz“. Ein Terminal ohne Einsatzabteilung unter seinen Abteilungen ist ein reines Dienste-Terminal.
 - **Keine Gäste:** Gäste aus Nachbarwehren trägt nur der Verfasser im Bericht ein.
-- **Externe API und Import:** Ein Bericht mit Terminal-Eintragungen gilt als von Menschen bearbeitet; die API ändert sein Personal nicht mehr (`externallyManaged` endet mit der ersten Eintragung).
+- **Externe API und Import:** Ein Bericht mit Terminal-Eintragungen gilt als von Menschen bearbeitet; die API ändert sein Personal nicht mehr (`managedBy` wird mit der ersten Eintragung `null`).
 - **Entschädigung:** wird wie für jede Personalzeile berechnet; die Freigabe bleibt beim Kommandanten.
 
 ## Sicherheit und Datenschutz

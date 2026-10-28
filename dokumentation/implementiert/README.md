@@ -23,3 +23,4 @@ Der Code ist durchgehend englisch, die Dokumentation deutsch. Die Zuordnung der 
 | [schnittstellen.md](schnittstellen.md) | Vorhandene HTTP-Endpunkte mit Rechten |
 | [entwicklung.md](entwicklung.md) | Entwicklungsumgebung, Befehle, Tests, Migrationen, CI |
 | [betrieb.md](betrieb.md) | Docker-Image und Compose-Stack |
+| [parallelbetrieb-mp-feuer.md](parallelbetrieb-mp-feuer.md) | Arbeitsweise während der Umstellung: Einsätze in MP-Feuer, Bescheide und Entschädigungen in f.orga; Verhalten beim erneuten Import |

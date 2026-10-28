@@ -14,10 +14,11 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { defineEntity, EntityManager, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import { type ImportResult, type TransferArchiveInfo, type TransferDataset, TransferRequest, type TransferUpload } from '@forga/core-contracts';
+import { type ImportResult, type TransferArchiveInfo, type TransferDataset, TransferRequest, type TransferSettings, type TransferUpload } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { CurrentUser } from '../security/decorators.js';
+import { SettingsService } from '../settings/settings.js';
 import { ZodPipe } from '../zod.pipe.js';
 import { ImportRegistry, type TransferRow } from './import-registry.js';
 import { IMPORT_EXPIRY_MS } from './imports.js';
@@ -56,6 +57,7 @@ export class TransferService {
     private readonly em: EntityManager,
     private readonly registry: ImportRegistry,
     private readonly audit: Audit,
+    private readonly settings: SettingsService,
   ) {}
 
   async upload(user: AuthenticatedUser, files: UploadedFileData[] | undefined): Promise<TransferUpload> {
@@ -83,7 +85,7 @@ export class TransferService {
       const units = profiles.find((candidate) => candidate.id === d.profile)?.transfer.units;
       infos.push({ profile: d.profile, rowCount: d.rows.length, ...(units && { units: { label: units.label, none: units.none, entries: await units.entries() } }) });
     }
-    return { id: transfer.id, archives, datasets: infos };
+    return { id: transfer.id, archives, datasets: infos, remembered: await this.remembered() };
   }
 
   async run(user: AuthenticatedUser, id: string, request: ParsedRequest, dryRun: boolean): Promise<ImportResult> {
@@ -110,8 +112,27 @@ export class TransferService {
     const result = await this.registry.run(profile, rows, { user, options, dryRun, mappings: request.mappings });
     if (!dryRun) {
       await this.audit.log('imports.transferApplied', { profile: profile.id, files: transfer.archives.map((a) => a.fileName), counts: result.counts });
+      await this.remember(transfer, request);
     }
     return result;
+  }
+
+  private async remembered(): Promise<TransferSettings> {
+    return (await this.settings.get<TransferSettings>('transfer')) ?? { departments: {}, units: {}, options: {} };
+  }
+
+  /** Keeps the choices of an import for the next transfer: per archive key the department and unit, per profile the options. */
+  private async remember(transfer: ImportTransferEntity, request: ParsedRequest): Promise<void> {
+    const current = await this.remembered();
+    const keys = new Set(transfer.archives.map((a) => a.key));
+    const ofArchives = <T>(values: Record<string, T>) => Object.fromEntries(Object.entries(values).filter(([key]) => keys.has(key)));
+    // Archives of this transfer without a unit drop the unit remembered before.
+    const units = { ...Object.fromEntries(Object.entries(current.units[request.profile] ?? {}).filter(([key]) => !keys.has(key))), ...ofArchives(request.units) };
+    await this.settings.set('transfer', {
+      departments: { ...current.departments, ...ofArchives(request.departments) },
+      units: { ...current.units, [request.profile]: units },
+      options: { ...current.options, [request.profile]: request.options },
+    });
   }
 
   async remove(user: AuthenticatedUser, id: string): Promise<void> {

@@ -125,11 +125,27 @@ export const TransferDataset = z.object({
 });
 export type TransferDataset = z.infer<typeof TransferDataset>;
 
+/**
+ * The assignment of the last data transfer (settings section `transfer`), saved with each import and offered again with
+ * the next upload, so a routine transfer needs no new choices.
+ */
+export const TransferSettings = z.object({
+  /** Archive key → name of the department (as in `TransferRequest.departments`). */
+  departments: z.record(z.string(), z.string().nullable()).default({}),
+  /** Profile → archive key → key of the unit. */
+  units: z.record(z.string(), z.record(z.string(), z.string().min(1))).default({}),
+  /** Profile → options. */
+  options: z.record(z.string(), z.record(z.string(), z.boolean())).default({}),
+});
+export type TransferSettings = z.infer<typeof TransferSettings>;
+
 export const TransferUpload = z.object({
   id: z.string(),
   archives: z.array(TransferArchiveInfo),
   /** In the order they must be imported (persons before their incidents). */
   datasets: z.array(TransferDataset),
+  /** Choices of earlier transfers (departments of known archive keys, units, options). */
+  remembered: TransferSettings,
 });
 export type TransferUpload = z.infer<typeof TransferUpload>;
 

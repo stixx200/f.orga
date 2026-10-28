@@ -233,6 +233,34 @@ export class ReportsService {
     if (report.status !== 'draft') throw new ForbiddenException({ code: 'incidents.notDraft', status: report.status });
   }
 
+  /**
+   * Parallel operation (setting `externalLeading`): reports of the MP-Feuer import are changed in MP-Feuer and come
+   * again with the next import, so f.orga changes neither their content nor their workflow until a releaser takes
+   * one over (`takeOver`).
+   */
+  async ledExternally(report: Pick<ReportEntity, 'managedBy'>): Promise<boolean> {
+    if (report.managedBy !== 'mp-feuer') return false;
+    return (await this.externalOperation()).leading;
+  }
+
+  /** Parallel operation with MP-Feuer (settings `externalLeading` and `externalEventsFrom`). */
+  async externalOperation(): Promise<{ leading: boolean; eventsFrom: string | null }> {
+    const settings = await this.contexts.settingsOnly();
+    return { leading: settings.externalLeading === 'mp-feuer', eventsFrom: settings.externalEventsFrom ?? null };
+  }
+
+  async assertNotLedExternally(report: Pick<ReportEntity, 'managedBy'>): Promise<void> {
+    if (await this.ledExternally(report)) throw new ConflictException({ code: 'incidents.ledByMpFeuer' });
+  }
+
+  /** A releaser continues an imported report in f.orga: from now on the MP-Feuer import leaves it unchanged. */
+  async takeOver(em: EntityManager, report: ReportEntity): Promise<void> {
+    if (report.managedBy !== 'mp-feuer') throw new ConflictException({ code: 'incidents.notFromMpFeuer' });
+    report.managedBy = null;
+    await em.flush();
+    await this.audit.log('incidents.report-taken-over', { reportId: report.id, reportNumber: report.number, dispatchNumber: report.incident.dispatchNumber });
+  }
+
   async load(em: EntityManager, id: string, user: AuthenticatedUser): Promise<ReportEntity> {
     const report = await em.findOne(ReportEntity, id, { populate: REPORT_POPULATE });
     if (!report || !this.canRead(user, report)) throw new NotFoundException();
@@ -328,6 +356,7 @@ export class ReportsService {
   /** Validates and applies the content; releasers lock the report by editing it. */
   async save(em: EntityManager, report: ReportEntity, input: ParsedReportInput, user: AuthenticatedUser): Promise<void> {
     assertVersion(report, input.version);
+    await this.assertNotLedExternally(report);
     const personIds = input.personnel.flatMap((p) => (p.personId ? [p.personId] : []));
     const context = await this.contexts.load(personIds, input.times.alarmedAt);
     await this.validateReferences(report, context, input);
@@ -335,7 +364,7 @@ export class ReportsService {
     // Other systems sending their own times leave the flag out: their end counts as confirmed.
     report.endConfirmed = input.endConfirmed ?? true;
     this.applyContent(em, report, input);
-    report.externallyManaged = false;
+    report.managedBy = null;
     this.lockBy(report, user);
   }
 
@@ -601,6 +630,7 @@ export class ReportsService {
       lockedAt: iso(report.lockedAt),
       returnComment: report.returnComment ?? null,
       authorPersonId: report.authorPersonId ?? null,
+      managedBy: report.managedBy ?? null,
       endConfirmed: report.endConfirmed,
       times: {
         alarmedAt: report.alarmedAt.toISOString(),
@@ -681,6 +711,7 @@ export class ReportsService {
   /** Author reports the report as finished. Errors block; warnings need an acknowledgement with reason. */
   async submit(em: EntityManager, report: ReportEntity, user: AuthenticatedUser, acknowledgements: Acknowledgement[]): Promise<void> {
     if (report.status !== 'draft') throw new ConflictException({ code: 'incidents.invalidTransition', from: report.status });
+    await this.assertNotLedExternally(report);
     // The acknowledgements are stored only if the report is submitted: a refused submit changes nothing.
     const acknowledged = this.withAcknowledgements(report, user, acknowledgements);
     const findings = await this.findings(em, report, await this.contextFor(report), acknowledged);
@@ -691,6 +722,8 @@ export class ReportsService {
     report.acknowledgements = acknowledged;
     report.status = 'review';
     report.returnComment = null;
+    // A person took the report into the workflow of f.orga: imports and the API leave it alone from now on.
+    report.managedBy = null;
   }
 
   /**
@@ -700,8 +733,10 @@ export class ReportsService {
   async returnToAuthor(report: ReportEntity, comment: string, user: AuthenticatedUser): Promise<void> {
     if (report.status !== 'review') throw new ConflictException({ code: 'incidents.invalidTransition', from: report.status });
     if (report.locked && user.grant(RELEASE) !== 'brigade') throw new ForbiddenException({ code: 'incidents.reportLocked', lockedBy: report.lockedBy ?? '' });
+    await this.assertNotLedExternally(report);
     report.status = 'draft';
     report.returnComment = comment;
+    report.managedBy = null;
     if (user.grant(UNLOCK) === 'brigade') {
       report.locked = false;
       report.lockedBy = null;
@@ -725,6 +760,7 @@ export class ReportsService {
     if (!from.includes(report.status)) {
       throw new ConflictException({ code: 'incidents.invalidTransition', from: report.status });
     }
+    await this.assertNotLedExternally(report);
     const findings = await this.findings(em, report, await this.contextFor(report));
     const blocking = findings.filter((f) => f.level === 'error');
     if (blocking.length) throw new BadRequestException({ code: 'incidents.findingsOpen', findings: blocking });
@@ -734,6 +770,8 @@ export class ReportsService {
       findings.filter((f) => f.level === 'warning' && !f.acknowledged).map((f) => ({ rule: f.rule, subject: f.subject, reason: 'released' })),
     );
     report.status = target;
+    // Released in f.orga: a new import must not take the release back.
+    report.managedBy = null;
     this.lockBy(report, user);
     await em.flush();
     await this.audit.log('incidents.report-released', { reportId: report.id, reportNumber: report.number, dispatchNumber: report.incident.dispatchNumber, level });
@@ -754,7 +792,8 @@ export class ReportsService {
     return reports.length;
   }
 
-  private async publishReleased(em: EntityManager, report: ReportEntity, level: 'compensation' | 'billing'): Promise<void> {
+  /** Tells the other modules about a released report (populated with `REPORT_POPULATE`); they replace what they took from it before. */
+  async publishReleased(em: EntityManager, report: ReportEntity, level: 'compensation' | 'billing'): Promise<void> {
     const context = await this.contextFor(report);
     const dto = await this.toDto(em, report, context);
     await this.events.publish<ReportReleasedEvent>(INCIDENTS_EVENTS.reportReleased, {
@@ -801,7 +840,10 @@ export class ReportsService {
     if (report.status === 'draft' && toStatus !== 'draft') {
       throw new ConflictException({ code: 'incidents.invalidTransition', from: report.status });
     }
+    await this.assertNotLedExternally(report);
     report.locked = false;
+    // Corrected in f.orga from now on; a new import would otherwise restore the state of MP-Feuer.
+    report.managedBy = null;
     report.lockedBy = null;
     report.lockedAt = null;
     report.status = toStatus;
@@ -849,6 +891,8 @@ export class ReportsService {
     if (access === 'submitted') throw new ForbiddenException({ code: 'incidents.statisticsSubmitted' });
     if (await this.statisticsClosed(em, incident)) throw new ConflictException({ code: 'incidents.statisticsClosed' });
     assertVersion(incident, version);
+    // While MP-Feuer leads, the statistics come with the import of its reports.
+    for (const report of incident.reports.getItems()) await this.assertNotLedExternally(report);
     if (statistics) {
       const keyword = await em.findOne(AlarmKeywordEntity, { key: incident.alarmKeyword });
       if (!keyword?.mainType) throw new BadRequestException({ code: 'incidents.statisticsNotCounted', keyword: incident.alarmKeyword });
@@ -886,7 +930,11 @@ export class ReportsService {
         statistics: incident.statistics ?? null,
         statisticsSuggestion: counted && !incident.statistics ? suggestStatistics(incident, keyword, settings.homeMunicipalities) : null,
         statisticsCounted: counted,
-        statisticsEditable: !closedYears.has(year) && this.statisticsAccess(user, reports) === 'write',
+        // While MP-Feuer leads, the statistics of its incidents come with the import.
+        statisticsEditable:
+          !closedYears.has(year) &&
+          this.statisticsAccess(user, reports) === 'write' &&
+          !(settings.externalLeading === 'mp-feuer' && reports.some((r) => r.managedBy === 'mp-feuer')),
         reports: reports
           .toSorted((a, b) => Number(b.primary) - Number(a.primary) || a.number.localeCompare(b.number))
           .map((r) => ({
@@ -898,6 +946,7 @@ export class ReportsService {
             status: r.status,
             locked: r.locked,
             authorPersonId: r.authorPersonId ?? null,
+            managedBy: r.managedBy ?? null,
           })),
         version: incident.version,
       };
