@@ -147,7 +147,7 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Einsatzstichwort | `alarmKeyword` |
 | Kosten und Bemerkungen des Einsatzes | `IncidentCosts` (`chargeable`, `chargeableReason`, `notes`), Recht `incidents.costs` |
 | Bereitschaft (auf der Wache) | standby |
-| Ausgerückt / Eingerückt eines Fahrzeugs im Bericht | `departedAt` / `returnedAt` am Fahrzeug des Berichts (`ReportVehicleEntity`) |
+| Alarmiert (Nachalarmierung) / Ausgerückt / Eingerückt eines Fahrzeugs im Bericht | `alarmedAt` / `departedAt` / `returnedAt` am Fahrzeug des Berichts (`ReportVehicleEntity`) |
 | Eigene Zeiten (Person oder Fahrzeug), geerbte Zeiten | own times (`from`/`to` bzw. `departedAt`/`returnedAt`, `null` = geerbt), `inheritedTimes`, wirksame Zeiten `effectiveTimes` |
 | Entschädigung | `Compensation` |
 | Verdienstausfall | `lossOfEarnings` |

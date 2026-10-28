@@ -38,7 +38,7 @@ const content = (vehicles: object[], extra: object = {}) => ({
   vehicles,
   ...extra,
 });
-const later = { vehicleId: '', departedAt: T('14:00'), returnedAt: T('15:30'), kilometres: 12 };
+const later = { vehicleId: '', alarmedAt: T('14:00'), departedAt: T('14:05'), returnedAt: T('15:30'), kilometres: 12 };
 
 beforeAll(async () => {
   test = await startTestApp();
@@ -66,13 +66,13 @@ beforeAll(async () => {
 afterAll(() => test?.app.close());
 
 describe('times of personnel and vehicles', () => {
-  it('saves the own times of a vehicle; its crew follows them unless a person has own times', async () => {
+  it('saves the own times of a vehicle; its crew follows its alarm and return unless a person has own times', async () => {
     const saved = await save(ids.report, content([later]));
     expect(saved.vehicles).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ vehicleId: ids.tsf, departedAt: T('14:00'), returnedAt: T('15:30'), kilometres: 12 }),
+        expect.objectContaining({ vehicleId: ids.tsf, alarmedAt: T('14:00'), departedAt: T('14:05'), returnedAt: T('15:30'), kilometres: 12 }),
         // The LF comes with its crew, without own times.
-        expect.objectContaining({ vehicleId: ids.lf, departedAt: null, returnedAt: null, kilometres: null }),
+        expect.objectContaining({ vehicleId: ids.lf, alarmedAt: null, departedAt: null, returnedAt: null, kilometres: null }),
       ]),
     );
     const personnel = byPerson(saved.personnel);
@@ -86,7 +86,7 @@ describe('times of personnel and vehicles', () => {
   });
 
   it('warns about vehicle times outside the report and person times outside the vehicle; refuses vehicles returning before departing', async () => {
-    const outside = await save(ids.report, content([{ ...later, departedAt: T('12:30') }]));
+    const outside = await save(ids.report, content([{ ...later, alarmedAt: T('12:30') }]));
     expect(rules(outside)).toEqual([`warning:vehicle-times-outside:${ids.tsf}`]);
     expect(outside.findings[0].params).toEqual({ vehicle: 'TSF' });
 
@@ -111,7 +111,7 @@ describe('times of personnel and vehicles', () => {
     const costs = await lookup.forCostRecovery(ids.incident);
     const crew = Object.fromEntries(costs!.reports[0].personnel.map((p) => [p.personId, p]));
     expect(crew[ids.lena]).toMatchObject({ from: T('14:00'), to: T('15:00') });
-    expect(costs!.reports[0].vehicles).toEqual(expect.arrayContaining([{ vehicleId: ids.tsf, departedAt: T('14:00'), returnedAt: T('15:30') }]));
+    expect(costs!.reports[0].vehicles).toEqual(expect.arrayContaining([{ vehicleId: ids.tsf, alarmedAt: T('14:00'), departedAt: T('14:05'), returnedAt: T('15:30') }]));
 
     // Compensation and respiratory protection take the times from the release.
     const events: ReportReleasedEvent[] = [];

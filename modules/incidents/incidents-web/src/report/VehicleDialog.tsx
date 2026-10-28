@@ -5,10 +5,12 @@ import { ResponsiveDialog } from '@forga/web-ui';
 import type { Content } from './editor';
 
 export type VehicleEntry = Content['vehicles'][number];
+type TimeKey = 'alarmedAt' | 'departedAt' | 'returnedAt';
 
 /**
- * Own departure and return times and the kilometres of one vehicle of the report. Empty times (and times equal to the
- * report's) are stored as `null`: the vehicle then follows the report, and its crew follows the vehicle.
+ * Own alarm, departure and return times and the kilometres of one vehicle of the report. Empty times (and times equal
+ * to the report's) are stored as `null`: the vehicle then follows the report. Its crew follows the alarm (e.g. alerted
+ * later) and the return of the vehicle; the departure only counts for the vehicle itself.
  */
 export function VehicleDialog({ name, entry, times, disabled, onSave, onClose }: {
   name: string;
@@ -21,11 +23,16 @@ export function VehicleDialog({ name, entry, times, disabled, onSave, onClose }:
   const { t } = useTranslation('incidents');
   const { t: common } = useTranslation('common');
   const [draft, setDraft] = useState<VehicleEntry>(entry);
-  const defaults = { departedAt: times.departedAt ?? times.alarmedAt, returnedAt: times.returnedAt };
-  const own = Boolean(draft.departedAt || draft.returnedAt);
-  const time = (key: 'departedAt' | 'returnedAt') => (
+  const defaults: Record<TimeKey, string> = {
+    alarmedAt: times.alarmedAt,
+    departedAt: times.departedAt ?? times.alarmedAt,
+    returnedAt: times.returnedAt,
+  };
+  const own = Boolean(draft.alarmedAt || draft.departedAt || draft.returnedAt);
+  const time = (key: TimeKey, description?: string) => (
     <TextInput
       label={t(`personnel.${key}`)}
+      description={description}
       type="datetime-local"
       value={toLocalInput(draft[key] ?? defaults[key])}
       onChange={(e) => {
@@ -44,7 +51,7 @@ export function VehicleDialog({ name, entry, times, disabled, onSave, onClose }:
       actions={
         <Group justify="space-between">
           {!disabled && own ? (
-            <Button variant="subtle" onClick={() => setDraft((d) => ({ ...d, departedAt: null, returnedAt: null }))}>{t('personnel.resetTimes')}</Button>
+            <Button variant="subtle" onClick={() => setDraft((d) => ({ ...d, alarmedAt: null, departedAt: null, returnedAt: null }))}>{t('personnel.resetTimes')}</Button>
           ) : (
             <span />
           )}
@@ -57,7 +64,8 @@ export function VehicleDialog({ name, entry, times, disabled, onSave, onClose }:
     >
       <Stack gap="sm">
         <Text size="sm" c="dimmed">{t('personnel.vehicleTimesHint')}</Text>
-        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+        <SimpleGrid cols={{ base: 1, sm: 3 }}>
+          {time('alarmedAt', t('personnel.alarmedAtHint'))}
           {time('departedAt')}
           {time('returnedAt')}
         </SimpleGrid>

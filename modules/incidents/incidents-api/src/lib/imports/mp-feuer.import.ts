@@ -58,6 +58,7 @@ const FIELDS = [
   field('to', 'Person bis', 'Person to', ['bis']),
   field('vehicle', 'Fahrzeug', 'Vehicle', ['Funkrufname', 'Bezeichnung', 'Fzg.-Nr.']),
   // Own times and kilometres of the person's vehicle in this report (data transfer: `EIN_FAHRZ`).
+  field('vehicleAlarmedAt', 'Fahrzeug alarmiert', 'Vehicle alerted', []),
   field('vehicleDepartedAt', 'Fahrzeug ausgerückt', 'Vehicle departed', []),
   field('vehicleReturnedAt', 'Fahrzeug eingerückt', 'Vehicle returned', []),
   field('vehicleKilometres', 'Fahrzeug Kilometer', 'Vehicle kilometres', []),
@@ -354,7 +355,7 @@ export class MpFeuerIncidentsImport {
         const vehicleId = standby ? null : (vehicle?.id ?? null);
         const ownVehicle = vehicleId ? this.vehicleTimes(em, report, vehicleId, values) : null;
         // Times equal to those the person inherits (vehicle, else report) are stored as `null` and follow them.
-        const inherited = { from: ownVehicle?.departedAt ?? report.alarmedAt, to: ownVehicle?.returnedAt ?? report.returnedAt };
+        const inherited = { from: ownVehicle?.alarmedAt ?? report.alarmedAt, to: ownVehicle?.returnedAt ?? report.returnedAt };
         const from = time(values['from']);
         const to = time(values['to']);
         report.personnel.add(
@@ -388,19 +389,22 @@ export class MpFeuerIncidentsImport {
 
   /**
    * The vehicle of the report with the own times and kilometres of the row (times equal to those of the report are
-   * stored as `null`); added to the report if missing. Rows without vehicle times leave the vehicle as it is.
+   * stored as `null`: alarm and return compared with the report's, the departure with its departure, else its alarm);
+   * added to the report if missing. Rows without vehicle times leave the vehicle as it is.
    */
   private vehicleTimes(em: EntityManager, report: ReportEntity, vehicleId: string, values: Record<string, string>): ReportVehicleEntity {
     let entry = report.vehicles.getItems().find((v) => v.vehicleId === vehicleId);
     if (!entry) {
-      entry = em.create(ReportVehicleEntity, { report, vehicleId, departedAt: null, returnedAt: null, kilometres: null });
+      entry = em.create(ReportVehicleEntity, { report, vehicleId, alarmedAt: null, departedAt: null, returnedAt: null, kilometres: null });
       report.vehicles.add(entry);
     }
+    const alarmed = time(values['vehicleAlarmedAt']);
     const departed = time(values['vehicleDepartedAt']);
     const returned = time(values['vehicleReturnedAt']);
     const kilometres = Number.parseInt((values['vehicleKilometres'] ?? '').trim(), 10);
-    if (departed || returned) {
-      entry.departedAt = departed && departed.getTime() !== report.alarmedAt.getTime() ? departed : null;
+    if (alarmed || departed || returned) {
+      entry.alarmedAt = alarmed && alarmed.getTime() !== report.alarmedAt.getTime() ? alarmed : null;
+      entry.departedAt = departed && departed.getTime() !== (report.departedAt ?? report.alarmedAt).getTime() ? departed : null;
       entry.returnedAt = returned && returned.getTime() !== report.returnedAt.getTime() ? returned : null;
     }
     if (Number.isFinite(kilometres) && kilometres >= 0) entry.kilometres = kilometres;

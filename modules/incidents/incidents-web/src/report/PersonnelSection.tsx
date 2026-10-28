@@ -66,7 +66,7 @@ export function PersonnelSection({ content, report, update, disabled, findings }
   const usedStationIds = [...new Set(content.personnel.flatMap((p) => (p.standbyStationId ? [p.standbyStationId] : [])))];
   const standbyStations = ownStations.map((s) => ({ id: s.id, name: s.name }));
   const vehicleEntry = (vehicleId: string): VehicleEntry =>
-    content.vehicles.find((v) => v.vehicleId === vehicleId) ?? { vehicleId, departedAt: null, returnedAt: null, kilometres: null };
+    content.vehicles.find((v) => v.vehicleId === vehicleId) ?? { vehicleId, alarmedAt: null, departedAt: null, returnedAt: null, kilometres: null };
   /** Puts a person on standby at a station (one click from the person row). */
   const toStandby = (index: number, stationId: string) =>
     update((c) => ({ ...c, personnel: c.personnel.map((p, i) => (i === index ? { ...p, vehicleId: null, standbyStationId: stationId } : p)) }));
@@ -95,7 +95,7 @@ export function PersonnelSection({ content, report, update, disabled, findings }
     update((c) => {
       const where = placeOf(to);
       const used = where.vehicleId && !c.vehicles.some((v) => v.vehicleId === where.vehicleId)
-        ? [...c.vehicles, { vehicleId: where.vehicleId, departedAt: null, returnedAt: null, kilometres: null }]
+        ? [...c.vehicles, { vehicleId: where.vehicleId, alarmedAt: null, departedAt: null, returnedAt: null, kilometres: null }]
         : c.vehicles;
       const present = new Set(c.personnel.flatMap((p) => (p.personId ? [p.personId] : [])));
       const added = entries.filter((entry) => !entry.personId || !present.has(entry.personId)).map((entry) => ({ ...blank(where), ...entry }));
@@ -212,11 +212,11 @@ export function PersonnelSection({ content, report, update, disabled, findings }
                 <div>
                   <Text fw={700}>{group.title}</Text>
                   {group.subtitle && <Text size="xs" c="dimmed">{group.subtitle}</Text>}
-                  {own && (own.departedAt || own.returnedAt) && (
+                  {own && (own.alarmedAt || own.departedAt || own.returnedAt) && (
                     <Group gap={4} mt={2}>
                       <StatusBadge>{t('personnel.vehicleOwnTimes')}</StatusBadge>
                       <Text size="xs" c="dimmed">
-                        {timeOf(own.departedAt ?? content.times.departedAt ?? content.times.alarmedAt)} – {timeOf(own.returnedAt ?? content.times.returnedAt)}
+                        {timeOf(own.alarmedAt ?? content.times.alarmedAt)} – {timeOf(own.returnedAt ?? content.times.returnedAt)}
                       </Text>
                     </Group>
                   )}
@@ -284,7 +284,7 @@ export function PersonnelSection({ content, report, update, disabled, findings }
           onSave={(entry) => {
             update((c) => {
               const used = entry.vehicleId && !c.vehicles.some((v) => v.vehicleId === entry.vehicleId)
-                ? [...c.vehicles, { vehicleId: entry.vehicleId, departedAt: null, returnedAt: null, kilometres: null }]
+                ? [...c.vehicles, { vehicleId: entry.vehicleId, alarmedAt: null, departedAt: null, returnedAt: null, kilometres: null }]
                 : c.vehicles;
               return { ...c, vehicles: used, personnel: c.personnel.map((p, i) => (i === editing ? entry : p)) };
             });

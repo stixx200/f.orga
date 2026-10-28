@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261028103733_initial extends Migration {
+export class Migration20261028122017_initial extends Migration {
 
-  override name = 'Migration20261028103733_initial';
+  override name = 'Migration20261028122017_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"incidents\";");
@@ -23,7 +23,7 @@ export class Migration20261028103733_initial extends Migration {
     this.addSql("create index \"report_personnel_person_id_index\" on \"incidents\".\"report_personnel\" (\"person_id\");");
     this.addSql("create table \"incidents\".\"report_revision\" (\"id\" uuid not null, \"report_id\" uuid not null, \"content\" jsonb not null, \"user_id\" varchar(255) null, \"user_name\" varchar(255) not null default '', \"saved_at\" timestamptz not null, primary key (\"id\"));");
     this.addSql("create index \"report_revision_report_id_index\" on \"incidents\".\"report_revision\" (\"report_id\");");
-    this.addSql("create table \"incidents\".\"report_vehicle\" (\"id\" uuid not null, \"report_id\" uuid not null, \"vehicle_id\" varchar(255) not null, \"departed_at\" timestamptz null, \"returned_at\" timestamptz null, \"kilometres\" int null, primary key (\"id\"));");
+    this.addSql("create table \"incidents\".\"report_vehicle\" (\"id\" uuid not null, \"report_id\" uuid not null, \"vehicle_id\" varchar(255) not null, \"alarmed_at\" timestamptz null, \"departed_at\" timestamptz null, \"returned_at\" timestamptz null, \"kilometres\" int null, primary key (\"id\"));");
     this.addSql("create table \"incidents\".\"statistics_year\" (\"year\" serial primary key, \"corrections\" jsonb not null, \"closed_at\" timestamptz null, \"closed_by\" varchar(255) null, \"frozen_values\" jsonb null, \"frozen_checks\" jsonb null, \"version\" int not null default 1);");
     this.addSql("alter table \"incidents\".\"report\" add constraint \"report_incident_id_foreign\" foreign key (\"incident_id\") references \"incidents\".\"incident\" (\"id\") on delete cascade;");
     this.addSql("alter table \"incidents\".\"report\" add constraint \"report_department_or_unit\" check ((\"department_id\" is null) <> (\"unit\" is null));");

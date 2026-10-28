@@ -1,6 +1,6 @@
 import { Button, Group, NumberInput, Radio, Select, SimpleGrid, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { useState } from 'react';
-import { type Compensation, inheritedTimes } from '@forga/incidents-contracts';
+import { type Compensation, hasCrewTimes, inheritedTimes } from '@forga/incidents-contracts';
 import { formatDateTime, formatMoney, fromLocalInput, toLocalInput, useLocalized, useTranslation } from '@forga/web-sdk';
 import { ResponsiveDialog } from '@forga/web-ui';
 import { useFunctions } from '../api';
@@ -122,7 +122,7 @@ export function PersonDialog({ name, entry, targets, standbyStations, compensati
           </SimpleGrid>
         ) : (
           <Text size="sm" c="dimmed">
-            {t(vehicle?.departedAt || vehicle?.returnedAt ? 'person.followsVehicle' : 'person.followsReport', {
+            {t(hasCrewTimes(vehicle) ? 'person.followsVehicle' : 'person.followsReport', {
               from: formatDateTime(inherited.from, i18n.language),
               to: formatDateTime(inherited.to, i18n.language),
             })}

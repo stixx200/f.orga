@@ -240,12 +240,12 @@ describe('MP-Feuer data transfer', () => {
     expect(report.times.returnedAt).toBe('2025-06-01T10:00:00.000Z');
     expect(report).toMatchObject({ situation: 'Mülleimer in Vollbrand', actions: 'Abgelöscht\n\nMit Kübelspritze gelöscht.', incidentCommander: 'Probe Anna' });
     expect(report.statistics).toMatchObject({ mainType: 'fire', fireSize: 'small-a' });
-    // Anna keeps her own times of MP-Feuer although her vehicle has times of its own.
+    // Anna keeps her own end of MP-Feuer although her vehicle has times of its own; the alarm of the LF is that of the report.
     expect(report.personnel).toMatchObject([
       { personId: await personId('Probe'), vehicleId: ids.lf, breathingApparatus: true, function: 'machinist', from: '2025-06-01T08:00:00.000Z', to: '2025-06-01T09:30:00.000Z' },
       { personId: await personId('Alt'), from: '2025-06-01T08:30:00.000Z' },
     ]);
-    expect(report.vehicles).toMatchObject([{ vehicleId: ids.lf, departedAt: '2025-06-01T08:05:00.000Z', returnedAt: '2025-06-01T09:15:00.000Z', kilometres: 12 }]);
+    expect(report.vehicles).toMatchObject([{ vehicleId: ids.lf, alarmedAt: null, departedAt: '2025-06-01T08:05:00.000Z', returnedAt: '2025-06-01T09:15:00.000Z', kilometres: 12 }]);
 
     const again = await run('incidents.mp-feuer', true);
     expect(again.body.counts).toMatchObject({ create: 0, update: 5, error: 0 });

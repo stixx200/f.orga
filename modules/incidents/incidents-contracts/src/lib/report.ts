@@ -112,6 +112,8 @@ export type PersonnelEntryInput = z.input<typeof PersonnelEntryInput>;
 
 export const VehicleEntryInput = z.object({
   vehicleId: z.uuid(),
+  /** Alarm of the vehicle, e.g. alerted later; start of its crew. `null` = alarm of the report (also for the times below). */
+  alarmedAt: datetime.nullable().default(null),
   departedAt: datetime.nullable().default(null),
   returnedAt: datetime.nullable().default(null),
   kilometres: z.number().int().min(0).nullable().default(null),
@@ -307,6 +309,7 @@ export const Report = z.object({
     z.object({
       id: z.uuid(),
       vehicleId: z.uuid(),
+      alarmedAt: z.string().nullable(),
       departedAt: z.string().nullable(),
       returnedAt: z.string().nullable(),
       kilometres: z.number().nullable(),

@@ -17,7 +17,7 @@ const RETRY_MS = [5_000, 15_000, 30_000, 60_000];
 export function vehicleOf(content: Pick<Content, 'vehicles'>, entry: Pick<Personnel, 'vehicleId' | 'standbyStationId'>): VehicleTimes | null {
   if (!entry.vehicleId || entry.standbyStationId) return null;
   const vehicle = content.vehicles.find((v) => v.vehicleId === entry.vehicleId);
-  return vehicle ? { departedAt: vehicle.departedAt ?? null, returnedAt: vehicle.returnedAt ?? null } : null;
+  return vehicle ? { alarmedAt: vehicle.alarmedAt ?? null, departedAt: vehicle.departedAt ?? null, returnedAt: vehicle.returnedAt ?? null } : null;
 }
 
 /**
