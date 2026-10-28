@@ -62,6 +62,7 @@ NAVIGATION = [
         ('shell/module.html', 'module', 'Module', None),
         ('shell/api-tokens.html', 'token', 'API-Tokens', None),
         ('infoterminal/verwaltung.html', 'terminal', 'Infoterminals', None),
+        ('mp-feuer/start.html', 'import', 'MP-Feuer', None),
         ('shell/einstellungen.html', 'einstellungen', 'Einstellungen', None),
     ]),
 ]

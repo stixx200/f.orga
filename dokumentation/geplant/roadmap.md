@@ -96,7 +96,6 @@ Offen:
 1. Migration der Echtdaten aus MP-Feuer in einer Testinstallation, Abgleich mit den heutigen Auswertungen.
 2. Betriebsanleitung (Installation, Sicherung, Wiederherstellung, Update).
 3. Parallelbetrieb mit MP-Feuer für einen Abrechnungszeitraum (Arbeitsweise: [parallelbetrieb-mp-feuer.md](../implementiert/parallelbetrieb-mp-feuer.md)).
-4. MP-Feuer-Integration in einen eigenen Dienst verlagern: [MP-Feuer-Brücke](module/mp-feuer-bruecke.md) (Mockups freigeben, dann Schnittstelle in f.orga, Brücke, Entfernen der Datenübernahme aus f.orga).
 
 ## Release 2 – Dienste, Atemschutz, Entschädigungen
 

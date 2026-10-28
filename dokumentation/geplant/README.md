@@ -20,4 +20,4 @@ Alles in diesem Ordner ist noch nicht umgesetzt. Was fertig ist, steht in [`../i
 | Stammdaten | 1 | [stammdaten.md](module/stammdaten.md) |
 | Einsatzberichte | 1 | [einsatzberichte.md](module/einsatzberichte.md) |
 | Infoterminal | umgesetzt (offene Punkte) | [infoterminal.md](module/infoterminal.md) |
-| MP-Feuer-Brücke (eigener Dienst) | Parallelbetrieb | [mp-feuer-bruecke.md](module/mp-feuer-bruecke.md) |
+| MP-Feuer (`mp-feuer`) | Parallelbetrieb | [mp-feuer.md](module/mp-feuer.md) |

@@ -694,19 +694,15 @@ a.tk-ereignis:hover { box-shadow: var(--e4); border-color: var(--dienst); }
   .tk-leiste .status { flex-basis: 100%; }
 }
 
-/* ---------- MP-Feuer-Brücke ---------- */
-/* Zielleiste unter dem Kopf: Umschalter Echt-/Testsystem, beim Testsystem gelbes Band. */
-.ziel-leiste { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 8px 24px; background: var(--flaeche); border-bottom: 1px solid var(--gitter); }
-.ziel-leiste.test { background: var(--hinweis); border-bottom: 2px solid #a67c00; }
-.ziel-label { font-weight: bold; font-size: .875rem; color: var(--neben); }
-.ziel-schalter { display: inline-flex; border: 1px solid var(--feldrand); border-radius: var(--radius); overflow: hidden; background: var(--flaeche); }
-.ziel-schalter a { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 16px; text-decoration: none; color: var(--text); font-size: .875rem; font-weight: bold; text-transform: uppercase; letter-spacing: .03em; }
-.ziel-schalter a + a { border-left: 1px solid var(--feldrand); }
-.ziel-schalter a.aktiv { background: var(--dienst); color: #fff; }
-.punkt { width: 10px; height: 10px; border-radius: 50%; background: var(--meta); flex: none; }
-.punkt.ok { background: #2e7d47; box-shadow: 0 0 0 2px #fff; }
-.ziel-info { color: var(--meta); font-size: .875rem; }
-.ziel-band { font-weight: bold; color: var(--hinweis-text); font-size: .9rem; }
+/* ---------- Modul MP-Feuer ---------- */
+/* Reiter als Links zwischen den Seiten eines Moduls (gleiche Optik wie .reiter button). */
+.reiter a {
+  position: relative; display: inline-flex; align-items: center; padding: 12px 16px; font-size: .875rem; font-weight: bold; text-decoration: none;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--neben); white-space: nowrap; min-height: 48px;
+}
+.reiter a:hover { color: var(--dienst); background: rgba(140, 29, 24, .04); }
+.reiter a.aktiv { color: var(--dienst); }
+.reiter a.aktiv::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--dienst); }
 tbody tr.grau td { color: var(--meta); background: var(--grau); }
 .ablage { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 16px; border: 2px dashed var(--feldrand); border-radius: var(--radius); text-align: center; background: var(--wechsel); }
 .ablage > .sym { width: 36px; height: 36px; color: var(--dienst); }
@@ -715,8 +711,5 @@ tbody tr.grau td { color: var(--meta); background: var(--grau); }
 .liste > li.fortschritt { display: block; }
 .fortschritt-kopf { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
 @media (max-width: 860px) {
-  .ziel-leiste { padding: 8px 12px; }
-  .ziel-schalter { flex: 1 1 100%; }
-  .ziel-schalter a { flex: 1; justify-content: center; min-height: 44px; }
-  .ziel-info { display: none; }
+  .reiter a { padding: 12px 10px; min-height: 44px; }
 }

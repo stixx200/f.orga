@@ -1,8 +1,8 @@
 # Mockups Release 1
 
-**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben. Die Mockups der MP-Feuer-Brücke (`mp-feuer-bruecke/`) sind zur Freigabe.
+**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben. Die Mockups des Moduls MP-Feuer (`mp-feuer/`) sind zur Freigabe.
 
-Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stammdaten und Einsatzberichte, dazu das Modul Infoterminal (Kiosk-Seite je Wache) und die MP-Feuer-Brücke (eigener Dienst, [Konzept](../module/mp-feuer-bruecke.md)). Sie funktionieren nicht und enthalten nur erfundene Daten. Farben, Schrift, Tabellen sowie Kopf- und Fußzeile folgen `Stil.md`.
+Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stammdaten und Einsatzberichte, dazu das Modul Infoterminal (Kiosk-Seite je Wache) und das Modul MP-Feuer ([Konzept](../module/mp-feuer.md)). Sie funktionieren nicht und enthalten nur erfundene Daten. Farben, Schrift, Tabellen sowie Kopf- und Fußzeile folgen `Stil.md`.
 
 ## Öffnen
 
@@ -87,24 +87,23 @@ Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stam
 | | `infoterminal/verwaltung.html` | Terminals je Wache mit Abteilungen und zuletzt gesehen, anlegen mit Abteilungsauswahl (`#d-link`), Link jederzeit anzeigen, kopieren und öffnen (`#d-link-anzeigen`), neuer Link, Widerruf; Menü „Verwaltung → Infoterminals“ |
 | | `stammdaten/organisation.html#wache` | Karte der Wache mit ihren Infoterminals und Abteilungen, „Öffnen“, „Link anzeigen“ und Link zur Verwaltung |
 
-### MP-Feuer-Brücke
+### Modul MP-Feuer
 
-Eigener Dienst mit eigener Oberfläche ([Konzept](../module/mp-feuer-bruecke.md)): eigener Kopf ohne Suche, darunter auf jeder Seite die Zielleiste mit dem Umschalter Echtsystem/Testsystem. Beim Testsystem ist die Leiste gelb und trägt den Hinweis „Testsystem“.
+Seiten im Rahmen der Shell unter „Verwaltung → MP-Feuer“ ([Konzept](../module/mp-feuer.md)). Reiter verbinden die Seiten des Moduls.
 
 | Seite | Inhalt |
 | --- | --- |
-| `mp-feuer-bruecke/anmeldung.html` | Anmeldung mit Konto der Brücke |
-| `mp-feuer-bruecke/start.html` | Übersicht im Echtsystem: Eingangsordner, letzte Übernahme, Verbindung (Adresse, Version, Token, „Einsatzberichte führt“, Bereiche), wöchentliche Routine |
-| `mp-feuer-bruecke/start-test.html` | Dieselbe Übersicht im Testsystem mit gelbem Band und einem fehlenden Bereich |
-| `mp-feuer-bruecke/uebernahme.html` | Schritt 1: Dateien hochladen oder aus dem Eingangsordner, erkannte Archive mit Abteilung, „Einsatzberichte als“, Überspringen und gemerkter Auswahl |
-| `mp-feuer-bruecke/probelauf.html` | Schritt 2: Datensätze in Reihenfolge mit Optionen und Ergebnis des Probelaufs |
-| `mp-feuer-bruecke/zuordnung.html` | Schritt 3: nicht zugeordnete Bezeichnungen wie in f.orga, Filter nach Art, Zusatzziele bei Funktionen, „Neuen Eintrag anlegen“ (`#d-neu`) |
-| `mp-feuer-bruecke/lauf.html` | Schritt 4: Übernahme in Teilen mit Fortschritt, Abbrechen nach dem laufenden Teil (`#d-abbrechen`) |
-| `mp-feuer-bruecke/ergebnis.html` | Schritt 5: Zähler je Datensatz, Meldungen nach Code und Wert mit Beispielen, CSV |
-| `mp-feuer-bruecke/verlauf.html` | Läufe beider Ziele mit Konto, Dateien und Ergebnis |
-| `mp-feuer-bruecke/einstellungen.html` | Ziele mit Token (`#d-ziel`), gemerkte Zuordnungen je Ziel (`#d-vergessen`), Eingangsordner und Zeitplan, Konten |
-| `mp-feuer-bruecke/export.html` | Export nach MP-Feuer: Platzhalter „in Vorbereitung“, geplante Exporte mit „Vorlage fehlt“ |
-| `mp-feuer-bruecke/forga-import.html` | f.orga: Import-Seite nur mit Tabellen-Import, Hinweis und Link auf die Brücke, Profil „Einsatzpersonal“ |
+| `mp-feuer/start.html` | Übersicht: letzte Übernahme, gemerkte Zuordnungen, Läufe, Stand („Einsatzberichte führt“), wöchentliche Routine |
+| `mp-feuer/uebernahme.html` | Schritt 1: Dateien hochladen, erkannte Archive mit Abteilung, „Einsatzberichte als“, Überspringen und gemerkter Auswahl |
+| `mp-feuer/probelauf.html` | Schritt 2: Datensätze in Reihenfolge mit Optionen und Ergebnis des Probelaufs |
+| `mp-feuer/zuordnung.html` | Schritt 3: nicht zugeordnete Bezeichnungen wie im Tabellen-Import, Filter nach Art, Zusatzziele bei Funktionen, „Neuen Eintrag anlegen“ (`#d-neu`) |
+| `mp-feuer/lauf.html` | Schritt 4: Hintergrundlauf in Teilen mit Fortschritt, Abbrechen nach dem laufenden Teil (`#d-abbrechen`) |
+| `mp-feuer/ergebnis.html` | Schritt 5: Zähler je Datensatz, Meldungen nach Code und Wert mit Beispielen, CSV |
+| `mp-feuer/verlauf.html` | Läufe mit Benutzer, Dateien und Ergebnis (auch abgebrochen, unterbrochen) |
+| `mp-feuer/zuordnungen.html` | Zuordnungsliste des Moduls, Suche und Filter, Ziel gelöscht oder inaktiv markiert, Löschen (`#d-loeschen`) |
+| `mp-feuer/einstellungen.html` | Gemerkte Auswahl je Archivnummer, Datensätze und Optionen, Zurücksetzen (`#d-vergessen`); Eingangsordner und Zeitplan als „später“ |
+| `mp-feuer/export.html` | Export nach MP-Feuer: Platzhalter „in Vorbereitung“, geplante Exporte mit „Vorlage fehlt“ |
+| `mp-feuer/tabellen-import.html` | Import-Seite des Core: Hinweis auf das Modul, Reiter „Gemerkte Zuordnungen“ mit der Zuordnungsliste des Tabellen-Imports (`#d-loeschen-core`) |
 
 ### Berichtseditor
 
@@ -137,7 +136,7 @@ Die Seiten werden mit `python3 _generator/bauen.py` aus den Skripten in `_genera
 | Datei | Inhalt |
 | --- | --- |
 | `rahmen.py` | Kopf, Seitenleiste, Fußzeile, Symbole und Bausteine: `tabelle()`, `dialog()`, `leer()` |
-| `shell.py`, `stammdaten.py`, `einsatzberichte.py`, `infoterminal.py`, `bruecke.py` | Seiteninhalte je App; `infoterminal.py` baut die Kiosk-Seiten mit eigenem Kopf (`tk()`) ohne Seitenleiste, `bruecke.py` die Seiten der MP-Feuer-Brücke mit eigenem Rahmen (`bseite()`) und Zielleiste |
+| `shell.py`, `stammdaten.py`, `einsatzberichte.py`, `infoterminal.py`, `mpfeuer.py` | Seiteninhalte je App; `infoterminal.py` baut die Kiosk-Seiten mit eigenem Kopf (`tk()`) ohne Seitenleiste, `mpfeuer.py` die Seiten des Moduls MP-Feuer mit Reitern (`mseite()`) |
 | `uebersetzung.py` | Englische Texte als Zeilen `Deutsch => English`. Zeilen ohne `=>` sind Daten, die gleich bleiben (Namen, Orte, Fahrzeuge, Kataloge). Dazu Muster für wiederkehrende Formen. |
 | `assets/mockup.css` | Gemeinsames Aussehen |
 | `assets/mockup.js` | Reiter und Schritte, Menü, Dialoge, bedingte Statistikfelder, Sprachumschalter |
