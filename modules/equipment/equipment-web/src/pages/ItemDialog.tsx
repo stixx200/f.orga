@@ -3,6 +3,7 @@ import { DateInput } from '@mantine/dates';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { InitialInspection, Item, ItemInput } from '@forga/equipment-contracts';
+import { vehicleLabel } from '@forga/masterdata-contracts';
 import { can, localDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { CodeInput, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { BREATHING_WRITE, keys, useCategories, useDepartments, useStations, useTypes, useVehicles, WRITE } from '../api';
@@ -115,7 +116,7 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
           <NumberInput label={t('fields.price')} value={form.price ?? ''} onChange={(v) => set('price', v === '' ? null : Number(v))} min={0} decimalScale={2} suffix=" €" />
           <DateInput label={t('fields.expiresOn')} value={form.expiresOn} onChange={(v) => set('expiresOn', v)} valueFormat="DD.MM.YYYY" clearable />
           <Select label={t('fields.department')} data={writable.map((d) => ({ value: d.id, label: d.name }))} value={departmentId || null} onChange={(v) => set('departmentId', v ?? '')} required />
-          <Select label={t('fields.vehicle')} data={vehicles.filter((v) => !departmentId || v.departmentId === departmentId).map((v) => ({ value: v.id, label: v.radioCallSign || v.designation }))} value={form.vehicleId} onChange={(v) => setForm((f) => ({ ...f, vehicleId: v, stationId: v ? null : f.stationId }))} clearable />
+          <Select label={t('fields.vehicle')} data={vehicles.filter((v) => !departmentId || v.departmentId === departmentId).map((v) => ({ value: v.id, label: vehicleLabel(v, departments.find((d) => d.id === v.departmentId)?.shortName) }))} value={form.vehicleId} onChange={(v) => setForm((f) => ({ ...f, vehicleId: v, stationId: v ? null : f.stationId }))} clearable />
           <Select label={t('fields.station')} data={stations.filter((s) => !departmentId || s.departmentId === departmentId).map((s) => ({ value: s.id, label: s.name }))} value={form.stationId} onChange={(v) => setForm((f) => ({ ...f, stationId: v, vehicleId: v ? null : f.vehicleId }))} clearable disabled={Boolean(form.vehicleId)} />
           <TextInput label={t('fields.loadingPlace')} value={form.loadingPlace} onChange={(e) => set('loadingPlace', e.currentTarget.value)} />
           {stock && <NumberInput label={t('fields.quantity')} value={form.quantity} onChange={(v) => set('quantity', Number(v) || 0)} min={0} />}

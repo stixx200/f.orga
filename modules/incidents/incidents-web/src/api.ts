@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { CatalogEntry, Department, PersonSummary, Station, Vehicle } from '@forga/masterdata-contracts';
+import { type CatalogEntry, type Department, type PersonSummary, type Station, type Vehicle, vehicleLabel } from '@forga/masterdata-contracts';
 import type { AlarmKeyword, Incident, IncidentSettings, IncidentUnit, Report, ReportRevision } from '@forga/incidents-contracts';
 import { api, can, useLocalized, useSession, withQuery } from '@forga/web-sdk';
 
@@ -197,7 +197,11 @@ export function useNames() {
       const person = persons.find((p) => p.id === id);
       return person ? personName(person) : '';
     },
-    vehicle: (id: string | null | undefined) => vehicles.find((v) => v.id === id)?.designation ?? '',
+    /** Designation, call sign and department, since designations like "Anhänger" repeat. */
+    vehicle: (id: string | null | undefined) => {
+      const vehicle = vehicles.find((v) => v.id === id);
+      return vehicle ? vehicleLabel(vehicle, departments.find((d) => d.id === vehicle.departmentId)?.shortName) : '';
+    },
     station: (id: string | null | undefined) => stations.find((s) => s.id === id)?.name ?? '',
   };
 }

@@ -52,3 +52,12 @@ export const Vehicle = z.object({
   version: z.number().int(),
 });
 export type Vehicle = z.infer<typeof Vehicle>;
+
+/**
+ * Unambiguous name of a vehicle in selections and lists: designation, radio call sign and the short name of its
+ * department, e.g. "Anhänger · Florian Musterstadt 1/90 (Musterstadt)". Designations like "Anhänger" repeat.
+ */
+export function vehicleLabel(vehicle: Pick<Vehicle, 'designation' | 'radioCallSign'>, department?: string | null): string {
+  const name = [vehicle.designation, vehicle.radioCallSign].filter(Boolean).join(' · ');
+  return department ? `${name} (${department})` : name;
+}
