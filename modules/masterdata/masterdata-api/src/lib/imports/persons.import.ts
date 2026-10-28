@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import {
+  findByAlias,
   type ImportContext,
   type ImportProfile,
   type ImportRow,
@@ -116,7 +117,8 @@ export class PersonsImport {
     const em = this.em.fork();
     const rules = (await this.settings.get<MembershipSettings>('masterdata.membership')) as MembershipSettings;
     const departments = await em.find(Department, {});
-    const exitReasons = new Set((await em.find(CatalogEntry, { kind: 'exit-reason', active: true })).map((e) => e.key));
+    const exitReasonEntries = await em.find(CatalogEntry, { kind: 'exit-reason', active: true });
+    const exitReasons = new Set(exitReasonEntries.map((e) => e.key));
     const byKey = new Map(departments.map((d) => [departmentKey(d), d]));
     const existing = await em.find(Person, {}, { populate: ['memberships.department', 'qualifications', 'ranks', 'honors', 'offices', 'restPeriods'] });
     const sensitive = user.grant(SENSITIVE) !== null;
@@ -202,7 +204,7 @@ export class PersonsImport {
         ? null
         : exitReasons.has(exitText)
           ? exitText
-          : (EXIT_REASONS.find(([pattern, key]) => pattern.test(values['exitReason']) && exitReasons.has(key))?.[1] ?? context.mapped('exit-reason', values['exitReason']) ?? null);
+          : (findByAlias(exitReasonEntries, values['exitReason'])?.key ?? EXIT_REASONS.find(([pattern, key]) => pattern.test(values['exitReason']) && exitReasons.has(key))?.[1] ?? context.mapped('exit-reason', values['exitReason']) ?? null);
       const gender =
         GENDERS[normalizeHeading(values['gender'] ?? '')] ?? SALUTATION_GENDER[normalizeHeading(values['salutation'] ?? '')];
       if (gender) fields['gender'] = gender;

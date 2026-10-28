@@ -524,6 +524,7 @@ export const translations: Translations = {
       },
     },
     errors: {
+      'incidents.aliasTaken': 'Die Bezeichnung „{{alias}}“ gehört schon zu einem anderen Alarmstichwort (Schlüssel, Name oder Alias).',
       'incidents.unitReportNotDraft': 'Der Bericht ist bereits fertiggemeldet, freigegeben oder gesperrt und wird nicht gelöscht.',
       'incidents.unitReportManaged': 'Dieser Bericht wird über seine Einheit verwaltet (z. B. „Kein EvD bei diesem Einsatz“) und nicht hier gelöscht.',
       'incidents.unitReportNotPrimary': 'Der Bericht einer feuerwehrweiten Einheit kann nur Hauptbericht sein, solange der Einsatz keinen Abteilungsbericht hat.',
@@ -1089,6 +1090,7 @@ export const translations: Translations = {
       },
     },
     errors: {
+      'incidents.aliasTaken': 'The name "{{alias}}" already belongs to another alarm keyword (key, name or alias).',
       'incidents.unitReportNotDraft': 'The report has already been submitted, released or locked and is not deleted.',
       'incidents.unitReportManaged': 'This report is managed by its unit (e.g. "no duty officer at this incident") and not deleted here.',
       'incidents.unitReportNotPrimary': 'The report of a brigade-wide unit can only be the primary report while the incident has no department report.',

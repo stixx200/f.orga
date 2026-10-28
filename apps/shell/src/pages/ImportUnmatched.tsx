@@ -58,6 +58,7 @@ export function UnmatchedValues({ items, mappings, onChange, stale, onRecheck, r
     <Stack gap="md">
       <Title order={4}>{t('imports.unmatched.title')}</Title>
       <Text size="sm">{t(transfer ? 'imports.unmatched.hintTransfer' : 'imports.unmatched.hint')}</Text>
+      <Text size="sm" c="dimmed">{t('imports.unmatched.remembered')}</Text>
       <Table withTableBorder striped>
         <Table.Thead>
           <Table.Tr>

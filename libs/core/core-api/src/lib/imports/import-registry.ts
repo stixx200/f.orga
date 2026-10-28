@@ -22,7 +22,8 @@ export interface ImportContext {
   dryRun: boolean;
   /**
    * Key of the entry the user chose for a value that matches no entry of the lookup `kind`, or `undefined`.
-   * Profiles ask after their own matching failed.
+   * Profiles ask only after their own matching (names and aliases) failed: every answer counts as used, and after
+   * an apply the value is remembered as alias of the chosen entry (`ImportLookup.remember`).
    */
   mapped(kind: string, value: string): string | undefined;
   /** Reports a value that matches no entry of the lookup `kind` (once per row); the result lists it with its count. */
@@ -51,6 +52,11 @@ export interface ImportLookup {
     /** Throws the module's error codes, e.g. `catalog.keyTaken`. */
     run(input: { key: string; name: string }): Promise<ImportLookupEntry>;
   };
+  /**
+   * Remembers `value` as alias of the entry `key`, so the next import matches it without asking. Called after an
+   * apply for every mapping the profile used; does nothing if the value already is a name or alias of an entry.
+   */
+  remember?(key: string, value: string): Promise<void>;
 }
 
 /** One data row with field keys and the 1-based row number in the file. */
@@ -127,7 +133,8 @@ export class ImportRegistry {
   }
 
   /**
-   * Runs a profile with the chosen entries for unknown values and collects the values that stay unmatched.
+   * Runs a profile with the chosen entries for unknown values and collects the values that stay unmatched. After an
+   * apply, the chosen entries remember the values as aliases.
    * Throws `imports.unknownLookup` or `imports.unknownMappingTarget` for mappings that point nowhere.
    */
   async run(profile: ImportProfile, rows: ImportRow[], { mappings, ...input }: ImportRunInput): Promise<ImportResult> {
@@ -140,12 +147,15 @@ export class ImportRegistry {
       }
     }
     const unmatched = new Map<string, ImportUnmatched>();
+    const used = new Map<string, { kind: string; value: string; key: string }>();
     const result = await profile.run(rows, {
       ...input,
       mapped: (kind, value) => {
         const values = mappings[kind];
         const text = value.trim();
-        return values && Object.hasOwn(values, text) ? values[text] : undefined;
+        if (!values || !Object.hasOwn(values, text)) return undefined;
+        used.set(JSON.stringify([kind, text]), { kind, value: text, key: values[text] });
+        return values[text];
       },
       unmatched: (kind, value) => {
         const text = value.trim();
@@ -155,6 +165,10 @@ export class ImportRegistry {
         unmatched.set(id, entry);
       },
     });
+    // The choices are remembered as aliases only when the import was applied.
+    if (!input.dryRun) {
+      for (const { kind, value, key } of used.values()) await this.lookup(kind)?.remember?.(key, value);
+    }
     return { ...result, unmatched: [...unmatched.values()] };
   }
 

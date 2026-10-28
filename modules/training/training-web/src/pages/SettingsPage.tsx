@@ -3,7 +3,7 @@ import { IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 import type { SessionType, SessionTypeInput, TrainingSettings } from '@forga/training-contracts';
 import { apiUrl, send, useLocalized, useTranslation } from '@forga/web-sdk';
-import { DataTable, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { AliasesInput, DataTable, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, useDepartments, useTrainingSettings, useTypes } from '../api';
 
 const SETTINGS_KEY = ['core', 'settings', 'training.general'];
@@ -21,6 +21,7 @@ function TypeDialog({ type, onClose }: { type?: SessionType; onClose: () => void
     record: type?.record ?? null,
     active: type?.active ?? true,
     sortOrder: type?.sortOrder ?? 0,
+    aliases: type?.aliases ?? [],
   }));
   const save = useAction(
     () => {
@@ -73,6 +74,7 @@ function TypeDialog({ type, onClose }: { type?: SessionType; onClose: () => void
         <Checkbox label={t('settingsPage.countsForParticipation')} checked={form.countsForParticipation} onChange={(e) => setForm({ ...form, countsForParticipation: e.currentTarget.checked })} />
         <Switch label={t('settingsPage.active')} checked={form.active} onChange={(e) => setForm({ ...form, active: e.currentTarget.checked })} />
       </SimpleGrid>
+      <AliasesInput value={form.aliases} onChange={(aliases) => setForm({ ...form, aliases })} mt="md" />
     </ResponsiveDialog>
   );
 }

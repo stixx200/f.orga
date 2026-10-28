@@ -90,7 +90,7 @@ export class InventoryImport {
       if (given('category') && !named && !namedCategory) { error('equipment.unknownCategory', { key: values['category']! }); continue; }
       const category = (named && categories.find((c) => c.key === named.categoryKey)) ?? namedCategory ?? (stored ? categories.find((c) => c.key === stored.categoryKey) : undefined) ?? (type && categories.find((c) => c.key === type.categoryKey));
       if (!category) { error('equipment.unknownCategory', { key: values['category'] ?? '' }); continue; }
-      const vehicle = given('vehicle') ? match(vehicles, values['vehicle'], (v) => [v.radioCallSign, v.designation]) : undefined;
+      const vehicle = given('vehicle') ? match(vehicles, values['vehicle'], (v) => [v.radioCallSign, v.designation, ...v.aliases]) : undefined;
       if (given('vehicle') && !vehicle) { error('equipment.import.unknownVehicle', { name: values['vehicle']! }); continue; }
 
       const lastInspection = given('lastInspection') ? parseDate(values['lastInspection']!) : null;

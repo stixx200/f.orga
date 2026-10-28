@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { type ImportContext, type ImportProfile, type ImportRow, type ImportRunResult, parseDate } from '@forga/core-api';
+import { findByAlias, type ImportContext, type ImportProfile, type ImportRow, type ImportRunResult, parseDate } from '@forga/core-api';
 import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
 import type { CatalogKind } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
@@ -93,8 +93,8 @@ export class CareerImport {
 
       const name = (values['name'] ?? '').trim();
       const active = catalog.filter((e) => e.kind === kind && e.active);
-      const chosen = name ? mapped(kind, name) : undefined;
-      let entry = matchCatalog(active, name) ?? active.find((e) => e.key === chosen);
+      // Aliases (earlier choices of the user) first, then the names; the user is asked only if neither matches.
+      let entry = findByAlias(active, name) ?? matchCatalog(active, name) ?? (name ? active.find((e) => e.key === mapped(kind, name)) : undefined);
       if (!entry && createEntries && name) {
         entry = em.create(CatalogEntry, {
           kind,
@@ -103,6 +103,7 @@ export class CareerImport {
           sortOrder: 1000,
           active: true,
           attributes: kind === 'rank' ? { abbreviation: '', level: 0 } : kind === 'qualification' ? { validityMonths: null } : {},
+          aliases: [],
         });
         catalog.push(entry);
         messages.push({ code: 'masterdata.import.catalogEntryCreated', params: { name } });

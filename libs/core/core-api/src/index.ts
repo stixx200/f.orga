@@ -29,6 +29,7 @@ export * from './lib/tasks/mail.service.js';
 export * from './lib/tasks/notifications.js';
 export * from './lib/attachments/attachments.js';
 export * from './lib/tasks/digest.service.js';
+export * from './lib/imports/aliases.js';
 export * from './lib/imports/import-registry.js';
 export * from './lib/imports/parse.js';
 export * from './lib/imports/transfer-archive.js';

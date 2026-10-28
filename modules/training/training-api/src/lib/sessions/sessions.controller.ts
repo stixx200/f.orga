@@ -20,6 +20,7 @@ import {
 } from '@forga/training-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { SessionEntity, SessionTypeEntity } from '../training.entities.js';
+import { checkTypeAliases } from './type-aliases.js';
 import { participation } from './participation.js';
 import { ATTENDANCE, PLAN, READ, SessionsService, SETTINGS } from './sessions.service.js';
 
@@ -36,6 +37,7 @@ export function toTypeDto(type: SessionTypeEntity): SessionType {
     record: type.record ?? null,
     active: type.active,
     sortOrder: type.sortOrder,
+    aliases: type.aliases,
     version: type.version,
   };
 }
@@ -65,7 +67,7 @@ export class SessionsController {
   @RequirePermissions(SETTINGS)
   async createType(@Body(new ZodPipe(SessionTypeInput)) input: Parsed<typeof SessionTypeInput>): Promise<SessionType> {
     const em = this.em.fork();
-    const type = em.create(SessionTypeEntity, input);
+    const type = em.create(SessionTypeEntity, { ...input, aliases: await checkTypeAliases(em, input, null) });
     await em.flush();
     return toTypeDto(type);
   }
@@ -77,7 +79,7 @@ export class SessionsController {
     const type = await em.findOne(SessionTypeEntity, id);
     if (!type) throw new NotFoundException();
     const { key: _key, ...rest } = input;
-    em.assign(type, rest);
+    em.assign(type, { ...rest, aliases: await checkTypeAliases(em, { ...input, key: type.key }, type) });
     await em.flush();
     return toTypeDto(type);
   }
@@ -88,7 +90,7 @@ export class SessionsController {
     const em = this.em.fork();
     const existing = new Set((await em.find(SessionTypeEntity, {})).map((t) => t.key));
     const missing = SESSION_TYPE_TEMPLATE.map((t) => SessionTypeInput.parse(t)).filter((t) => !existing.has(t.key));
-    for (const type of missing) em.create(SessionTypeEntity, type);
+    for (const type of missing) em.create(SessionTypeEntity, { ...type, aliases: type.aliases ?? [] });
     await em.flush();
     return { added: missing.length };
   }

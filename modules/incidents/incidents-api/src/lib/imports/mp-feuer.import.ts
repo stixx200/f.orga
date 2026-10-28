@@ -2,6 +2,8 @@ import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import {
   berlinTime,
+  findByAlias,
+  hasAlias,
   type ImportContext,
   type ImportLookup,
   type ImportProfile,
@@ -27,6 +29,7 @@ import {
 } from '@forga/masterdata-contracts';
 import { localDate } from '../domain/compensation.js';
 import { AlarmKeywordEntity, IncidentEntity, ReportPersonnelEntity } from '../incidents.entities.js';
+import { rememberKeywordAlias } from '../keywords/keywords.controller.js';
 import { addCrewVehicles, RELEASE, ReportsService } from '../reports/reports.service.js';
 import { statisticsFromMpFeuer } from './mp-feuer-statistics.js';
 import { readIncidents } from './mp-feuer.transfer.js';
@@ -144,11 +147,12 @@ export class MpFeuerIncidentsImport {
         run: async ({ key, name }) => {
           const em = this.em.fork();
           if (await em.count(AlarmKeywordEntity, { key })) throw new ConflictException({ code: 'catalog.keyTaken', key });
-          const keyword = em.create(AlarmKeywordEntity, new ZodPipe(AlarmKeywordInput).transform({ key, name: { de: name, en: name } }));
+          const keyword = em.create(AlarmKeywordEntity, { ...new ZodPipe(AlarmKeywordInput).transform({ key, name: { de: name, en: name } }), aliases: [] });
           await em.flush();
           return { key: keyword.key, name: keyword.name };
         },
       },
+      remember: (key, value) => rememberKeywordAlias(this.em.fork(), key, value),
     };
   }
 
@@ -172,7 +176,8 @@ export class MpFeuerIncidentsImport {
       this.organization.catalog('function'),
     ]);
     const units = await this.reports.units.active();
-    const keywords = new Set((await em.find(AlarmKeywordEntity, {})).map((k) => k.key));
+    const keywordEntities = await em.find(AlarmKeywordEntity, {});
+    const keywords = new Set(keywordEntities.map((k) => k.key));
     const createdKeywords = new Set<string>();
     const persons = await this.directory.memberPeriods();
     const results: ImportRowResult[] = [];
@@ -223,7 +228,7 @@ export class MpFeuerIncidentsImport {
       // Keywords the user mapped to another one count as known; others can be created (also reported as unmatched,
       // so the user may choose an existing keyword instead).
       const source = (first['keyword'] ?? '').trim();
-      const keyword = keywords.has(source) ? source : (mapped('alarm-keyword', source) ?? source);
+      const keyword = keywords.has(source) ? source : (findByAlias(keywordEntities, source)?.key ?? mapped('alarm-keyword', source) ?? source);
       const groupMessages: ImportMessage[] = [];
       if (!keywords.has(keyword)) {
         if (keyword) unmatched('alarm-keyword', keyword);
@@ -232,7 +237,7 @@ export class MpFeuerIncidentsImport {
             failAll('incidents.unknownKeyword', { key: keyword, kind: 'alarm-keyword', value: keyword });
             continue;
           }
-          em.create(AlarmKeywordEntity, { key: keyword, name: { de: keyword, en: keyword }, requiresVehicle: true, compensationKind: 'incident' });
+          em.create(AlarmKeywordEntity, { key: keyword, name: { de: keyword, en: keyword }, requiresVehicle: true, compensationKind: 'incident', aliases: [] });
           createdKeywords.add(keyword);
           if (!dryRun) await em.flush();
         }
@@ -387,16 +392,16 @@ export class MpFeuerIncidentsImport {
   private vehicle(vehicles: Vehicle[], value: string): Vehicle | undefined {
     const wanted = normalizeHeading(value);
     if (!wanted) return undefined;
-    return vehicles.find((v) => normalizeHeading(v.radioCallSign) === wanted || normalizeHeading(v.designation) === wanted);
+    return vehicles.find((v) => normalizeHeading(v.radioCallSign) === wanted || normalizeHeading(v.designation) === wanted) ?? findByAlias(vehicles, value);
   }
 
-  /** Function by name or abbreviation of the catalog, e.g. "Maschinist", "GF", "EvD". */
+  /** Function by name, abbreviation or alias of the catalog, e.g. "Maschinist", "GF", "EvD". */
   private function(functions: CatalogEntry[], value: string): CatalogEntry | undefined {
     const wanted = normalizeHeading(value);
     if (!wanted) return undefined;
     return functions.find(
       (f) => f.active && [f.name.de, f.name.en, String(f.attributes['abbreviation'] ?? '')].some((n) => n && normalizeHeading(n) === wanted),
-    );
+    ) ?? functions.find((f) => f.active && hasAlias(f.aliases, value));
   }
 
   /** Standby is booked at the first station of the department. */

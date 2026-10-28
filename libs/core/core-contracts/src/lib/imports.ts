@@ -164,3 +164,11 @@ export const ImportLookupEntryInput = z.object({
   name: z.string().trim().min(1).max(200),
 });
 export type ImportLookupEntryInput = z.input<typeof ImportLookupEntryInput>;
+
+/**
+ * Other names of a record that imports match, e.g. "TLF 16/25" for the vehicle "TLF 3000". Imports remember the
+ * entry a user chose for an unknown value as alias of that entry. Compared like headings (case, umlauts, punctuation).
+ * In inputs optional: omitted, a new record has none and a changed record keeps its aliases.
+ */
+export const Aliases = z.array(z.string().trim().min(1).max(200)).max(100).optional();
+export type Aliases = z.input<typeof Aliases>;
