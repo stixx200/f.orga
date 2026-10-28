@@ -8,8 +8,8 @@ import { ExternalController } from './api/external.controller.js';
 import { IncidentsData } from './data/incidents.data.js';
 import { IncidentsLookupService } from './data/incidents.lookup.js';
 import { IncidentsDeadlines } from './deadlines/incidents.deadlines.js';
-import { ImportFunctionTargets } from './imports/function-targets.js';
-import { MpFeuerIncidentsImport } from './imports/mp-feuer.import.js';
+import { FUNCTION_TARGETS } from './imports/function-targets.js';
+import { PersonnelImport } from './imports/personnel.import.js';
 import {
   AlarmKeywordEntity,
   IncidentEntity,
@@ -42,7 +42,7 @@ import { TerminalBookingService } from './terminal/terminal-booking.service.js';
 @Module({
   controllers: [KeywordsController, IncidentsController, PersonAssignmentsController, MyIncidentsController, ExternalController, CompensationExportController, StatisticsController, UnitsController],
   providers: [
-    IncidentsData, ReportContextLoader, ReportsService, ReportPdf, ReportWriters, IncidentsDeadlines, AssignmentLines, IncidentsLists, MpFeuerIncidentsImport, ImportFunctionTargets, CompensationChecker,
+    IncidentsData, ReportContextLoader, ReportsService, ReportPdf, ReportWriters, IncidentsDeadlines, AssignmentLines, IncidentsLists, PersonnelImport, CompensationChecker,
     IncidentsLookupService, { provide: INCIDENTS_LOOKUP, useExisting: IncidentsLookupService },
     IncidentUnitsRegistry, { provide: INCIDENT_UNITS, useExisting: IncidentUnitsRegistry },
     UnitReportsService, { provide: INCIDENTS_UNIT_REPORTS, useExisting: UnitReportsService },
@@ -59,8 +59,7 @@ export class IncidentsModule implements OnModuleInit {
     private readonly lists: ListRegistry,
     private readonly incidentsLists: IncidentsLists,
     private readonly imports: ImportRegistry,
-    private readonly mpFeuerImport: MpFeuerIncidentsImport,
-    private readonly functionTargets: ImportFunctionTargets,
+    private readonly personnelImport: PersonnelImport,
     @Inject(ORGANIZATION_REFERENCES) private readonly references: OrganizationReferences,
     @Inject(CATALOG_REFERENCES) private readonly catalogReferences: CatalogReferences,
     private readonly search: SearchRegistry,
@@ -74,10 +73,10 @@ export class IncidentsModule implements OnModuleInit {
   onModuleInit(): void {
     this.deadlineRegistry.register(this.deadlines);
     for (const definition of this.incidentsLists.definitions()) this.lists.register('incidents', definition);
-    this.imports.register('incidents', this.mpFeuerImport.profile());
-    this.imports.registerLookup('incidents', this.mpFeuerImport.lookup());
-    // Function texts that are no function (e.g. "Arbeitszeit Stadt Erbach") can be mapped to flags of the personnel.
-    this.imports.registerLookupExtras('incidents', this.functionTargets.extras());
+    this.imports.register('incidents', this.personnelImport.profile());
+    this.imports.registerLookup('incidents', this.personnelImport.lookup());
+    // Function texts that are no function (e.g. "Arbeitszeit Stadt Musterstadt") can be mapped to flags of the personnel.
+    this.imports.registerLookupExtras('incidents', FUNCTION_TARGETS);
     // Reports keep the IDs of departments, vehicles and standby stations; those must not be deleted.
     this.references.register('incidents', (kind, id) => {
       const em = this.em.fork();

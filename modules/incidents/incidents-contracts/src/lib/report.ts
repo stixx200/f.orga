@@ -289,7 +289,7 @@ export const PersonnelEntry = z.object({
 export type PersonnelEntry = z.infer<typeof PersonnelEntry>;
 
 /** System that keeps a report as long as no person edits it in f.orga. */
-export const ReportManagedBy = z.enum(['api', 'mp-feuer']);
+export const ReportManagedBy = z.enum(['api', 'mp-feuer', 'import']);
 export type ReportManagedBy = z.infer<typeof ReportManagedBy>;
 
 export const Report = z.object({

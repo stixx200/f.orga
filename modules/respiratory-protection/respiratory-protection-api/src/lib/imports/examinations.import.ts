@@ -7,7 +7,6 @@ import { EvidenceEntity } from '../respiratory-protection.entities.js';
 import { EvidenceService, EXAMINATIONS } from '../evidence/evidence.service.js';
 import { parseResult } from './examination-result.js';
 import { matchPerson } from './person-match.js';
-import { readExaminations } from './evidence.transfer.js';
 
 const field = (key: string, de: string, en: string, aliases: string[], required = false) => ({ key, label: { de, en }, required, aliases });
 
@@ -41,7 +40,6 @@ export class ExaminationsImport {
       permission: EXAMINATIONS,
       fields: FIELDS,
       run: (rows, context) => this.run(rows, context),
-      transfer: { order: 30, read: readExaminations },
     };
   }
 

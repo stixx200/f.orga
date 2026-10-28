@@ -211,7 +211,6 @@ const de = {
     withdrawn: 'Entschuldigung zurückgenommen.',
   },
   errors: {
-    'training.aliasTaken': 'Die Bezeichnung „{{alias}}“ gehört schon zu einem anderen Diensttyp (Schlüssel, Name oder Alias).',
     'training.unknownType': 'Diese Art von Dienst gibt es nicht.',
     'training.closed': 'Der Dienst ist abgeschlossen.',
     'training.alreadyPresent': 'Sie sind für diesen Dienst schon als anwesend eingetragen.',
@@ -446,7 +445,6 @@ const en: typeof de = {
     withdrawn: 'Excuse withdrawn.',
   },
   errors: {
-    'training.aliasTaken': 'The name "{{alias}}" already belongs to another session type (key, name or alias).',
     'training.unknownType': 'This kind of session does not exist.',
     'training.closed': 'The session is closed.',
     'training.alreadyPresent': 'You are already recorded as present for this session.',

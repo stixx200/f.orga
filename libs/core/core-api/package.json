@@ -23,7 +23,6 @@
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "exceljs": "^4.4.0",
-    "fflate": "^0.8.3",
     "nodemailer": "^10.2.1",
     "openid-client": "^6.8.8",
     "pdfmake": "^0.3.12",

@@ -22,7 +22,6 @@ import { OrganizationDirectory } from '../security/organization-directory.js';
 import { CurrentUser, RequirePermissions } from '../security/decorators.js';
 import { SettingsService } from '../settings/settings.js';
 import { IMPORT_EXPIRY_MS, ImportUploadEntity } from '../imports/imports.js';
-import { ImportTransferEntity } from '../imports/transfers.js';
 import { ZodPipe } from '../zod.pipe.js';
 
 export const EXPORT_PERMISSION = 'core.data.export';
@@ -176,11 +175,9 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
     cutoff.setMonth(cutoff.getMonth() - settings.auditRetentionMonths);
     const em = this.em.fork();
     counts['core.audit'] = dryRun ? await em.count(AuditEntry, { timestamp: { $lt: cutoff } }) : await em.nativeDelete(AuditEntry, { timestamp: { $lt: cutoff } });
-    // Uploaded import files and data transfers hold personal data; nobody needs them after a day.
+    // Uploaded import files hold personal data; nobody needs them after a day.
     const expired = { createdAt: { $lt: new Date(Date.now() - IMPORT_EXPIRY_MS) } };
-    counts['core.imports'] = dryRun
-      ? (await em.count(ImportUploadEntity, expired)) + (await em.count(ImportTransferEntity, expired))
-      : (await em.nativeDelete(ImportUploadEntity, expired)) + (await em.nativeDelete(ImportTransferEntity, expired));
+    counts['core.imports'] = dryRun ? await em.count(ImportUploadEntity, expired) : await em.nativeDelete(ImportUploadEntity, expired);
     for (const [key, rule] of this.registry.rules) counts[key] = await rule.run(settings, dryRun);
     if (!dryRun && Object.values(counts).some((c) => c > 0)) await this.audit.log('privacy.retention-applied', counts, null);
     return { dryRun, counts };

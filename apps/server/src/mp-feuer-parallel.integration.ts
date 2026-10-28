@@ -1,16 +1,12 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { zipSync } from 'fflate';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DomainEvents } from '@forga/core-api';
 import { INCIDENTS_EVENTS, type ReportReleasedEvent, type ReportUnlockedEvent } from '@forga/incidents-contracts';
+import { mpFeuerClient, transferZip } from './testing/mp-feuer';
 import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
 
 /**
  * Parallel operation with MP-Feuer: incidents are written and released in MP-Feuer and come again with every data
- * transfer; f.orga issues notices and pays compensation from them.
+ * transfer of the module MP-Feuer; f.orga issues notices and pays compensation from them.
  */
 let test: TestApp;
 let admin: string;
@@ -21,29 +17,6 @@ const unlocked: ReportUnlockedEvent[] = [];
 const post = (path: string, body: unknown) => test.http.post(`/api${path}`).set('Cookie', admin).set(UI).send(body as object);
 const get = (path: string) => test.http.get(`/api${path}`).set('Cookie', admin);
 const put = (path: string, body: unknown) => test.http.put(`/api${path}`).set('Cookie', admin).set(UI).send(body as object);
-
-type Tables = Record<string, Record<string, string | number>[]>;
-
-/** An MP-Feuer transfer archive with the given tables (all columns as text, like MP-Feuer's own types). */
-function transferZip(tables: Tables): Buffer {
-  const dir = mkdtempSync(join(tmpdir(), 'forga-mptra-parallel-'));
-  try {
-    const path = join(dir, 'transfer.db');
-    const db = new DatabaseSync(path);
-    for (const [table, rows] of Object.entries(tables)) {
-      const columns = [...new Set(rows.flatMap((r) => Object.keys(r)))];
-      db.exec(`create table ${table} (${columns.map((c) => `${c} TEXT`).join(', ')})`);
-      for (const row of rows) {
-        db.prepare(`insert into ${table} (${columns.join(', ')}) values (${columns.map(() => '?').join(', ')})`).run(...columns.map((c) => (row[c] === undefined ? null : String(row[c]))));
-      }
-    }
-    db.close();
-    const info = new TextEncoder().encode('[content]\r\ntype=transfer\r\ntraversion=1\r\nencrypted=0\r\n');
-    return Buffer.from(zipSync({ 'transfer.db': readFileSync(path), 'MPTRA.IFO': info, 'content.xml': new Uint8Array() }));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
 
 const person = (id: string, firstName: string, lastName: string) => ({
   PER_ID: id, PER_NR: '', PER_ANREDE: '', PER_VORNAME: firstName, PER_NACHNAME: lastName, PER_STRASSE: '', PER_PLZ: '', PER_ORT: '', PER_TEL_PRIV: '', PER_TEL_GES: '',
@@ -121,17 +94,16 @@ const fourth = transferZip({
 
 const FILE = 'MPTRA_01_2026-10-25-074935_Abt._Musterstadt.zip';
 
-async function upload(archive: Buffer): Promise<{ id: string; remembered: { departments: Record<string, string | null>; options: Record<string, Record<string, boolean>> } }> {
-  return (await test.http.post('/api/core/imports/transfers').set('Cookie', admin).set(UI).attach('files', archive, FILE).expect(201)).body;
-}
+let mp: ReturnType<typeof mpFeuerClient>;
 
-async function importIncidents(archive: Buffer, departments: Record<string, string> = {}) {
-  const transfer = await upload(archive);
-  // The routine transfer uses the remembered choices; persons only once.
-  const request = { departments: { ...transfer.remembered.departments, ...departments }, options: transfer.remembered.options['incidents.mp-feuer'] ?? {} };
-  const result = (await post(`/core/imports/transfers/${transfer.id}/apply`, { profile: 'incidents.mp-feuer', ...request }).expect(200)).body;
-  await test.http.delete(`/api/core/imports/transfers/${transfer.id}`).set('Cookie', admin).set(UI).expect(204);
-  return result as { counts: Record<string, number>; rows: { action: string; messages: { code: string }[] }[] };
+/** The routine transfer: upload, the remembered selection with only the incident personnel, dry run, apply. */
+async function importIncidents(archive: Buffer) {
+  const run = await mp.upload([[archive, FILE]]);
+  await mp.select(run.id, { datasets: Object.fromEntries(run.datasets.map((d) => [d.profile, { enabled: d.profile === 'incidents.personnel' }])) });
+  await mp.dryRun(run.id);
+  const applied = await mp.apply(run.id);
+  expect(applied.status).toBe('applied');
+  return { counts: applied.datasets.find((d) => d.profile === 'incidents.personnel')!.counts!, report: await mp.report(run.id) };
 }
 
 type IncidentSummary = { id: string; dispatchNumber: string; alarmKeyword: string; location: { street: string }; reports: { id: string; status: string; managedBy: string | null }[] };
@@ -143,6 +115,7 @@ const itemsOf = async (reportId: string) => ((await get('/compensation/items?ope
 beforeAll(async () => {
   test = await startTestApp();
   admin = await setUp(test);
+  mp = mpFeuerClient(test, () => admin);
   await post('/masterdata/catalog/templates/bw', {}).expect(201);
   ids.musterstadt = (await post('/masterdata/departments', { name: 'Abteilung Musterstadt', shortName: 'Musterstadt', type: 'operational' }).expect(201)).body.id;
   ids.lf = (await post('/masterdata/vehicles', { designation: 'LF 20/16', vehicleType: 'lf-20-16', departmentId: ids.musterstadt }).expect(201)).body.id;
@@ -155,12 +128,15 @@ afterAll(() => test?.app.close());
 
 describe('Parallel operation with MP-Feuer', () => {
   it('remembers the choices of a transfer for the next one', async () => {
-    const transfer = await upload(first);
-    expect(transfer.remembered).toEqual({ departments: {}, units: {}, options: {} });
-    const departments = { '01': 'Abteilung Musterstadt' };
-    expect((await post(`/core/imports/transfers/${transfer.id}/apply`, { profile: 'masterdata.persons', departments }).expect(200)).body.counts).toMatchObject({ create: 2 });
-    await test.http.delete(`/api/core/imports/transfers/${transfer.id}`).set('Cookie', admin).set(UI).expect(204);
-    expect((await upload(first)).remembered).toMatchObject({ departments, options: { 'masterdata.persons': {} } });
+    const run = await mp.upload([[first, FILE]]);
+    expect(run.archives).toMatchObject([{ key: '01', department: 'Abteilung Musterstadt', remembered: false }]);
+    await mp.select(run.id, { datasets: Object.fromEntries(run.datasets.map((d) => [d.profile, { enabled: d.profile === 'masterdata.persons' }])) });
+    await mp.dryRun(run.id);
+    expect((await mp.apply(run.id)).datasets.find((d) => d.profile === 'masterdata.persons')?.counts).toMatchObject({ create: 2 });
+    const next = await mp.upload([[first, FILE]]);
+    expect(next.archives).toMatchObject([{ key: '01', department: 'Abteilung Musterstadt', remembered: true }]);
+    expect(next.datasets.find((d) => d.profile === 'incidents.personnel')?.enabled).toBe(false);
+    await test.http.delete(`/api/mp-feuer/runs/${next.id}`).set('Cookie', admin).set(UI).expect(204);
   });
 
   it('announces releases of MP-Feuer from the configured day on and keeps its reports read-only', async () => {
@@ -230,7 +206,7 @@ describe('Parallel operation with MP-Feuer', () => {
     released.length = 0;
     const result = await importIncidents(third);
     // The report row and both crew rows of the storm.
-    expect(result.rows.filter((r) => r.messages.some((m) => m.code === 'incidents.import.reportEdited'))).toHaveLength(3);
+    expect(result.report.messages.find((m: { code: string }) => m.code === 'incidents.import.reportEdited')).toMatchObject({ count: 3 });
     expect((await reportOf('1260000002')).personnel).toHaveLength(1);
 
     const fire = await reportOf('1260000001');

@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["DOM", "DOM.Iterable", "ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "rootDir": "src",
+    "outDir": "out-tsc",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "tsBuildInfoFile": "out-tsc/tsconfig.tsbuildinfo",
+    "types": ["vite/client"]
+  },
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../../../libs/core/core-contracts"
+    },
+    {
+      "path": "../../masterdata/masterdata-contracts"
+    },
+    {
+      "path": "../mp-feuer-contracts"
+    },
+    {
+      "path": "../../../libs/web/web-ui"
+    },
+    {
+      "path": "../../../libs/web/web-sdk"
+    }
+  ]
+}

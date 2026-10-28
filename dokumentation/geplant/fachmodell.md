@@ -62,13 +62,13 @@ Offen:
 
 ### Import und Export
 
-Umgesetzt sind der Import-Assistent (Hochladen, Zuordnen mit Vorschlägen, Probelauf, idempotente Übernahme, Audit), das Personenprofil mit den Überschriften des MP-Feuer-Exports `Personal.xlsx` und die Datenübernahme aus MP-Feuer-Transferdateien (siehe [implementiert/architektur.md](../implementiert/architektur.md#import)). Jede Liste ist als CSV/Excel exportierbar.
+Umgesetzt sind der Import-Assistent (Hochladen, Zuordnen mit Vorschlägen, Probelauf, idempotente Übernahme, Audit), das Personenprofil mit den Überschriften des MP-Feuer-Exports `Personal.xlsx`, die gemerkten Zuordnungen und das Modul MP-Feuer für die Transferdateien (siehe [implementiert/architektur.md](../implementiert/architektur.md#import)). Jede Liste ist als CSV/Excel exportierbar.
 
 Offen:
 - **Vollexport** je Modul als JSON (versioniertes Format, IDs bleiben erhalten) für Umzug, Sicherung auf Fachebene und Auswertungen außerhalb; Import solcher Dateien
 - **MP-Feuer-Migration der Einsätze**: Profil für den Berichtsexport `Einsatzberichte_Zusatz.xlsx` (Wetter, Sachschaden, Brandfläche; Spalten siehe [Altanwendungen](../recherche/altanwendungen.md)). Der Personalexport `Einsaetze_Personal.xlsx` wird schon übernommen.
 - **Jugendfeuerwehr aus MP-Feuer**: Erziehungsberechtigte (`JUG_EB_1/2_*`) und Jugendgruppen (`Einheiten`) aus dem Export bzw. der Transferdatei der Jugendfeuerwehr
-- **Weitere Inhalte der MP-Feuer-Transferdateien** (die [Datenübernahme](../implementiert/architektur.md#datenübernahme-aus-mp-feuer) liest Personen, Lehrgänge, Dienstgrade, Ehrungen, G26, Belastungsübungen, Dienste und Einsätze): Fahrzeuge (`FZG_*`) und Geräte (`GAS_*`, `GSO_*`, `GFU_*` usw. mit Prüfungen) für Stammdaten und Gerätewartung, Fahrzeuge je Einsatz ohne Besatzung (`EIN_FAHRZ`), Funktionen und Dienststellungen aus `PER_HIST`, Atemschutz-Heißausbildung (`AS-BÜC`) und Atemschutzeinsätze aus `PER_PRUEF`, Einsatzwachen (`EIW_*`), Vergütungen (`VPE_*`), Kleiderkammer (`KLD_*`, `PER_AUSR`)
+- **Weitere Inhalte der MP-Feuer-Transferdateien** (das [Modul MP-Feuer](../implementiert/architektur.md#modul-mp-feuer-mp-feuer) liest Personen, Lehrgänge, Dienstgrade, Ehrungen, G26, Belastungsübungen, Dienste und Einsätze): Fahrzeuge (`FZG_*`) und Geräte (`GAS_*`, `GSO_*`, `GFU_*` usw. mit Prüfungen) für Stammdaten und Gerätewartung, Fahrzeuge je Einsatz ohne Besatzung (`EIN_FAHRZ`), Funktionen und Dienststellungen aus `PER_HIST`, Atemschutz-Heißausbildung (`AS-BÜC`) und Atemschutzeinsätze aus `PER_PRUEF`, Einsatzwachen (`EIW_*`), Vergütungen (`VPE_*`), Kleiderkammer (`KLD_*`, `PER_AUSR`)
 - Audit-Eintrag für Vollexporte
 - **Parallelbetrieb mit MP-Feuer** (umgesetzt ist der [Grundablauf](../implementiert/parallelbetrieb-mp-feuer.md)), offen:
   - in MP-Feuer gelöschte Einsätze und Berichte erkennen: Berichte aus MP-Feuer im Zeitraum der Transferdateien, die nicht mehr vorkommen, nach der Übernahme zur Prüfung auflisten (nicht automatisch löschen)
@@ -226,9 +226,22 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Importprofil | `ImportProfile` |
 | Nicht zugeordnete Bezeichnung (Import) | `ImportUnmatched`, Zuordnung `mappings` |
 | Nachschlageliste (Import) | `ImportLookup` |
-| Alias (weitere Bezeichnung für Importe, gemerkte Zuordnung) | `aliases`, `ImportLookup.remember` |
+| Gemerkte Zuordnung (Bezeichnung eines Imports → Eintrag oder Zusatzziel) | `RememberedMapping`, `MappingStore`; Listen `core.import_mapping` (`ImportMappings`, Tabellen-Import) und `mp_feuer.mapping` (`MpFeuerMappings`) |
+| Ziel gelöscht / Ziel inaktiv (gemerkte Zuordnung) | `targetState` `deleted` / `inactive` |
+| Weitere Spaltenüberschriften eines Importfelds | `ImportField.aliases` |
 | Zusatzziel einer Nachschlageliste (z. B. „Keine Funktion – Verdienstausfall“) | `ImportLookupExtras`, `registerLookupExtras` |
-| Gemerkte Regel für Funktionstexte ohne Funktion (MP-Feuer-Import) | `ImportFunctionRules`, `ImportFunctionTarget`, Einstellungsabschnitt `incidents.importFunctionRules` |
+| Ziel für Funktionstexte ohne Funktion (Einsatzpersonal) | `ImportFunctionTarget`, Schlüssel `incidents:during-working-hours` usw. |
+| Tabellen-Import | table import, `ImportService.run`/`runRows` mit `mappingList: 'core'` |
+| Quelle eines Imports | `ImportSource` (`ImportContext.source`) |
+| Einsatzpersonal (Importprofil) | `incidents.personnel` |
+| Modul MP-Feuer, Datenübernahme | `mp-feuer` |
+| Lauf (Datenübernahme) | run (`mp_feuer.run`, `MpFeuerRun`) |
+| Datensatz (eines Laufs) | dataset (`mp_feuer.run_dataset`, `RunDataset`) |
+| Teil (eines Datensatzes) | part (`MP_FEUER_PART_SIZE`) |
+| Probelauf | dry run (`dry-run`) |
+| Archiv (Transferdatei), Archivnummer | archive (`RunArchive`, `key`) |
+| Gemerkte Auswahl (MP-Feuer) | `MpFeuerRemembered`, Einstellungsabschnitt `mp-feuer.remembered` |
+| Export nach MP-Feuer | `MpFeuerExportAdapter` |
 
 ### Kleiderkammer
 

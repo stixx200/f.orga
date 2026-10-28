@@ -31,8 +31,6 @@ export const AlarmKeywordSchema = defineEntity({
     requiresVehicle: p.boolean().default(true),
     compensationKind: p.string().$type<CompensationKind>().default('incident'),
     active: p.boolean().default(true),
-    /** Other names imports match the keyword by; unique among the keywords. */
-    aliases: p.json<string[]>(),
     version: p.integer().version(),
   },
 });
@@ -124,7 +122,8 @@ export const ReportSchema = defineEntity({
     acknowledgements: p.json<StoredAcknowledgement[]>(),
     /**
      * System that created the report and keeps it until a person edits it in f.orga: `api` (only then the API adds
-     * personnel) or `mp-feuer` (a new import replaces it); `null`: f.orga.
+     * personnel), `mp-feuer` (run of the module MP-Feuer; protected while MP-Feuer leads) or `import` (table import);
+     * a new import replaces it. `null`: f.orga.
      */
     managedBy: p.string().$type<ReportManagedBy>().nullable(),
     personnel: () => p.oneToMany(ReportPersonnelEntity).mappedBy('report').orphanRemoval(),

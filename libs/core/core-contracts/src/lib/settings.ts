@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { LocalizedText } from './i18n.js';
-import { TransferSettings } from './imports.js';
 import { ReminderSettings } from './tasks.js';
 
 function isPublicUrl(value: string): boolean {
@@ -88,8 +87,6 @@ export const CORE_SETTINGS = {
   reminders: ReminderSettings,
   privacy: PrivacySettings,
   oidc: OidcSettings,
-  /** Remembered choices of the MP-Feuer data transfer; written by the transfer, not on a settings page. */
-  transfer: TransferSettings,
 } as const;
 
 /** Fields that are write-only and never leave the server. */
@@ -124,5 +121,4 @@ export const CORE_SETTINGS_ACCESS: Record<string, SettingsAccess> = {
   oidc: { managersOnly: true },
   privacy: { managersOnly: true },
   reminders: { managersOnly: true },
-  transfer: { managersOnly: true },
 };

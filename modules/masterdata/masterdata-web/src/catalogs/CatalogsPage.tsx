@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { ActiveModule } from '@forga/core-contracts';
 import { type CatalogEntry, CatalogKind, type CatalogUsage, type Course, type CourseInput, type PersonStatus, VEHICLE_STATISTICS_CATEGORIES } from '@forga/masterdata-contracts';
 import { api, ApiError, send, useLocalized, useTranslation } from '@forga/web-sdk';
-import { AliasesInput, DataTable, Notice, notifySuccess, PageHeader, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { DataTable, Notice, notifySuccess, PageHeader, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { useCatalog, useDepartments } from '../api';
 import { useCourses } from '../persons/CoursesTab';
 
@@ -32,11 +32,10 @@ function EntryDialog({ kind, entry, onClose }: { kind: CatalogKind; entry?: Cata
     sortOrder: entry?.sortOrder ?? 0,
     active: entry?.active ?? true,
     attributes: { ...entry?.attributes } as Record<string, unknown>,
-    aliases: entry?.aliases ?? [],
   }));
   const save = useAction(
     () => {
-      const body = { kind, key: form.key, name: { de: form.de, en: form.en || form.de }, sortOrder: form.sortOrder, active: form.active, attributes: form.attributes, aliases: form.aliases };
+      const body = { kind, key: form.key, name: { de: form.de, en: form.en || form.de }, sortOrder: form.sortOrder, active: form.active, attributes: form.attributes };
       return entry ? send('PUT', `masterdata/catalog/${entry.id}`, body) : send('POST', 'masterdata/catalog', body);
     },
     { success: t('catalogs.saved'), invalidate: [['masterdata', 'catalog', kind]], onSuccess: onClose },
@@ -84,7 +83,6 @@ function EntryDialog({ kind, entry, onClose }: { kind: CatalogKind; entry?: Cata
           <Checkbox key={f.key} label={t(`catalogs.attributes.${f.key}`)} description={t(`catalogs.${f.key}Hint`)} checked={form.attributes[f.key] === true} onChange={(e) => attribute(f.key, e.currentTarget.checked)} />
         ))}
         <Switch label={t('catalogs.active')} description={t('catalogs.activeHint')} checked={form.active} onChange={(e) => setForm({ ...form, active: e.currentTarget.checked })} />
-        <AliasesInput value={form.aliases} onChange={(aliases) => setForm({ ...form, aliases })} />
       </Stack>
     </ResponsiveDialog>
   );

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Aliases, LocalizedText } from '@forga/core-contracts';
+import { LocalizedText } from '@forga/core-contracts';
 
 /**
  * Catalogs maintained by the administrator. Entries are referenced by their stable `key`,
@@ -48,8 +48,6 @@ export const CatalogEntryInput = z.object({
   sortOrder: z.number().int().default(0),
   active: z.boolean().default(true),
   attributes: z.record(z.string(), z.unknown()).default({}),
-  /** Other names imports match the entry by, e.g. "Masch." for "Maschinist". */
-  aliases: Aliases,
 });
 export type CatalogEntryInput = z.input<typeof CatalogEntryInput>;
 
@@ -61,7 +59,6 @@ export const CatalogEntry = z.object({
   sortOrder: z.number(),
   active: z.boolean(),
   attributes: z.record(z.string(), z.unknown()),
-  aliases: z.array(z.string()),
   version: z.number(),
 });
 export type CatalogEntry = z.infer<typeof CatalogEntry>;

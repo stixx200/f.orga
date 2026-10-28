@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { Aliases } from '@forga/core-contracts';
 import { VEHICLE_STATISTICS_CATEGORY_IDS } from './vehicle-statistics-categories.js';
 
 export const VehicleStatus = z.enum(['in-service', 'out-of-service', 'retired']);
@@ -27,8 +26,6 @@ export const VehicleInput = z.object({
     .default(null),
   status: VehicleStatus.default('in-service'),
   notes: z.string().default(''),
-  /** Other names imports match the vehicle by besides designation and radio call sign, e.g. an old designation. */
-  aliases: Aliases,
 });
 export type VehicleInput = z.input<typeof VehicleInput>;
 
@@ -48,7 +45,6 @@ export const Vehicle = z.object({
   statisticsCategory: z.string(),
   status: VehicleStatus,
   notes: z.string(),
-  aliases: z.array(z.string()),
   version: z.number().int(),
 });
 export type Vehicle = z.infer<typeof Vehicle>;

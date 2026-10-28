@@ -10,6 +10,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -24,20 +25,24 @@ import {
   type ImportRememberedUrl,
   ImportRequest,
   type ImportResult,
+  type ImportSource,
   type ImportUpload,
   ImportUrlRequest,
+  type ImportValueMappings,
+  type RememberedMapping,
 } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { CurrentUser } from '../security/decorators.js';
 import { decryptSecret, encryptSecret, serverKey } from '../security/server-key.js';
 import { ZodPipe } from '../zod.pipe.js';
-import { ImportRegistry, type ImportRow } from './import-registry.js';
+import { ImportMappings } from './import-mappings.js';
+import { ImportRegistry, type ImportRow, type ImportRunOutcome, type RememberedValues } from './import-registry.js';
 import { type ParsedTable, parseCsv, parseIcs, parseXlsx } from './parse.js';
 import { displayUrl, fetchCalendar, UrlImportError } from './url-fetch.js';
 
 const MAX_SIZE = 10 * 1024 * 1024;
-/** Uploads and data transfers are removed after a day, also when never imported (retention run). */
+/** Uploads are removed after a day, also when never imported (retention run). */
 export const IMPORT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 /** An uploaded file between upload and import; removed after the import or after 24 hours. */
@@ -83,6 +88,28 @@ type ParsedUrlRequest = ReturnType<typeof ImportUrlRequest.parse>;
 /** `FORGA_IMPORT_URL_ALLOW_PRIVATE=true`: calendars may also be loaded from local and private addresses. */
 const allowPrivateAddresses = () => process.env['FORGA_IMPORT_URL_ALLOW_PRIVATE'] === 'true';
 
+/** Rows for a profile, from a file of the table import or from a module (e.g. the transfer files of MP-Feuer). */
+export interface RunRowsInput {
+  user: AuthenticatedUser;
+  /** ID of the import profile; the user needs its permission. */
+  profile: string;
+  rows: ImportRow[];
+  /** Missing options get the profile's default. */
+  options?: Record<string, boolean>;
+  /** Entries chosen for unknown values. */
+  mappings?: ImportValueMappings;
+  dryRun: boolean;
+  source: ImportSource;
+  /**
+   * `core`: read the mapping list of the table import and remember the used mappings in it after an apply; `none`: the
+   * caller keeps a list of its own, passes it as `remembered` and remembers the returned `used` mappings itself.
+   */
+  mappingList: 'core' | 'none';
+  remembered?: RememberedValues;
+  /** Further details of the audit entry `imports.applied`, e.g. the file name. */
+  audit?: Record<string, unknown>;
+}
+
 /** The part of a multer file the import needs. */
 interface UploadedFileData {
   originalname: string;
@@ -95,7 +122,27 @@ export class ImportService {
     private readonly em: EntityManager,
     private readonly registry: ImportRegistry,
     private readonly audit: Audit,
+    private readonly mappings: ImportMappings,
   ) {}
+
+  /**
+   * Runs a profile in-process: checks the permission of the profile (`404 imports.unknownProfile`) and the mappings,
+   * runs the profile with the remembered mappings and writes `imports.applied` after an apply. Used by the table import
+   * and by modules feeding rows into the profiles of other modules.
+   */
+  async runRows(input: RunRowsInput): Promise<ImportRunOutcome> {
+    const { user, dryRun, source } = input;
+    const profile = this.registry.get(input.profile);
+    if (!profile || !user.can(profile.permission)) throw new NotFoundException({ code: 'imports.unknownProfile' });
+    const options = Object.fromEntries((profile.options ?? []).map((o) => [o.key, input.options?.[o.key] ?? o.default]));
+    const remembered = input.mappingList === 'core' ? await this.mappings.remembered() : input.remembered;
+    const outcome = await this.registry.run(profile, input.rows, { user, options, dryRun, source, mappings: input.mappings ?? {}, remembered });
+    if (!dryRun) {
+      if (input.mappingList === 'core') await this.mappings.remember(outcome.used, profile.id, user);
+      await this.audit.log('imports.applied', { profile: profile.id, source, ...input.audit, counts: outcome.result.counts });
+    }
+    return outcome;
+  }
 
   async upload(user: AuthenticatedUser, file: UploadedFileData | undefined): Promise<ImportUpload> {
     if (!file) throw new BadRequestException({ code: 'imports.fileMissing' });
@@ -201,15 +248,18 @@ export class ImportService {
       row: index + 2,
       values: Object.fromEntries(columns.map(([key, i]) => [key, cells[i] ?? ''])),
     }));
-    const options = Object.fromEntries(
-      (profile.options ?? []).map((o) => [o.key, request.options[o.key] ?? o.default]),
-    );
-
-    const result = await this.registry.run(profile, rows, { user, options, dryRun, mappings: request.mappings });
-    if (!dryRun) {
-      await em.nativeDelete(ImportUploadEntity, { id: upload.id });
-      await this.audit.log('imports.applied', { profile: profile.id, fileName: upload.fileName, counts: result.counts });
-    }
+    const { result } = await this.runRows({
+      user,
+      profile: profile.id,
+      rows,
+      options: request.options,
+      mappings: request.mappings,
+      dryRun,
+      source: { module: 'core' },
+      mappingList: 'core',
+      audit: { fileName: upload.fileName },
+    });
+    if (!dryRun) await em.nativeDelete(ImportUploadEntity, { id: upload.id });
     return result;
   }
 }
@@ -219,8 +269,31 @@ export class ImportsController {
   constructor(
     private readonly registry: ImportRegistry,
     private readonly imports: ImportService,
+    private readonly mappings: ImportMappings,
     private readonly audit: Audit,
   ) {}
+
+  /** Mappings remembered by the table import, with the state of their targets; for users of any import profile. */
+  @Get('mappings')
+  async rememberedMappings(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('kind') kind?: string,
+    @Query('q') q?: string,
+    @Query('problems') problems?: string,
+  ): Promise<RememberedMapping[]> {
+    if (!this.registry.available(user).length) throw new NotFoundException({ code: 'imports.unknownProfile' });
+    return this.mappings.list({ kind: kind || undefined, q, problems: problems === 'true' });
+  }
+
+  /** Forgets a mapping: the next import reports the value as unmatched again. */
+  @Delete('mappings/:id')
+  @HttpCode(204)
+  async deleteMapping(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<void> {
+    if (!this.registry.available(user).length) throw new NotFoundException({ code: 'imports.unknownProfile' });
+    const removed = await this.mappings.remove(id);
+    if (!removed) throw new NotFoundException({ code: 'imports.mappingNotFound' });
+    await this.audit.log('imports.mapping-deleted', { kind: removed.kind, value: removed.value, key: removed.key });
+  }
 
   @Get('profiles')
   profiles(@CurrentUser() user: AuthenticatedUser): ImportProfileInfo[] {

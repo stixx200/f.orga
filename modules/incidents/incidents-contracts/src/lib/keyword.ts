@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Aliases, LocalizedText } from '@forga/core-contracts';
+import { LocalizedText } from '@forga/core-contracts';
 import { FalseAlarmType, MainType, TechnicalCategory } from './statistics.js';
 
 export const CompensationKind = z.enum(['incident', 'standby', 'fire-watch']);
@@ -20,8 +20,6 @@ export const AlarmKeywordInput = z.object({
   requiresVehicle: z.boolean().default(true),
   compensationKind: CompensationKind.default('incident'),
   active: z.boolean().default(true),
-  /** Other names imports match the keyword by, e.g. "B 3" for "B3". */
-  aliases: Aliases,
 });
 export type AlarmKeywordInput = z.input<typeof AlarmKeywordInput>;
 
@@ -35,7 +33,6 @@ export const AlarmKeyword = z.object({
   requiresVehicle: z.boolean(),
   compensationKind: CompensationKind,
   active: z.boolean(),
-  aliases: z.array(z.string()),
   version: z.number(),
 });
 export type AlarmKeyword = z.infer<typeof AlarmKeyword>;
