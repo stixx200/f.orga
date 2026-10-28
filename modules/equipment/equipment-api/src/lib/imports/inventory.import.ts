@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { berlinDate, type ImportContext, type ImportProfile, type ImportRow, normalizeHeading, parseDate } from '@forga/core-api';
-import { type ImportResult, type ImportRowResult, normalizeRfid } from '@forga/core-contracts';
+import { berlinDate, type ImportContext, type ImportProfile, type ImportRow, type ImportRunResult, normalizeHeading, parseDate } from '@forga/core-api';
+import { type ImportRowResult, normalizeRfid } from '@forga/core-contracts';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
 import { CategoryEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity } from '../equipment.entities.js';
 import { WRITE } from '../items/items.service.js';
@@ -58,7 +58,7 @@ export class InventoryImport {
    * category, vehicle, serial number …). A type or category that is given but unknown is an error. A "last inspection"
    * that cannot be assigned to an inspection type is not taken over; the row says so (`equipment.import.inspectionDiscarded`).
    */
-  private async run(rows: ImportRow[], { user, dryRun }: ImportContext): Promise<ImportResult> {
+  private async run(rows: ImportRow[], { user, dryRun }: ImportContext): Promise<ImportRunResult> {
     const em = this.em.fork();
     const departments = await this.organization.departments();
     const vehicles = await this.organization.vehicles();

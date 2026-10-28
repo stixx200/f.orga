@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import { Audit, berlinDate, type ImportContext, type ImportProfile, type ImportRow, parseDate } from '@forga/core-api';
-import type { ImportResult, ImportRowResult } from '@forga/core-contracts';
+import { Audit, berlinDate, type ImportContext, type ImportProfile, type ImportRow, type ImportRunResult, parseDate } from '@forga/core-api';
+import type { ImportRowResult } from '@forga/core-contracts';
 import { OPEN_STATUSES, paidOf, parseAmount, round2, totalOf } from '@forga/cost-recovery-contracts';
 import { NoticeEntity } from '../cost-recovery.entities.js';
 
@@ -47,7 +47,7 @@ export class PaymentsImport {
     };
   }
 
-  private async run(rows: ImportRow[], { dryRun, user }: ImportContext): Promise<ImportResult> {
+  private async run(rows: ImportRow[], { dryRun, user }: ImportContext): Promise<ImportRunResult> {
     const em = this.em.fork();
     const results: ImportRowResult[] = [];
     const today = berlinDate();

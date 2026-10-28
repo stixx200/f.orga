@@ -1,11 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { berlinTime, type ImportContext, type ImportProfile, type ImportRow, normalizeHeading, parseDate, parseLocalDateTime } from '@forga/core-api';
-import type { ImportResult, ImportRowResult } from '@forga/core-contracts';
-import type { AttendanceStatus } from '@forga/training-contracts';
+import { berlinTime, type ImportContext, type ImportLookup, type ImportProfile, type ImportRow, type ImportRunResult, normalizeHeading, parseDate, parseLocalDateTime, ZodPipe } from '@forga/core-api';
+import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
+import { type AttendanceStatus, SessionTypeInput } from '@forga/training-contracts';
 import { membersOnDate, ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { AttendanceEntity, SessionEntity, SessionTypeEntity } from '../training.entities.js';
-import { PLAN } from '../sessions/sessions.service.js';
+import { PLAN, SETTINGS } from '../sessions/sessions.service.js';
 import { readSessions } from './sessions.transfer.js';
 
 const field = (key: string, de: string, en: string, aliases: string[], required = false) => ({ key, label: { de, en }, required, aliases });
@@ -58,7 +58,29 @@ export class SessionsImport {
     };
   }
 
-  private async run(rows: ImportRow[], { user, dryRun }: ImportContext): Promise<ImportResult> {
+  /** Session types for types of the file that are not known. */
+  lookup(): ImportLookup {
+    return {
+      kind: 'session-type',
+      name: { de: 'Diensttypen', en: 'Session types' },
+      keyFormat: 'slug',
+      entries: async () =>
+        (await this.em.fork().find(SessionTypeEntity, { active: true }, { orderBy: { sortOrder: 'asc', key: 'asc' } })).map((t) => ({ key: t.key, name: t.name })),
+      create: {
+        permission: SETTINGS,
+        run: async ({ key, name }) => {
+          const em = this.em.fork();
+          if (await em.count(SessionTypeEntity, { key })) throw new ConflictException({ code: 'catalog.keyTaken', key });
+          const last = await em.findOne(SessionTypeEntity, {}, { orderBy: { sortOrder: 'desc' } });
+          const type = em.create(SessionTypeEntity, new ZodPipe(SessionTypeInput).transform({ key, name: { de: name, en: name }, sortOrder: (last?.sortOrder ?? 0) + 10 }));
+          await em.flush();
+          return { key: type.key, name: type.name };
+        },
+      },
+    };
+  }
+
+  private async run(rows: ImportRow[], { user, dryRun, mapped, unmatched }: ImportContext): Promise<ImportRunResult> {
     const em = this.em.fork();
     const departments = await this.organization.departments();
     const types = await em.find(SessionTypeEntity, {});
@@ -88,9 +110,13 @@ export class SessionsImport {
       if (!date) { fail('imports.invalidDate'); continue; }
       if (!department) { fail('masterdata.import.unknownDepartment', { name: first['department'] ?? '' }); continue; }
       if (!user.can(PLAN, department.id)) { fail('auth.forbidden'); continue; }
-      const typeText = normalizeHeading(first['type'] ?? '');
-      const type = types.find((t) => t.key === typeText || normalizeHeading(t.name.de) === typeText) ?? types.find((t) => t.key === 'exercise') ?? types[0];
-      if (!type) { fail('training.unknownType', { key: first['type'] ?? '' }); continue; }
+      // Unknown types become exercises unless the user chose a type for them.
+      const typeSource = (first['type'] ?? '').trim();
+      const typeText = normalizeHeading(typeSource);
+      const chosen = typeSource ? mapped('session-type', typeSource) : undefined;
+      const matched = typeText ? types.find((t) => t.key === typeText || normalizeHeading(t.name.de) === typeText || normalizeHeading(t.name.en) === typeText) ?? types.find((t) => t.key === chosen) : undefined;
+      const type = matched ?? types.find((t) => t.key === 'exercise') ?? types[0];
+      if (!type) { fail('training.unknownType', { key: typeSource }); continue; }
       const startsAt = time(date, first['start'], '19:00');
       const endsAt = first['end'] ? time(date, first['end'], '21:00') : new Date(startsAt.getTime() + 2 * 3_600_000);
 
@@ -98,13 +124,21 @@ export class SessionsImport {
       let session: SessionEntity | null = await em.findOne(SessionEntity, { title: first['title'], startsAt, departmentIds: { $overlap: [department.id] } }, { populate: ['attendance'] });
       if (session?.status === 'closed') { fail('training.closed'); continue; }
       const created = !session;
+      // The type only matters for new sessions.
+      const messages: ImportMessage[] = [];
+      if (created && typeSource && !matched) {
+        messages.push({ code: 'training.import.unknownType', params: { kind: 'session-type', value: typeSource } });
+        unmatched('session-type', typeSource);
+      }
       if (!session && !dryRun) {
         session = em.create(SessionEntity, { type: type.key, title: first['title'], startsAt, endsAt, departmentIds: [department.id], instructorIds: [], status: 'held' });
       }
-      for (const { row, values } of group) {
+      for (const [position, { row, values }] of group.entries()) {
+        // Messages about the session appear once, at its first row.
+        const rowMessages = position === 0 ? messages : [];
         // A row without a person only carries the session (e.g. a session without participants in a data transfer).
         if (!values['personName']?.trim() && !values['personnelNumber']?.trim()) {
-          results.push({ row, action: created ? 'create' : 'unchanged', label, messages: [] });
+          results.push({ row, action: created ? 'create' : 'unchanged', label, messages: rowMessages });
           continue;
         }
         // Personnel number first, otherwise "Last First" in any order among the members on that day.
@@ -127,7 +161,7 @@ export class SessionsImport {
             }),
           );
         }
-        results.push({ row, action: exists ? 'unchanged' : created ? 'create' : 'update', label, messages: [] });
+        results.push({ row, action: exists ? 'unchanged' : created ? 'create' : 'update', label, messages: rowMessages });
       }
     }
     if (!dryRun) await em.flush();

@@ -71,6 +71,7 @@ export class IncidentsModule implements OnModuleInit {
     this.deadlineRegistry.register(this.deadlines);
     for (const definition of this.incidentsLists.definitions()) this.lists.register('incidents', definition);
     this.imports.register('incidents', this.mpFeuerImport.profile());
+    this.imports.registerLookup('incidents', this.mpFeuerImport.lookup());
     // Reports keep the IDs of departments, vehicles and standby stations; those must not be deleted.
     this.references.register('incidents', (kind, id) => {
       const em = this.em.fork();

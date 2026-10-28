@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { berlinDate, type ImportContext, type ImportProfile, type ImportRow, parseDate } from '@forga/core-api';
-import type { ImportResult, ImportRowResult } from '@forga/core-contracts';
+import { berlinDate, type ImportContext, type ImportProfile, type ImportRow, type ImportRunResult, parseDate } from '@forga/core-api';
+import type { ImportRowResult } from '@forga/core-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory, type PersonSnapshot } from '@forga/masterdata-contracts';
 import { EvidenceEntity } from '../respiratory-protection.entities.js';
 import { EVIDENCE, EvidenceService, trackValues } from '../evidence/evidence.service.js';
@@ -55,7 +55,7 @@ export class StressExercisesImport {
     };
   }
 
-  private async run(rows: ImportRow[], { user, dryRun }: ImportContext): Promise<ImportResult> {
+  private async run(rows: ImportRow[], { user, dryRun }: ImportContext): Promise<ImportRunResult> {
     const em = this.em.fork();
     const members: PersonSnapshot[] = await this.directory.membersOn(berlinDate());
     const results: ImportRowResult[] = [];

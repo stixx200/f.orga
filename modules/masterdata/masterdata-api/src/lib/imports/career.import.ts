@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { type ImportContext, type ImportProfile, type ImportRow, parseDate } from '@forga/core-api';
-import type { ImportMessage, ImportResult, ImportRowResult } from '@forga/core-contracts';
+import { type ImportContext, type ImportProfile, type ImportRow, type ImportRunResult, parseDate } from '@forga/core-api';
+import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
 import type { CatalogKind } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { HonorAward, Person, PersonQualification, RankAssignment } from '../masterdata.entities.js';
@@ -58,13 +58,14 @@ export class CareerImport {
       },
       permission: WRITE,
       fields: FIELDS,
-      options: [{ key: 'createCatalogEntries', label: { de: 'Unbekannte Bezeichnungen im Katalog anlegen', en: 'Add unknown names to the catalog' }, default: false }],
+      // Data transfers offer choosing or creating an entry per unknown name instead.
+      options: [{ key: 'createCatalogEntries', label: { de: 'Unbekannte Bezeichnungen im Katalog anlegen', en: 'Add unknown names to the catalog' }, default: false, transfer: false }],
       run: (rows, context) => this.run(rows, context),
       transfer: { order: 20, read: readCareer },
     };
   }
 
-  private async run(rows: ImportRow[], { user, options, dryRun }: ImportContext): Promise<ImportResult> {
+  private async run(rows: ImportRow[], { user, options, dryRun, mapped, unmatched }: ImportContext): Promise<ImportRunResult> {
     const em = this.em.fork();
     const persons = await em.find(Person, {}, { populate: ['memberships.department', 'qualifications', 'ranks', 'honors'] });
     const catalog = await em.find(CatalogEntry, { kind: { $in: ['qualification', 'rank', 'honor'] } });
@@ -91,7 +92,9 @@ export class CareerImport {
       if (!this.persons.can(user, WRITE, person)) { fail('auth.forbidden'); continue; }
 
       const name = (values['name'] ?? '').trim();
-      let entry = matchCatalog(catalog.filter((e) => e.kind === kind && e.active), name);
+      const active = catalog.filter((e) => e.kind === kind && e.active);
+      const chosen = name ? mapped(kind, name) : undefined;
+      let entry = matchCatalog(active, name) ?? active.find((e) => e.key === chosen);
       if (!entry && createEntries && name) {
         entry = em.create(CatalogEntry, {
           kind,
@@ -104,7 +107,11 @@ export class CareerImport {
         catalog.push(entry);
         messages.push({ code: 'masterdata.import.catalogEntryCreated', params: { name } });
       }
-      if (!entry) { fail('masterdata.import.unknownCatalogEntry', { kind, name }); continue; }
+      if (!entry) {
+        if (name) unmatched(kind, name);
+        fail('masterdata.import.unknownCatalogEntry', { kind, value: name, name });
+        continue;
+      }
       const { key } = entry;
 
       let exists: boolean;

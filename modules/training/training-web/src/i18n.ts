@@ -224,6 +224,7 @@ const de = {
     'training.attendanceEndBeforeStart': 'Das Ende der Anwesenheit liegt vor dem Beginn.',
     'training.attendanceOutsideSession': 'Die Anwesenheit liegt außerhalb der Dienstzeit.',
     'training.import.unknownPerson': 'Person nicht gefunden.',
+    'training.import.unknownType': 'Diensttyp „{{value}}“ ist unbekannt; der Dienst wird als Übung angelegt.',
   },
 };
 
@@ -451,6 +452,7 @@ const en: typeof de = {
     'training.attendanceEndBeforeStart': 'The end of the attendance is before its start.',
     'training.attendanceOutsideSession': 'The attendance is outside the session time.',
     'training.import.unknownPerson': 'Person not found.',
+    'training.import.unknownType': 'Session type "{{value}}" is unknown; the session is created as an exercise.',
   },
 };
 

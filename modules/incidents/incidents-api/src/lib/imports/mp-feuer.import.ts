@@ -1,15 +1,18 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import {
   berlinTime,
   type ImportContext,
+  type ImportLookup,
   type ImportProfile,
   type ImportRow,
+  type ImportRunResult,
   normalizeHeading,
   parseLocalDateTime,
+  ZodPipe,
 } from '@forga/core-api';
-import type { ImportMessage, ImportResult, ImportRowResult } from '@forga/core-contracts';
-import { IncidentInput, type ReportStatus } from '@forga/incidents-contracts';
+import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
+import { AlarmKeywordInput, IncidentInput, type ReportStatus } from '@forga/incidents-contracts';
 import {
   type CatalogEntry,
   type Department,
@@ -118,8 +121,28 @@ export class MpFeuerIncidentsImport {
     };
   }
 
+  /** Alarm keywords for keywords of the export that are not known; the key is the keyword itself. */
+  lookup(): ImportLookup {
+    return {
+      kind: 'alarm-keyword',
+      name: { de: 'Alarmstichworte', en: 'Alarm keywords' },
+      keyFormat: 'text',
+      entries: async () => (await this.em.fork().find(AlarmKeywordEntity, { active: true }, { orderBy: { key: 'asc' } })).map((k) => ({ key: k.key, name: k.name })),
+      create: {
+        permission: 'incidents.settings.manage',
+        run: async ({ key, name }) => {
+          const em = this.em.fork();
+          if (await em.count(AlarmKeywordEntity, { key })) throw new ConflictException({ code: 'catalog.keyTaken', key });
+          const keyword = em.create(AlarmKeywordEntity, new ZodPipe(AlarmKeywordInput).transform({ key, name: { de: name, en: name } }));
+          await em.flush();
+          return { key: keyword.key, name: keyword.name };
+        },
+      },
+    };
+  }
+
   /** A dry run works in a transaction that is always rolled back, so intermediate flushes change nothing. */
-  private async run(rows: ImportRow[], context: ImportContext): Promise<ImportResult> {
+  private async run(rows: ImportRow[], context: ImportContext): Promise<ImportRunResult> {
     const em = this.em.fork();
     if (!context.dryRun) return this.apply(em, rows, context);
     await em.begin();
@@ -130,7 +153,7 @@ export class MpFeuerIncidentsImport {
     }
   }
 
-  private async apply(em: EntityManager, rows: ImportRow[], { options, dryRun }: ImportContext): Promise<ImportResult> {
+  private async apply(em: EntityManager, rows: ImportRow[], { options, dryRun, mapped, unmatched }: ImportContext): Promise<ImportRunResult> {
     const [departments, vehicles, stations, functions] = await Promise.all([
       this.organization.departments(),
       this.organization.vehicles({ includeRetired: true }),
@@ -138,6 +161,7 @@ export class MpFeuerIncidentsImport {
       this.organization.catalog('function'),
     ]);
     const keywords = new Set((await em.find(AlarmKeywordEntity, {})).map((k) => k.key));
+    const createdKeywords = new Set<string>();
     const persons = await this.directory.memberPeriods();
     const results: ImportRowResult[] = [];
     const handled = new Map<string, Set<string>>();
@@ -172,15 +196,23 @@ export class MpFeuerIncidentsImport {
         failAll('imports.invalidDate');
         continue;
       }
-      const keyword = (first['keyword'] ?? '').trim();
+      // Keywords the user mapped to another one count as known; others can be created (also reported as unmatched,
+      // so the user may choose an existing keyword instead).
+      const source = (first['keyword'] ?? '').trim();
+      const keyword = keywords.has(source) ? source : (mapped('alarm-keyword', source) ?? source);
+      const groupMessages: ImportMessage[] = [];
       if (!keywords.has(keyword)) {
-        if (!options['createKeywords'] || !keyword) {
-          failAll('incidents.unknownKeyword', { key: keyword });
-          continue;
+        if (keyword) unmatched('alarm-keyword', keyword);
+        if (!createdKeywords.has(keyword)) {
+          if (!options['createKeywords'] || !keyword) {
+            failAll('incidents.unknownKeyword', { key: keyword, kind: 'alarm-keyword', value: keyword });
+            continue;
+          }
+          em.create(AlarmKeywordEntity, { key: keyword, name: { de: keyword, en: keyword }, requiresVehicle: true, compensationKind: 'incident' });
+          createdKeywords.add(keyword);
+          if (!dryRun) await em.flush();
         }
-        em.create(AlarmKeywordEntity, { key: keyword, name: { de: keyword, en: keyword }, requiresVehicle: true, compensationKind: 'incident' });
-        keywords.add(keyword);
-        if (!dryRun) await em.flush();
+        groupMessages.push({ code: 'incidents.import.keywordCreated', params: { kind: 'alarm-keyword', value: keyword } });
       }
 
       // Without a dispatch number each report is an incident of its own, numbered stably for re-imports.
@@ -250,8 +282,9 @@ export class MpFeuerIncidentsImport {
       }
       const date = localDate(begin.toISOString());
       const members = membersOnDate(persons, date);
-      for (const { row, values } of group) {
-        const messages: ImportMessage[] = [];
+      for (const [position, { row, values }] of group.entries()) {
+        // Messages about the report appear once, at its first row.
+        const messages: ImportMessage[] = position === 0 ? [...groupMessages] : [];
         // A row without a person carries only the report (e.g. the report row of a data transfer).
         if (!values['personName']?.trim() && !values['personnelNumber']?.trim()) {
           results.push({ row, action: created ? 'create' : 'update', label, messages });
@@ -267,12 +300,20 @@ export class MpFeuerIncidentsImport {
           continue;
         }
         seen.add(person.id);
-        const vehicle = this.vehicle(vehicles, values['vehicle'] ?? '');
+        const vehicleText = (values['vehicle'] ?? '').trim();
+        const vehicle = this.vehicle(vehicles, vehicleText) ?? vehicles.find((v) => vehicleText && v.id === mapped('vehicle', vehicleText));
         const standby = yes(values['standby']);
         const station = standby ? this.station(stations, department) : undefined;
-        if (values['vehicle'] && !vehicle && !standby) messages.push({ code: 'incidents.api.unknownVehicle', params: { value: values['vehicle'] } });
-        const fn = this.function(functions, values['function'] ?? '');
-        if (values['function'] && !fn) messages.push({ code: 'incidents.import.unknownFunction', params: { value: values['function'] } });
+        if (vehicleText && !vehicle && !standby) {
+          messages.push({ code: 'incidents.api.unknownVehicle', params: { kind: 'vehicle', value: vehicleText } });
+          unmatched('vehicle', vehicleText);
+        }
+        const functionText = (values['function'] ?? '').trim();
+        const fn = this.function(functions, functionText) ?? functions.find((f) => f.active && functionText && f.key === mapped('function', functionText));
+        if (functionText && !fn) {
+          messages.push({ code: 'incidents.import.unknownFunction', params: { kind: 'function', value: functionText } });
+          unmatched('function', functionText);
+        }
         const from = time(values['from']);
         const to = time(values['to']);
         report.personnel.add(

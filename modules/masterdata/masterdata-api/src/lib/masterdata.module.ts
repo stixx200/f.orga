@@ -20,6 +20,7 @@ import { CoursesController } from './courses/courses.controller.js';
 import { MasterdataDeadlines } from './deadlines/masterdata.deadlines.js';
 import { OrganizationService, PersonDirectoryService } from './directory/directory.js';
 import { CareerImport } from './imports/career.import.js';
+import { MasterdataLookups } from './imports/lookups.js';
 import { PersonsImport } from './imports/persons.import.js';
 import { MasterdataLists } from './lists/masterdata.lists.js';
 import { DepartmentGroup } from './organization/group.entities.js';
@@ -47,6 +48,7 @@ import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/person
     MasterdataDeadlines,
     PersonsImport,
     CareerImport,
+    MasterdataLookups,
     MasterdataData,
     { provide: PERSON_DIRECTORY, useClass: PersonDirectoryService },
     { provide: ORGANIZATION, useClass: OrganizationService },
@@ -72,6 +74,7 @@ export class MasterdataModule implements OnModuleInit {
     private readonly imports: ImportRegistry,
     private readonly personsImport: PersonsImport,
     private readonly careerImport: CareerImport,
+    private readonly lookups: MasterdataLookups,
     private readonly references: OrganizationReferenceRegistry,
     private readonly catalogReferences: CatalogReferenceRegistry,
     private readonly catalogUsage: MasterdataCatalogUsage,
@@ -91,6 +94,7 @@ export class MasterdataModule implements OnModuleInit {
     this.deadlineRegistry.register(this.deadlines);
     this.imports.register('masterdata', this.personsImport.profile());
     this.imports.register('masterdata', this.careerImport.profile());
+    for (const lookup of this.lookups.lookups()) this.imports.registerLookup('masterdata', lookup);
     // Role assignments of the core refer to departments by ID.
     this.references.register('core', (kind, id) =>
       kind === 'department' ? this.em.fork().count(RoleAssignment, { departmentId: id }) : Promise.resolve(0),

@@ -189,6 +189,9 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Benutzer | `User` |
 | Audit-Log | audit (`core.audit`) |
 | Kern (Shell-Backend) | core |
+| Importprofil | `ImportProfile` |
+| Nicht zugeordnete Bezeichnung (Import) | `ImportUnmatched`, Zuordnung `mappings` |
+| Nachschlageliste (Import) | `ImportLookup` |
 
 ### Kleiderkammer
 

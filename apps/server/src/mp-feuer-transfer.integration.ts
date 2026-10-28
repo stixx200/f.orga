@@ -247,3 +247,151 @@ describe('MP-Feuer data transfer', () => {
     await post(`/core/imports/transfers/${transfer}/preview`, { profile: 'masterdata.persons' }).expect(404);
   });
 });
+
+describe('MP-Feuer data transfer with entries chosen for unknown names', () => {
+  let transfer: string;
+  const departments = { '02': 'Abteilung Musterstadt' };
+  const run = (profile: string, apply: boolean, mappings: Record<string, Record<string, string>> = {}, status = 200) =>
+    post(`/core/imports/transfers/${transfer}/${apply ? 'apply' : 'preview'}`, { profile, departments, mappings }).expect(status);
+
+  const archive = transferZip({
+    PER_STAMM: [
+      person('P-EVA', '0001', 'Eva', 'Neu'),
+      person('P-PAUL', '0002', 'Paul', 'Fort', { PER_AKTIV_BD: '2019-06-30', PER_ARCHIV_DAT: '2019-07-01', PER_AKTIV_GRUND: 'Berufliche Gründe' }),
+    ],
+    PER_LEHRG: [
+      { PER_ID: 'L1', PER_INDEX: 'P-EVA', PER_LEHRG_KURZ: '', PER_LEHRG_LANG: 'Drohnenpilot', PER_ZEITRAUM_VD: '2023-05-01', PER_ZEITRAUM_BD: '', PER_BESTAETIG_DAT: '', PER_GUELTIG_BD: '', PER_LEHRG_OK: 1 },
+    ],
+    PER_HIST: [
+      { PER_ID: 'H1', PER_INDEX: 'P-EVA', PER_HIST_KATEGORIE_OW: 'Dienstgrad', PER_HIST_KURZ: '', PER_HIST_LANG: 'Brandmeisteranwärter', PER_ZEITRAUM_VD: '2024-01-01' },
+      { PER_ID: 'H2', PER_INDEX: 'P-EVA', PER_HIST_KATEGORIE_OW: 'Ehrung', PER_HIST_KURZ: '', PER_HIST_LANG: 'Vereinsnadel in Gold', PER_ZEITRAUM_VD: '2024-02-01' },
+    ],
+    UPE_STAMM: [{ UPE_ID: 'U1', UPE_ZEIT_V: '2025-07-07 19:00:00.000', UPE_ZEIT_B: '2025-07-07 21:00:00.000', UPE_ART: 'Jugendprobe', UPE_THEMA: 'Knoten und Stiche' }],
+    UPE_PERS: [{ UPE_ID: 'UP1', UPE_INDEX: 'U1', UPE_PER_INDEX: 'P-EVA', UPE_PER_NAME: 'Neu Eva', UPE_PER_MERKMAL_EN: 0, UPE_PER_MERKMAL_KR: 0, UPE_PER_MERKMAL_UR: 0, UPE_PER_MERKMAL_AS: 0 }],
+    EIN_STAMM: [
+      {
+        EIN_ID: 'E1', EIN_NR: '2025-101', EIN_LS_NR: '1250000777', EIN_ZEIT_V: '2025-07-01 10:00:00.000', EIN_ZEIT_B: '2025-07-01 11:00:00.000',
+        EIN_ALARMSTICHWORT: 'B 2 Wohnung', EIN_ART: 'Wohnungsbrand', EIN_KATEGORIE_OW: 'Brand', EIN_ERLAEUTERUNG: '', EIN_ORT: '', EIN_ORT_STRASSE: 'Am Markt 1', EIN_ORT_PLZ: '12345',
+        EIN_ORT_ORT: 'Musterstadt', EIN_ORT_ORTSTEIL: '', EIN_ORT_ZUSATZ: '', EIN_ORT_OBJEKT: '', EIN_MERKMAL_ST_GLOBAL: 1, EIN_MERKMAL_KO: 0, EIN_ZUSATZ_2: '',
+        EIN_LAGE: '', EIN_VERLAUF: '', EIN_BERICHT: '', EIN_URSACHE: '', EIN_LEITUNG: '', EIN_STATISTIK: '', EIN_RETTUNG_P_S: '', EIN_VERLUSTE_S: '', EIN_RETTUNG_T_S: '',
+      },
+    ],
+    EIN_PERS: [
+      { EIN_ID: 'EP1', EIN_INDEX: 'E1', EIN_PER_INDEX: 'P-EVA', EIN_PER_NR: '0001', EIN_PER_NAME: 'Neu Eva', EIN_PER_ZEIT_V: '2025-07-01 10:00:00.000', EIN_PER_ZEIT_B: '2025-07-01 11:00:00.000', EIN_PER_MERKMAL_BE: 0, EIN_PER_MERKMAL_AS: 0, EIN_PER_MERKMAL_VA: 0, EIN_PER_AUFGABE: 'Schlauchträger', EIN_FZG_RUFNAME: '', EIN_FZG_BEZEICHNUNG: 'MTW alt' },
+    ],
+  });
+
+  it('reads the archive', async () => {
+    const response = await test.http.post('/api/core/imports/transfers').set('Cookie', admin).set(UI).attach('files', archive, 'MPTRA_02_2026-10-25-074935_Abt._Musterstadt.zip').expect(201);
+    transfer = response.body.id;
+    expect(response.body.archives).toMatchObject([{ key: '02' }]);
+  });
+
+  it('lists the lookups and their entries', async () => {
+    const lookups = (await get('/core/imports/lookups').expect(200)).body as { kind: string; creatable: boolean; keyFormat: string }[];
+    expect(lookups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'qualification', creatable: true, keyFormat: 'slug' }),
+        expect.objectContaining({ kind: 'vehicle', creatable: false }),
+        expect.objectContaining({ kind: 'alarm-keyword', creatable: true, keyFormat: 'text' }),
+        expect.objectContaining({ kind: 'session-type', creatable: true }),
+      ]),
+    );
+    expect((await get('/core/imports/lookups/exit-reason').expect(200)).body).toEqual(expect.arrayContaining([{ key: 'own-request', name: { de: 'Auf eigenen Wunsch', en: 'Own request' } }]));
+    await get('/core/imports/lookups/unknown').expect(404);
+  });
+
+  it('reports an unknown exit reason and takes over the chosen one', async () => {
+    const preview = await run('masterdata.persons', false);
+    expect(preview.body.unmatched).toEqual([{ kind: 'exit-reason', value: 'Berufliche Gründe', count: 1 }]);
+    const paul = (preview.body.rows as { label: string; messages: unknown[] }[]).find((r) => r.label === 'Fort, Paul');
+    expect(paul?.messages).toEqual([{ code: 'masterdata.import.unknownExitReason', params: { kind: 'exit-reason', value: 'Berufliche Gründe' } }]);
+
+    const applied = await run('masterdata.persons', true, { 'exit-reason': { 'Berufliche Gründe': 'own-request' } });
+    expect(applied.body).toMatchObject({ counts: { create: 2, error: 0 }, unmatched: [] });
+    expect((await get(`/masterdata/persons/${await personId('Fort')}`)).body).toMatchObject({ status: 'left', exitReason: 'own-request' });
+  });
+
+  it('rejects mappings to entries or lookups that do not exist', async () => {
+    expect((await run('masterdata.career', false, { rank: { Brandmeisteranwärter: 'no-such-rank' } }, 400)).body).toMatchObject({
+      code: 'imports.unknownMappingTarget',
+      kind: 'rank',
+      value: 'Brandmeisteranwärter',
+      key: 'no-such-rank',
+    });
+    expect((await run('masterdata.career', false, { planet: { Mars: 'mars' } }, 400)).body).toMatchObject({ code: 'imports.unknownLookup', kind: 'planet' });
+  });
+
+  it('assigns chosen and newly created catalog entries; ignored names stay errors', async () => {
+    const preview = await run('masterdata.career', false);
+    expect(preview.body.counts).toMatchObject({ create: 0, error: 3 });
+    expect(preview.body.unmatched).toEqual([
+      { kind: 'qualification', value: 'Drohnenpilot', count: 1 },
+      { kind: 'rank', value: 'Brandmeisteranwärter', count: 1 },
+      { kind: 'honor', value: 'Vereinsnadel in Gold', count: 1 },
+    ]);
+    expect(preview.body.rows[0].messages).toEqual([{ code: 'masterdata.import.unknownCatalogEntry', params: { kind: 'qualification', value: 'Drohnenpilot', name: 'Drohnenpilot' } }]);
+
+    // A user who may import persons but not manage catalogs can choose entries, but not create them.
+    const role = (await post('/core/roles', { name: 'Import ohne Katalog', permissions: [], permissionsAllDepartments: ['masterdata.persons.read', 'masterdata.persons.write'] }).expect(201)).body.id;
+    await post('/core/users', { username: 'importer', displayName: 'Importer', password: 'auch-sehr-geheim', roles: [{ roleId: role, departmentId: null }] }).expect(201);
+    const importer = await test.login({ username: 'importer', password: 'auch-sehr-geheim' });
+    const lookups = (await test.http.get('/api/core/imports/lookups').set('Cookie', importer).expect(200)).body as { kind: string; creatable: boolean }[];
+    expect(lookups.find((l) => l.kind === 'qualification')?.creatable).toBe(false);
+    const denied = await test.http.post('/api/core/imports/lookups/qualification').set('Cookie', importer).set(UI).send({ key: 'drone-pilot', name: 'Drohnenpilot' }).expect(403);
+    expect(denied.body).toMatchObject({ code: 'auth.forbidden', permissions: ['masterdata.catalogs.manage'] });
+
+    const created = await post('/core/imports/lookups/qualification', { key: 'drone-pilot', name: 'Drohnenpilot' }).expect(201);
+    expect(created.body).toEqual({ key: 'drone-pilot', name: { de: 'Drohnenpilot', en: 'Drohnenpilot' } });
+    expect((await post('/core/imports/lookups/qualification', { key: 'drone-pilot', name: 'Drohnenpilot' }).expect(409)).body).toMatchObject({ code: 'catalog.keyTaken' });
+    expect((await post('/core/imports/lookups/qualification', { key: 'Kein Schlüssel', name: 'X' }).expect(400)).body).toMatchObject({ code: 'validation.failed' });
+
+    const mappings = { qualification: { Drohnenpilot: 'drone-pilot' }, rank: { Brandmeisteranwärter: 'bm' } };
+    const applied = await run('masterdata.career', true, mappings);
+    expect(applied.body.counts).toMatchObject({ create: 2, error: 1 });
+    expect(applied.body.unmatched).toEqual([{ kind: 'honor', value: 'Vereinsnadel in Gold', count: 1 }]);
+    expect(applied.body.rows.find((r: { action: string }) => r.action === 'error').messages).toEqual([
+      { code: 'masterdata.import.unknownCatalogEntry', params: { kind: 'honor', value: 'Vereinsnadel in Gold', name: 'Vereinsnadel in Gold' } },
+    ]);
+    const eva = (await get(`/masterdata/persons/${await personId('Neu')}`)).body;
+    expect(eva.qualifications).toMatchObject([{ qualification: 'drone-pilot', acquiredOn: '2023-05-01' }]);
+    expect(eva.ranks).toMatchObject([{ rank: 'bm', since: '2024-01-01' }]);
+    expect(eva.honors).toEqual([]);
+  });
+
+  it('uses a chosen session type for unknown types', async () => {
+    const preview = await run('training.sessions', false);
+    expect(preview.body.unmatched).toEqual([{ kind: 'session-type', value: 'Jugendprobe', count: 1 }]);
+    expect(preview.body.rows[0].messages).toEqual([{ code: 'training.import.unknownType', params: { kind: 'session-type', value: 'Jugendprobe' } }]);
+    expect((await run('training.sessions', true, { 'session-type': { Jugendprobe: 'lesson' } })).body).toMatchObject({ counts: { create: 2, error: 0 }, unmatched: [] });
+    const [session] = (await get('/training/sessions?from=2025-07-07&to=2025-07-07')).body as { type: string; title: string }[];
+    expect(session).toMatchObject({ type: 'lesson', title: 'Knoten und Stiche' });
+  });
+
+  it('assigns chosen functions, vehicles and keywords of incident personnel', async () => {
+    const preview = await run('incidents.mp-feuer', false);
+    expect(preview.body.unmatched).toEqual([
+      { kind: 'alarm-keyword', value: 'B 2 Wohnung', count: 1 },
+      { kind: 'vehicle', value: 'MTW alt', count: 1 },
+      { kind: 'function', value: 'Schlauchträger', count: 1 },
+    ]);
+    const messages = (preview.body.rows as { messages: { code: string; params?: Record<string, string> }[] }[]).flatMap((r) => r.messages);
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        { code: 'incidents.import.keywordCreated', params: { kind: 'alarm-keyword', value: 'B 2 Wohnung' } },
+        { code: 'incidents.api.unknownVehicle', params: { kind: 'vehicle', value: 'MTW alt' } },
+        { code: 'incidents.import.unknownFunction', params: { kind: 'function', value: 'Schlauchträger' } },
+      ]),
+    );
+
+    // A keyword whose key is its text, created from the import.
+    expect((await post('/core/imports/lookups/alarm-keyword', { key: 'B2', name: 'B2 Wohnungsbrand' }).expect(201)).body).toMatchObject({ key: 'B2' });
+    const mappings = { 'alarm-keyword': { 'B 2 Wohnung': 'B2' }, vehicle: { 'MTW alt': ids.lf }, function: { Schlauchträger: 'hose-team' } };
+    const applied = await run('incidents.mp-feuer', true, mappings);
+    expect(applied.body).toMatchObject({ counts: { error: 0 }, unmatched: [] });
+    const [incident] = (await get('/incidents/incidents?from=2025-07-01&to=2025-07-01')).body as { alarmKeyword: string; reports: { id: string }[] }[];
+    expect(incident.alarmKeyword).toBe('B2');
+    const report = (await get(`/incidents/reports/${incident.reports[0].id}`)).body;
+    expect(report.personnel).toMatchObject([{ personId: await personId('Neu'), vehicleId: ids.lf, function: 'hose-team' }]);
+  });
+});

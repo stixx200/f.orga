@@ -422,7 +422,15 @@ describe('MP-Feuer import', () => {
     const result = await run(true);
     expect(result.body.counts).toEqual({ create: 3, update: 0, unchanged: 0, error: 1 });
     expect(result.body.rows[3].messages[0]).toMatchObject({ code: 'incidents.import.unknownPerson', params: { name: 'Person Unbekannt' } });
-    expect(result.body.rows[0].messages).toEqual([{ code: 'incidents.import.unknownFunction', params: { value: 'Fahrer' } }]);
+    // The keyword is new: created and offered for assignment to an existing one.
+    expect(result.body.rows[0].messages).toEqual([
+      { code: 'incidents.import.keywordCreated', params: { kind: 'alarm-keyword', value: 'B3-MP' } },
+      { code: 'incidents.import.unknownFunction', params: { kind: 'function', value: 'Fahrer' } },
+    ]);
+    expect(result.body.unmatched).toEqual([
+      { kind: 'alarm-keyword', value: 'B3-MP', count: 2 },
+      { kind: 'function', value: 'Fahrer', count: 1 },
+    ]);
 
     const incidents = (await get('/incidents/incidents?from=2025-10-21&to=2025-10-21')).body as { id: string; dispatchNumber: string; createdVia: string; reports: { id: string; departmentId: string; primary: boolean; status: string; locked: boolean }[] }[];
     expect(incidents).toHaveLength(1);

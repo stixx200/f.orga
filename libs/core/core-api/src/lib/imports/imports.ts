@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   Injectable,
@@ -15,6 +16,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { defineEntity, EntityManager, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
 import {
+  type ImportLookupEntry,
+  ImportLookupEntryInput,
+  type ImportLookupInfo,
   type ImportProfileInfo,
   ImportRequest,
   type ImportResult,
@@ -129,7 +133,7 @@ export class ImportService {
       (profile.options ?? []).map((o) => [o.key, request.options[o.key] ?? o.default]),
     );
 
-    const result = await profile.run(rows, { user, options, dryRun });
+    const result = await this.registry.run(profile, rows, { user, options, dryRun, mappings: request.mappings });
     if (!dryRun) {
       await em.nativeDelete(ImportUploadEntity, { id: upload.id });
       await this.audit.log('imports.applied', { profile: profile.id, fileName: upload.fileName, counts: result.counts });
@@ -143,11 +147,43 @@ export class ImportsController {
   constructor(
     private readonly registry: ImportRegistry,
     private readonly imports: ImportService,
+    private readonly audit: Audit,
   ) {}
 
   @Get('profiles')
   profiles(@CurrentUser() user: AuthenticatedUser): ImportProfileInfo[] {
     return this.registry.available(user);
+  }
+
+  /** Lookups that unknown values of an import can be mapped to; `creatable` if the user may add entries. */
+  @Get('lookups')
+  lookups(@CurrentUser() user: AuthenticatedUser): ImportLookupInfo[] {
+    if (!this.registry.available(user).length) throw new NotFoundException({ code: 'imports.unknownProfile' });
+    return this.registry.lookups(user);
+  }
+
+  @Get('lookups/:kind')
+  entries(@Param('kind') kind: string, @CurrentUser() user: AuthenticatedUser): Promise<ImportLookupEntry[]> {
+    const lookup = this.registry.lookup(kind);
+    if (!lookup || !this.registry.available(user).length) throw new NotFoundException({ code: 'imports.unknownLookup', kind });
+    return lookup.entries();
+  }
+
+  /** Creates an entry for an unknown value, e.g. a course name missing in the catalog. Needs the lookup's permission. */
+  @Post('lookups/:kind')
+  async create(
+    @Param('kind') kind: string,
+    @Body(new ZodPipe(ImportLookupEntryInput)) input: ReturnType<typeof ImportLookupEntryInput.parse>,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ImportLookupEntry> {
+    const lookup = this.registry.lookup(kind);
+    if (!lookup || !this.registry.available(user).length) throw new NotFoundException({ code: 'imports.unknownLookup', kind });
+    if (!lookup.create || !user.can(lookup.create.permission)) {
+      throw new ForbiddenException({ code: 'auth.forbidden', permissions: lookup.create ? [lookup.create.permission] : [] });
+    }
+    const entry = await lookup.create.run(input);
+    await this.audit.log('imports.lookupEntryCreated', { kind, key: entry.key });
+    return entry;
   }
 
   /** Step 1: upload an Excel, CSV or iCalendar file (`multipart/form-data`, field `file`). */
