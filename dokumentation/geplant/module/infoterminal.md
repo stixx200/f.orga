@@ -2,7 +2,7 @@
 
 Release offen (siehe [Releaseplan](../roadmap.md#infoterminal)). Benötigt: Stammdaten, Einsatzberichte. Nutzt optional: Dienste. Modul-ID `info-terminal`, Datenbankschema `info_terminal`, Rechte `info-terminal.*`, API unter `/api/info-terminal/…`. Alle Oberflächen sind deutsch und englisch.
 
-**Status: Konzept zur Freigabe.** Nichts davon ist umgesetzt. Mockups: [`mockups/infoterminal/`](../mockups/README.md#seiten).
+**Status: Konzept und Mockups freigegeben.** Nichts davon ist umgesetzt. Mockups: [`mockups/infoterminal/`](../mockups/README.md#seiten).
 
 ## Zweck
 
@@ -40,7 +40,8 @@ Nach einem Einsatz oder Dienst tragen sich die Einsatzkräfte an einem Gerät in
 1. **Anlegen** in „Verwaltung → Infoterminals“ oder auf der Seite der Wache: Wache, Bezeichnung des Geräts, erlaubte Aktionen (Einsätze eintragen immer; „Neuer Einsatz“ und „Dienste“ abschaltbar), Sprache beim Start.
 2. **Link und QR-Code** erscheinen genau einmal: `https://<adresse>/terminal#k=fit_<zufall>`. Der Schlüssel steht im Fragment (`#`), damit er nicht in Protokollen von Server und Proxy landet. Gespeichert wird nur sein SHA-256 und ein Präfix zum Wiedererkennen (wie bei API-Tokens). Die Adresse kommt aus `brigade.publicUrl` bzw. `FORGA_PUBLIC_URL`; ohne sie kann kein Terminal angelegt werden (`503` `info-terminal.noPublicUrl`).
 3. **Einrichten auf dem Gerät:** Die Terminalseite liest den Schlüssel aus dem Fragment, tauscht ihn mit `POST /api/info-terminal/kiosk/session` gegen ein Cookie `forga_terminal` (`HttpOnly`, `SameSite=Strict`, `Secure` wie die Sitzung, Pfad `/api/info-terminal/kiosk`, 400 Tage, bei Nutzung verlängert) und entfernt das Fragment aus der Adresse (`history.replaceState`). Ein Lesezeichen enthält danach keinen Schlüssel mehr.
-   - Kurzweg auf der Seite der Wache: „Dieses Gerät als Infoterminal einrichten …“ legt für den angemeldeten Verwalter ein neues Terminal an und öffnet es direkt auf dem aktuellen Gerät. Die eigene Sitzung bleibt davon getrennt (anderes Cookie, anderer Pfad); Vorschlag: der Verwalter meldet sich danach auf dem Gerät ab.
+   - Kurzweg auf der Seite der Wache: „Dieses Gerät als Infoterminal einrichten …“ legt für den angemeldeten Verwalter ein neues Terminal an und öffnet es direkt auf dem aktuellen Gerät. Die eigene Sitzung bleibt davon getrennt (anderes Cookie, anderer Pfad); der Verwalter meldet sich danach auf dem Gerät ab.
+   - Der Link lässt sich später nicht wieder anzeigen. Wer ihn verloren hat, erzeugt einen neuen Link.
 4. **Zuletzt gesehen:** Jede Anfrage aktualisiert `lastSeenAt` (höchstens einmal je Minute). Die Verwaltung markiert Terminals, die länger als 30 Tage nicht gesehen wurden.
 5. **Neuer Link:** erzeugt einen neuen Schlüssel; der alte gilt sofort nicht mehr (z. B. wenn der Link in falsche Hände geraten ist).
 6. **Widerrufen:** jederzeit, sofort wirksam, mit Bestätigung. Das Gerät zeigt „nicht freigeschaltet“. Eintragungen bleiben in Berichten und Diensten. Ein widerrufenes Terminal lässt sich nicht wieder aktivieren.
@@ -65,6 +66,7 @@ Die Mockups zeigen jeden Schritt. Nach 60 Sekunden ohne Eingabe und 10 Sekunden 
    - **Wo waren Sie?** Fahrzeuge der Wache als Kacheln mit belegten Plätzen, dann „Bereitschaft“ auf dieser Wache. „Anderes Fahrzeug …“ öffnet eine Auswahl aller Fahrzeuge in Dienst. Fahrzeuge heißen überall **Bezeichnung · Funkrufname (Abteilung)**, z. B. „LF 20/16 · Florian Musterstadt 1/44 (Musterstadt)“, gebildet mit `vehicleLabel(vehicle, departmentShortName)` aus `@forga/masterdata-contracts`, damit gleichnamige Fahrzeuge (mehrere „Anhänger“) unterscheidbar sind.
    - **Funktion** aus dem Katalog `function` (aktive Einträge, Reihenfolge des Katalogs), dazu „keine Angabe“.
    - **Weitere Angaben:** unter Atemschutz, Verdienstausfall beim Arbeitgeber, Einsatz während der Arbeitszeit beim Dienstherrn, „Ich war nicht die ganze Zeit dabei“ mit Von/Bis.
+   - **Bei Bereitschaft** entfallen „Unter Atemschutz“ und „Ich war nicht die ganze Zeit dabei“ samt Von/Bis; stattdessen steht der Hinweis, dass die Bereitschaft für die Zeiten des Berichts gilt und pauschal zählt (Mockup `buchung.html#bereitschaft`). Eine Bereitschaftseintragung vom Terminal hat damit immer die Zeiten des Berichts (`from`/`to` = `null`) und keinen Atemschutz; wechselt jemand beim Ändern vom Fahrzeug zur Bereitschaft, werden beide Angaben entfernt.
 4. **Eintragen** → Bestätigung mit Name, Fahrzeug, Funktion und Zeit, „Eingetragene ansehen“ oder „Fertig“.
 
 ### Ändern und Austragen
@@ -72,7 +74,7 @@ Die Mockups zeigen jeden Schritt. Nach 60 Sekunden ohne Eingabe und 10 Sekunden 
 - Antippen eines grünen Namens oder „Eingetragen (n)“ zeigt die Eingetragenen je Fahrzeug.
 - Eintragungen **vom Infoterminal** lassen sich ändern (Formular mit den bisherigen Angaben) und austragen (mit Bestätigung), solange das Zeitfenster offen und der Bericht ein ungesperrter Entwurf ist.
 - Eintragungen **vom Verfasser** (Editor, Import, API) und Terminal-Eintragungen, die ein Benutzer im Editor geändert hat, sind am Terminal gesperrt („vom Verfasser“). Damit kann am Terminal niemand die Arbeit des Verfassers überschreiben.
-- Ohne PIN kann jeder am Terminal jede Terminal-Eintragung ändern. Das ist bewusst so entschieden; die Historie zeigt jede Änderung mit Terminal und Zeit.
+- Ohne PIN kann jeder am Terminal jede Terminal-Eintragung ändern, ohne zeitliche Sperre innerhalb des Zeitfensters. Die Historie zeigt jede Änderung mit Terminal und Zeit; das genügt.
 
 ### Neuer Einsatz
 
@@ -98,14 +100,15 @@ Der neue Bericht hat **keinen Verfasser**; die Frist „Verfasser für Einsatzbe
 | Fall | Öffnet | Schließt |
 | --- | --- | --- |
 | Einsatz, Ende des Berichts bestätigt (`endConfirmed`) | Alarmzeit des Einsatzes | Ende des Abteilungsberichts + 60 Minuten |
-| Einsatz, Ende noch nicht bestätigt | Alarmzeit des Einsatzes | Alarm + **12 Stunden** (offene Entscheidung 1) |
+| Einsatz, Ende noch nicht bestätigt | Alarmzeit des Einsatzes | Alarm + **12 Stunden**; bestätigt der Verfasser später ein Ende, gilt Ende + 60 Minuten, auch wenn das früher ist |
 | Dienst | Beginn − `checkInBeforeMinutes` (Einstellung `training.general`, Standard 30) | geplantes Ende + 60 Minuten |
 
 Immer gilt zusätzlich:
 - Eintragen und Ändern nur, solange der Bericht ein **Entwurf** und **nicht gesperrt** ist (Server: dieselbe Prüfung wie beim Speichern, `incidents.notDraft`, `incidents.reportLocked`, `incidents.reportReleased`). Sonst zeigt die Kachel „Bericht schon fertig gemeldet, bitte an den Verfasser wenden“ und das Terminal nimmt nichts mehr an.
 - Beim Dienst nur, solange er nicht abgeschlossen ist (`training.closed`).
 - Maßgeblich ist die Serverzeit in Europe/Berlin. Das Terminal zeigt das Ende des Fensters an jeder Kachel.
-- Die Nachlaufzeit (60 Minuten), die Vorlaufzeit bei offenem Ende (12 Stunden) und der Vorlauf vor Diensten sind Einstellungen des Moduls (`info-terminal.general`: `afterEndMinutes`, `openEndHours`; der Vorlauf kommt aus den Diensten).
+- Die Nachlaufzeit (60 Minuten) und die Dauer bei offenem Ende (12 Stunden) sind Einstellungen des Moduls (`info-terminal.general`: `afterEndMinutes`, `openEndHours`); der Vorlauf vor Diensten kommt aus den Diensten.
+- Fenster lassen sich nicht von Hand vorzeitig schließen oder verlängern, weder bei Diensten noch bei Einsätzen. Bei Diensten gilt immer das geplante Ende; Einsätze schließen spätestens mit dem Fertigmelden des Berichts.
 
 ## Was ins Personal bzw. die Anwesenheit geschrieben wird
 
@@ -116,8 +119,8 @@ Immer gilt zusätzlich:
 | Person | ja | nur Personen aus den Stammdaten, keine Gäste |
 | Fahrzeug oder Bereitschaftswache | ja | Bereitschaft immer auf der Wache des Terminals; ein neues Fahrzeug kommt wie im Editor in die Fahrzeuge des Berichts (`addCrewVehicles`) |
 | Funktion | ja | Katalog `function`, optional |
-| Atemschutz | ja/nein | Minuten, Gerät und CSA trägt der Verfasser nach |
-| `from` / `to` | optional | leer = Zeiten des Berichts (`null`), wie im Editor |
+| Atemschutz | ja/nein, nur bei Fahrzeug | Minuten, Gerät und CSA trägt der Verfasser nach; bei Bereitschaft immer nein |
+| `from` / `to` | optional, nur bei Fahrzeug | leer = Zeiten des Berichts (`null`), wie im Editor; bei Bereitschaft immer `null` |
 | Verdienstausfall | ja/nein | Betrag trägt der Verfasser ein (Warnung „Verdienstausfall ohne Betrag“ bleibt bis dahin) |
 | Arbeitszeit beim Dienstherrn | ja/nein | |
 | Zuschläge, manueller Betrag, verletzt/getötet | nein | nur im Editor |
@@ -127,13 +130,14 @@ Immer gilt zusätzlich:
 
 ## Zusammenspiel mit den bestehenden Regeln
 
-- **Prüfregeln** laufen unverändert beim Speichern und Fertigmelden. Das Terminal zeigt keine Befunde; der Verfasser sieht sie im Editor. Ausnahme: Eine Person, die schon in einem anderen Bericht desselben Einsatzes steht, lehnt das Terminal ab (`info-terminal.personInOtherReport` mit dem Namen der Abteilung), statt den Fehler `personnel-overlap-incident` zu erzeugen (offene Entscheidung 4).
+- **Prüfregeln** laufen unverändert beim Speichern und Fertigmelden. Das Terminal zeigt keine Befunde; der Verfasser sieht sie im Editor. Ausnahme: Eine Person, die schon in einem anderen Bericht desselben Einsatzes steht, lehnt das Terminal ab (`info-terminal.personInOtherReport` mit dem Namen der Abteilung), statt den Fehler `personnel-overlap-incident` zu erzeugen.
 - **Doppelt im selben Bericht** geht nicht: Ein schon eingetragener Name öffnet die vorhandene Eintragung.
 - **Gleichzeitiges Bearbeiten:** Eintragungen ändern den Bericht, während der Verfasser ihn vielleicht offen hat. Damit das automatische Speichern des Editors sie nicht überschreibt und keinen Konflikt `conflict.stale` auslöst, arbeiten Eintragungen wie Check-ins bei Diensten: Sie ändern nur ihre eigene Personalzeile und nicht die `version` des Berichts. `PUT …/reports/:id` lässt Terminal-Zeilen stehen, die der Client nicht kannte (Abgleich über `bookedAt` gegenüber dem geladenen Stand). Der Editor lädt das Personal regelmäßig nach und zeigt „2 neue Eintragungen vom Infoterminal“. Erst wenn ein Benutzer die Zeile im Editor speichert, gehört sie zum normalen Inhalt (und ist am Terminal gesperrt).
 - **Versionen:** Jede Eintragung legt eine Version des Berichts an (Benutzer = technischer Benutzer des Terminals), damit „Versionen“ und „Wiederherstellen“ sie kennen.
 - **Hauptbericht:** keine neue Regel. Der Bericht der Abteilung wird Hauptbericht nur nach den bestehenden Regeln.
-- **Berichte gesamtwehrweiter Einheiten (EvD):** am Terminal **nicht** eintragbar. Der EvD schreibt seinen Bericht selbst; Einheiten haben keine Wache (offene Entscheidung 3).
-- **Nur Einsatzabteilungen:** Terminals gibt es nur an Wachen von Einsatzabteilungen, weil nur sie Einsatzberichte schreiben. Wachen anderer Abteilungstypen (z. B. Jugendfeuerwehr) bekommen ein Terminal nur für Dienste (offene Entscheidung 5).
+- **Berichte gesamtwehrweiter Einheiten (EvD):** am Terminal **nicht** eintragbar. Der EvD schreibt seinen Bericht selbst; Einheiten haben keine Wache.
+- **Nur Einsatzabteilungen:** Terminals gibt es nur an Wachen von Einsatzabteilungen, weil nur sie Einsatzberichte schreiben. Wachen anderer Abteilungstypen (z. B. Jugendfeuerwehr) bekommen ein Terminal nur für Dienste; „Für Einsätze eintragen“ und „Neuer Einsatz“ sind dort nicht wählbar.
+- **Keine Gäste:** Gäste aus Nachbarwehren trägt nur der Verfasser im Bericht ein.
 - **Externe API und Import:** Ein Bericht mit Terminal-Eintragungen gilt als von Menschen bearbeitet; die API ändert sein Personal nicht mehr (`externallyManaged` endet mit der ersten Eintragung).
 - **Entschädigung:** wird wie für jede Personalzeile berechnet; die Freigabe bleibt beim Kommandanten.
 
@@ -167,21 +171,8 @@ Das Modul importiert nur Verträge (`*-contracts`):
 
 **Entitäten** (Schema `info_terminal`, historisiert): `TerminalEntity` (Wache, Bezeichnung, Hash und Präfix des Schlüssels, erlaubte Aktionen, Sprache, technischer Benutzer, angelegt von/am, widerrufen von/am, `lastSeenAt`). Die Eintragungen selbst liegen in den Modulen Einsatzberichte und Dienste.
 
-**Frontend:** `info-terminal-web` exponiert neben `./Module` (Verwaltung, Karte an der Wache) eine Kiosk-Seite. Die Shell braucht dafür eine öffentliche Route `/terminal`, die nur dieses Bundle ohne Anmeldung lädt (offene Entscheidung 7).
+**Frontend:** `info-terminal-web` exponiert neben `./Module` (Verwaltung, Karte an der Wache) eine Kiosk-Seite. Die Shell bekommt dafür eine öffentliche Route `/terminal`, die nur dieses Bundle ohne Anmeldung lädt; eine eigene App gibt es nicht.
 
 ## Einstellungen
 
 `info-terminal.general`: `afterEndMinutes` (60), `openEndHours` (12), `maxAlarmAgeHours` für „Neuer Einsatz“ (12), `idleSeconds` (60), `notSeenWarningDays` (30).
-
-## Offene Entscheidungen
-
-1. **Fenster ohne bestätigtes Ende:** 12 Stunden nach dem Alarm? Alternativen: 6 Stunden (kürzer offen, aber lange Einsätze verlieren das Terminal) oder 24 Stunden (wie `longDurationHours`). Bestätigt der Verfasser später ein Ende, gilt Ende + 60 Minuten, auch wenn das früher ist.
-2. **Dienstende:** Es gibt nur das geplante Ende. Vorschlag: geplantes Ende + 60 Minuten. Soll der Verantwortliche ein Fenster vorzeitig schließen oder verlängern können (auch bei Einsätzen durch den Verfasser im Editor)?
-3. **EvD- und andere Einheitsberichte** bleiben am Terminal außen vor. Einverstanden?
-4. **Person schon in einem anderen Bericht desselben Einsatzes:** Ablehnen (Vorschlag) oder eintragen und dem Verfasser den Fehler überlassen?
-5. **Wachen von Nicht-Einsatzabteilungen** (Jugendfeuerwehr im eigenen Gebäude): Terminal nur für Dienste zulassen?
-6. **Link später wieder anzeigen:** Der Link erscheint nur einmal (Vorschlag, sicherer). Alternative: verschlüsselt speichern und für Verwalter wieder anzeigbar.
-7. **Technische Einbindung der Kiosk-Seite:** öffentliche Route `/terminal` in der Shell, die das Bundle des Moduls ohne Sitzung lädt (Vorschlag), oder eine eigene kleine App `apps/info-terminal`.
-8. **Personenkreis der Namenskacheln:** nur Probezeit und aktiv (Vorschlag) oder auch passive Mitglieder und Altersabteilung?
-9. **Gäste** (Nachbarwehr) am Terminal eintragen? Vorschlag: nein, nur der Verfasser.
-10. **Missbrauch ohne PIN:** Reicht die Historie, oder soll das Terminal Änderungen fremder Eintragungen nur innerhalb von z. B. 10 Minuten nach dem Eintragen erlauben?

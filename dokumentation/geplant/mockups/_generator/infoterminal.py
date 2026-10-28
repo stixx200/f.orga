@@ -51,7 +51,8 @@ def wahl(name, optionen, klasse=''):
     t = ''
     for wert, text, klein, an in optionen:
         k = f'<small>{klein}</small>' if klein else ''
-        t += f'<label><input type="radio" name="{name}" value="{wert}"{" checked" if an else ""}><span>{text}{k}</span></label>'
+        fid = ' id="bereitschaft"' if wert == 'be' else ''
+        t += f'<label><input type="radio" name="{name}" value="{wert}"{fid}{" checked" if an else ""}><span>{text}{k}</span></label>'
     return f'<div class="wahl {klasse}">{t}</div>'
 
 
@@ -123,12 +124,13 @@ tk('infoterminal/buchung.html', 'Eintragen', zurueck('personen.html', '‹ Ander
 <section class="tk-abschnitt">
   <h2>Weitere Angaben</h2>
   <div class="schalter-liste">
-    <label class="schalter"><input type="checkbox"> Unter Atemschutz</label>
+    <label class="schalter bedingt" data-wenn="wo=lf|dla|elw|mlf|mtw"><input type="checkbox"> Unter Atemschutz</label>
     <label class="schalter"><input type="checkbox"> Verdienstausfall beim Arbeitgeber</label>
     <label class="schalter"><input type="checkbox"> Einsatz während der Arbeitszeit beim Dienstherrn</label>
-    <label class="schalter"><input type="checkbox" checked> Ich war nicht die ganze Zeit dabei</label>
+    <label class="schalter bedingt" data-wenn="wo=lf|dla|elw|mlf|mtw"><input type="checkbox" checked> Ich war nicht die ganze Zeit dabei</label>
   </div>
-  <div class="felder zwei" style="margin-top:8px">
+  <div class="meldung info bedingt" data-wenn="wo=be" style="margin:8px 0 0" hidden><span class="ic">i</span><span>Bereitschaft gilt für die Zeiten des Berichts und zählt pauschal 1 Stunde. Atemschutz und abweichende Zeiten entfallen.</span></div>
+  <div class="felder zwei bedingt" data-wenn="wo=lf|dla|elw|mlf|mtw" style="margin-top:8px">
     <div class="feld"><label>Von</label><input type="time" value="13:40"></div>
     <div class="feld"><label>Bis</label><input type="time" value=""><div class="hilfe">Leer: bis zum Ende des Einsatzes</div></div>
   </div>

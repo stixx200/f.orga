@@ -1,6 +1,6 @@
 # Mockups Release 1
 
-**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind.
+**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben.
 
 Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stammdaten und Einsatzberichte, dazu das geplante Modul Infoterminal (Kiosk-Seite je Wache). Sie funktionieren nicht und enthalten nur erfundene Daten. Farben, Schrift, Tabellen sowie Kopf- und Fußzeile folgen `Stil.md`.
 
@@ -10,7 +10,7 @@ Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stam
 
 - **Handyansicht**: Fenster unter 860 px schmal ziehen oder den Gerätemodus der Entwicklerwerkzeuge nutzen. Das Menü öffnet sich über ☰, die Suche über die Lupe.
 - **Sprache**: Umschalter DE/EN oben rechts, auf dem Handy im Menü, auf der Anmeldeseite oben rechts. Die Wahl bleibt im Browser gespeichert. Ein Link mit `?sprache=en` öffnet eine Seite direkt auf Englisch.
-- **Dialoge**: Ein Link mit `#<dialog-id>` öffnet einen Dialog direkt, z. B. `einsatzberichte/pruefung.html#d-sperre`. Im Berichtseditor springt `#s4` zu Schritt 4.
+- **Dialoge**: Ein Link mit `#<dialog-id>` öffnet einen Dialog direkt, z. B. `einsatzberichte/pruefung.html#d-sperre`. Im Berichtseditor springt `#s4` zu Schritt 4. `#<id>` einer Auswahl wählt sie aus, z. B. `infoterminal/buchung.html#bereitschaft`.
 
 ## Gestaltung
 
@@ -77,7 +77,7 @@ Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stam
 | | `einsatzberichte/einstellungen.html` | Entschädigungssätze mit Gültigkeit, Rundung, Freigabe in zwei Stufen (abschaltbar), Stichwort-Katalog mit Einsatzhauptart und Unterkategorie, Prüfregeln, Kataloge |
 | Infoterminal (Konzept: [`module/infoterminal.md`](../module/infoterminal.md)) | `infoterminal/start.html` | Kiosk-Seite einer Wache ohne Shell-Rahmen: offene Einsätze und Dienste im Zeitfenster, „+ Neuer Einsatz“ |
 | | `infoterminal/personen.html` | „Wer sind Sie?“: Namenskacheln der Abteilung mit Sprungleiste, Eingetragene mit Haken, Suche in anderen Abteilungen |
-| | `infoterminal/buchung.html` | Eintragen: Fahrzeug (Bezeichnung · Funkrufname (Abteilung)) oder Bereitschaft, Funktion, Atemschutz, Verdienstausfall, Arbeitszeit, abweichende Zeit; Bestätigung `#d-eingetragen` |
+| | `infoterminal/buchung.html` | Eintragen: Fahrzeug (Bezeichnung · Funkrufname (Abteilung)) oder Bereitschaft, Funktion, Atemschutz, Verdienstausfall, Arbeitszeit, abweichende Zeit; bei Bereitschaft (`#bereitschaft`) ohne Atemschutz und abweichende Zeit; Bestätigung `#d-eingetragen` |
 | | `infoterminal/eingetragen.html` | Eingetragene je Fahrzeug; eigene Eintragungen ändern und austragen (`#d-aendern`), Eintragungen des Verfassers gesperrt |
 | | `infoterminal/neuer-einsatz.html` | Neuer Einsatz mit Stichwort und Alarm; passende Einsätze anderer Abteilungen `#d-treffer` |
 | | `infoterminal/dienst.html` | Anwesenheit für einen Dienst eintragen (unbestätigt wie der QR-Check-in) |

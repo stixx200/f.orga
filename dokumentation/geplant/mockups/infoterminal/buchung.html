@@ -15,7 +15,7 @@
 <div class="tk-titel"><div><span class="meta">B3 Brand Scheune · Alarm 13:12</span><h1>Jana Fischer eintragen</h1></div></div>
 <section class="tk-abschnitt">
   <h2>Wo waren Sie?</h2>
-  <div class="wahl "><label><input type="radio" name="wo" value="lf" checked><span>LF 20/16 · Florian Musterstadt 1/44 (Musterstadt)<small>5 von 9 Plätzen</small></span></label><label><input type="radio" name="wo" value="dla"><span>DLA(K) 23-12 · Florian Musterstadt 1/33 (Musterstadt)<small>1 von 3 Plätzen</small></span></label><label><input type="radio" name="wo" value="elw"><span>ELW 1 · Florian Musterstadt 1/11 (Musterstadt)<small>0 von 4 Plätzen</small></span></label><label><input type="radio" name="wo" value="mlf"><span>MLF 10/6 · Florian Musterstadt 1/42 (Musterstadt)<small>0 von 6 Plätzen</small></span></label><label><input type="radio" name="wo" value="mtw"><span>MTW · Florian Musterstadt 1/19 (Musterstadt)<small>0 von 9 Plätzen</small></span></label><label><input type="radio" name="wo" value="be"><span>Bereitschaft<small>Feuerwehrhaus Musterstadt · pauschal 1 h</small></span></label></div>
+  <div class="wahl "><label><input type="radio" name="wo" value="lf" checked><span>LF 20/16 · Florian Musterstadt 1/44 (Musterstadt)<small>5 von 9 Plätzen</small></span></label><label><input type="radio" name="wo" value="dla"><span>DLA(K) 23-12 · Florian Musterstadt 1/33 (Musterstadt)<small>1 von 3 Plätzen</small></span></label><label><input type="radio" name="wo" value="elw"><span>ELW 1 · Florian Musterstadt 1/11 (Musterstadt)<small>0 von 4 Plätzen</small></span></label><label><input type="radio" name="wo" value="mlf"><span>MLF 10/6 · Florian Musterstadt 1/42 (Musterstadt)<small>0 von 6 Plätzen</small></span></label><label><input type="radio" name="wo" value="mtw"><span>MTW · Florian Musterstadt 1/19 (Musterstadt)<small>0 von 9 Plätzen</small></span></label><label><input type="radio" name="wo" value="be" id="bereitschaft"><span>Bereitschaft<small>Feuerwehrhaus Musterstadt · pauschal 1 h</small></span></label></div>
   <details style="margin-top:12px"><summary class="knopf text">Anderes Fahrzeug …</summary>
     <div class="feld" style="margin-top:8px"><label for="f1">Fahrzeug einer anderen Wache oder Abteilung</label><select id="f1">
       <option>– bitte wählen –</option><option>LF 8/6 · Florian Musterstadt 2/43 (Birkenhain)</option><option>MTW · Florian Musterstadt 2/19 (Birkenhain)</option>
@@ -29,12 +29,13 @@
 <section class="tk-abschnitt">
   <h2>Weitere Angaben</h2>
   <div class="schalter-liste">
-    <label class="schalter"><input type="checkbox"> Unter Atemschutz</label>
+    <label class="schalter bedingt" data-wenn="wo=lf|dla|elw|mlf|mtw"><input type="checkbox"> Unter Atemschutz</label>
     <label class="schalter"><input type="checkbox"> Verdienstausfall beim Arbeitgeber</label>
     <label class="schalter"><input type="checkbox"> Einsatz während der Arbeitszeit beim Dienstherrn</label>
-    <label class="schalter"><input type="checkbox" checked> Ich war nicht die ganze Zeit dabei</label>
+    <label class="schalter bedingt" data-wenn="wo=lf|dla|elw|mlf|mtw"><input type="checkbox" checked> Ich war nicht die ganze Zeit dabei</label>
   </div>
-  <div class="felder zwei" style="margin-top:8px">
+  <div class="meldung info bedingt" data-wenn="wo=be" style="margin:8px 0 0" hidden><span class="ic">i</span><span>Bereitschaft gilt für die Zeiten des Berichts und zählt pauschal 1 Stunde. Atemschutz und abweichende Zeiten entfallen.</span></div>
+  <div class="felder zwei bedingt" data-wenn="wo=lf|dla|elw|mlf|mtw" style="margin-top:8px">
     <div class="feld"><label for="f2">Von</label><input id="f2" type="time" value="13:40"></div>
     <div class="feld"><label for="f3">Bis</label><input id="f3" type="time" value=""><div class="hilfe">Leer: bis zum Ende des Einsatzes</div></div>
   </div>

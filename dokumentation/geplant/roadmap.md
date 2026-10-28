@@ -111,9 +111,8 @@ Umgesetzt, mit Oberflächen ohne eigene Mockups: Beförderungen, Urkunden (Befö
 
 ## Infoterminal
 
-Noch keinem Release zugeordnet. Konzept: [Modul Infoterminal](module/infoterminal.md).
+Noch keinem Release zugeordnet. Konzept: [Modul Infoterminal](module/infoterminal.md). Konzept und Mockups (`mockups/infoterminal/`, Karte an der Wache in `stammdaten/organisation.html`) sind freigegeben.
 
-1. Konzept und Mockups (`mockups/infoterminal/`, Karte an der Wache in `stammdaten/organisation.html`) freigeben, offene Entscheidungen klären.
-2. Vorarbeiten in bestehenden Modulen: `vehicleLabel()` in `masterdata-contracts`, Erweiterungspunkt `masterdata.station.sections`, Eintragungen ohne Versionskonflikt im Einsatzbericht (`bookedVia`, Abgleich beim Speichern, Editor lädt nach), `createdVia: 'terminal'`, `checkedInVia` bei der Anwesenheit, öffentliche Kiosk-Route in der Shell.
-3. Modul `info-terminal`: Terminals mit Geräteschlüssel, Verwaltung, Kiosk-Seite für Einsätze und „Neuer Einsatz“.
-4. Dienste am Terminal (mit Modul Dienste).
+1. Vorarbeiten in bestehenden Modulen: `vehicleLabel()` in `masterdata-contracts`, Erweiterungspunkt `masterdata.station.sections`, Eintragungen ohne Versionskonflikt im Einsatzbericht (`bookedVia`, Abgleich beim Speichern, Editor lädt nach), `createdVia: 'terminal'`, `checkedInVia` bei der Anwesenheit, öffentliche Kiosk-Route in der Shell.
+2. Modul `info-terminal`: Terminals mit Geräteschlüssel, Verwaltung, Kiosk-Seite für Einsätze und „Neuer Einsatz“.
+3. Dienste am Terminal (mit Modul Dienste).
