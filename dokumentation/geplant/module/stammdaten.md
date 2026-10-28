@@ -46,7 +46,7 @@ Alle Entitäten sind historisiert (siehe [Historie](../fachmodell.md#historie)).
 
 Name, Anschrift, Abteilung, Kennzeichen „ständig besetzt“ (Jahresstatistik), Bemerkung.
 
-Die Wache in der Organisation bekommt eine eigene Karte mit ihren Daten und einem Erweiterungspunkt `masterdata.station.sections` (Props `{ stationId, departmentId }`). Das Modul [Infoterminal](infoterminal.md) zeigt dort die Terminals der Wache mit Status, „Infoterminals verwalten“ und „Dieses Gerät als Infoterminal einrichten …“ (Mockup `stammdaten/organisation.html#wache`).
+Die Wache in der Organisation bekommt eine eigene Karte mit ihren Daten und einem Erweiterungspunkt `masterdata.station.sections` (Props `{ stationId, departmentId }`). Das Modul [Infoterminal](infoterminal.md) zeigt dort die Terminals der Wache mit Abteilungen und Status, „Öffnen“ und „Link anzeigen“ für Berechtigte sowie „Infoterminals verwalten“ (Mockup `stammdaten/organisation.html#wache`).
 
 ### Fahrzeug
 

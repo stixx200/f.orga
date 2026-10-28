@@ -56,19 +56,35 @@ def wahl(name, optionen, klasse=''):
     return f'<div class="wahl {klasse}">{t}</div>'
 
 
+def umschalter(aktiv):
+    """Abteilungsansicht: ein Terminal kann mehreren Abteilungen der Wache dienen."""
+    teile = [('ft', 'Abt. Musterstadt', 'start.html'), ('jf', 'Jugendfeuerwehr', 'start-jugend.html'), ('aa', 'Altersabteilung', '#')]
+    a = ''.join(f'<a href="{z}"' + (' class="aktiv" aria-current="page"' if k == aktiv else '') + f'>{t}</a>' for k, t, z in teile)
+    return f'<nav class="tk-abteilungen" aria-label="Abteilung wählen">{a}</nav>'
+
+
 # ---------- Startbildschirm ----------
-tk('infoterminal/start.html', 'Infoterminal', '''
+tk('infoterminal/start.html', 'Infoterminal', umschalter('ft') + '''
 <div class="tk-titel"><h1>Wofür möchten Sie sich eintragen?</h1><span class="meta">Freitag, 23.10.2026</span></div>
 <div class="tk-ereignisse">
   <a class="tk-ereignis" href="personen.html"><span class="art">Einsatz · läuft</span><strong>B3 Brand Scheune</strong><span>Alarm 13:12 · Musterstadt, Lindenweg 4</span>
-    <span class="fuss-zeile"><span class="plakette ok">5 eingetragen</span><span class="meta">Eintragen bis 01:12</span></span></a>
+    <span class="fuss-zeile"><span class="plakette ok">5 eingetragen</span><span class="meta">Eintragen bis 19:12</span></span></a>
   <a class="tk-ereignis" href="personen.html"><span class="art">Einsatz · beendet 13:50</span><strong>TH1 Ölspur</strong><span>Alarm 12:05 · Musterstadt, B 311</span>
     <span class="fuss-zeile"><span class="plakette ok">4 eingetragen</span><span class="plakette gelb">Eintragen nur noch bis 14:50</span></span></a>
   <div class="tk-ereignis dienst zu" aria-disabled="true"><span class="art">Dienst · heute 19:00–21:30</span><strong>Übung Technische Hilfe</strong><span>Feuerwehrhaus Musterstadt</span>
     <span class="fuss-zeile"><span class="meta">Eintragen ab 18:30</span></span></div>
   <a class="tk-neu" href="neuer-einsatz.html">+ Neuer Einsatz</a>
 </div>
-<p class="meta">Eintragen geht während eines Einsatzes und bis eine Stunde nach seinem Ende, bei Diensten ab 30 Minuten vor Beginn bis eine Stunde nach dem Ende. Ohne eingetragenes Einsatzende schließt das Eintragen 12 Stunden nach dem Alarm. Den Bericht schreibt weiterhin der Verfasser in f.orga.</p>
+<p class="meta">Eintragen geht während eines Einsatzes und bis eine Stunde nach seinem Ende, bei Diensten ab 30 Minuten vor Beginn bis eine Stunde nach dem Ende. Ohne eingetragenes Einsatzende schließt das Eintragen 6 Stunden nach dem Alarm. Den Bericht schreibt weiterhin der Verfasser in f.orga.</p>
+''')
+
+tk('infoterminal/start-jugend.html', 'Infoterminal', umschalter('jf') + '''
+<div class="tk-titel"><h1>Wofür möchten Sie sich eintragen?</h1><span class="meta">Freitag, 23.10.2026 · Jugendfeuerwehr Musterstadt</span></div>
+<div class="tk-ereignisse">
+  <a class="tk-ereignis dienst" href="dienst.html"><span class="art">Dienst · heute 14:00–16:30</span><strong>Jugendfeuerwehrdienst: Knoten und Stiche</strong><span>Feuerwehrhaus Musterstadt</span>
+    <span class="fuss-zeile"><span class="plakette ok">9 eingetragen</span><span class="meta">Eintragen bis 17:30</span></span></a>
+</div>
+<p class="meta">Die Jugendfeuerwehr schreibt keine Einsatzberichte. In ihrer Ansicht stehen deshalb nur Dienste und kein „Neuer Einsatz“.</p>
 ''')
 
 # ---------- Personenauswahl ----------
@@ -86,19 +102,20 @@ def name_kachel(nach, vor, gebucht, ziel='buchung.html'):
     return f'<a class="tk-name" href="{ziel}"><strong>{vor} {nach}</strong><span class="meta">Abt. Musterstadt</span></a>'
 
 
-tk('infoterminal/personen.html', 'Wer sind Sie?', zurueck('start.html') + '''
+tk('infoterminal/personen.html', 'Wer sind Sie?', umschalter('ft') + zurueck('start.html') + '''
 <div class="tk-titel"><div><span class="meta">Einsatz · Alarm 13:12 · Musterstadt, Lindenweg 4</span><h1>B3 Brand Scheune: Wer sind Sie?</h1></div>
 <a class="knopf" href="eingetragen.html">Eingetragen (5)</a></div>
 <div class="tk-buchstaben" aria-label="Nach Anfangsbuchstaben springen"><a class="aktiv" href="#">Alle</a><a href="#">B</a><a href="#">F</a><a href="#">G</a><a href="#">H</a><a href="#">K</a><a href="#">L</a><a href="#">M</a><a href="#">O</a><a href="#">R</a><a href="#">S</a><a href="#">U</a><a href="#">V</a><a href="#">W</a><a href="#">Z</a></div>
 <div class="tk-namen">''' + ''.join(name_kachel(n, v, g) for n, v, g in MITGLIEDER) + '''</div>
 <section class="tk-abschnitt">
-  <h2>Aus einer anderen Abteilung?</h2>
-  <div class="feld"><label>Namen suchen (ab 3 Buchstaben)</label><input type="search" value="Bren" placeholder="Nachname"></div>
+  <h2>Nicht dabei?</h2>
+  <div class="feld"><label>Alle Personen durchsuchen (ab 3 Buchstaben)</label><input type="search" value="Bren" placeholder="Nachname"></div>
   <div class="tk-namen" style="margin-bottom:0">
     <a class="tk-name" href="buchung.html"><strong>Lena Brenner</strong><span class="meta">Abt. Weidenhain</span></a>
+    <a class="tk-name" href="buchung.html"><strong>Hans Brenner</strong><span class="meta">Altersabteilung Weidenhain</span></a>
     <span class="tk-name gesperrt"><strong>Tim Brendel</strong><span class="meta">Abt. Birkenhain · steht schon im Bericht Birkenhain</span></span>
   </div>
-  <p class="meta" style="margin:8px 0 0">Gezeigt werden höchstens 10 Treffer, nur Name und Abteilung. Gäste aus Nachbarwehren trägt der Verfasser im Bericht ein.</p>
+  <p class="meta" style="margin:8px 0 0">Die Suche findet alle Personen aller Abteilungen, auch passive Mitglieder, Jugendfeuerwehr und Altersabteilung. Höchstens 10 Treffer, nur Name und Abteilung. Gäste aus Nachbarwehren trägt der Verfasser im Bericht ein.</p>
 </section>
 <p class="meta">Grün mit Haken: schon eingetragen. Antippen öffnet die eigene Eintragung zum Ändern oder Austragen. Nach 60 Sekunden ohne Eingabe kehrt das Terminal zur Übersicht zurück.</p>
 ''')
@@ -140,7 +157,7 @@ tk('infoterminal/buchung.html', 'Eintragen', zurueck('personen.html', '‹ Ander
 ''', dialoge=dialog('d-eingetragen', 'Eingetragen', '''
 <div class="tk-erfolg"><div class="haken" aria-hidden="true">✓</div>
 <p><strong>Jana Fischer</strong><br>LF 20/16 · Florian Musterstadt 1/44 (Musterstadt)<br>Melder · ab 13:40</p>
-<p class="meta">B3 Brand Scheune · Bericht Abteilung Musterstadt. Ändern oder Austragen bis 01:12 hier am Terminal. Zurück zur Übersicht in 10 s.</p></div>''',
+<p class="meta">B3 Brand Scheune · Bericht Abteilung Musterstadt. Ändern oder Austragen bis 19:12 hier am Terminal. Zurück zur Übersicht in 10 s.</p></div>''',
     '<a class="knopf" href="eingetragen.html">Eingetragene ansehen</a><a class="knopf primaer" href="start.html">Fertig</a>'))
 
 # ---------- Eingetragene mit Korrektur ----------
@@ -155,7 +172,7 @@ def zeile(name, fkt, quelle, aenderbar=True):
 
 
 tk('infoterminal/eingetragen.html', 'Eingetragen', zurueck('personen.html', '‹ Zur Namensliste') + '''
-<div class="tk-titel"><div><span class="meta">Einsatz · Alarm 13:12 · Musterstadt, Lindenweg 4</span><h1>B3 Brand Scheune: Eingetragen (6)</h1></div><span class="plakette gelb">Ändern bis 01:12</span></div>
+<div class="tk-titel"><div><span class="meta">Einsatz · Alarm 13:12 · Musterstadt, Lindenweg 4</span><h1>B3 Brand Scheune: Eingetragen (6)</h1></div><span class="plakette gelb">Ändern bis 19:12</span></div>
 <section class="tk-abschnitt"><h2>LF 20/16 · Florian Musterstadt 1/44 (Musterstadt)</h2><p class="meta">5 von 9 Plätzen</p><ul class="tk-besatzung">''' +
     zeile('Tobias Rief', 'Gruppenführer', '', False) + zeile('Michael Bauer', 'Maschinist', '13:31') + zeile('Jonas Keller', 'Angriffstrupp · Atemschutz', '13:33') +
     zeile('Lukas Hahn', 'Angriffstrupp · Atemschutz', '13:34') + zeile('Jana Fischer', 'Melder · ab 13:40', '14:32') + '''</ul></section>
@@ -175,7 +192,7 @@ tk('infoterminal/neuer-einsatz.html', 'Neuer Einsatz', zurueck('start.html') + '
 <section class="tk-abschnitt">
   <div class="feld"><label class="pflicht">Stichwort</label><select><option>– bitte wählen –</option><option selected>TH-Wasser · Wasser im Gebäude / Unwetter</option><option>B1 · Kleinbrand</option><option>B2 · Brand Wohnung</option><option>TH1 · Technische Hilfe klein</option><option>B-BMA · Brandmeldeanlage</option></select></div>
   <div class="felder zwei">
-    <div class="feld"><label class="pflicht">Alarm</label><input type="time" value="13:58"><div class="hilfe">heute, höchstens 12 Stunden zurück</div></div>
+    <div class="feld"><label class="pflicht">Alarm</label><input type="time" value="13:58"><div class="hilfe">heute, höchstens 6 Stunden zurück</div></div>
     <div class="feld"><label>Leitstellennummer</label><input type="text" placeholder="falls bekannt, z. B. 2026-104950"></div>
   </div>
   <div class="felder zwei">
@@ -193,20 +210,20 @@ tk('infoterminal/neuer-einsatz.html', 'Neuer Einsatz', zurueck('start.html') + '
     '<a class="knopf" href="personen.html">Nein, neuen Einsatz anlegen</a>'))
 
 # ---------- Dienst ----------
-tk('infoterminal/dienst.html', 'Dienst eintragen', zurueck('start.html') + '''
-<div class="tk-titel"><div><span class="meta">Dienst · heute 19:00–21:30 · Abt. Musterstadt</span><h1>Übung Technische Hilfe: Jana Fischer</h1></div><span class="plakette gelb">Eintragen bis 22:30</span></div>
+tk('infoterminal/dienst.html', 'Dienst eintragen', umschalter('jf') + zurueck('start-jugend.html') + '''
+<div class="tk-titel"><div><span class="meta">Dienst · heute 14:00–16:30 · Jugendfeuerwehr Musterstadt</span><h1>Jugendfeuerwehrdienst: Leon Hartmann</h1></div><span class="plakette gelb">Eintragen bis 17:30</span></div>
 <section class="tk-abschnitt">
   <h2>Anwesend</h2>
   <div class="schalter-liste">
-    <label class="schalter"><input type="checkbox"> Unter Atemschutz</label>
     <label class="schalter"><input type="checkbox"> Ich war nicht die ganze Zeit dabei</label>
   </div>
-  <div class="feld" style="margin-top:8px"><label>Funktion (optional)</label><input type="text" placeholder="z. B. Maschinist"></div>
+  <div class="feld" style="margin-top:8px"><label>Funktion (optional)</label><input type="text" placeholder="z. B. Gruppensprecher"></div>
+  <p class="meta" style="margin:0">„Unter Atemschutz“ gibt es nur in Diensten von Einsatzabteilungen.</p>
 </section>
 <div class="meldung warnung"><span class="ic">!</span><span>Die Eintragung ist vorläufig, bis der Verantwortliche die Anwesenheit speichert, wie beim QR-Check-in.</span></div>
-<section class="tk-abschnitt"><h2>Schon anwesend (14)</h2><p class="meta" style="margin:0">Michael Bauer, Nina Graf, Lukas Hahn, Jonas Keller, Ralf Kunz, Martin Lang, Daniel Moser, Felix Ott, Tobias Rief, Sandra Roth, Erik Sauter, Kai Weber, Anna Weiß, Paul Ziegler</p></section>
-<div class="tk-leiste"><a class="knopf" href="start.html">Abbrechen</a><a class="knopf primaer gross" href="start.html">Anwesend eintragen</a></div>
-''', uhr='19:42')
+<section class="tk-abschnitt"><h2>Schon anwesend (9)</h2><p class="meta" style="margin:0">Mia Bauer, Finn Eberle, Lea Graf, Noah Kunz, Emma Lang, Ben Moser, Lina Ott, Paul Roth, Sophie Weber</p></section>
+<div class="tk-leiste"><a class="knopf" href="start-jugend.html">Abbrechen</a><a class="knopf primaer gross" href="start-jugend.html">Anwesend eintragen</a></div>
+''')
 
 # ---------- Nichts offen ----------
 tk('infoterminal/leer.html', 'Infoterminal', '''
@@ -232,14 +249,14 @@ seite('infoterminal/verwaltung.html', 'Infoterminals', '''
   <div class="feld"><label>Abteilung</label><select><option>Alle Abteilungen</option><option>Musterstadt</option><option>Birkenhain</option><option>Weidenhain</option></select></div>
   <label class="schalter"><input type="checkbox"> Widerrufene zeigen</label>
 </div>
-''' + tabelle(['Wache', 'Gerät', 'Erlaubt', 'Zuletzt gesehen', 'Status', ''], [
-    ['<strong>Feuerwehrhaus Musterstadt</strong><span class="unter-text">Abt. Musterstadt</span>', 'Tablet Fahrzeughalle', 'Einsätze, Neuer Einsatz, Dienste', 'heute 14:31', '<span class="plakette ok">aktiv</span>',
-     '<span class="knopfreihe"><button type="button" class="knopf klein" data-dialog="d-neuer-link">Neuer Link …</button><button type="button" class="knopf klein" data-dialog="d-widerruf">Widerrufen …</button></span>'],
-    ['<strong>Feuerwehrhaus Musterstadt</strong><span class="unter-text">Abt. Musterstadt</span>', 'PC Funkraum', 'Einsätze, Dienste', '21.10.2026 19:02', '<span class="plakette ok">aktiv</span>',
-     '<span class="knopfreihe"><button type="button" class="knopf klein" data-dialog="d-neuer-link">Neuer Link …</button><button type="button" class="knopf klein" data-dialog="d-widerruf">Widerrufen …</button></span>'],
-    ('warnung', ['<strong>Gerätehaus Weidenhain</strong><span class="unter-text">Abt. Weidenhain</span>', 'Tablet', 'Einsätze, Neuer Einsatz', '19.09.2026 20:44', '<span class="plakette warn">seit 34 Tagen nicht gesehen</span>',
-     '<span class="knopfreihe"><button type="button" class="knopf klein" data-dialog="d-neuer-link">Neuer Link …</button><button type="button" class="knopf klein" data-dialog="d-widerruf">Widerrufen …</button></span>']),
-    ['<strong>Gerätehaus Birkenhain</strong><span class="unter-text">Abt. Birkenhain</span>', 'Tablet', 'Einsätze', '02.10.2026 08:10', '<span class="plakette grau">widerrufen 02.10.2026 · Stefan Eberle</span>', ''],
+''' + tabelle(['Wache', 'Gerät', 'Abteilungen', 'Erlaubt', 'Zuletzt gesehen', 'Status', ''], [
+    ['<strong>Feuerwehrhaus Musterstadt</strong><span class="unter-text">Abt. Musterstadt</span>', 'Tablet Fahrzeughalle', 'Abt. Musterstadt, Jugendfeuerwehr Musterstadt, Altersabteilung Musterstadt', 'Einsätze, Neuer Einsatz, Dienste', 'heute 14:31', '<span class="plakette ok">aktiv</span>',
+     '<span class="knopfreihe"><button type="button" class="knopf klein sekundaer" data-dialog="d-link-anzeigen">Link anzeigen</button><button type="button" class="knopf klein" data-dialog="d-neuer-link">Neuer Link …</button><button type="button" class="knopf klein" data-dialog="d-widerruf">Widerrufen …</button></span>'],
+    ['<strong>Feuerwehrhaus Musterstadt</strong><span class="unter-text">Abt. Musterstadt</span>', 'PC Funkraum', 'Abt. Musterstadt', 'Einsätze, Dienste', '21.10.2026 19:02', '<span class="plakette ok">aktiv</span>',
+     '<span class="knopfreihe"><button type="button" class="knopf klein sekundaer" data-dialog="d-link-anzeigen">Link anzeigen</button><button type="button" class="knopf klein" data-dialog="d-neuer-link">Neuer Link …</button><button type="button" class="knopf klein" data-dialog="d-widerruf">Widerrufen …</button></span>'],
+    ('warnung', ['<strong>Gerätehaus Weidenhain</strong><span class="unter-text">Abt. Weidenhain</span>', 'Tablet', 'Abt. Weidenhain', 'Einsätze, Neuer Einsatz', '19.09.2026 20:44', '<span class="plakette warn">seit 34 Tagen nicht gesehen</span>',
+     '<span class="knopfreihe"><button type="button" class="knopf klein sekundaer" data-dialog="d-link-anzeigen">Link anzeigen</button><button type="button" class="knopf klein" data-dialog="d-neuer-link">Neuer Link …</button><button type="button" class="knopf klein" data-dialog="d-widerruf">Widerrufen …</button></span>']),
+    ['<strong>Gerätehaus Birkenhain</strong><span class="unter-text">Abt. Birkenhain</span>', 'Tablet', 'Abt. Birkenhain', 'Einsätze', '02.10.2026 08:10', '<span class="plakette grau">widerrufen 02.10.2026 · Stefan Eberle</span>', ''],
 ], 'stapel') + '''
 <section class="karte" style="margin-top:16px;max-width:720px">
   <h2>Neues Infoterminal</h2>
@@ -247,6 +264,13 @@ seite('infoterminal/verwaltung.html', 'Infoterminals', '''
     <div class="feld"><label class="pflicht">Wache</label><select><option>Feuerwehrhaus Musterstadt (Musterstadt)</option><option>Gerätehaus Birkenhain (Birkenhain)</option><option>Gerätehaus Weidenhain (Weidenhain)</option></select></div>
     <div class="feld"><label class="pflicht">Gerät</label><input type="text" placeholder="z. B. Tablet Fahrzeughalle"></div>
   </div>
+  <fieldset><legend>Abteilungen</legend><div class="schalter-liste">
+    <label class="schalter"><input type="checkbox" checked disabled> Abt. Musterstadt (Abteilung der Wache)</label>
+    <label class="schalter"><input type="checkbox" checked> Jugendfeuerwehr Musterstadt</label>
+    <label class="schalter"><input type="checkbox" checked> Altersabteilung Musterstadt</label>
+  </div>
+  <div class="feld" style="max-width:360px;margin-top:8px"><label>Weitere Abteilung</label><select><option>– bitte wählen –</option><option>Führungsgruppe Musterstadt</option><option>Sonderdienste</option></select></div>
+  <p class="meta" style="margin:0">Am Terminal wird die Abteilung umgeschaltet. Einsätze gibt es nur für Einsatzabteilungen, die übrigen tragen sich für Dienste ein.</p></fieldset>
   <fieldset><legend>Erlaubt</legend><div class="schalter-liste">
     <label class="schalter"><input type="checkbox" checked disabled> Für Einsätze der Abteilung eintragen</label>
     <label class="schalter"><input type="checkbox" checked> Neuen Einsatz anlegen</label>
@@ -255,13 +279,19 @@ seite('infoterminal/verwaltung.html', 'Infoterminals', '''
   <div class="feld" style="max-width:260px"><label>Sprache beim Start</label><select><option>Deutsch</option><option>English</option></select></div>
   <div class="formular-fuss"><button type="button" class="knopf primaer" data-dialog="d-link">Infoterminal anlegen</button></div>
 </section>
-<p class="meta">Ein Infoterminal ist ein Gerät an einer Wache. Es braucht kein Benutzerkonto, kann nur eintragen und nichts lesen außer Namen der Abteilung und den offenen Einsätzen und Diensten. Anlegen, neuer Link und Widerruf stehen im Audit-Log.</p>
+<p class="meta">Ein Infoterminal ist ein Gerät an einer Wache. Es braucht kein Benutzerkonto, kann nur eintragen und nichts lesen außer Namen der Abteilung und den offenen Einsätzen und Diensten. Anlegen, Link anzeigen, neuer Link und Widerruf stehen im Audit-Log.</p>
 ''', brot=[('Verwaltung', None), ('Infoterminals', None)], dialoge=dialog('d-link', 'Link für das Infoterminal', '''
-<div class="meldung ok"><span class="ic">✓</span><span><strong>Infoterminal angelegt.</strong> Der Link wird nur jetzt angezeigt. Öffnen Sie ihn auf dem Gerät an der Wache; danach bleibt das Gerät angemeldet.</span></div>
+<div class="meldung ok"><span class="ic">✓</span><span><strong>Infoterminal angelegt.</strong> Öffnen Sie den Link auf dem Gerät an der Wache; danach bleibt das Gerät angemeldet. Unter „Link anzeigen“ lässt er sich später wieder abrufen.</span></div>
 ''' + qr_svg() + '''
 <code class="geheim" translate="no">https://forga.musterstadt.example/terminal#k=fit_Q7m2Xv9bR4tW1nL8pD3sH6yC0jF5gK2a</code>
 <p class="meta" style="margin-top:8px">QR-Code mit der Kamera des Tablets scannen oder den Link kopieren. Wer den Link hat, kann für die Wache eintragen. Nicht per E-Mail oder Messenger weitergeben.</p>''',
     '<button type="button" class="knopf">Link kopieren</button><button class="knopf primaer" value="ok">Fertig</button>') +
+    dialog('d-link-anzeigen', 'Link von Tablet Fahrzeughalle', '''
+<p class="neben">Feuerwehrhaus Musterstadt · Abt. Musterstadt, Jugendfeuerwehr Musterstadt, Altersabteilung Musterstadt</p>
+''' + qr_svg(11) + '''
+<code class="geheim" translate="no">https://forga.musterstadt.example/terminal#k=fit_Q7m2Xv9bR4tW1nL8pD3sH6yC0jF5gK2a</code>
+<p class="meta" style="margin-top:8px">Das Anzeigen steht im Audit-Log. Wer den Link hat, kann für die Abteilungen dieses Terminals eintragen. Ist er in falsche Hände geraten: „Neuer Link“.</p>''',
+    '<button type="button" class="knopf">Link kopieren</button><a class="knopf primaer" href="start.html">Infoterminal öffnen</a>') +
     dialog('d-neuer-link', 'Neuen Link erzeugen?', '<p>Der bisherige Link von <strong>Tablet Fahrzeughalle</strong> wird sofort ungültig. Das Gerät zeigt dann „nicht freigeschaltet“, bis der neue Link geöffnet ist.</p>',
            ABBRECHEN + '<button class="knopf primaer" value="ok" data-dialog="d-link">Neuen Link erzeugen</button>') +
     dialog('d-widerruf', 'Infoterminal widerrufen?', '<p><strong>Tablet Fahrzeughalle</strong> (Feuerwehrhaus Musterstadt) kann danach nicht mehr eintragen. Bisherige Eintragungen bleiben in den Berichten. Für das Gerät legen Sie später ein neues Infoterminal an.</p>',

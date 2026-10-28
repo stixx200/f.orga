@@ -75,16 +75,17 @@ Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stam
 | | `einsatzberichte/offene-berichte.html` | Offene Berichte nach Verfasser, Verfasser zuweisen, Erinnerung mit Bestätigung |
 | | `einsatzberichte/jahresstatistik.html` | Jahresstatistik: Vorschau mit Herkunft je Wert, Plausibilitätsprüfung, Korrektur, Abschluss |
 | | `einsatzberichte/einstellungen.html` | Entschädigungssätze mit Gültigkeit, Rundung, Freigabe in zwei Stufen (abschaltbar), Stichwort-Katalog mit Einsatzhauptart und Unterkategorie, Prüfregeln, Kataloge |
-| Infoterminal (Konzept: [`module/infoterminal.md`](../module/infoterminal.md)) | `infoterminal/start.html` | Kiosk-Seite einer Wache ohne Shell-Rahmen: offene Einsätze und Dienste im Zeitfenster, „+ Neuer Einsatz“ |
-| | `infoterminal/personen.html` | „Wer sind Sie?“: Namenskacheln der Abteilung mit Sprungleiste, Eingetragene mit Haken, Suche in anderen Abteilungen |
+| Infoterminal (Konzept: [`module/infoterminal.md`](../module/infoterminal.md)) | `infoterminal/start.html` | Kiosk-Seite einer Wache ohne Shell-Rahmen: Abteilungsumschalter, offene Einsätze und Dienste im Zeitfenster, „+ Neuer Einsatz“ |
+| | `infoterminal/start-jugend.html` | Ansicht der Jugendfeuerwehr am selben Terminal: nur Dienste, kein „Neuer Einsatz“ |
+| | `infoterminal/personen.html` | „Wer sind Sie?“: Namenskacheln der gewählten Abteilung mit Sprungleiste, Eingetragene mit Haken, Suche über alle Personen (auch passive und Altersabteilung) |
 | | `infoterminal/buchung.html` | Eintragen: Fahrzeug (Bezeichnung · Funkrufname (Abteilung)) oder Bereitschaft, Funktion, Atemschutz, Verdienstausfall, Arbeitszeit, abweichende Zeit; bei Bereitschaft (`#bereitschaft`) ohne Atemschutz und abweichende Zeit; Bestätigung `#d-eingetragen` |
 | | `infoterminal/eingetragen.html` | Eingetragene je Fahrzeug; eigene Eintragungen ändern und austragen (`#d-aendern`), Eintragungen des Verfassers gesperrt |
 | | `infoterminal/neuer-einsatz.html` | Neuer Einsatz mit Stichwort und Alarm; passende Einsätze anderer Abteilungen `#d-treffer` |
-| | `infoterminal/dienst.html` | Anwesenheit für einen Dienst eintragen (unbestätigt wie der QR-Check-in) |
+| | `infoterminal/dienst.html` | Anwesenheit für einen Dienst der Jugendfeuerwehr eintragen (unbestätigt wie der QR-Check-in, ohne Atemschutz) |
 | | `infoterminal/leer.html` | Nichts offen |
 | | `infoterminal/gesperrt.html` | Link ungültig oder widerrufen |
-| | `infoterminal/verwaltung.html` | Terminals je Wache mit zuletzt gesehen, anlegen mit einmaligem Link und QR-Code (`#d-link`), neuer Link, Widerruf; Menü „Verwaltung → Infoterminals“ |
-| | `stammdaten/organisation.html#wache` | Karte der Wache mit ihren Infoterminals und Links zur Verwaltung |
+| | `infoterminal/verwaltung.html` | Terminals je Wache mit Abteilungen und zuletzt gesehen, anlegen mit Abteilungsauswahl (`#d-link`), Link jederzeit anzeigen, kopieren und öffnen (`#d-link-anzeigen`), neuer Link, Widerruf; Menü „Verwaltung → Infoterminals“ |
+| | `stammdaten/organisation.html#wache` | Karte der Wache mit ihren Infoterminals und Abteilungen, „Öffnen“, „Link anzeigen“ und Link zur Verwaltung |
 
 ### Berichtseditor
 

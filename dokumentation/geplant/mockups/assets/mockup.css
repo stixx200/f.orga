@@ -612,6 +612,12 @@ hr.trenner { border: 0; border-top: 1px solid var(--gitter); margin: 16px 0; }
 .tk input[type=text], .tk input[type=search], .tk input[type=time], .tk input[type=date], .tk input[type=number], .tk select { min-height: 52px; font-size: 1.05rem; }
 .tk .schalter { min-height: 52px; font-size: 1rem; }
 .tk .schalter input { width: 26px; height: 26px; }
+/* Umschalter der Abteilungen (Segmented Control) */
+.tk-abteilungen { display: flex; flex-wrap: wrap; margin: 0 0 16px; border: 1px solid var(--dienst); border-radius: var(--radius); overflow: hidden; background: var(--flaeche); }
+.tk-abteilungen a { flex: 1 1 0; display: flex; align-items: center; justify-content: center; min-height: 56px; padding: 8px 16px; color: var(--dienst); font-weight: bold; text-align: center; text-decoration: none; }
+.tk-abteilungen a + a { border-left: 1px solid var(--dienst); }
+.tk-abteilungen a:hover { background: var(--wechsel); }
+.tk-abteilungen a.aktiv { background: var(--dienst); color: #fff; }
 /* Karten der offenen Einsätze und Dienste */
 .tk-ereignisse { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-bottom: 24px; }
 .tk-ereignis { display: flex; flex-direction: column; gap: 4px; padding: 20px 24px; min-height: 140px; background: var(--flaeche); border: 1px solid var(--gitter); border-left: 6px solid var(--dienst); border-radius: var(--radius); box-shadow: var(--e1); color: var(--text); text-decoration: none; }
@@ -669,6 +675,7 @@ a.tk-ereignis:hover { box-shadow: var(--e4); border-color: var(--dienst); }
   .tk-kopf .sprache button { min-width: 40px; padding: 0 8px; }
   .tk-inhalt { padding: 16px 16px 40px; }
   .tk-titel h1 { font-size: 1.45rem; }
+  .tk-abteilungen a { min-height: 48px; padding: 6px 8px; font-size: .85rem; }
   .tk-ereignisse { grid-template-columns: minmax(0, 1fr); }
   .tk-namen { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .tk-name { min-height: 76px; padding: 10px 12px; }

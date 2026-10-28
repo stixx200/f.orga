@@ -1312,7 +1312,6 @@ Verwaltung der Infoterminals => Managing info terminals
 Wache mit Infoterminal => Station with info terminal
 Anderes Fahrzeug … => Other vehicle …
 B3 Brand Scheune · Alarm 13:12
-B3 Brand Scheune · Bericht Abteilung Musterstadt. Ändern oder Austragen bis 01:12 hier am Terminal. Zurück zur Übersicht in 10 s. => B3 Brand Scheune · report of the Musterstadt department. Change or remove until 01:12 here at the terminal. Back to the overview in 10 s.
 Beträge, Atemschutzminuten und Verletzungen trägt der Verfasser im Bericht ein. => Amounts, breathing apparatus minutes and injuries are entered by the author in the report.
 Bis => To
 Von => From
@@ -1347,13 +1346,8 @@ keine Angabe => not specified
 Anwesend => Present
 Anwesend eintragen => Sign in as present
 Die Eintragung ist vorläufig, bis der Verantwortliche die Anwesenheit speichert, wie beim QR-Check-in. => The entry is provisional until the person in charge saves the attendance, as with the QR check-in.
-Dienst · heute 19:00–21:30 · Abt. Musterstadt => Service · today 19:00–21:30 · Dept. Musterstadt
-Eintragen bis 22:30 => Sign-in until 22:30
 Funktion (optional) => Function (optional)
-Michael Bauer, Nina Graf, Lukas Hahn, Jonas Keller, Ralf Kunz, Martin Lang, Daniel Moser, Felix Ott, Tobias Rief, Sandra Roth, Erik Sauter, Kai Weber, Anna Weiß, Paul Ziegler
-Schon anwesend (14) => Already present (14)
 z. B. Maschinist => e.g. Maschinist
-Übung Technische Hilfe: Jana Fischer => Technical rescue drill: Jana Fischer
 ‹ Übersicht => ‹ Overview
 13:31 am Infoterminal => 13:31 at the info terminal
 Angriffstrupp · Atemschutz => Angriffstrupp · breathing apparatus
@@ -1369,7 +1363,6 @@ entfernt. Die Änderung steht in der Historie des Berichts. => . The change is r
 ganzer Einsatz => whole incident
 vom Verfasser => by the author
 Ändern => Change
-Ändern bis 01:12 => Change until 01:12
 Ändern öffnet das Formular mit den bisherigen Angaben. => Change opens the form with the previous details.
 ‹ Zur Namensliste => ‹ To the list of names
 Der Link ist ungültig oder wurde widerrufen. Bitte wenden Sie sich an den Abteilungskommandanten oder den Administrator. Er richtet das Gerät unter „Verwaltung → Infoterminals“ oder auf der Seite der Wache neu ein. => The link is invalid or was revoked. Please contact the department commander or the administrator. They set up the device again under “Administration → Info terminals” or on the station page.
@@ -1397,20 +1390,16 @@ Straße und Hausnummer => Street and house number
 Unseren Bericht hinzufügen => Add our report
 Weiter => Next
 falls bekannt, z. B. 2026-104950 => if known, e.g. 2026-104950
-heute, höchstens 12 Stunden zurück => today, at most 12 hours ago
 Abt. Birkenhain · steht schon im Bericht Birkenhain => Dept. Birkenhain · already in the Birkenhain report
 Anna Weiß
 Tim Brendel
-Aus einer anderen Abteilung? => From another department?
 B3 Brand Scheune: Wer sind Sie? => B3 Brand Scheune: who are you?
 DLA(K) 23-12 · Maschinist
 LF 20/16 · Angriffstrupp
 LF 20/16 · Maschinist
 Eingetragen (5) => Signed in (5)
-Gezeigt werden höchstens 10 Treffer, nur Name und Abteilung. Gäste aus Nachbarwehren trägt der Verfasser im Bericht ein. => At most 10 matches are shown, name and department only. Guests from neighbouring brigades are entered by the author in the report.
 Grün mit Haken: schon eingetragen. Antippen öffnet die eigene Eintragung zum Ändern oder Austragen. Nach 60 Sekunden ohne Eingabe kehrt das Terminal zur Übersicht zurück. => Green with a tick: already signed in. Tapping opens your entry to change or remove it. After 60 seconds without input the terminal returns to the overview.
 Nach Anfangsbuchstaben springen => Jump by initial letter
-Namen suchen (ab 3 Buchstaben) => Search name (3 letters or more)
 Wer sind Sie? => Who are you?
 4 eingetragen => 4 signed in
 5 eingetragen => 5 signed in
@@ -1420,17 +1409,13 @@ Dienst · heute 19:00–21:30 => Service · today 19:00–21:30
 Einsatz · beendet 13:50 => Incident · ended 13:50
 Einsatz · läuft => Incident · ongoing
 Eintragen ab 18:30 => Sign-in from 18:30
-Eintragen bis 01:12 => Sign-in until 01:12
-Eintragen geht während eines Einsatzes und bis eine Stunde nach seinem Ende, bei Diensten ab 30 Minuten vor Beginn bis eine Stunde nach dem Ende. Ohne eingetragenes Einsatzende schließt das Eintragen 12 Stunden nach dem Alarm. Den Bericht schreibt weiterhin der Verfasser in f.orga. => Sign-in is possible during an incident and up to one hour after its end, for services from 30 minutes before the start until one hour after the end. Without an entered end of the incident, sign-in closes 12 hours after the alarm. The author still writes the report in f.orga.
 Eintragen nur noch bis 14:50 => Sign-in only until 14:50
 Freitag, 23.10.2026 => Friday, 23.10.2026
 Wofür möchten Sie sich eintragen? => What do you want to sign in for?
 Übung Technische Hilfe => Technical rescue drill
 (Feuerwehrhaus Musterstadt) kann danach nicht mehr eintragen. Bisherige Eintragungen bleiben in den Berichten. Für das Gerät legen Sie später ein neues Infoterminal an. => (Feuerwehrhaus Musterstadt) can then no longer sign anyone in. Existing entries stay in the reports. For the device, create a new info terminal later.
 Abt. Birkenhain => Dept. Birkenhain
-Der Link wird nur jetzt angezeigt. Öffnen Sie ihn auf dem Gerät an der Wache; danach bleibt das Gerät angemeldet. => The link is shown only now. Open it on the device at the station; the device then stays signed in.
 Der bisherige Link von => The previous link of
-Ein Infoterminal ist ein Gerät an einer Wache. Es braucht kein Benutzerkonto, kann nur eintragen und nichts lesen außer Namen der Abteilung und den offenen Einsätzen und Diensten. Anlegen, neuer Link und Widerruf stehen im Audit-Log. => An info terminal is a device at a station. It needs no user account, can only sign people in and reads nothing except names of the department and the open incidents and services. Creation, new link and revocation are recorded in the audit log.
 Einsätze, Dienste => Incidents, services
 Einsätze, Neuer Einsatz => Incidents, new incident
 Einsätze, Neuer Einsatz, Dienste => Incidents, new incident, services
@@ -1463,16 +1448,52 @@ seit 34 Tagen nicht gesehen => not seen for 34 days
 widerrufen 02.10.2026 · Stefan Eberle => revoked 02.10.2026 · Stefan Eberle
 wird sofort ungültig. Das Gerät zeigt dann „nicht freigeschaltet“, bis der neue Link geöffnet ist. => becomes invalid immediately. The device then shows “not activated” until the new link is opened.
 z. B. Tablet Fahrzeughalle => e.g. tablet in the vehicle hall
-Dieses Gerät als Infoterminal einrichten … => Set up this device as info terminal …
 Feuerwehrstraße 1, 12345 Musterstadt
 Infoterminals verwalten => Manage info terminals
-Mitglieder tragen sich dort nach Einsätzen und Diensten ein. Der geheime Link wird nur beim Einrichten angezeigt. => Members sign in there after incidents and services. The secret link is shown only during setup.
 PC Funkraum => PC radio room
 Ständig besetzt => Permanently staffed
 Tablet Fahrzeughalle => Tablet vehicle hall
 Wache Feuerwehrhaus Musterstadt => Station Feuerwehrhaus Musterstadt
 zuletzt gesehen 21.10.2026 19:02 => last seen 21.10.2026 19:02
 zuletzt gesehen heute 14:31 => last seen today 14:31
+Ansicht Jugendfeuerwehr (nur Dienste) => Youth fire brigade view (services only)
+B3 Brand Scheune · Bericht Abteilung Musterstadt. Ändern oder Austragen bis 19:12 hier am Terminal. Zurück zur Übersicht in 10 s. => B3 Brand Scheune · report of the Musterstadt department. Change or remove until 19:12 here at the terminal. Back to the overview in 10 s.
+Abteilung wählen => Choose department
+Dienst · heute 14:00–16:30 · Jugendfeuerwehr Musterstadt => Service · today 14:00–16:30 · Jugendfeuerwehr Musterstadt
+Eintragen bis 17:30 => Sign-in until 17:30
+Jugendfeuerwehrdienst: Leon Hartmann => Youth fire brigade service: Leon Hartmann
+Mia Bauer, Finn Eberle, Lea Graf, Noah Kunz, Emma Lang, Ben Moser, Lina Ott, Paul Roth, Sophie Weber
+Schon anwesend (9) => Already present (9)
+z. B. Gruppensprecher => e.g. group spokesperson
+„Unter Atemschutz“ gibt es nur in Diensten von Einsatzabteilungen. => “Under breathing apparatus” only exists in services of operational departments.
+Ändern bis 19:12 => Change until 19:12
+heute, höchstens 6 Stunden zurück => today, at most 6 hours ago
+Alle Personen durchsuchen (ab 3 Buchstaben) => Search all people (3 letters or more)
+Altersabteilung Weidenhain
+Die Suche findet alle Personen aller Abteilungen, auch passive Mitglieder, Jugendfeuerwehr und Altersabteilung. Höchstens 10 Treffer, nur Name und Abteilung. Gäste aus Nachbarwehren trägt der Verfasser im Bericht ein. => The search finds all people of all departments, including passive members, youth fire brigade and veterans. At most 10 matches, name and department only. Guests from neighbouring brigades are entered by the author in the report.
+Hans Brenner
+Nicht dabei? => Not listed?
+9 eingetragen => 9 signed in
+Die Jugendfeuerwehr schreibt keine Einsatzberichte. In ihrer Ansicht stehen deshalb nur Dienste und kein „Neuer Einsatz“. => The youth fire brigade writes no incident reports. Its view therefore shows only services and no “New incident”.
+Dienst · heute 14:00–16:30 => Service · today 14:00–16:30
+Freitag, 23.10.2026 · Jugendfeuerwehr Musterstadt => Friday, 23.10.2026 · Jugendfeuerwehr Musterstadt
+Jugendfeuerwehrdienst: Knoten und Stiche => Youth fire brigade service: knots and hitches
+Eintragen bis 19:12 => Sign-in until 19:12
+Eintragen geht während eines Einsatzes und bis eine Stunde nach seinem Ende, bei Diensten ab 30 Minuten vor Beginn bis eine Stunde nach dem Ende. Ohne eingetragenes Einsatzende schließt das Eintragen 6 Stunden nach dem Alarm. Den Bericht schreibt weiterhin der Verfasser in f.orga. => Sign-in is possible during an incident and up to one hour after its end, for services from 30 minutes before the start until one hour after the end. Without an entered end of the incident, sign-in closes 6 hours after the alarm. The author still writes the report in f.orga.
+Abt. Musterstadt (Abteilung der Wache) => Dept. Musterstadt (department of the station)
+Abt. Musterstadt, Jugendfeuerwehr Musterstadt, Altersabteilung Musterstadt => Dept. Musterstadt, Jugendfeuerwehr Musterstadt, Altersabteilung Musterstadt
+Am Terminal wird die Abteilung umgeschaltet. Einsätze gibt es nur für Einsatzabteilungen, die übrigen tragen sich für Dienste ein. => The department is switched at the terminal. Incidents exist only for operational departments; the others sign in for services.
+Das Anzeigen steht im Audit-Log. Wer den Link hat, kann für die Abteilungen dieses Terminals eintragen. Ist er in falsche Hände geraten: „Neuer Link“. => Showing the link is recorded in the audit log. Whoever has the link can sign people in for the departments of this terminal. If it got into the wrong hands: “New link”.
+Ein Infoterminal ist ein Gerät an einer Wache. Es braucht kein Benutzerkonto, kann nur eintragen und nichts lesen außer Namen der Abteilung und den offenen Einsätzen und Diensten. Anlegen, Link anzeigen, neuer Link und Widerruf stehen im Audit-Log. => An info terminal is a device at a station. It needs no user account, can only sign people in and reads nothing except names of its departments and the open incidents and services. Creation, showing the link, new link and revocation are recorded in the audit log.
+Feuerwehrhaus Musterstadt · Abt. Musterstadt, Jugendfeuerwehr Musterstadt, Altersabteilung Musterstadt => Feuerwehrhaus Musterstadt · Dept. Musterstadt, Jugendfeuerwehr Musterstadt, Altersabteilung Musterstadt
+Infoterminal öffnen => Open info terminal
+Link von Tablet Fahrzeughalle => Link of tablet vehicle hall
+Weitere Abteilung => Additional department
+Öffnen Sie den Link auf dem Gerät an der Wache; danach bleibt das Gerät angemeldet. Unter „Link anzeigen“ lässt er sich später wieder abrufen. => Open the link on the device at the station; the device then stays signed in. “Show link” brings it up again later.
+Abt. Musterstadt · zuletzt gesehen 21.10.2026 19:02 => Dept. Musterstadt · last seen 21.10.2026 19:02
+Abt. Musterstadt, Jugendfeuerwehr, Altersabteilung · zuletzt gesehen heute 14:31 => Dept. Musterstadt, youth fire brigade, veterans · last seen today 14:31
+Link anzeigen => Show link
+Mitglieder tragen sich dort nach Einsätzen und Diensten ein. „Öffnen“ startet das Infoterminal in diesem Browser, z. B. auf dem Tablet der Wache (nur mit dem Recht, Infoterminals zu verwalten). => Members sign in there after incidents and services. “Open” starts the info terminal in this browser, e.g. on the station tablet (only with the right to manage info terminals).
 '''
 
 EN = {}

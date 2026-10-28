@@ -347,11 +347,11 @@ seite('stammdaten/organisation.html', 'Organisation', '''
   <hr class="trenner">
   <h3>Infoterminal</h3>
   <ul class="liste">
-    <li><span>''' + sym('terminal') + '''</span><span><strong>Tablet Fahrzeughalle</strong><br><span class="meta">zuletzt gesehen heute 14:31</span></span><span class="rechts plakette ok">aktiv</span></li>
-    <li><span>''' + sym('terminal') + '''</span><span><strong>PC Funkraum</strong><br><span class="meta">zuletzt gesehen 21.10.2026 19:02</span></span><span class="rechts plakette ok">aktiv</span></li>
+    <li><span>''' + sym('terminal') + '''</span><span><strong>Tablet Fahrzeughalle</strong> <span class="plakette ok">aktiv</span><br><span class="meta">Abt. Musterstadt, Jugendfeuerwehr, Altersabteilung · zuletzt gesehen heute 14:31</span></span><a class="rechts knopf klein sekundaer" href="{P}infoterminal/start.html">Öffnen</a></li>
+    <li><span>''' + sym('terminal') + '''</span><span><strong>PC Funkraum</strong> <span class="plakette ok">aktiv</span><br><span class="meta">Abt. Musterstadt · zuletzt gesehen 21.10.2026 19:02</span></span><a class="rechts knopf klein sekundaer" href="{P}infoterminal/start.html">Öffnen</a></li>
   </ul>
-  <p class="meta">Mitglieder tragen sich dort nach Einsätzen und Diensten ein. Der geheime Link wird nur beim Einrichten angezeigt.</p>
-  <div class="formular-fuss" style="justify-content:flex-start"><a class="knopf klein" href="{P}infoterminal/verwaltung.html">Infoterminals verwalten</a><a class="knopf klein sekundaer" href="{P}infoterminal/verwaltung.html#d-link">Dieses Gerät als Infoterminal einrichten …</a></div>
+  <p class="meta">Mitglieder tragen sich dort nach Einsätzen und Diensten ein. „Öffnen“ startet das Infoterminal in diesem Browser, z. B. auf dem Tablet der Wache (nur mit dem Recht, Infoterminals zu verwalten).</p>
+  <div class="formular-fuss" style="justify-content:flex-start"><a class="knopf klein" href="{P}infoterminal/verwaltung.html">Infoterminals verwalten</a><a class="knopf klein" href="{P}infoterminal/verwaltung.html#d-link-anzeigen">Link anzeigen</a></div>
 </section>
 </div>
 </div>''', brot=[('Stammdaten', None), ('Organisation', None)], aktionen='<a class="knopf primaer" href="#">+ Abteilung anlegen</a>')

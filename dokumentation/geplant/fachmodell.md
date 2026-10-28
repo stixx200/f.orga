@@ -249,6 +249,8 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | --- | --- |
 | Infoterminal (Gerät an einer Wache) | terminal (`TerminalEntity`), Modul `info-terminal` |
 | Geräteschlüssel, Einrichtungslink | device key (`fit_…`, gespeichert als `keyHash`, `keyPrefix`), Cookie `forga_terminal` |
+| Abteilungen des Terminals, Abteilungsansicht | `departmentIds` am Terminal, gewählte Abteilung `departmentId` je Kiosk-Anfrage |
+| Link anzeigen (verschlüsselt gespeicherter Schlüssel) | `keyCiphertext`, Server-Schlüssel `FORGA_SECRET_KEY`, Audit `info-terminal.link-shown` |
 | Eintragung am Terminal | booking; im Einsatzbericht `bookedVia: 'info-terminal'`, in der Anwesenheit `checkedInVia: 'info-terminal'` |
 | Zeitfenster | booking window (`afterEndMinutes`, `openEndHours`) |
 | Neuer Einsatz am Terminal | `createdVia: 'terminal'` |
