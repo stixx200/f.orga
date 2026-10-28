@@ -4,11 +4,12 @@ import {
   type ImportContext,
   type ImportProfile,
   type ImportRow,
+  type ImportRunResult,
   normalizeHeading,
   parseDate,
   SettingsService,
 } from '@forga/core-api';
-import type { ImportMessage, ImportResult, ImportRowResult } from '@forga/core-contracts';
+import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
 import { type DepartmentType, Gender, type MembershipSettings, PersonStatus, probationEnd } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { Department, Membership, Person } from '../masterdata.entities.js';
@@ -110,7 +111,7 @@ export class PersonsImport {
     };
   }
 
-  private async run(rows: ImportRow[], context: ImportContext): Promise<ImportResult> {
+  private async run(rows: ImportRow[], context: ImportContext): Promise<ImportRunResult> {
     const { user, options, dryRun } = context;
     const em = this.em.fork();
     const rules = (await this.settings.get<MembershipSettings>('masterdata.membership')) as MembershipSettings;
@@ -201,7 +202,7 @@ export class PersonsImport {
         ? null
         : exitReasons.has(exitText)
           ? exitText
-          : (EXIT_REASONS.find(([pattern, key]) => pattern.test(values['exitReason']) && exitReasons.has(key))?.[1] ?? null);
+          : (EXIT_REASONS.find(([pattern, key]) => pattern.test(values['exitReason']) && exitReasons.has(key))?.[1] ?? context.mapped('exit-reason', values['exitReason']) ?? null);
       const gender =
         GENDERS[normalizeHeading(values['gender'] ?? '')] ?? SALUTATION_GENDER[normalizeHeading(values['salutation'] ?? '')];
       if (gender) fields['gender'] = gender;
@@ -243,7 +244,10 @@ export class PersonsImport {
       // Imported persons are existing members unless the file says otherwise.
       const finalStatus = left ? 'left' : (status ?? (department.type === 'veterans' ? 'veterans' : department.type === 'youth' ? 'youth' : 'active'));
       const from = dates['joinedOn'] ?? (left ? leftOn : today());
-      if (left && values['exitReason'] && !exitReason) messages.push({ code: 'masterdata.import.unknownExitReason', params: { value: values['exitReason'] } });
+      if (left && values['exitReason'] && !exitReason) {
+        messages.push({ code: 'masterdata.import.unknownExitReason', params: { kind: 'exit-reason', value: values['exitReason'].trim() } });
+        context.unmatched('exit-reason', values['exitReason']);
+      }
       const created = em.create(Person, {
         ...(fields as Partial<Person>),
         firstName: values['firstName'],

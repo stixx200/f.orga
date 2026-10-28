@@ -42,6 +42,7 @@ export class TrainingModule implements OnModuleInit {
     this.exports.register('training', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
     this.personData.register('training', { anonymize: (ids) => this.data.anonymize(ids) });
     this.imports.register('training', this.sessionsImport.profile());
+    this.imports.registerLookup('training', this.sessionsImport.lookup());
     this.historyAccess.register('training.session', async (user, id) => {
       const session = await this.em.fork().findOne(SessionEntity, id);
       return { allowed: Boolean(session) && this.sessions.can(user, READ, session!) };

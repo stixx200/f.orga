@@ -98,6 +98,17 @@ export class CatalogService {
     await em.flush();
     return added;
   }
+
+  /** Throws `catalog.keyTaken` if the kind already has the key. */
+  async create(input: ParsedEntry): Promise<CatalogEntry> {
+    const em = this.em.fork();
+    if (await em.count(CatalogEntry, { kind: input.kind, key: input.key })) {
+      throw new ConflictException({ code: 'catalog.keyTaken', key: input.key });
+    }
+    const entry = em.create(CatalogEntry, parseEntry(input));
+    await em.flush();
+    return entry;
+  }
 }
 
 function parseEntry(input: ParsedEntry): ParsedEntry {
@@ -130,13 +141,7 @@ export class CatalogController {
   @Post('catalog')
   @RequirePermissions('masterdata.catalogs.manage')
   async create(@Body(new ZodPipe(CatalogEntryInput)) input: ParsedEntry): Promise<CatalogEntryDto> {
-    const em = this.em.fork();
-    if (await em.count(CatalogEntry, { kind: input.kind, key: input.key })) {
-      throw new ConflictException({ code: 'catalog.keyTaken', key: input.key });
-    }
-    const entry = em.create(CatalogEntry, parseEntry(input));
-    await em.flush();
-    return toCatalogDto(entry);
+    return toCatalogDto(await this.catalogs.create(input));
   }
 
   /** Kind and key are fixed once created; entries still in use are deactivated instead of deleted. */

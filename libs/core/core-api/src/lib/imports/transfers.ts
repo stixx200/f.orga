@@ -92,7 +92,7 @@ export class TransferService {
       values: 'department' in values ? { ...values, department: request.departments[archive] ?? values['department'] } : values,
     }));
     const options = Object.fromEntries((profile.options ?? []).map((o) => [o.key, request.options[o.key] ?? o.default]));
-    const result = await profile.run(rows, { user, options, dryRun });
+    const result = await this.registry.run(profile, rows, { user, options, dryRun, mappings: request.mappings });
     if (!dryRun) {
       await this.audit.log('imports.transferApplied', { profile: profile.id, files: transfer.archives.map((a) => a.fileName), counts: result.counts });
     }

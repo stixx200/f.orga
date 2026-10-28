@@ -11,12 +11,13 @@ import {
   type ImportContext,
   type ImportProfile,
   type ImportRow,
+  type ImportRunResult,
   normalizeHeading,
   RequirePermissions,
   SettingsService,
   ZodPipe,
 } from '@forga/core-api';
-import type { ImportMessage, ImportResult, ImportRowResult } from '@forga/core-contracts';
+import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
 import {
   type DutyAssignment,
   DutyAssignmentInput,
@@ -177,7 +178,7 @@ export class DutyRosterImport {
     };
   }
 
-  private async run(rows: ImportRow[], { dryRun }: ImportContext): Promise<ImportResult> {
+  private async run(rows: ImportRow[], { dryRun }: ImportContext): Promise<ImportRunResult> {
     const touched: DutyAssignmentEntity[] = [];
     const em = this.em.fork();
     const settings = await this.config.get();

@@ -2,10 +2,11 @@ import { Button, Checkbox, FileInput, Group, Radio, SegmentedControl, Select, St
 import { IconUpload } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { ImportMapping, ImportProfileInfo, ImportResult, ImportUpload } from '@forga/core-contracts';
+import type { ImportMapping, ImportProfileInfo, ImportResult, ImportUnmatched, ImportUpload, ImportValueMappings } from '@forga/core-contracts';
 import { api, send, upload, useLocalized, useTranslation } from '@forga/web-sdk';
 import { EmptyState, Notice, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { ResultView } from './ImportResult';
+import { mergeUnmatched, UnmatchedValues } from './ImportUnmatched';
 import { TransferImport } from './TransferImport';
 
 /** Share of the profile's fields the file covers; the best fitting profile is suggested first. */
@@ -26,6 +27,10 @@ export function ImportPage() {
   const [options, setOptions] = useState<Record<string, boolean>>({});
   const [preview, setPreview] = useState<ImportResult | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  // Entries chosen for unknown names, kept for the whole upload.
+  const [mappings, setMappings] = useState<ImportValueMappings>({});
+  const [unmatched, setUnmatched] = useState<Record<string, ImportUnmatched[]>>({});
+  const [stale, setStale] = useState(false);
   const profile = profiles.find((p) => p.id === profileId);
   const [mode, setMode] = useState<'file' | 'transfer'>('file');
   const transferable = profiles.some((p) => p.transfer);
@@ -40,14 +45,18 @@ export function ImportPage() {
   const uploadFile = useAction((selected: File) => upload<ImportUpload>('core/imports', selected), {
     onSuccess: (u) => {
       setUploaded(u);
+      setMappings({});
+      setUnmatched({});
       const best = profiles.toSorted((a, b) => fit(b, u) - fit(a, u))[0];
       if (best) chooseProfile(best.id, u);
       setStep(1);
     },
   });
-  const request = () => ({ profile: profileId!, mapping, options });
+  const request = () => ({ profile: profileId!, mapping, options, mappings });
   const check = useAction(() => send<ImportResult>('POST', `core/imports/${uploaded!.id}/preview`, request()), {
     onSuccess: (r) => {
+      setUnmatched((u) => ({ ...u, [profileId!]: mergeUnmatched(u[profileId!] ?? [], r.unmatched, mappings) }));
+      setStale(false);
       setPreview(r);
       setStep(3);
     },
@@ -184,9 +193,24 @@ export function ImportPage() {
             <Stack gap="md">
               <Notice kind={preview.counts.error ? 'warning' : 'info'}>{t(preview.counts.error ? 'imports.previewErrors' : 'imports.previewOk')}</Notice>
               <ResultView result={preview} />
+              {(unmatched[profileId!] ?? []).length > 0 && (
+                <Panel>
+                  <UnmatchedValues
+                    items={unmatched[profileId!] ?? []}
+                    mappings={mappings}
+                    onChange={(next) => {
+                      setMappings(next);
+                      setStale(true);
+                    }}
+                    stale={stale}
+                    onRecheck={() => check.mutate(undefined)}
+                    rechecking={check.isPending}
+                  />
+                </Panel>
+              )}
               <Group justify="flex-end">
                 <Button variant="default" onClick={() => setStep(2)}>{common('actions.back')}</Button>
-                <Button loading={apply.isPending} onClick={() => apply.mutate(undefined)}>{t('imports.apply', { count: (preview.counts.create ?? 0) + (preview.counts.update ?? 0) })}</Button>
+                <Button loading={apply.isPending} disabled={stale} onClick={() => apply.mutate(undefined)}>{t('imports.apply', { count: (preview.counts.create ?? 0) + (preview.counts.update ?? 0) })}</Button>
               </Group>
             </Stack>
           )}
