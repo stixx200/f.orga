@@ -1,5 +1,7 @@
 # Architektur (umgesetzter Stand)
 
+Das [Gesamtbild](gesamtbild.md) zeigt in Diagrammen, welche Teile jedes Modul mitbringt und wo sie zusammenlaufen.
+
 ## Technik
 
 | Bereich | Einsatz |
@@ -26,6 +28,13 @@
 | `@forga/masterdata-*` | `modules/masterdata` | Backend der Stammdaten (Kataloge, Organisation, Personen, Lehrgänge, Schnittstellen für andere Module), Frontend-Seite „Organisation“ (bearbeitbar) |
 | `@forga/incidents-*` | `modules/incidents` | Backend der Einsatzberichte (Stichworte, Einsätze, Berichte, Prüfregeln, Entschädigung, Ablauf, externe API, MP-Feuer-Import, Auswertungen, Abrechnungsexport, Jahresstatistik, Berichte gesamtwehrweiter Einheiten), Frontend für Einsätze, Berichte und Prüfung |
 | `@forga/duty-officer-*` | `modules/duty-officer` | Einsatzleiter vom Dienst: EvD-Dienstplan mit iCal-Import, EvD-Bericht zu jedem Einsatz, Einstellungen, Karte auf der Einsatzseite |
+| `@forga/training-*` | `modules/training` | Übungsdienst: Dienstarten, Dienstplan, Teilnahmen, Kalender-Abonnement, Übungsbeteiligung |
+| `@forga/respiratory-protection-*` | `modules/respiratory-protection` | Atemschutz: Nachweise (Untersuchung, Belastungsübung, Einsätze), Tauglichkeitsampel, Streckenplanung |
+| `@forga/compensation-*` | `modules/compensation` | Entschädigungen: Satzung, Positionen aus Einsätzen, Diensten und Lehrgängen, Auszahlungsläufe |
+| `@forga/equipment-*` | `modules/equipment` | Geräte: Kategorien, Gerätetypen, Prüfungen, Mängel, Verbrauch in Einsätzen und Diensten |
+| `@forga/cost-recovery-*` | `modules/cost-recovery` | Kostenersatz: Tatbestände je Einsatz, Bescheide, Zahlungen |
+| `@forga/promotions-*` | `modules/promotions` | Beförderungen: Regeln, Vorschlagslisten, Durchführung |
+| `@forga/clothing-*` | `modules/clothing` | Kleiderkammer: Artikel, Ausgabe und Rücknahme, Pflege, Prüfungen, Größen |
 
 ## Modulvertrag
 
