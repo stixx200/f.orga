@@ -12,6 +12,7 @@ services:
       # Set to true as soon as f.orga is served via HTTPS.
       FORGA_SECURE_COOKIES: ${FORGA_SECURE_COOKIES:-false}
       FORGA_SECRET_KEY: ${FORGA_SECRET_KEY:-}
+      FORGA_IMPORT_URL_ALLOW_PRIVATE: ${FORGA_IMPORT_URL_ALLOW_PRIVATE:-false}
       # Plugin packages (.tgz) and the trusted keys of their publishers (comma separated, base64).
       FORGA_PLUGIN_DIR: /plugins
       FORGA_PLUGIN_KEYS: ${FORGA_PLUGIN_KEYS:-}

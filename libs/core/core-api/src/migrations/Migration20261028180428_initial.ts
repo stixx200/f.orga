@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261028141842_initial extends Migration {
+export class Migration20261028180428_initial extends Migration {
 
-  override name = 'Migration20261028141842_initial';
+  override name = 'Migration20261028180428_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"core\";");
@@ -16,6 +16,7 @@ export class Migration20261028141842_initial extends Migration {
     this.addSql("create index \"history_parent_entity_parent_id_index\" on \"core\".\"history\" (\"parent_entity\", \"parent_id\");");
     this.addSql("create table \"core\".\"import_transfer\" (\"id\" uuid not null, \"user_id\" varchar(255) not null, \"archives\" jsonb not null, \"datasets\" jsonb not null, \"created_at\" timestamptz not null, primary key (\"id\"));");
     this.addSql("create table \"core\".\"import_upload\" (\"id\" uuid not null, \"user_id\" varchar(255) not null, \"file_name\" varchar(255) not null, \"headers\" jsonb not null, \"rows\" jsonb not null, \"created_at\" timestamptz not null, primary key (\"id\"));");
+    this.addSql("create table \"core\".\"import_url\" (\"user_id\" varchar(255) not null, \"url\" text not null, \"display\" varchar(255) not null, \"saved_at\" timestamptz not null, primary key (\"user_id\"));");
     this.addSql("create table \"core\".\"module\" (\"id\" varchar(255) not null, \"active\" boolean not null default true, \"granted_templates\" jsonb null, \"updated_at\" timestamptz not null, primary key (\"id\"));");
     this.addSql("create table \"core\".\"role\" (\"id\" uuid not null, \"name\" jsonb not null, \"template_key\" varchar(255) null, \"description\" jsonb not null default '{\"de\":\"\",\"en\":\"\"}', \"permissions\" jsonb not null, \"permissions_all_departments\" jsonb not null default '[]', \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"role\" add constraint \"role_template_key_unique\" unique (\"template_key\");");
@@ -52,6 +53,7 @@ export class Migration20261028141842_initial extends Migration {
     this.addSql("drop table if exists \"core\".\"history\" cascade;");
     this.addSql("drop table if exists \"core\".\"import_transfer\" cascade;");
     this.addSql("drop table if exists \"core\".\"import_upload\" cascade;");
+    this.addSql("drop table if exists \"core\".\"import_url\" cascade;");
     this.addSql("drop table if exists \"core\".\"module\" cascade;");
     this.addSql("drop table if exists \"core\".\"role\" cascade;");
     this.addSql("drop table if exists \"core\".\"setting\" cascade;");

@@ -7,7 +7,7 @@ import { DomainEvents } from './events/domain-events.js';
 import { CORE_HISTORIZED, HistoryAccessRegistry } from './history/history-access.js';
 import { HistoryController } from './history/history.controller.js';
 import { ImportRegistry } from './imports/import-registry.js';
-import { ImportService, ImportsController, ImportUploadEntity } from './imports/imports.js';
+import { ImportService, ImportsController, ImportUploadEntity, ImportUrlEntity } from './imports/imports.js';
 import { ImportTransferEntity, TransferService, TransfersController } from './imports/transfers.js';
 import { ListRegistry } from './lists/list-registry.js';
 import { ListsController } from './lists/lists.controller.js';
@@ -54,6 +54,7 @@ export const CORE_ENTITIES: EntityDefinition[] = [
   Session,
   ApiToken,
   ImportUploadEntity,
+  ImportUrlEntity,
   ImportTransferEntity,
   PasswordReset,
   BrigadeAsset,

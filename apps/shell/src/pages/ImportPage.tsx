@@ -1,8 +1,8 @@
-import { Button, Checkbox, FileInput, Group, Radio, SegmentedControl, Select, Stack, Stepper, Table, Text } from '@mantine/core';
-import { IconUpload } from '@tabler/icons-react';
-import { useQuery } from '@tanstack/react-query';
+import { Button, Checkbox, Divider, FileInput, Group, Radio, SegmentedControl, Select, Stack, Stepper, Table, Text, TextInput } from '@mantine/core';
+import { IconCalendar, IconUpload } from '@tabler/icons-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { ImportMapping, ImportProfileInfo, ImportResult, ImportUnmatched, ImportUpload, ImportValueMappings } from '@forga/core-contracts';
+import type { ImportMapping, ImportProfileInfo, ImportRememberedUrl, ImportResult, ImportUnmatched, ImportUpload, ImportUrlRequest, ImportValueMappings } from '@forga/core-contracts';
 import { api, send, upload, useLocalized, useTranslation } from '@forga/web-sdk';
 import { EmptyState, Notice, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { ResultView } from './ImportResult';
@@ -34,6 +34,12 @@ export function ImportPage() {
   const profile = profiles.find((p) => p.id === profileId);
   const [mode, setMode] = useState<'file' | 'transfer'>('file');
   const transferable = profiles.some((p) => p.transfer);
+  const queryClient = useQueryClient();
+  const rememberedKey = ['core', 'imports', 'url'];
+  // The full address is never sent back (it may contain a secret token), only scheme and host.
+  const { data: rememberedUrl } = useQuery({ queryKey: rememberedKey, queryFn: () => api<ImportRememberedUrl>('core/imports/url'), enabled: profiles.length > 0 });
+  const [url, setUrl] = useState('');
+  const [remember, setRemember] = useState(true);
 
   const chooseProfile = (id: string, source: ImportUpload) => {
     const chosen = profiles.find((p) => p.id === id);
@@ -42,15 +48,26 @@ export function ImportPage() {
     setOptions(Object.fromEntries((chosen?.options ?? []).map((o) => [o.key, o.default])));
   };
 
-  const uploadFile = useAction((selected: File) => upload<ImportUpload>('core/imports', selected), {
+  const received = (u: ImportUpload) => {
+    setUploaded(u);
+    setMappings({});
+    setUnmatched({});
+    const best = profiles.toSorted((a, b) => fit(b, u) - fit(a, u))[0];
+    if (best) chooseProfile(best.id, u);
+    setStep(1);
+  };
+  const uploadFile = useAction((selected: File) => upload<ImportUpload>('core/imports', selected), { onSuccess: received });
+  // Without `url` the server loads the remembered address.
+  const loadUrl = useAction((body: ImportUrlRequest) => send<ImportUpload>('POST', 'core/imports/url', body), {
+    invalidate: [rememberedKey],
     onSuccess: (u) => {
-      setUploaded(u);
-      setMappings({});
-      setUnmatched({});
-      const best = profiles.toSorted((a, b) => fit(b, u) - fit(a, u))[0];
-      if (best) chooseProfile(best.id, u);
-      setStep(1);
+      setUrl('');
+      received(u);
     },
+  });
+  const forgetUrl = useAction(() => send<void>('DELETE', 'core/imports/url'), {
+    success: t('imports.url.forgotten'),
+    onSuccess: () => queryClient.setQueryData<ImportRememberedUrl>(rememberedKey, (r) => r && { ...r, remembered: null }),
   });
   const request = () => ({ profile: profileId!, mapping, options, mappings });
   const check = useAction(() => send<ImportResult>('POST', `core/imports/${uploaded!.id}/preview`, request()), {
@@ -114,6 +131,42 @@ export function ImportPage() {
               <Group justify="flex-end">
                 <Button disabled={!file} loading={uploadFile.isPending} onClick={() => file && uploadFile.mutate(file)}>{common('actions.next')}</Button>
               </Group>
+              <Divider label={t('imports.url.or')} />
+              <Text fw={700} size="sm">{t('imports.url.title')}</Text>
+              {rememberedUrl?.remembered && (
+                <Group justify="space-between" gap="xs">
+                  <Text size="sm">{t('imports.url.remembered', { address: rememberedUrl.remembered.display })}</Text>
+                  <Group gap="xs">
+                    <Button variant="subtle" loading={forgetUrl.isPending} onClick={() => forgetUrl.mutate(undefined)}>{t('imports.url.forget')}</Button>
+                    <Button variant="light" leftSection={<IconCalendar size={18} />} loading={loadUrl.isPending && !loadUrl.variables?.url} onClick={() => loadUrl.mutate({})}>{t('imports.url.reload')}</Button>
+                  </Group>
+                </Group>
+              )}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (url.trim()) loadUrl.mutate({ url: url.trim(), remember: Boolean(rememberedUrl?.canRemember) && remember });
+                }}
+              >
+                <Stack gap="xs">
+                  <Group align="flex-end" gap="xs" wrap="nowrap">
+                    <TextInput
+                      flex={1}
+                      label={t('imports.url.address')}
+                      description={t('imports.url.hint')}
+                      placeholder="webcal://…"
+                      value={url}
+                      onChange={(e) => setUrl(e.currentTarget.value)}
+                      leftSection={<IconCalendar size={18} />}
+                      autoComplete="off"
+                    />
+                    <Button type="submit" disabled={!url.trim()} loading={loadUrl.isPending && Boolean(loadUrl.variables?.url)}>{t('imports.url.load')}</Button>
+                  </Group>
+                  {rememberedUrl?.canRemember && (
+                    <Checkbox label={t('imports.url.remember')} checked={remember} onChange={(e) => setRemember(e.currentTarget.checked)} />
+                  )}
+                </Stack>
+              </form>
             </Stack>
           </Panel>
         </Stepper.Step>
