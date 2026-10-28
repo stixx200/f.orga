@@ -49,6 +49,7 @@ export class EvdReports implements OnModuleInit, DeadlineProvider {
   onModuleInit(): void {
     this.units.register({
       key: DUTY_OFFICER_UNIT,
+      module: MODULE,
       label: { de: 'Einsatzleiter vom Dienst', en: 'Duty officer' },
       shortLabel: { de: 'EvD', en: 'Duty officer' },
       numberPrefix: 'EvD',

@@ -158,7 +158,7 @@ describe('EvD reports', () => {
     expect((await get(`/incidents/reports/${ids.evd}`, officer).expect(200)).body).toMatchObject({ situation: 'Rauch aus Dachstuhl', vehicles: [expect.objectContaining({ vehicleId: ids.elw })] });
     // The duty officer reads the department report, but does not write it.
     expect((await save(ids.department, content, officer)).status).toBe(403);
-    // Unit reports are never primary and not deleted like department reports.
+    // Unit reports are not primary next to a department report and not deleted like department reports.
     expect((await post(`/incidents/reports/${ids.evd}/primary`, {}).expect(400)).body.code).toBe('incidents.unitReportNotPrimary');
     expect((await del(`/incidents/reports/${ids.evd}`).expect(409)).body.code).toBe('incidents.unitReportManaged');
     await post(`/incidents/reports/${ids.evd}/submit`, {}, officer).expect(200);
@@ -280,6 +280,29 @@ describe('EvD reports', () => {
     expect((await post(`/cost-recovery/notices/${notice.id}/issue`, {}).expect(409)).body.code).toBe('cost-recovery.notReleased');
     await releaseForBilling(evd);
     await post(`/cost-recovery/notices/${notice.id}/issue`, {}).expect(200);
+  });
+
+  it('makes the EvD report primary while the incident has no department report', async () => {
+    // Releasers create incidents without department reports: the EvD report is the only and primary report.
+    const created = await incident('2026-300009', { departmentIds: [] });
+    const evd = evdOf(created)!;
+    expect(created.reports).toEqual([expect.objectContaining({ unit: 'duty-officer', primary: true })]);
+    expect((await get(`/incidents/reports/${evd.id}`, officer).expect(200)).body.findings.map((f: { rule: string }) => f.rule)).toContain('statistics-missing');
+    const statistics = { mainType: 'fire', fireSize: 'medium' };
+    const saved = await save(evd.id, { times: { alarmedAt: T('13:05'), returnedAt: T('14:00') }, situation: 'Lage', actions: 'Leitung', personnel: [{ personId: ids.jonas }], statistics }, officer);
+    expect(saved.status).toBe(200);
+    expect(saved.body.findings.map((f: { rule: string }) => f.rule)).not.toContain('statistics-not-allowed');
+    // "No duty officer" would leave the incident without reports.
+    expect((await post(`/duty-officer/incidents/${created.id}/exemption`, { reason: 'Kein EvD' }).expect(409)).body.code).toBe('incidents.unitReportOnlyReport');
+
+    // The first department report takes over the primary role with the statistics.
+    const department = (await post(`/incidents/incidents/${created.id}/reports`, { departmentId: ids.musterstadt }, writer).expect(201)).body;
+    expect(department).toMatchObject({ primary: true, statistics: expect.objectContaining(statistics) });
+    expect((await get(`/incidents/reports/${evd.id}`).expect(200)).body).toMatchObject({ primary: false, statistics: null });
+    expect((await post(`/incidents/reports/${evd.id}/primary`, {}).expect(400)).body.code).toBe('incidents.unitReportNotPrimary');
+    // Now the EvD report may go.
+    await post(`/duty-officer/incidents/${created.id}/exemption`, { reason: 'Kein EvD' }).expect(200);
+    expect((await get(`/incidents/incidents/${created.id}`).expect(200)).body.reports).toEqual([expect.objectContaining({ id: department.id, primary: true })]);
   });
 
   it('leaves the incidents as before while the module is inactive', async () => {

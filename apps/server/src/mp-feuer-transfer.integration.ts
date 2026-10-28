@@ -165,7 +165,7 @@ describe('MP-Feuer data transfer', () => {
       { profile: 'respiratory-protection.examinations', rowCount: 1 },
       { profile: 'respiratory-protection.stress-exercises', rowCount: 1 },
       { profile: 'training.sessions', rowCount: 3 },
-      { profile: 'incidents.mp-feuer', rowCount: 5 },
+      { profile: 'incidents.mp-feuer', rowCount: 5, units: expect.objectContaining({ label: { de: 'Einsatzberichte als', en: 'Incident reports as' } }) },
     ]);
   });
 
@@ -393,5 +393,108 @@ describe('MP-Feuer data transfer with entries chosen for unknown names', () => {
     expect(incident.alarmKeyword).toBe('B2');
     const report = (await get(`/incidents/reports/${incident.reports[0].id}`)).body;
     expect(report.personnel).toMatchObject([{ personId: await personId('Neu'), vehicleId: ids.lf, function: 'hose-team' }]);
+  });
+});
+
+/** A report of the archive table `EIN_STAMM` (alarm keyword B1, released for billing). */
+const incidentRow = (id: string, dispatchNumber: string, from: string, to: string, extra: Record<string, string | number>) => ({
+  EIN_ID: id, EIN_NR: id, EIN_LS_NR: dispatchNumber, EIN_ZEIT_V: from, EIN_ZEIT_B: to, EIN_ALARMSTICHWORT: 'B1', EIN_ART: 'Kleinbrand', EIN_KATEGORIE_OW: 'Brand', EIN_ERLAEUTERUNG: '',
+  EIN_ORT: '', EIN_ORT_STRASSE: 'Lindenweg 2', EIN_ORT_PLZ: '12345', EIN_ORT_ORT: 'Musterstadt', EIN_ORT_ORTSTEIL: '', EIN_ORT_ZUSATZ: '', EIN_ORT_OBJEKT: '', EIN_MERKMAL_ST_GLOBAL: 1,
+  EIN_MERKMAL_KO: 0, EIN_ZUSATZ_2: 'zur Abrechnung freigegeben', EIN_LAGE: '', EIN_VERLAUF: '', EIN_BERICHT: '', EIN_URSACHE: '', EIN_LEITUNG: '', EIN_STATISTIK: '',
+  EIN_RETTUNG_P_S: '', EIN_VERLUSTE_S: '', EIN_RETTUNG_T_S: '', ...extra,
+});
+const crewRow = (id: string, reportId: string, from: string, to: string) => ({
+  EIN_ID: id, EIN_INDEX: reportId, EIN_PER_INDEX: '', EIN_PER_NR: '', EIN_PER_NAME: 'Probe Anna', EIN_PER_ZEIT_V: from, EIN_PER_ZEIT_B: to, EIN_PER_MERKMAL_BE: 0, EIN_PER_MERKMAL_AS: 0,
+  EIN_PER_MERKMAL_VA: 0, EIN_PER_AUFGABE: '', EIN_FZG_RUFNAME: '', EIN_FZG_BEZEICHNUNG: '',
+});
+
+/** Values of the annual statistics 2025 by `question:column`. */
+const annualValues = async () => {
+  const values = (await get('/incidents/statistics/2025').expect(200)).body.values as { question: string; column: string; value: number }[];
+  return (key: string) => values.find((v) => `${v.question}:${v.column}` === key)?.value ?? 0;
+};
+
+describe('MP-Feuer data transfer with the reports of the whole brigade as duty officer reports', () => {
+  let transfer: string;
+  const departments = { '00': 'Gesamtfeuerwehr', '03': 'Abteilung Musterstadt' };
+  const run = (apply: boolean, units: Record<string, string> = {}, status = 200) =>
+    post(`/core/imports/transfers/${transfer}/${apply ? 'apply' : 'preview'}`, { profile: 'incidents.mp-feuer', departments, units }).expect(status);
+
+  // The archive "Gesamtfeuerwehr" holds the reports of the duty officers: one for an incident with Musterstadt, one alone.
+  const brigade = transferZip({
+    EIN_STAMM: [
+      incidentRow('G1', '1250000900', '2025-08-01 14:00:00.000', '2025-08-01 16:00:00.000', { EIN_LAGE: 'Einsatzleitung übernommen', EIN_STATISTIK: '#L Kleinbrände A' }),
+      incidentRow('G2', '1250000901', '2025-08-02 09:00:00.000', '2025-08-02 10:00:00.000', { EIN_LAGE: 'Kleinbrand, Lage allein erkundet', EIN_STATISTIK: '#L Kleinbrände A' }),
+    ],
+    EIN_PERS: [crewRow('GP1', 'G1', '2025-08-01 14:00:00.000', '2025-08-01 16:00:00.000')],
+  });
+  const department = transferZip({
+    EIN_STAMM: [incidentRow('M1', '1250000900', '2025-08-01 14:00:00.000', '2025-08-01 16:30:00.000', { EIN_LAGE: 'Gartenhütte brennt', EIN_STATISTIK: '#L Kleinbrände B' })],
+    EIN_PERS: [crewRow('MP1', 'M1', '2025-08-01 14:00:00.000', '2025-08-01 16:30:00.000')],
+  });
+
+  it('offers the units of the active modules for the incident reports of an archive', async () => {
+    await post('/incidents/keywords/templates/bw', {}).expect(201);
+    ids.brigade = (await post('/masterdata/departments', { name: 'Gesamtfeuerwehr', shortName: 'Gesamt', type: 'command' }).expect(201)).body.id;
+    const response = await test.http
+      .post('/api/core/imports/transfers')
+      .set('Cookie', admin)
+      .set(UI)
+      .attach('files', brigade, 'MPTRA_00_2026-10-25-074935_Gesamtfeuerwehr.zip')
+      .attach('files', department, 'MPTRA_03_2026-10-25-074935_Abt._Musterstadt.zip')
+      .expect(201);
+    transfer = response.body.id;
+    expect(response.body.datasets).toEqual([
+      {
+        profile: 'incidents.mp-feuer',
+        rowCount: 5,
+        units: {
+          label: { de: 'Einsatzberichte als', en: 'Incident reports as' },
+          none: { de: 'Abteilungsbericht', en: 'Department report' },
+          entries: [{ key: 'duty-officer', name: { de: 'Einsatzleiter vom Dienst', en: 'Duty officer' } }],
+        },
+      },
+    ]);
+  });
+
+  it('takes no incident reports of departments that are not operational, and no unknown units', async () => {
+    const preview = await run(false);
+    expect(preview.body.counts).toMatchObject({ create: 2, error: 3 });
+    const errors = (preview.body.rows as { action: string; messages: { code: string; params?: object }[] }[]).filter((r) => r.action === 'error');
+    expect(errors.map((r) => r.messages[0])).toEqual(Array.from({ length: 3 }, () => ({ code: 'incidents.departmentNotOperational', params: { name: 'Gesamtfeuerwehr' } })));
+    expect((await run(false, { '00': 'fire-chief' }, 400)).body).toMatchObject({ code: 'imports.unknownUnit', unit: 'fire-chief' });
+  });
+
+  it('imports the reports of an archive mapped to the duty officer as EvD reports; alone, an EvD report is primary and counts', async () => {
+    const before = await annualValues();
+    const applied = await run(true, { '00': 'duty-officer' });
+    expect(applied.body.counts).toMatchObject({ create: 5, error: 0 });
+
+    type Summary = { id: string; departmentId: string | null; unit: string | null; number: string; primary: boolean; status: string; hasStatistics: boolean };
+    const incidents = (await get('/incidents/incidents?from=2025-08-01&to=2025-08-02')).body as { dispatchNumber: string; reports: Summary[] }[];
+    // Same dispatch number: the EvD report joins the incident of Musterstadt, whose report is primary.
+    const joint = incidents.find((i) => i.dispatchNumber === '1250000900')!;
+    expect(joint.reports).toEqual([
+      expect.objectContaining({ departmentId: ids.musterstadt, unit: null, primary: true, hasStatistics: true }),
+      expect.objectContaining({ departmentId: null, unit: 'duty-officer', primary: false, hasStatistics: false, number: 'EvD-2025-001', status: 'released-billing' }),
+    ]);
+    expect((await get(`/incidents/reports/${joint.reports[0].id}`)).body.statistics).toMatchObject({ mainType: 'fire', fireSize: 'small-b' });
+    const evd = (await get(`/incidents/reports/${joint.reports[1].id}`)).body;
+    expect(evd).toMatchObject({ situation: 'Einsatzleitung übernommen', personnel: [expect.objectContaining({ personId: await personId('Probe') })] });
+
+    // Only the duty officer: his report is the primary report with the statistics.
+    const alone = incidents.find((i) => i.dispatchNumber === '1250000901')!;
+    expect(alone.reports).toEqual([expect.objectContaining({ unit: 'duty-officer', primary: true, hasStatistics: true, number: 'EvD-2025-002' })]);
+    expect((await get(`/incidents/reports/${alone.reports[0].id}`)).body.statistics).toMatchObject({ mainType: 'fire', fireSize: 'small-a' });
+
+    // Each incident counts once in the annual statistics, via its primary report.
+    const after = await annualValues();
+    expect(after('F28:D') - before('F28:D')).toBe(2);
+    expect(after('F29:D') - before('F29:D')).toBe(1);
+    expect(after('F30:D') - before('F30:D')).toBe(1);
+
+    // Importing again replaces the reports instead of duplicating them.
+    expect((await run(true, { '00': 'duty-officer' })).body.counts).toMatchObject({ create: 0, update: 5, error: 0 });
+    expect((await get('/incidents/incidents?from=2025-08-01&to=2025-08-02')).body.flatMap((i: { reports: unknown[] }) => i.reports)).toHaveLength(3);
   });
 });

@@ -9,6 +9,8 @@ import type { ReportStatus } from './report.js';
  */
 export const IncidentUnit = z.object({
   key: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  /** ID of the module registering the unit; while it is inactive, the unit is not offered for new reports (e.g. in imports). */
+  module: z.string().optional(),
   /** E.g. "Einsatzleiter vom Dienst"; shown instead of a department name. */
   label: LocalizedText,
   /** E.g. "EvD"; in lists, badges and cost recovery positions ("Personal EvD"). */
@@ -67,7 +69,11 @@ export interface IncidentUnitReports {
     unit: string,
     options: { authorPersonId: string | null; personnel: { personId: string; function: string | null }[] },
   ): Promise<UnitReportSummary>;
-  /** Deletes the report of the unit; only a draft that is not locked, otherwise `incidents.unitReportNotDraft`. */
+  /**
+   * Deletes the report of the unit; only a draft that is not locked, otherwise `incidents.unitReportNotDraft`. The
+   * primary report of an incident without department reports passes its role to another unit report; as the only
+   * report of the incident it stays (`incidents.unitReportOnlyReport`).
+   */
   deleteUnitReport(incidentId: string, unit: string): Promise<void>;
   hasUnitReport(incidentId: string, unit: string): Promise<boolean>;
   /** The reports of the unit for the given incidents, by incident ID. */

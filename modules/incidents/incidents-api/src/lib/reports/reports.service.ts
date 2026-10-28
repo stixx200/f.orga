@@ -17,6 +17,7 @@ import {
   type ReportUnlockedEvent,
   type StatisticsSuggestion,
 } from '@forga/incidents-contracts';
+import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
 import { type FitnessLookup, RESPIRATORY_PROTECTION_FITNESS } from '@forga/respiratory-protection-contracts';
 import { computeCompensation, localDate } from '../domain/compensation.js';
 import { type Assignment, evaluateRules } from '../domain/rules.js';
@@ -150,6 +151,7 @@ export class ReportsService {
     private readonly events: DomainEvents,
     private readonly audit: Audit,
     readonly units: IncidentUnitsRegistry,
+    @Inject(ORGANIZATION) private readonly organization: Organization,
     @Optional() @Inject(RESPIRATORY_PROTECTION_FITNESS) private readonly fitness?: FitnessLookup,
   ) {}
 
@@ -266,21 +268,35 @@ export class ReportsService {
   }
 
   /**
-   * New draft report of a department or (with `{ unit }`) of a brigade-wide unit. The first department report of an
-   * incident becomes its primary report; unit reports never are. Times default to alarm + 1 h, with the end
-   * unconfirmed until the author confirms or changes it.
+   * Only operational departments write incident reports (not e.g. youth, veterans or the command group): throws
+   * `incidents.departmentNotOperational` with the name of the department.
+   */
+  async requireOperational(departmentId: string): Promise<void> {
+    const department = (await this.organization.departments()).find((d) => d.id === departmentId);
+    if (!department) throw new BadRequestException({ code: 'masterdata.unknownDepartment' });
+    if (department.type !== 'operational') throw new BadRequestException({ code: 'incidents.departmentNotOperational', name: department.name });
+  }
+
+  /**
+   * New draft report of an operational department or (with `{ unit }`) of a brigade-wide unit. Primary report: the
+   * first department report of an incident; while an incident has no department report, its first unit report. The
+   * first department report takes over the primary role (and the statistics) from a unit report. Times default to
+   * alarm + 1 h, with the end unconfirmed until the author confirms or changes it.
    */
   async createReport(em: EntityManager, incident: IncidentEntity, owner: string | { unit: string }, authorPersonId: string | null): Promise<ReportEntity> {
     await em.populate(incident, ['reports']);
     const departmentId = typeof owner === 'string' ? owner : null;
     const unit = typeof owner === 'string' ? null : this.units.get(owner.unit);
     if (!departmentId && !unit) throw new BadRequestException({ code: 'incidents.unknownUnit' });
+    if (departmentId) await this.requireOperational(departmentId);
+    const existing = incident.reports.getItems();
+    const primary = existing.find((r) => r.primary);
     const report = em.create(ReportEntity, {
       incident,
       departmentId,
       unit: unit?.key ?? null,
       number: unit ? await this.nextUnitNumber(em, unit, incident.alarmedAt) : await this.nextNumber(em, departmentId!, incident.alarmedAt),
-      primary: Boolean(departmentId) && !incident.reports.getItems().some((r) => r.primary),
+      primary: !primary && (Boolean(departmentId) || !existing.some((r) => r.departmentId)),
       authorPersonId,
       alarmedAt: incident.alarmedAt,
       returnedAt: new Date(incident.alarmedAt.getTime() + 3_600_000),
@@ -289,6 +305,7 @@ export class ReportsService {
       acknowledgements: [],
     });
     incident.reports.add(report);
+    if (departmentId && primary?.unit) await this.setPrimary(em, report, true);
     return report;
   }
 
@@ -493,7 +510,6 @@ export class ReportsService {
         actions: report.actions,
         statistics: report.statistics ?? null,
         departmentId: report.departmentId ?? undefined,
-        departmentType: (report.departmentId && context.departments.get(report.departmentId)?.type) || 'operational',
         unit: report.unit ? { vehicleRequired: this.unitOf(report)?.vehicleRequired ?? false } : undefined,
         keyword: keyword ? { mainType: keyword.mainType ?? null, requiresVehicle: keyword.requiresVehicle } : null,
         personnel: assignments,
@@ -626,13 +642,18 @@ export class ReportsService {
     report.lockedAt = new Date();
   }
 
-  /** Makes the report primary; `imported` data of another system may also move the primary role of released reports. */
-  async setPrimary(em: EntityManager, report: ReportEntity, imported = false): Promise<void> {
+  /**
+   * Makes the report primary. A unit report only while the incident has no department report. `force` (data of
+   * another system, a department report replacing a unit report as primary) also moves the role of released reports.
+   */
+  async setPrimary(em: EntityManager, report: ReportEntity, force = false): Promise<void> {
     if (report.primary) return;
-    if (report.unit) throw new BadRequestException({ code: 'incidents.unitReportNotPrimary' });
+    if (report.unit && (await em.count(ReportEntity, { incident: report.incident, departmentId: { $ne: null } }))) {
+      throw new BadRequestException({ code: 'incidents.unitReportNotPrimary' });
+    }
     const current = await em.findOne(ReportEntity, { incident: report.incident, primary: true });
     // The statistics of a released primary report do not move away: it is unlocked first.
-    if (!imported && current?.status.startsWith('released')) throw new ForbiddenException({ code: 'incidents.reportReleased' });
+    if (!force && current?.status.startsWith('released')) throw new ForbiddenException({ code: 'incidents.reportReleased' });
     if (current) {
       current.primary = false;
       // Secondary reports carry no statistics; keep them on the new primary report if it has none.

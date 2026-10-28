@@ -16,6 +16,8 @@ export function useRoles() {
 export interface DepartmentOption {
   id: string;
   name: string;
+  /** E.g. `operational`, `youth`, `veterans`, `command`. */
+  type?: string;
 }
 
 /** Departments of the master data module; empty while the module is not active. */

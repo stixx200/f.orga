@@ -26,9 +26,12 @@ export function ReportStatusBadge({ status, locked }: { status: ReportStatus; lo
   );
 }
 
-/** Primary report dark, secondary reports light, as in the mockups; reports of brigade-wide units (e.g. EvD) neutral. */
+/**
+ * Primary report dark, secondary reports light, as in the mockups; reports of brigade-wide units (e.g. EvD) neutral
+ * unless primary (an incident without department report).
+ */
 export function DepartmentBadge({ name, primary, unit = false }: { name: string; primary: boolean; unit?: boolean }) {
-  return <StatusBadge tone={unit ? undefined : primary ? 'primary' : 'highlight'}>{name}</StatusBadge>;
+  return <StatusBadge tone={primary ? 'primary' : unit ? undefined : 'highlight'}>{name}</StatusBadge>;
 }
 
 /** Overall state of an incident: the least advanced report status. */

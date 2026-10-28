@@ -30,6 +30,8 @@ export function TransferImport({ profiles }: { profiles: ImportProfileInfo[] }) 
   const [files, setFiles] = useState<File[]>([]);
   const [transfer, setTransfer] = useState<TransferUpload | null>(null);
   const [assigned, setAssigned] = useState<Record<string, string | null>>({});
+  // Profile → archive → unit the rows of the archive belong to instead of its department (e.g. EvD reports).
+  const [units, setUnits] = useState<Record<string, Record<string, string | null>>>({});
   const [options, setOptions] = useState<Record<string, Record<string, boolean>>>({});
   const [stages, setStages] = useState<Record<string, Stage>>({});
   const [results, setResults] = useState<Record<string, ImportResult>>({});
@@ -43,6 +45,7 @@ export function TransferImport({ profiles }: { profiles: ImportProfileInfo[] }) 
       setTransfer(u);
       setAssigned(Object.fromEntries(u.archives.map((a) => [a.key, suggestDepartment(a, departments)])));
       setOptions(Object.fromEntries(u.datasets.map((d) => [d.profile, Object.fromEntries((profiles.find((p) => p.id === d.profile)?.options ?? []).map((o) => [o.key, o.default]))])));
+      setUnits({});
       setStages({});
       setResults({});
       setMappings({});
@@ -50,7 +53,18 @@ export function TransferImport({ profiles }: { profiles: ImportProfileInfo[] }) 
       setStale({});
     },
   });
-  const request = (profile: string) => ({ profile, departments: assigned, options: options[profile] ?? {}, mappings });
+  const unitsOf = (profile: string) => Object.fromEntries(Object.entries(units[profile] ?? {}).filter((e): e is [string, string] => Boolean(e[1])));
+  const request = (profile: string) => ({ profile, departments: assigned, units: unitsOf(profile), options: options[profile] ?? {}, mappings });
+  const changeUnit = (profile: string, archive: string, unit: string | null) => {
+    setUnits((u) => ({ ...u, [profile]: { ...u[profile], [archive]: unit } }));
+    // The check no longer matches the assignment: check again before importing.
+    setStages((s) => ({ ...s, [profile]: s[profile] === 'checked' ? 'open' : (s[profile] ?? 'open') }));
+  };
+  // Only operational departments write incident reports: archives of others bring them only as reports of a unit.
+  const departmentOf = (archive: TransferArchiveInfo) => {
+    const name = assigned[archive.key] ?? archive.label;
+    return departments.find((d) => d.name === name) ?? departments.find((d) => unitKey(d.name) === unitKey(name));
+  };
   const changeMappings = (profile: string, changed: ImportValueMappings) => {
     setMappings(changed);
     setStale((s) => ({ ...s, [profile]: true }));
@@ -102,6 +116,7 @@ export function TransferImport({ profiles }: { profiles: ImportProfileInfo[] }) 
   // Only the first open dataset can be imported, so persons exist before their incidents.
   const next = transfer.datasets.find((d) => !['applied', 'skipped'].includes(stages[d.profile] ?? 'open'))?.profile;
   const pending = (profile: string) => run.isPending && run.variables?.profile === profile;
+  const withUnits = transfer.datasets.flatMap((d) => (d.units ? [{ profile: d.profile, choices: d.units }] : []));
 
   return (
     <Stack gap="lg">
@@ -112,6 +127,7 @@ export function TransferImport({ profiles }: { profiles: ImportProfileInfo[] }) 
             <Table.Tr>
               <Table.Th>{t('imports.transfer.archive')}</Table.Th>
               <Table.Th>{t('imports.transfer.department')}</Table.Th>
+              {withUnits.map(({ profile, choices }) => <Table.Th key={profile}>{localized(choices.label)}</Table.Th>)}
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -132,6 +148,22 @@ export function TransferImport({ profiles }: { profiles: ImportProfileInfo[] }) 
                     searchable
                   />
                 </Table.Td>
+                {withUnits.map(({ profile, choices }) => {
+                  const unit = units[profile]?.[archive.key] ?? null;
+                  const type = departmentOf(archive)?.type;
+                  return (
+                    <Table.Td key={profile}>
+                      <Select
+                        aria-label={localized(choices.label)}
+                        data={[{ value: '', label: localized(choices.none) }, ...choices.entries.map((e) => ({ value: e.key, label: localized(e.name) }))]}
+                        value={unit ?? ''}
+                        onChange={(value) => changeUnit(profile, archive.key, value || null)}
+                        allowDeselect={false}
+                      />
+                      {!unit && type && type !== 'operational' && <Text size="xs" c="dimmed" mt={4}>{t('imports.transfer.unitNeeded')}</Text>}
+                    </Table.Td>
+                  );
+                })}
               </Table.Tr>
             ))}
           </Table.Tbody>

@@ -45,8 +45,8 @@ export interface RuleInput {
   situation: string;
   actions: string;
   statistics: IncidentStatistics | null;
+  /** Department of the report (always operational); unset for the report of a unit. */
   departmentId?: string;
-  departmentType: string;
   /**
    * Set for the report of a brigade-wide unit (e.g. the duty officer): its persons come from every department, and
    * they need a vehicle only if the unit says so.
@@ -77,9 +77,6 @@ export interface RawFinding {
   subject: string | null;
   params: Record<string, string | number>;
 }
-
-/** Departments whose personnel need no vehicle (command units, special services); their members come from everywhere. */
-const NO_VEHICLE_DEPARTMENTS = new Set(['command', 'special-service']);
 
 /** Person statuses that do not take part in incidents. */
 const NOT_OPERATIONAL = new Set(['youth', 'veterans', 'passive', 'left']);
@@ -149,7 +146,7 @@ export function evaluateRules(input: RuleInput, settings: IncidentSettings): Raw
     if (input.primary ? reportFrom !== incidentAlarm : reportFrom < incidentAlarm) add('incident-time-differs');
   }
 
-  const vehicleRequired = (input.keyword?.requiresVehicle ?? true) && (input.unit ? input.unit.vehicleRequired : !NO_VEHICLE_DEPARTMENTS.has(input.departmentType));
+  const vehicleRequired = (input.keyword?.requiresVehicle ?? true) && (input.unit?.vehicleRequired ?? true);
   const crew = new Map<string, number>();
 
   for (const p of input.personnel) {
@@ -166,7 +163,7 @@ export function evaluateRules(input: RuleInput, settings: IncidentSettings): Raw
     const facts = input.persons?.get(p.personId);
     if (facts) {
       if (NOT_OPERATIONAL.has(facts.status)) add('person-not-operational', p.key, { person: p.label, status: facts.status });
-      else if (input.departmentId && !input.unit && !NO_VEHICLE_DEPARTMENTS.has(input.departmentType) && !facts.departmentIds.includes(input.departmentId)) {
+      else if (input.departmentId && !input.unit && !facts.departmentIds.includes(input.departmentId)) {
         add('person-not-member', p.key, { person: p.label });
       }
       if (facts.birthDate && input.minimumAge && ageOn(facts.birthDate, localDay(input.times.alarmedAt)) < input.minimumAge) {

@@ -68,7 +68,9 @@ export class ExternalController {
     const departmentIds: string[] = [];
     for (const value of input.departments) {
       const department = findDepartment(departments, value);
-      if (department) departmentIds.push(department.id);
+      // Only operational departments write incident reports.
+      if (department?.type === 'operational') departmentIds.push(department.id);
+      else if (department) warnings.push({ code: 'incidents.departmentNotOperational', value });
       else warnings.push({ code: 'incidents.api.unknownDepartment', value });
     }
 

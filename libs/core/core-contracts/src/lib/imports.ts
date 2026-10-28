@@ -103,8 +103,26 @@ export const TransferArchiveInfo = z.object({
 });
 export type TransferArchiveInfo = z.infer<typeof TransferArchiveInfo>;
 
+/**
+ * Brigade-wide units the rows of an archive can be assigned to instead of its department, e.g. the incident reports of
+ * the archive "Gesamtfeuerwehr" as reports of the duty officer.
+ */
+export const TransferUnits = z.object({
+  /** E.g. "Einsatzberichte als". */
+  label: LocalizedText,
+  /** The choice without a unit, e.g. "Abteilungsbericht". */
+  none: LocalizedText,
+  entries: z.array(z.object({ key: z.string(), name: LocalizedText })),
+});
+export type TransferUnits = z.infer<typeof TransferUnits>;
+
 /** Rows an import profile reads from the archives. */
-export const TransferDataset = z.object({ profile: z.string(), rowCount: z.number() });
+export const TransferDataset = z.object({
+  profile: z.string(),
+  rowCount: z.number(),
+  /** Only for profiles whose rows can belong to a unit instead of the department of the archive. */
+  units: TransferUnits.optional(),
+});
 export type TransferDataset = z.infer<typeof TransferDataset>;
 
 export const TransferUpload = z.object({
@@ -119,6 +137,8 @@ export const TransferRequest = z.object({
   profile: z.string(),
   /** Archive key → name of the department the archive belongs to (`null` = use the label of the archive). */
   departments: z.record(z.string(), z.string().nullable()).default({}),
+  /** Archive key → key of the unit its rows belong to (only profiles offering `units`; others ignore it). */
+  units: z.record(z.string(), z.string().min(1)).default({}),
   options: z.record(z.string(), z.boolean()).default({}),
   /** Apply to all archives of the transfer. */
   mappings: ImportValueMappings.default({}),

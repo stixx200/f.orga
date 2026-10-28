@@ -12,7 +12,7 @@ import {
   ZodPipe,
 } from '@forga/core-api';
 import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
-import { AlarmKeywordInput, IncidentInput, type ReportStatus } from '@forga/incidents-contracts';
+import { AlarmKeywordInput, IncidentInput, type IncidentUnit, type ReportStatus } from '@forga/incidents-contracts';
 import {
   type CatalogEntry,
   type Department,
@@ -47,6 +47,8 @@ const FIELDS = [
   field('district', 'Ortsteil', 'District', ['Ortsteil (Obj.)']),
   field('object', 'Objekt', 'Object', ['Zusatz (Obj.)']),
   field('department', 'Abteilung', 'Department', ['Bezeichnung (2)', 'Abteilung'], true),
+  // Key or name of a brigade-wide unit (e.g. "EvD"): the row belongs to the report of the unit, not of the department.
+  field('unit', 'Feuerwehrweite Einheit', 'Brigade-wide unit', []),
   field('personName', 'Name (Nachname Vorname)', 'Name (last first)', ['Name']),
   field('personnelNumber', 'Personalnummer', 'Personnel number', ['Pers.-Nr.']),
   field('from', 'Person von', 'Person from', ['von']),
@@ -110,14 +112,23 @@ export class MpFeuerIncidentsImport {
       id: 'incidents.mp-feuer',
       name: { de: 'Einsätze aus MP-Feuer', en: 'Incidents from MP-Feuer' },
       description: {
-        de: 'Personalexport von MP-Feuer (eine Zeile je Person und Bericht). Einsatz = Leitstellennummer, Bericht = Abteilung + Einsatznummer + Beginn, Hauptbericht = „bei Ges. Stat. anzeigen“, Status aus Zusatzfeld 2. Ein erneuter Import ersetzt nur Berichte, die seitdem niemand bearbeitet hat.',
-        en: 'Personnel export of MP-Feuer (one row per person and report). Incident = dispatch number, report = department + incident number + begin, primary = "bei Ges. Stat. anzeigen", status from Zusatzfeld 2. Importing again only replaces reports nobody has edited since.',
+        de: 'Personalexport von MP-Feuer (eine Zeile je Person und Bericht). Einsatz = Leitstellennummer, Bericht = Abteilung (nur Einsatzabteilungen) oder feuerwehrweite Einheit (z. B. EvD) + Einsatznummer + Beginn, Hauptbericht = „bei Ges. Stat. anzeigen“, Status aus Zusatzfeld 2. Ein erneuter Import ersetzt nur Berichte, die seitdem niemand bearbeitet hat.',
+        en: 'Personnel export of MP-Feuer (one row per person and report). Incident = dispatch number, report = department (operational departments only) or brigade-wide unit (e.g. duty officer) + incident number + begin, primary = "bei Ges. Stat. anzeigen", status from Zusatzfeld 2. Importing again only replaces reports nobody has edited since.',
       },
       permission: RELEASE,
       fields: FIELDS,
       options: [{ key: 'createKeywords', label: { de: 'Unbekannte Stichworte anlegen', en: 'Create unknown keywords' }, default: true }],
       run: (rows, context) => this.run(rows, context),
-      transfer: { order: 60, read: readIncidents },
+      transfer: {
+        order: 60,
+        read: readIncidents,
+        // E.g. the archive "Gesamtfeuerwehr" holds the reports of the duty officer.
+        units: {
+          label: { de: 'Einsatzberichte als', en: 'Incident reports as' },
+          none: { de: 'Abteilungsbericht', en: 'Department report' },
+          entries: async () => (await this.reports.units.active()).map((u) => ({ key: u.key, name: u.label })),
+        },
+      },
     };
   }
 
@@ -160,6 +171,7 @@ export class MpFeuerIncidentsImport {
       this.organization.stations(),
       this.organization.catalog('function'),
     ]);
+    const units = await this.reports.units.active();
     const keywords = new Set((await em.find(AlarmKeywordEntity, {})).map((k) => k.key));
     const createdKeywords = new Set<string>();
     const persons = await this.directory.memberPeriods();
@@ -167,10 +179,10 @@ export class MpFeuerIncidentsImport {
     const handled = new Map<string, Set<string>>();
     const createdIncidents: IncidentEntity[] = [];
 
-    // One report per department, incident number and begin.
+    // One report per department (or unit), incident number and begin.
     const groups = new Map<string, ImportRow[]>();
     for (const row of rows) {
-      const key = [normalizeName(row.values['department'] ?? ''), row.values['incidentNumber'], row.values['begin']].join('|');
+      const key = [normalizeName(row.values['department'] ?? ''), row.values['unit'] ?? '', row.values['incidentNumber'], row.values['begin']].join('|');
       groups.set(key, [...(groups.get(key) ?? []), row]);
     }
 
@@ -186,10 +198,22 @@ export class MpFeuerIncidentsImport {
         for (const { row } of group) results.push({ row, action: 'error', label, messages: [{ code, params }] });
       };
 
-      const department = this.department(departments, first['department'] ?? '');
+      // Rows of a unit (e.g. the archive "Gesamtfeuerwehr" as duty officer) need no department.
+      const unitText = (first['unit'] ?? '').trim();
+      const unit = unitText ? this.unit(units, unitText) : undefined;
+      const department = unitText ? undefined : this.department(departments, first['department'] ?? '');
       const begin = time(first['begin']);
-      if (!department) {
+      if (unitText && !unit) {
+        failAll('incidents.import.unknownUnit', { unit: unitText });
+        continue;
+      }
+      if (!unit && !department) {
         failAll('masterdata.import.unknownDepartment', { name: first['department'] ?? '' });
+        continue;
+      }
+      // Only operational departments write incident reports (not e.g. youth, veterans or the command group).
+      if (department && department.type !== 'operational') {
+        failAll('incidents.departmentNotOperational', { name: department.name });
         continue;
       }
       if (!begin) {
@@ -216,7 +240,7 @@ export class MpFeuerIncidentsImport {
       }
 
       // Without a dispatch number each report is an incident of its own, numbered stably for re-imports.
-      const dispatchNumber = first['dispatchNumber']?.trim() || `MP-${localDate(begin.toISOString()).slice(0, 4)}-${first['incidentNumber']}-${normalizeName(department.shortName)}`;
+      const dispatchNumber = first['dispatchNumber']?.trim() || `MP-${localDate(begin.toISOString()).slice(0, 4)}-${first['incidentNumber']}-${normalizeName(unit ? unit.numberPrefix : department!.shortName)}`;
       let incident: IncidentEntity | null = await em.findOne(IncidentEntity, { dispatchNumber }, { populate: ['reports'] });
       if (!incident) {
         incident = await this.reports.createIncident(
@@ -235,13 +259,13 @@ export class MpFeuerIncidentsImport {
       }
       const current: IncidentEntity = incident;
 
-      let report = current.reports.getItems().find((r) => r.departmentId === department.id);
+      let report = current.reports.getItems().find((r) => (unit ? r.unit === unit.key : r.departmentId === department!.id));
       const created = !report;
       if (report && !report.externallyManaged) {
         for (const { row } of group) results.push({ row, action: 'unchanged', label, messages: [{ code: 'incidents.import.reportEdited' }] });
         continue;
       }
-      report ??= await this.reports.createReport(em, current, department.id, null);
+      report ??= await this.reports.createReport(em, current, unit ? { unit: unit.key } : department!.id, null);
       await em.populate(report, ['personnel', 'vehicles']);
 
       // MP-Feuer may hold several reports of a department for one dispatch number; f.orga keeps one and merges their personnel.
@@ -274,8 +298,12 @@ export class MpFeuerIncidentsImport {
         });
         // Chargeable applies to the whole incident; one department's report marking it is enough.
         if (yes(first['chargeable'])) current.chargeable = true;
-        if (group.some((r) => yes(r.values['primary']))) await this.reports.setPrimary(em, report, true);
-        else if (current.reports.count() > 1) report.primary = false;
+        // A unit report is primary only while the incident has no department report.
+        const otherDepartments = current.reports.getItems().some((r) => r !== report && r.departmentId);
+        if (group.some((r) => yes(r.values['primary'])) && !(unit && otherDepartments)) await this.reports.setPrimary(em, report, true);
+        else if (otherDepartments) report.primary = false;
+        // Statistics belong to the primary report only.
+        if (!report.primary) report.statistics = null;
 
         for (const item of report.personnel.getItems()) em.remove(item);
         report.personnel.removeAll();
@@ -303,7 +331,7 @@ export class MpFeuerIncidentsImport {
         const vehicleText = (values['vehicle'] ?? '').trim();
         const vehicle = this.vehicle(vehicles, vehicleText) ?? vehicles.find((v) => vehicleText && v.id === mapped('vehicle', vehicleText));
         const standby = yes(values['standby']);
-        const station = standby ? this.station(stations, department) : undefined;
+        const station = standby && department ? this.station(stations, department) : undefined;
         if (vehicleText && !vehicle && !standby) {
           messages.push({ code: 'incidents.api.unknownVehicle', params: { kind: 'vehicle', value: vehicleText } });
           unmatched('vehicle', vehicleText);
@@ -343,6 +371,12 @@ export class MpFeuerIncidentsImport {
     const counts = { create: 0, update: 0, unchanged: 0, error: 0 };
     for (const r of results) counts[r.action]++;
     return { dryRun, counts, rows: results.toSorted((a, b) => a.row - b.row) };
+  }
+
+  /** Unit by key, name or short name, e.g. `duty-officer`, "Einsatzleiter vom Dienst", "EvD". */
+  private unit(units: IncidentUnit[], value: string): IncidentUnit | undefined {
+    const wanted = normalizeName(value);
+    return units.find((u) => u.key === value || [u.label.de, u.label.en, u.shortLabel.de, u.shortLabel.en].some((n) => normalizeName(n) === wanted));
   }
 
   private department(departments: Department[], value: string): Department | undefined {

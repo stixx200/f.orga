@@ -908,3 +908,22 @@ describe('review round 2', () => {
     expect((await auditOf()).find((e) => e.action === 'incidents.report-deleted')?.details).toMatchObject({ reportId: ahornfeld.id, reportNumber: ahornfeld.number });
   });
 });
+
+describe('reports of operational departments only', () => {
+  it('refuses reports of other departments when creating an incident, adding a report and through the API', async () => {
+    const veterans = (await post('/masterdata/departments', { name: 'Altersabteilung Musterstadt', shortName: 'Alters Musterstadt', type: 'veterans', parentId: ids.musterstadt }).expect(201)).body.id;
+    const incident = { dispatchNumber: '2026-400001', alarmKeyword: 'B2', alarmedAt: T('09:00') };
+    expect((await post('/incidents/incidents', { ...incident, departmentIds: [veterans] }).expect(400)).body).toMatchObject({ code: 'incidents.departmentNotOperational', name: 'Altersabteilung Musterstadt' });
+    const created = (await post('/incidents/incidents', { ...incident, departmentIds: [ids.musterstadt] }).expect(201)).body;
+    expect((await post(`/incidents/incidents/${created.id}/reports`, { departmentId: veterans }).expect(400)).body.code).toBe('incidents.departmentNotOperational');
+
+    const token = await post('/core/tokens', { name: 'Alarmfax 2', scopes: ['incidents.api.create'] }).expect(201);
+    const result = await test.http
+      .post('/api/incidents/v1/incidents')
+      .set({ Authorization: `Bearer ${token.body.token}` })
+      .send({ dispatchNumber: '2026-400002', alarmKeyword: 'B2', alarmedAt: T('09:30'), departments: ['Musterstadt', 'Alters Musterstadt'], personnel: [] })
+      .expect(200);
+    expect(result.body.warnings).toEqual([{ code: 'incidents.departmentNotOperational', value: 'Alters Musterstadt' }]);
+    expect(result.body.reports).toEqual([expect.objectContaining({ departmentId: ids.musterstadt })]);
+  });
+});
