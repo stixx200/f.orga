@@ -43,7 +43,7 @@ export class OnboardingController {
     const stored = new Set((await em.find(Setting, {}, { fields: ['section'] })).map((s) => s.section));
     for (const { manifest, settings } of this.options.modules) {
       if (inactive.has(manifest.id) || !Object.keys(settings).length) continue;
-      const page = (manifest.navigation ?? []).find((n) => n.section === 'administration' && n.path === 'settings');
+      const page = (manifest.navigation ?? []).find((n) => n.section === 'settings' && n.path === 'settings');
       if (!page) continue;
       items.push({
         key: `module:${manifest.id}`,

@@ -1,9 +1,13 @@
 import { Button, FileButton, Group, SimpleGrid, Stack, Text } from '@mantine/core';
+import { IconSettings } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { ModuleStatus } from '@forga/core-contracts';
-import { api, send, upload, useLocalized, useTranslation } from '@forga/web-sdk';
+import { Link } from 'react-router';
+import type { LocalizedText, ModuleStatus, Session } from '@forga/core-contracts';
+import { api, can, send, upload, useLocalized, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, Notice, PageHeader, Panel, StatusBadge, type Tone, useAction } from '@forga/web-ui';
+import { moduleSettings } from '../../frame/Sidebar';
+import type { LoadedModule } from '../../modules';
 
 const STATUS_KEY = ['core', 'modules', 'status'] as const;
 const PLUGINS_KEY = ['core', 'plugins'] as const;
@@ -70,11 +74,36 @@ function PluginsPanel() {
   );
 }
 
-/** Installed modules can be switched on and off; data of a deactivated module stays. */
-export function ModulesPage() {
+/** Links to the settings pages of a module the user may open. */
+function SettingsLinks({ entries }: { entries: { module: string; entry: { label: LocalizedText; path: string } }[] }) {
+  const localized = useLocalized();
+  if (!entries.length) return null;
+  return (
+    <Group gap="xs" mb="md">
+      {entries.map(({ module, entry }) => (
+        <Button key={entry.path} component={Link} to={`/${module}/${entry.path}`} size="xs" variant="light" leftSection={<IconSettings size={14} />}>
+          {localized(entry.label)}
+        </Button>
+      ))}
+    </Group>
+  );
+}
+
+/**
+ * Installed modules with their settings pages. Module managers switch modules on and off (data of a deactivated module
+ * stays) and manage plugins; others see only the active modules whose settings they may change.
+ */
+export function ModulesPage({ modules: loaded, session }: { modules: LoadedModule[]; session: Session }) {
   const { t } = useTranslation('shell');
   const localized = useLocalized();
-  const { data: modules = [] } = useQuery({ queryKey: STATUS_KEY, queryFn: () => api<ModuleStatus[]>('core/modules/status') });
+  const manager = can(session, 'core.modules.manage');
+  const settings = moduleSettings(loaded, session);
+  const settingsOf = (id: string) => settings.filter((s) => s.module === id);
+  const { data: status = [] } = useQuery({ queryKey: STATUS_KEY, queryFn: () => api<ModuleStatus[]>('core/modules/status'), enabled: manager });
+  // Without the module permission only the active modules with settings the user may change.
+  const modules: ModuleStatus[] = manager
+    ? status
+    : loaded.filter((m) => settingsOf(m.info.id).length).map((m) => ({ id: m.info.id, name: m.info.name, version: m.info.version, active: true, requires: [], optional: [] }));
   const [deactivating, setDeactivating] = useState<ModuleStatus | null>(null);
   // The shell loads the frontends of the active modules at start, so it starts over after a change.
   const toggle = useAction((module: ModuleStatus) => send('PUT', `core/modules/${module.id}`, { active: !module.active }), {
@@ -91,7 +120,7 @@ export function ModulesPage() {
   return (
     <Stack gap="lg">
       <PageHeader breadcrumbs={[{ label: t('nav.administration') }, { label: t('nav.modules') }]} title={t('nav.modules')} />
-      <Notice kind="info">{t('modules.info')}</Notice>
+      {manager && <Notice kind="info">{t('modules.info')}</Notice>}
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
         {modules.map((module) => {
           const dependents = requiredBy(module.id);
@@ -102,7 +131,8 @@ export function ModulesPage() {
               aside={<StatusBadge tone={module.active ? 'done' : 'neutral'}>{t(module.active ? 'modules.active' : 'modules.inactive')}</StatusBadge>}
             >
               <Text size="sm" mb="md">{t(`modules.descriptions.${module.id}`, { defaultValue: t('modules.noDescription') })}</Text>
-              <Group justify="space-between" align="end" wrap="nowrap">
+              <SettingsLinks entries={settingsOf(module.id)} />
+              {manager && <Group justify="space-between" align="end" wrap="nowrap">
                 <Text size="xs" c="dimmed">
                   {[
                     module.requires.length ? t('modules.requires', { modules: module.requires.map(nameOf).join(', ') }) : '',
@@ -114,12 +144,12 @@ export function ModulesPage() {
                 ) : (
                   <Button size="xs" loading={toggle.isPending} onClick={() => toggle.mutate(module)}>{t('modules.activate')}</Button>
                 )}
-              </Group>
+              </Group>}
             </Panel>
           );
         })}
       </SimpleGrid>
-      <PluginsPanel />
+      {manager && <PluginsPanel />}
       <ConfirmDialog
         opened={!!deactivating}
         onClose={() => setDeactivating(null)}

@@ -23,7 +23,7 @@ export const EQUIPMENT_MANIFEST = {
     // Readers see the due inspections; recording them needs `equipment.inspect` or, for breathing apparatus, `equipment.breathing.inspect`.
     { label: { de: 'Prüfungen', en: 'Inspections' }, path: 'inspections', permission: 'equipment.read', icon: 'check' },
     { label: { de: 'Mängel', en: 'Defects' }, path: 'defects', permission: 'equipment.read', icon: 'alert' },
-    { label: { de: 'Geräte', en: 'Equipment' }, path: 'settings', permission: 'equipment.settings.manage', icon: 'settings', section: 'administration' },
+    { label: { de: 'Geräte', en: 'Equipment' }, path: 'settings', permission: 'equipment.settings.manage', icon: 'settings', section: 'settings' },
   ],
   roles: [
     { key: 'member', permissions: ['equipment.defects.report'] },

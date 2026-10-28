@@ -17,7 +17,7 @@ export const COST_RECOVERY_MANIFEST = {
     { label: { de: 'Kostenpflichtige Einsätze', en: 'Chargeable incidents' }, path: 'candidates', permission: 'cost-recovery.write', icon: 'receipt' },
     { label: { de: 'Bescheide', en: 'Notices' }, path: 'notices', permission: 'cost-recovery.read', icon: 'list' },
     { label: { de: 'Adressbuch', en: 'Address book' }, path: 'debtors', permission: 'cost-recovery.write', icon: 'users' },
-    { label: { de: 'Kostenersatz', en: 'Cost recovery' }, path: 'settings', permission: 'cost-recovery.settings.manage', icon: 'settings', section: 'administration' },
+    { label: { de: 'Kostenersatz', en: 'Cost recovery' }, path: 'settings', permission: 'cost-recovery.settings.manage', icon: 'settings', section: 'settings' },
   ],
   roles: [
     { key: 'commander', permissions: ['cost-recovery.read', 'cost-recovery.write', 'cost-recovery.issue'] },

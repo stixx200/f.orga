@@ -21,7 +21,7 @@ export const RESPIRATORY_PROTECTION_MANIFEST = {
   navigation: [
     { label: { de: 'Tauglichkeit', en: 'Fitness' }, path: 'overview', permission: 'respiratory-protection.read', icon: 'shield' },
     { label: { de: 'Schnellerfassung', en: 'Quick entry' }, path: 'quick-entry', permission: 'respiratory-protection.evidence', icon: 'list' },
-    { label: { de: 'Atemschutz', en: 'Respiratory protection' }, path: 'settings', permission: 'respiratory-protection.settings.manage', icon: 'settings', section: 'administration' },
+    { label: { de: 'Atemschutz', en: 'Respiratory protection' }, path: 'settings', permission: 'respiratory-protection.settings.manage', icon: 'settings', section: 'settings' },
   ],
   roles: [
     { key: 'member', permissions: ['respiratory-protection.self'] },

@@ -25,7 +25,7 @@ export const INFO_TERMINAL_MANIFEST = {
   ],
   navigation: [
     { label: { de: 'Infoterminals', en: 'Info terminals' }, path: 'terminals', permission: INFO_TERMINAL_READ, icon: 'terminal', section: 'administration' },
-    { label: { de: 'Infoterminal', en: 'Info terminal' }, path: 'settings', permission: INFO_TERMINAL_SETTINGS_MANAGE, icon: 'settings', section: 'administration' },
+    { label: { de: 'Infoterminal', en: 'Info terminal' }, path: 'settings', permission: INFO_TERMINAL_SETTINGS_MANAGE, icon: 'settings', section: 'settings' },
   ],
   roles: [
     { key: 'commander', permissions: ['info-terminal.*'] },

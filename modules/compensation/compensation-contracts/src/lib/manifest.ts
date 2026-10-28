@@ -21,7 +21,7 @@ export const COMPENSATION_MANIFEST = {
     { label: { de: 'Auszahlungsläufe', en: 'Payout runs' }, path: 'runs', permission: 'compensation.runs.read', icon: 'coins' },
     { label: { de: 'Offene Posten', en: 'Open items' }, path: 'items', permission: 'compensation.read', icon: 'list' },
     { label: { de: 'Funktionspauschalen', en: 'Function allowances' }, path: 'functions', permission: 'compensation.runs', icon: 'award' },
-    { label: { de: 'Entschädigungen', en: 'Compensation' }, path: 'settings', permission: 'compensation.settings.manage', icon: 'settings', section: 'administration' },
+    { label: { de: 'Entschädigungen', en: 'Compensation' }, path: 'settings', permission: 'compensation.settings.manage', icon: 'settings', section: 'settings' },
   ],
   roles: [
     { key: 'member', permissions: [SELF] },

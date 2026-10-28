@@ -27,7 +27,7 @@ export const DUTY_OFFICER_MANIFEST = {
   ],
   navigation: [
     { label: { de: 'EvD-Dienst', en: 'Duty officer roster' }, path: 'roster', permission: DUTY_OFFICER_READ, icon: 'calendar' },
-    { label: { de: 'Einsatzleiter vom Dienst', en: 'Duty officer' }, path: 'settings', permission: 'duty-officer.settings.manage', icon: 'settings', section: 'administration' },
+    { label: { de: 'Einsatzleiter vom Dienst', en: 'Duty officer' }, path: 'settings', permission: 'duty-officer.settings.manage', icon: 'settings', section: 'settings' },
   ],
   roles: [
     { key: 'commander', permissions: ['duty-officer.*'] },

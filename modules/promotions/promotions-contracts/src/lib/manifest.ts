@@ -59,7 +59,7 @@ export const PROMOTIONS_MANIFEST = {
       path: 'rules',
       permission: 'promotions.settings.manage',
       icon: 'settings',
-      section: 'administration',
+      section: 'settings',
     },
   ],
   roles: [
