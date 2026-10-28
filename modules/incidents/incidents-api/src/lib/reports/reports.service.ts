@@ -257,13 +257,15 @@ export class ReportsService {
   }
 
   /** Tells other modules about a new incident (e.g. the duty officer module adds its report); after the commit. */
-  async publishCreated(incident: IncidentEntity): Promise<void> {
+  async publishCreated(incident: IncidentEntity, requested: { units: string[]; personId: string | null } = { units: [], personId: null }): Promise<void> {
     await this.events.publish<IncidentCreatedEvent>(INCIDENTS_EVENTS.incidentCreated, {
       incidentId: incident.id,
       dispatchNumber: incident.dispatchNumber,
       alarmKeyword: incident.alarmKeyword,
       alarmedAt: incident.alarmedAt.toISOString(),
       createdVia: incident.createdVia,
+      units: requested.units,
+      requestedByPersonId: requested.personId,
     });
   }
 

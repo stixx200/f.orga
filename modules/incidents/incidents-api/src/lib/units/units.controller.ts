@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import type { IncidentUnit } from '@forga/incidents-contracts';
 import { IncidentUnitsRegistry } from './units.registry.js';
 
@@ -7,9 +7,12 @@ import { IncidentUnitsRegistry } from './units.registry.js';
 export class UnitsController {
   constructor(private readonly units: IncidentUnitsRegistry) {}
 
-  /** Every logged-in user: the UI names unit reports with them, also in lists of incidents. */
+  /**
+   * Every logged-in user: the UI names unit reports with them, also in lists of incidents. `active=true`: only the
+   * units of active modules, e.g. to offer them for a new incident.
+   */
   @Get()
-  list(): IncidentUnit[] {
-    return this.units.all();
+  async list(@Query('active') active?: string): Promise<IncidentUnit[]> {
+    return active === 'true' ? this.units.active() : this.units.all();
   }
 }

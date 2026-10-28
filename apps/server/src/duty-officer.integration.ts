@@ -305,6 +305,24 @@ describe('EvD reports', () => {
     expect((await get(`/incidents/incidents/${created.id}`).expect(200)).body.reports).toEqual([expect.objectContaining({ id: department.id, primary: true })]);
   });
 
+  it('creates an incident with only the EvD report, also while the setting is off', async () => {
+    // The duty officer writes no department reports, but may create an incident with his own report.
+    const created = await incident('2026-300010', { departmentIds: [], units: ['duty-officer'] }, officer);
+    expect(created.reports).toEqual([expect.objectContaining({ unit: 'duty-officer', departmentId: null, primary: true, authorPersonId: ids.jonas })]);
+
+    await put('/core/settings/duty-officer.general', { reportRequired: false, dutyKinds: DUTY_KIND_TEMPLATE }).expect(200);
+    const requested = await incident('2026-300011', { departmentIds: [], units: ['duty-officer'] }, officer);
+    expect(requested.reports).toEqual([expect.objectContaining({ unit: 'duty-officer', primary: true })]);
+    await put('/core/settings/duty-officer.general', { reportRequired: true, dutyKinds: DUTY_KIND_TEMPLATE }).expect(200);
+
+    // Department writers may not ask for the EvD report; without department or unit there is nothing to write.
+    expect((await post('/incidents/incidents', { dispatchNumber: '2026-300012', alarmKeyword: 'B2', alarmedAt: T('13:05'), departmentIds: [], units: ['duty-officer'] }, writer).expect(403)).body.code).toBe('auth.forbidden');
+    expect((await post('/incidents/incidents', { dispatchNumber: '2026-300012', alarmKeyword: 'B2', alarmedAt: T('13:05'), departmentIds: [] }, officer).expect(400)).body.code).toBe('incidents.departmentRequired');
+    expect((await post('/incidents/incidents', { dispatchNumber: '2026-300012', alarmKeyword: 'B2', alarmedAt: T('13:05'), departmentIds: [], units: ['unknown'] }).expect(400)).body.code).toBe('incidents.unknownUnit');
+    // Offered for new incidents: the units of active modules.
+    expect((await get('/incidents/units?active=true', officer).expect(200)).body.map((u: { key: string }) => u.key)).toEqual(['duty-officer']);
+  });
+
   it('leaves the incidents as before while the module is inactive', async () => {
     await put('/core/modules/duty-officer', { active: false }).expect(200);
     const created = await incident('2026-300008');

@@ -33,7 +33,11 @@ export const IncidentUpdate = IncidentInput.extend({ version: z.number().int() }
 export type IncidentUpdate = z.input<typeof IncidentUpdate>;
 
 /** New incident with a draft report for each department; writers need at least one of their departments. */
-export const CreateIncident = IncidentInput.extend({ departmentIds: z.array(z.uuid()).default([]) });
+export const CreateIncident = IncidentInput.extend({
+  departmentIds: z.array(z.uuid()).default([]),
+  /** Keys of brigade-wide units whose report the incident gets (e.g. `duty-officer`), also without department reports. */
+  units: z.array(z.string()).default([]),
+});
 export type CreateIncident = z.input<typeof CreateIncident>;
 
 /**

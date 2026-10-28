@@ -46,6 +46,7 @@ import {
   Unlock,
 } from '@forga/incidents-contracts';
 import { AlarmKeywordEntity, IncidentEntity, ReportEntity, ReportPersonnelEntity, ReportRevisionEntity } from '../incidents.entities.js';
+import { UnitReportsService } from '../units/unit-reports.service.js';
 import { ownerName } from '../units/units.registry.js';
 import { ReportPdf } from './report-pdf.js';
 import { ReportWriters } from './report-writers.js';
@@ -150,6 +151,7 @@ export class IncidentsController {
     private readonly audit: Audit,
     private readonly pdf: ReportPdf,
     private readonly writers: ReportWriters,
+    private readonly unitReports: UnitReportsService,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
     @Inject(ORGANIZATION) private readonly organization: Organization,
   ) {}
@@ -189,16 +191,27 @@ export class IncidentsController {
   }
 
   /**
-   * Creates an incident and a draft report for each given department. Writers name at least one department:
-   * an incident without a report of theirs would vanish from their list. Releasers may create it without reports.
+   * Creates an incident and a draft report for each given department and unit (e.g. only the EvD report). Writers
+   * name at least one department or unit they write for: an incident without a report of theirs would vanish from
+   * their list. Releasers may create it without reports.
    */
   @Post('incidents')
-  @RequirePermissions(WRITE)
   async create(
     @Body(new ZodPipe(CreateIncident)) input: ParsedCreateIncident,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<IncidentDto> {
-    if (!input.departmentIds.length && user.grant(RELEASE) !== 'brigade') throw new BadRequestException({ code: 'incidents.departmentRequired' });
+    const releaser = user.grant(RELEASE) === 'brigade';
+    // Writers of department reports, releasers, or writers of a unit's reports (e.g. the duty officer with only his report).
+    const active = await this.reports.units.active();
+    if (!user.can(WRITE) && !releaser && !active.some((u) => user.can(u.writePermission))) {
+      throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
+    }
+    for (const key of input.units) {
+      const unit = active.find((u) => u.key === key);
+      if (!unit) throw new BadRequestException({ code: 'incidents.unknownUnit', unit: key });
+      if (!releaser && !user.can(unit.writePermission)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [unit.writePermission] });
+    }
+    if (!input.departmentIds.length && !input.units.length && !releaser) throw new BadRequestException({ code: 'incidents.departmentRequired' });
     for (const departmentId of input.departmentIds) {
       if (!canWriteFor(user, departmentId)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
     }
@@ -210,8 +223,10 @@ export class IncidentsController {
       await this.reports.createReport(em, incident, departmentId, departmentId === own ? user.personId : null);
     }
     await em.flush();
-    // Other modules may add their reports (e.g. the duty officer); the answer contains them.
-    await this.reports.publishCreated(incident);
+    // Other modules add their reports (e.g. the duty officer, always for a requested unit); the answer contains them.
+    await this.reports.publishCreated(incident, { units: input.units, personId: user.personId ?? null });
+    // A requested unit report the owning module did not create (e.g. its handler failed) is written by the creator.
+    for (const unit of input.units) await this.unitReports.createUnitReport(incident.id, unit, { authorPersonId: user.personId ?? null, personnel: [] });
     const created = await this.em.fork().findOneOrFail(IncidentEntity, incident.id, { populate: ['reports'] });
     return toIncidentDto(created);
   }
