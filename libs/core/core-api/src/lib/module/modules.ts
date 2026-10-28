@@ -13,10 +13,10 @@ import {
 } from '@nestjs/common';
 import { defineEntity, EntityManager, p } from '@mikro-orm/core';
 import type { NextFunction, Request, Response } from 'express';
-import { type ActiveModule, ModuleActivation, type ModuleStatus } from '@forga/core-contracts';
+import { type ActiveModule, type KioskFrontend, ModuleActivation, type ModuleStatus } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
 import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
-import { RequirePermissions } from '../security/decorators.js';
+import { Public, RequirePermissions } from '../security/decorators.js';
 import { Role } from '../security/security.entities.js';
 import { ZodPipe } from '../zod.pipe.js';
 
@@ -171,8 +171,22 @@ export class ModulesController {
         name: manifest.name,
         version: manifest.version,
         navigation: manifest.navigation ?? [],
-        frontend: manifest.frontend && { ...manifest.frontend, entry: this.options.frontendEntry(manifest.id) },
+        frontend: manifest.frontend && { remote: manifest.frontend.remote, exposed: manifest.frontend.exposed, entry: this.options.frontendEntry(manifest.id) },
       }));
+  }
+
+  /**
+   * The kiosk page of an active module (e.g. the info terminal at `/terminal`), for the shell without login: only the
+   * federation entry, nothing else about the installation. `404 modules.inactive` while the module is switched off.
+   */
+  @Get('kiosk/:path')
+  @Public()
+  async kiosk(@Param('path') path: string): Promise<KioskFrontend> {
+    const module = this.options.modules.find((m) => m.manifest.frontend?.kiosk?.path === path);
+    if (!module?.manifest.frontend?.kiosk) throw new NotFoundException();
+    if ((await this.modules.inactiveIds()).has(module.manifest.id)) throw new NotFoundException({ code: 'modules.inactive', module: module.manifest.id });
+    const { remote, kiosk } = module.manifest.frontend;
+    return { moduleId: module.manifest.id, remote, exposed: kiosk.exposed, entry: this.options.frontendEntry(module.manifest.id) };
   }
 
   @Get('status')

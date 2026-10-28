@@ -51,7 +51,7 @@ export const IncidentSchema = defineEntity({
     alarmMessage: p.text().default(''),
     alarmedAt: p.datetime().index(),
     location: p.json<Location>(),
-    createdVia: p.string().$type<'ui' | 'api' | 'import'>().default('ui'),
+    createdVia: p.string().$type<'ui' | 'api' | 'import' | 'terminal'>().default('ui'),
     /** Costs and notes apply to the whole incident, entered by the commander (`incidents.costs`), not per report. */
     chargeable: p.boolean().default(false),
     chargeableReason: p.text().default(''),
@@ -162,6 +162,14 @@ export const ReportPersonnelSchema = defineEntity({
     compensationOverride: p.json<{ amount: number; reason: string }>().nullable(),
     injured: p.boolean().default(false),
     killed: p.boolean().default(false),
+    /** `info-terminal`: booked at an info terminal (stays as origin after the author changed the entry). */
+    bookedVia: p.string().$type<'info-terminal'>().nullable(),
+    /** When it was booked or last changed at a terminal. */
+    bookedAt: p.datetime().nullable(),
+    /** Info terminal (module `info-terminal`) that booked the entry; no foreign key across modules. */
+    terminalId: p.string().nullable(),
+    /** Booked at a terminal and not changed by a user since: the terminal may still change or remove it. */
+    terminalEditable: p.boolean().default(false),
   },
 });
 export class ReportPersonnelEntity extends ReportPersonnelSchema.class {}

@@ -84,7 +84,7 @@ export function AttendanceTab({ session, editable }: { session: Session; editabl
     setRows((rs) => {
       const merged = rs.map((r) => {
         const checkIn = fresh.find((a) => a.personId === r.personId);
-        return checkIn ? { ...r, status: 'present' as const, checkedInAt: checkIn.checkedInAt } : r;
+        return checkIn ? { ...r, ...toRow(checkIn) } : r;
       });
       return [...merged, ...fresh.filter((a) => !rs.some((r) => r.personId === a.personId)).map(toRow)];
     });
@@ -147,7 +147,7 @@ export function AttendanceTab({ session, editable }: { session: Session; editabl
                   <Text fw={700} size="sm">{name(r.personId)}</Text>
                   {unconfirmed.has(r.personId) && (
                     <Group gap={4}>
-                      <StatusBadge tone="warning">{t('attendance.viaQr')}</StatusBadge>
+                      <StatusBadge tone="warning">{t(session.attendance.find((x) => x.personId === r.personId)?.checkedInVia === 'info-terminal' ? 'attendance.viaTerminal' : 'attendance.viaQr')}</StatusBadge>
                       {editable && <Button size="compact-xs" variant="subtle" color="red" onClick={() => setDiscarding(r.personId)}>{t('attendance.discard')}</Button>}
                     </Group>
                   )}

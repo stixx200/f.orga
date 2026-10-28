@@ -52,6 +52,10 @@ export const COSTS = 'incidents.costs';
 
 const iso = (date: Date | null | undefined) => (date ? date.toISOString() : null);
 
+/** For comparing dispatch numbers and addresses: lowercase, without spaces. */
+export const normalized = (value: string | undefined | null) => (value ?? '').toLowerCase().replace(/\s+/g, '');
+const MATCH_WINDOW_MS = 2 * 3_600_000;
+
 const REVISION_WINDOW_MS = 10 * 60_000;
 const MAX_REVISIONS = 50;
 
@@ -67,6 +71,69 @@ export function addCrewVehicles(em: EntityManager, report: ReportEntity): void {
     listed.add(p.vehicleId);
     report.vehicles.add(em.create(ReportVehicleEntity, { report, vehicleId: p.vehicleId, alarmedAt: null, departedAt: null, returnedAt: null, kilometres: null }));
   }
+}
+
+type ParsedPersonnel = ParsedReportInput['personnel'][number];
+
+/** A stored personnel entry in the form of `ReportInput`. */
+export function entryToInput(p: ReportPersonnelEntity): ParsedPersonnel {
+  return {
+    personId: p.personId ?? null,
+    guestName: p.guestName,
+    vehicleId: p.vehicleId ?? null,
+    standbyStationId: p.standbyStationId ?? null,
+    function: p.function ?? null,
+    breathingApparatus: p.breathingApparatus,
+    breathingMinutes: p.breathingMinutes ?? null,
+    chemicalSuit: p.chemicalSuit,
+    breathingDevice: p.breathingDevice ?? null,
+    from: iso(p.from),
+    to: iso(p.to),
+    lossOfEarnings: p.lossOfEarnings,
+    duringWorkingHours: p.duringWorkingHours,
+    allowances: p.allowances,
+    compensationOverride: p.compensationOverride ?? null,
+    injured: p.injured,
+    killed: p.killed,
+    bookedAt: iso(p.bookedAt),
+  };
+}
+
+/** Origin of a personnel entry booked at an info terminal, carried over when the author saves the entry again. */
+export interface BookingOrigin {
+  bookedVia: 'info-terminal';
+  bookedAt: Date | null;
+  terminalId: string | null;
+}
+
+const time = (value: string | Date | null | undefined) => (value ? new Date(value).getTime() : null);
+
+/** Does the entry sent by the client say the same as the stored one (as far as `applyContent` stores it)? */
+function sameEntry(input: ParsedPersonnel, stored: ReportPersonnelEntity): boolean {
+  const breathing = input.breathingApparatus;
+  return (
+    (input.vehicleId ?? null) === (stored.vehicleId ?? null) &&
+    (input.standbyStationId ?? null) === (stored.standbyStationId ?? null) &&
+    (input.function ?? null) === (stored.function ?? null) &&
+    breathing === stored.breathingApparatus &&
+    (breathing ? input.breathingMinutes : null) === (stored.breathingMinutes ?? null) &&
+    (breathing && input.chemicalSuit) === stored.chemicalSuit &&
+    (breathing ? input.breathingDevice : null) === (stored.breathingDevice ?? null) &&
+    time(input.from) === time(stored.from) &&
+    time(input.to) === time(stored.to) &&
+    input.lossOfEarnings === stored.lossOfEarnings &&
+    input.duringWorkingHours === stored.duringWorkingHours &&
+    JSON.stringify(input.allowances) === JSON.stringify(stored.allowances) &&
+    JSON.stringify(input.compensationOverride ?? null) === JSON.stringify(stored.compensationOverride ?? null) &&
+    input.injured === stored.injured &&
+    input.killed === stored.killed
+  );
+}
+
+/** Latest `bookedAt` of the personnel of a report, `null` without terminal bookings. Needs `personnel` loaded. */
+export function latestBookingAt(report: ReportEntity): string | null {
+  const times = report.personnel.getItems().flatMap((p) => (p.bookedAt ? [p.bookedAt.getTime()] : []));
+  return times.length ? new Date(Math.max(...times)).toISOString() : null;
 }
 
 /** The editable content of a stored report, in the form of `ReportInput`. */
@@ -87,25 +154,7 @@ export function reportToInput(report: ReportEntity): ParsedReportInput {
     incidentCommander: report.incidentCommander,
     weather: report.weather,
     equipment: report.equipment,
-    personnel: report.personnel.getItems().map((p) => ({
-      personId: p.personId ?? null,
-      guestName: p.guestName,
-      vehicleId: p.vehicleId ?? null,
-      standbyStationId: p.standbyStationId ?? null,
-      function: p.function ?? null,
-      breathingApparatus: p.breathingApparatus,
-      breathingMinutes: p.breathingMinutes ?? null,
-      chemicalSuit: p.chemicalSuit,
-      breathingDevice: p.breathingDevice ?? null,
-      from: iso(p.from),
-      to: iso(p.to),
-      lossOfEarnings: p.lossOfEarnings,
-      duringWorkingHours: p.duringWorkingHours,
-      allowances: p.allowances,
-      compensationOverride: p.compensationOverride ?? null,
-      injured: p.injured,
-      killed: p.killed,
-    })),
+    personnel: report.personnel.getItems().map(entryToInput),
     vehicles: report.vehicles.getItems().map((v) => ({
       vehicleId: v.vehicleId,
       alarmedAt: iso(v.alarmedAt),
@@ -273,7 +322,7 @@ export class ReportsService {
     if (!(await em.count(AlarmKeywordEntity, { key }))) throw new BadRequestException({ code: 'incidents.unknownKeyword', key });
   }
 
-  async createIncident(em: EntityManager, input: ReturnType<typeof IncidentInput.parse>, via: 'ui' | 'api' | 'import'): Promise<IncidentEntity> {
+  async createIncident(em: EntityManager, input: ReturnType<typeof IncidentInput.parse>, via: 'ui' | 'api' | 'import' | 'terminal'): Promise<IncidentEntity> {
     await this.requireKeyword(em, input.alarmKeyword);
     const alarmedAt = new Date(input.alarmedAt);
     let dispatchNumber = input.dispatchNumber;
@@ -296,6 +345,44 @@ export class ReportsService {
       location: input.location,
       createdVia: via,
     });
+  }
+
+  /** Incidents with the dispatch number, ignoring case and spaces. */
+  async findByDispatchNumber(em: EntityManager, dispatchNumber: string): Promise<IncidentEntity[]> {
+    const pattern = dispatchNumber.trim().replace(/[\\%_]/g, (c) => `\\${c}`).replace(/\s+/g, '%');
+    const candidates = await em.find(IncidentEntity, { dispatchNumber: { $ilike: pattern } }, { populate: ['reports'], limit: 20 });
+    return candidates.filter((i) => normalized(i.dispatchNumber) === normalized(dispatchNumber));
+  }
+
+  /**
+   * Existing incidents that may be the one about to be created, newest first, at most 10: the same dispatch number
+   * (ignoring case and spaces), or within two hours of the alarm the same keyword or the same location (street, or
+   * the city where a street is missing). With `reports` loaded.
+   */
+  async matchingIncidents(
+    em: EntityManager,
+    query: { dispatchNumber?: string | null; alarmKeyword?: string | null; alarmedAt: string; street?: string | null; city?: string | null },
+  ): Promise<IncidentEntity[]> {
+    const alarmedAt = new Date(query.alarmedAt);
+    const number = normalized(query.dispatchNumber);
+    const street = normalized(query.street);
+    const city = normalized(query.city);
+    const nearby = await em.find(
+      IncidentEntity,
+      { alarmedAt: { $gte: new Date(alarmedAt.getTime() - MATCH_WINDOW_MS), $lte: new Date(alarmedAt.getTime() + MATCH_WINDOW_MS) } },
+      { populate: ['reports'], orderBy: { alarmedAt: 'desc' }, limit: 200 },
+    );
+    const sameNumber = number ? await this.findByDispatchNumber(em, query.dispatchNumber as string) : [];
+    const samePlace = (i: IncidentEntity) => {
+      const otherStreet = normalized(i.location.street);
+      const otherCity = normalized(i.location.city);
+      if (street && otherStreet) return street === otherStreet && (!city || !otherCity || city === otherCity);
+      return Boolean(city) && city === otherCity;
+    };
+    const found = new Map<string, IncidentEntity>();
+    for (const i of sameNumber) found.set(i.id, i);
+    for (const i of nearby) if ((query.alarmKeyword && i.alarmKeyword === query.alarmKeyword) || samePlace(i)) found.set(i.id, i);
+    return [...found.values()].toSorted((a, b) => b.alarmedAt.getTime() - a.alarmedAt.getTime()).slice(0, 10);
   }
 
   /** Tells other modules about a new incident (e.g. the duty officer module adds its report); after the commit. */
@@ -353,19 +440,61 @@ export class ReportsService {
     return report;
   }
 
-  /** Validates and applies the content; releasers lock the report by editing it. */
+  /**
+   * Validates and applies the content; releasers lock the report by editing it. Bookings of an info terminal the
+   * client did not know yet stay (see `mergeBookings`).
+   */
   async save(em: EntityManager, report: ReportEntity, input: ParsedReportInput, user: AuthenticatedUser): Promise<void> {
     assertVersion(report, input.version);
     await this.assertNotLedExternally(report);
-    const personIds = input.personnel.flatMap((p) => (p.personId ? [p.personId] : []));
+    const { personnel, preserve, origins } = this.mergeBookings(report, input);
+    const result = { ...input, personnel: [...[...preserve].map(entryToInput), ...personnel] };
+    const personIds = result.personnel.flatMap((p) => (p.personId ? [p.personId] : []));
     const context = await this.contexts.load(personIds, input.times.alarmedAt);
-    await this.validateReferences(report, context, input);
-    await this.recordRevision(em, report, input, user);
+    await this.validateReferences(report, context, result);
+    await this.recordRevision(em, report, result, user);
     // Other systems sending their own times leave the flag out: their end counts as confirmed.
     report.endConfirmed = input.endConfirmed ?? true;
-    this.applyContent(em, report, input);
+    this.applyContent(em, report, { ...input, personnel }, { preserve, origins });
     report.managedBy = null;
     this.lockBy(report, user);
+  }
+
+  /**
+   * Bookings of an info terminal change the personnel without changing the version of the report, so the editor of
+   * the author may not know them. Of the stored entries booked at a terminal and not changed by a user since:
+   * - booked or changed after the latest booking the client knows (`bookingsKnownAt`): kept, the client's entry for
+   *   the person is ignored;
+   * - known and sent unchanged (same `bookedAt` and content): kept as it is, still editable at the terminal;
+   * - known and changed by the client: the client's entry applies and belongs to the author from now on;
+   * - known and left out: removed by the user.
+   * An entry the client still sends with `bookedAt` while nothing is stored for the person was removed at the
+   * terminal meanwhile and is not added again.
+   */
+  private mergeBookings(report: ReportEntity, input: ParsedReportInput) {
+    const known = input.bookingsKnownAt;
+    const knownAt = known === undefined ? undefined : known ? new Date(known).getTime() : 0;
+    const stored = report.personnel.getItems();
+    const storedPersons = new Set(stored.flatMap((p) => (p.personId ? [p.personId] : [])));
+    const sent = new Map(input.personnel.flatMap((p) => (p.personId ? [[p.personId, p] as const] : [])));
+    const preserve = new Set<ReportPersonnelEntity>();
+    const origins = new Map<string, BookingOrigin>();
+    for (const entry of stored) {
+      if (!entry.personId || !entry.bookedVia) continue;
+      const origin: BookingOrigin = { bookedVia: entry.bookedVia, bookedAt: entry.bookedAt ?? null, terminalId: entry.terminalId ?? null };
+      const own = sent.get(entry.personId);
+      if (!entry.terminalEditable) {
+        origins.set(entry.personId, origin);
+        continue;
+      }
+      const unknown = knownAt !== undefined && (entry.bookedAt?.getTime() ?? 0) > knownAt;
+      const unchanged = Boolean(own?.bookedAt && entry.bookedAt && new Date(own.bookedAt).getTime() === entry.bookedAt.getTime() && sameEntry(own, entry));
+      if (unknown || unchanged) preserve.add(entry);
+      else if (own) origins.set(entry.personId, origin);
+    }
+    const kept = new Set([...preserve].map((p) => p.personId));
+    const personnel = input.personnel.filter((p) => !p.personId || (!kept.has(p.personId) && !(p.bookedAt && !storedPersons.has(p.personId))));
+    return { personnel, preserve, origins };
   }
 
   /**
@@ -384,8 +513,8 @@ export class ReportsService {
         savedAt: new Date(now.getTime() - 1),
       });
     }
-    // The content of a version is the report, not the version number the client sent.
-    const { version: _version, ...content } = input;
+    // The content of a version is the report, not the version number or the known bookings the client sent.
+    const { version: _version, bookingsKnownAt: _known, ...content } = input;
     if (latest && latest.userId === user.id && now.getTime() - latest.savedAt.getTime() < REVISION_WINDOW_MS) {
       latest.content = content as unknown as Record<string, unknown>;
       latest.savedAt = now;
@@ -413,8 +542,16 @@ export class ReportsService {
     return `${prefix}${String(highest + 1).padStart(3, '0')}`;
   }
 
-  /** Replaces the editable content of a report including all child lists. */
-  applyContent(em: EntityManager, report: ReportEntity, input: ParsedReportInput): void {
+  /**
+   * Replaces the editable content of a report including all child lists. `preserve`: personnel entries kept as they
+   * are (bookings of an info terminal); `origins`: the terminal origin of entries the author saves again, by person.
+   */
+  applyContent(
+    em: EntityManager,
+    report: ReportEntity,
+    input: ParsedReportInput,
+    options: { preserve?: ReadonlySet<ReportPersonnelEntity>; origins?: ReadonlyMap<string, BookingOrigin> } = {},
+  ): void {
     em.assign(report, {
       authorPersonId: input.authorPersonId,
       alarmedAt: new Date(input.times.alarmedAt),
@@ -429,8 +566,9 @@ export class ReportsService {
       weather: input.weather,
       equipment: input.equipment,
     });
-    report.personnel.removeAll();
+    for (const p of report.personnel.getItems()) if (!options.preserve?.has(p)) report.personnel.remove(p);
     for (const p of input.personnel) {
+      const origin = p.personId ? options.origins?.get(p.personId) : undefined;
       report.personnel.add(
         em.create(ReportPersonnelEntity, {
           report,
@@ -451,6 +589,10 @@ export class ReportsService {
           compensationOverride: p.compensationOverride,
           injured: p.injured,
           killed: p.killed,
+          bookedVia: origin?.bookedVia ?? null,
+          bookedAt: origin?.bookedAt ?? null,
+          terminalId: origin?.terminalId ?? null,
+          terminalEditable: false,
         }),
       );
     }
@@ -610,6 +752,9 @@ export class ReportsService {
         compensationOverride: p.compensationOverride ?? null,
         injured: p.injured,
         killed: p.killed,
+        bookedVia: p.bookedVia ?? null,
+        bookedAt: iso(p.bookedAt),
+        terminalEditable: p.terminalEditable,
         compensation: computeCompensation(
           { ...times, guest: !p.personId, standby: Boolean(p.standbyStationId), duringWorkingHours: p.duringWorkingHours, allowances: p.allowances, override: p.compensationOverride ?? null },
           ctx.settings,
@@ -675,6 +820,7 @@ export class ReportsService {
       findings: await this.findings(em, report, ctx),
       compensationTotal: Math.round(personnel.reduce((sum, p) => sum + p.compensation.amount, 0) * 100) / 100,
       version: report.version,
+      latestBookingAt: latestBookingAt(report),
     };
   }
 

@@ -1,4 +1,5 @@
 import type { ForgaModule } from '@forga/core-api';
+import { infoTerminalModule } from '@forga/info-terminal-api';
 import { dutyOfficerModule } from '@forga/duty-officer-api';
 import { clothingModule } from '@forga/clothing-api';
 import { promotionsModule } from '@forga/promotions-api';
@@ -11,4 +12,4 @@ import { incidentsModule } from '@forga/incidents-api';
 import { masterdataModule } from '@forga/masterdata-api';
 
 /** Feature modules built into this server image. */
-export const INSTALLED_MODULES: ForgaModule[] = [masterdataModule, incidentsModule, trainingModule, respiratoryProtectionModule, compensationModule, equipmentModule, costRecoveryModule, promotionsModule, clothingModule, dutyOfficerModule];
+export const INSTALLED_MODULES: ForgaModule[] = [masterdataModule, incidentsModule, trainingModule, respiratoryProtectionModule, compensationModule, equipmentModule, costRecoveryModule, promotionsModule, clothingModule, dutyOfficerModule, infoTerminalModule];

@@ -245,6 +245,7 @@ export function PersonnelSection({ content, report, update, disabled, findings }
                       {p.breathingApparatus && <StatusBadge tone="done">{t('personnel.breathing')}</StatusBadge>}
                       {p.chemicalSuit && <StatusBadge tone="done">{t('personnel.chemicalSuit')}</StatusBadge>}
                       {p.guestName && <StatusBadge>{t('personnel.guestBadge')}</StatusBadge>}
+                      {p.bookedAt && <StatusBadge tone="highlight">{t('personnel.terminalBadge')}</StatusBadge>}
                       {p.duringWorkingHours && <StatusBadge>{t('personnel.workingHours')}</StatusBadge>}
                       {(p.from || p.to) && <StatusBadge>{t('personnel.ownTimes')}</StatusBadge>}
                     </span>

@@ -11,8 +11,8 @@ export interface IncidentCreatedEvent {
   dispatchNumber: string;
   alarmKeyword: string;
   alarmedAt: string;
-  /** `import`: data taken over from another system (e.g. MP-Feuer), usually historic. */
-  createdVia: 'ui' | 'api' | 'import';
+  /** `import`: data taken over from another system (e.g. MP-Feuer), usually historic; `terminal`: at an info terminal. */
+  createdVia: 'ui' | 'api' | 'import' | 'terminal';
   /** Units whose report the creator asked for; the module owning the unit creates it, whatever its settings say. */
   units?: string[];
   /** Person of the creator; writes a requested unit report when nobody else is on duty. */

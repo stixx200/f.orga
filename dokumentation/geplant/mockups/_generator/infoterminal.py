@@ -7,17 +7,23 @@ ABBRECHEN = '<button class="knopf" value="abbrechen">Abbrechen</button>'
 WACHE = 'Feuerwehrhaus Musterstadt'
 
 
-def tk(pfad, titel, inhalt, *, dialoge='', uhr='14:32', wache=WACHE):
-    """Kiosk-Seite: kein Shell-Rahmen, keine Navigation, keine Anmeldung. Kopf mit Wache, Uhr und Sprache."""
+def tk(pfad, titel, inhalt, *, dialoge='', uhr='14:32', wache=WACHE, heim='start.html'):
+    """Kiosk-Seite: kein Shell-Rahmen, keine Navigation, keine Anmeldung. Kopf mit Wache, Uhr und Sprache.
+
+    Außer auf der Übersicht selbst steht links im Kopf immer die große Schaltfläche „Zurück zur Übersicht“.
+    Der Kopf klebt oben, die Schaltfläche ist also auf jedem Bildschirm und auch beim Scrollen erreichbar."""
+    knopf = (f'<a class="tk-heim" href="{heim}">{sym("start")}<span>Zurück zur Übersicht</span></a>'
+             if heim else '')
     rumpf = ('<div class="tk">' + mockup_hinweis('{P}') +
-             '<header class="tk-kopf"><img src="{P}assets/logo.svg" alt="Wappen">'
+             f'<header class="tk-kopf">{knopf}<img src="{{P}}assets/logo.svg" alt="Wappen">'
              '<div class="tk-wache"><span class="kicker">Infoterminal · Freiwillige Feuerwehr Musterstadt</span>'
              f'<strong>{wache}</strong></div><span class="tk-uhr" translate="no">{uhr}</span>{SPRACHE}</header>'
              f'<main class="tk-inhalt" id="inhalt">{inhalt}</main>{FUSS}</div>')
     seite(pfad, titel, rumpf, ohne_rahmen=True, dialoge=dialoge)
 
 
-def zurueck(ziel, text='‹ Übersicht'):
+def zurueck(ziel, text):
+    """Schritt zurück innerhalb eines Ablaufs (z. B. zur Namensliste); zur Übersicht führt die Schaltfläche im Kopf."""
     return f'<a class="tk-zurueck" href="{ziel}">{text}</a>'
 
 
@@ -76,7 +82,7 @@ tk('infoterminal/start.html', 'Infoterminal', umschalter('ft') + '''
   <a class="tk-neu" href="neuer-einsatz.html">+ Neuer Einsatz</a>
 </div>
 <p class="meta">Eintragen geht während eines Einsatzes und bis eine Stunde nach seinem Ende, bei Diensten ab 30 Minuten vor Beginn bis eine Stunde nach dem Ende. Ohne eingetragenes Einsatzende schließt das Eintragen 6 Stunden nach dem Alarm. Den Bericht schreibt weiterhin der Verfasser in f.orga.</p>
-''')
+''', heim=False)
 
 tk('infoterminal/start-jugend.html', 'Infoterminal', umschalter('jf') + '''
 <div class="tk-titel"><h1>Wofür möchten Sie sich eintragen?</h1><span class="meta">Freitag, 23.10.2026 · Jugendfeuerwehr Musterstadt</span></div>
@@ -85,7 +91,7 @@ tk('infoterminal/start-jugend.html', 'Infoterminal', umschalter('jf') + '''
     <span class="fuss-zeile"><span class="plakette ok">9 eingetragen</span><span class="meta">Eintragen bis 17:30</span></span></a>
 </div>
 <p class="meta">Die Jugendfeuerwehr schreibt keine Einsatzberichte. In ihrer Ansicht stehen deshalb nur Dienste und kein „Neuer Einsatz“.</p>
-''')
+''', heim=False)
 
 # ---------- Personenauswahl ----------
 MITGLIEDER = [
@@ -102,7 +108,7 @@ def name_kachel(nach, vor, gebucht, ziel='buchung.html'):
     return f'<a class="tk-name" href="{ziel}"><strong>{vor} {nach}</strong><span class="meta">Abt. Musterstadt</span></a>'
 
 
-tk('infoterminal/personen.html', 'Wer sind Sie?', umschalter('ft') + zurueck('start.html') + '''
+tk('infoterminal/personen.html', 'Wer sind Sie?', umschalter('ft') + '''
 <div class="tk-titel"><div><span class="meta">Einsatz · Alarm 13:12 · Musterstadt, Lindenweg 4</span><h1>B3 Brand Scheune: Wer sind Sie?</h1></div>
 <a class="knopf" href="eingetragen.html">Eingetragen (5)</a></div>
 <div class="tk-buchstaben" aria-label="Nach Anfangsbuchstaben springen"><a class="aktiv" href="#">Alle</a><a href="#">B</a><a href="#">F</a><a href="#">G</a><a href="#">H</a><a href="#">K</a><a href="#">L</a><a href="#">M</a><a href="#">O</a><a href="#">R</a><a href="#">S</a><a href="#">U</a><a href="#">V</a><a href="#">W</a><a href="#">Z</a></div>
@@ -187,7 +193,7 @@ tk('infoterminal/eingetragen.html', 'Eingetragen', zurueck('personen.html', '‹
            ABBRECHEN + '<button class="knopf primaer" value="ok">Austragen</button>', gefahr=True))
 
 # ---------- Neuer Einsatz ----------
-tk('infoterminal/neuer-einsatz.html', 'Neuer Einsatz', zurueck('start.html') + '''
+tk('infoterminal/neuer-einsatz.html', 'Neuer Einsatz', '''
 <div class="tk-titel"><h1>Neuer Einsatz</h1><span class="meta">Legt den Einsatz und den Bericht der Abteilung Musterstadt an</span></div>
 <section class="tk-abschnitt">
   <div class="feld"><label class="pflicht">Stichwort</label><select><option>– bitte wählen –</option><option selected>TH-Wasser · Wasser im Gebäude / Unwetter</option><option>B1 · Kleinbrand</option><option>B2 · Brand Wohnung</option><option>TH1 · Technische Hilfe klein</option><option>B-BMA · Brandmeldeanlage</option></select></div>
@@ -210,7 +216,7 @@ tk('infoterminal/neuer-einsatz.html', 'Neuer Einsatz', zurueck('start.html') + '
     '<a class="knopf" href="personen.html">Nein, neuen Einsatz anlegen</a>'))
 
 # ---------- Dienst ----------
-tk('infoterminal/dienst.html', 'Dienst eintragen', umschalter('jf') + zurueck('start-jugend.html') + '''
+tk('infoterminal/dienst.html', 'Dienst eintragen', umschalter('jf') + '''
 <div class="tk-titel"><div><span class="meta">Dienst · heute 14:00–16:30 · Jugendfeuerwehr Musterstadt</span><h1>Jugendfeuerwehrdienst: Leon Hartmann</h1></div><span class="plakette gelb">Eintragen bis 17:30</span></div>
 <section class="tk-abschnitt">
   <h2>Anwesend</h2>
@@ -223,7 +229,7 @@ tk('infoterminal/dienst.html', 'Dienst eintragen', umschalter('jf') + zurueck('s
 <div class="meldung warnung"><span class="ic">!</span><span>Die Eintragung ist vorläufig, bis der Verantwortliche die Anwesenheit speichert, wie beim QR-Check-in.</span></div>
 <section class="tk-abschnitt"><h2>Schon anwesend (9)</h2><p class="meta" style="margin:0">Mia Bauer, Finn Eberle, Lea Graf, Noah Kunz, Emma Lang, Ben Moser, Lina Ott, Paul Roth, Sophie Weber</p></section>
 <div class="tk-leiste"><a class="knopf" href="start-jugend.html">Abbrechen</a><a class="knopf primaer gross" href="start-jugend.html">Anwesend eintragen</a></div>
-''')
+''', heim='start-jugend.html')
 
 # ---------- Nichts offen ----------
 tk('infoterminal/leer.html', 'Infoterminal', '''
@@ -232,7 +238,7 @@ tk('infoterminal/leer.html', 'Infoterminal', '''
   <h1>Gerade ist nichts zum Eintragen offen</h1>
   <p class="neben">Einsätze erscheinen hier ab dem Alarm, Dienste 30 Minuten vor Beginn. Nächster Dienst: <strong>Dienstag, 27.10. 19:00 · Übung Atemschutz</strong>.</p>
   <a class="knopf primaer gross" href="neuer-einsatz.html">+ Neuer Einsatz</a>
-</div>''', uhr='09:15')
+</div>''', uhr='09:15', heim=False)
 
 # ---------- Ungültig / widerrufen ----------
 tk('infoterminal/gesperrt.html', 'Infoterminal nicht freigeschaltet', '''
@@ -241,7 +247,7 @@ tk('infoterminal/gesperrt.html', 'Infoterminal nicht freigeschaltet', '''
   <h1>Dieses Gerät ist nicht als Infoterminal freigeschaltet</h1>
   <p class="neben">Der Link ist ungültig oder wurde widerrufen. Bitte wenden Sie sich an den Abteilungskommandanten oder den Administrator. Er richtet das Gerät unter „Verwaltung → Infoterminals“ oder auf der Seite der Wache neu ein.</p>
   <p class="meta">Es werden keine Daten angezeigt. Fehlercode <code translate="no">info-terminal.invalidKey</code></p>
-</div>''', wache='Infoterminal', uhr='14:32')
+</div>''', wache='Infoterminal', uhr='14:32', heim=False)
 
 # ---------- Verwaltung ----------
 seite('infoterminal/verwaltung.html', 'Infoterminals', '''

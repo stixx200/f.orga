@@ -33,7 +33,7 @@ Feuerwehr (Gesamtwehr, genau eine je Installation)
 | Lehrgangsvormerkung | Eine Person ist für einen Lehrgang vorgesehen. Grundlage der Lehrgangsplanung. |
 | Nachweis | Ein datiertes Ereignis mit Gültigkeit: Eignungsuntersuchung, Belastungsübung, Unterweisung, Geräteprüfung. |
 | Erinnerung | Hinweis auf einen fällig werdenden Nachweis. |
-| Infoterminal | Gerät an einer Wache, an dem sich Einsatzkräfte ohne Benutzerkonto während und bis kurz nach einem Einsatz oder Dienst selbst eintragen (geplant, siehe [Modul Infoterminal](module/infoterminal.md)). |
+| Infoterminal | Gerät an einer Wache, an dem sich Einsatzkräfte ohne Benutzerkonto während und bis kurz nach einem Einsatz oder Dienst selbst eintragen (siehe [Modul Infoterminal](../implementiert/architektur.md#modul-infoterminal-info-terminal)). |
 
 ## Querschnittsthemen
 
@@ -263,13 +263,16 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Fachbegriff | Code |
 | --- | --- |
 | Infoterminal (Gerät an einer Wache) | terminal (`TerminalEntity`), Modul `info-terminal` |
-| Geräteschlüssel, Einrichtungslink | device key (`fit_…`, gespeichert als `keyHash`, `keyPrefix`), Cookie `forga_terminal` |
+| Geräteschlüssel, Einrichtungslink | device key (`fit_…`, gespeichert als `keyHash`, `keyPrefix`), Link `…/terminal#k=…`, Cookie `forga_terminal` |
 | Abteilungen des Terminals, Abteilungsansicht | `departmentIds` am Terminal, gewählte Abteilung `departmentId` je Kiosk-Anfrage |
-| Link anzeigen (verschlüsselt gespeicherter Schlüssel) | `keyCiphertext`, Server-Schlüssel `FORGA_SECRET_KEY`, Audit `info-terminal.link-shown` |
-| Eintragung am Terminal | booking; im Einsatzbericht `bookedVia: 'info-terminal'`, in der Anwesenheit `checkedInVia: 'info-terminal'` |
-| Zeitfenster | booking window (`afterEndMinutes`, `openEndHours`) |
+| Link anzeigen (verschlüsselt gespeicherter Schlüssel) | `keyEncrypted`, Server-Schlüssel `FORGA_SECRET_KEY`, Audit `info-terminal.link-shown` |
+| Neuer Link, Widerrufen | rotate (`info-terminal.key-rotated`), revoke (`revokedAt`) |
+| Zuletzt gesehen | `lastSeenAt` |
+| Eintragung am Terminal | booking (`INCIDENTS_TERMINAL_BOOKING`), check-in (`TRAINING_TERMINAL_CHECK_IN`); im Einsatzbericht `bookedVia: 'info-terminal'`, `bookedAt`, `terminalId`, „am Terminal änderbar“ `terminalEditable`; in der Anwesenheit `checkedInVia: 'info-terminal'` |
+| Namenskacheln, Namenssuche | members, person search (`/kiosk/members`, `/kiosk/persons`) |
+| Zeitfenster | booking window (`bookingWindow()`, `afterEndMinutes`, `openEndHours`); bei Diensten `terminalCheckInWindow()` |
 | Neuer Einsatz am Terminal | `createdVia: 'terminal'` |
-| Kiosk-Seite | kiosk, API `/api/info-terminal/kiosk/…` |
+| Kiosk-Seite | kiosk, Shell-Route `/terminal` (`frontend.kiosk` im Manifest), API `/api/info-terminal/kiosk/…` |
 | Fahrzeugbeschriftung „Bezeichnung · Funkrufname (Abteilung)“ | `vehicleLabel(vehicle, departmentShortName)` |
 
 ### Modul-IDs
@@ -289,4 +292,4 @@ Die Modul-ID ist zugleich das Präfix der Berechtigungen und der Pfad in API und
 | Beförderungen | `promotions` |
 | Kleiderkammer | `clothing` |
 | Einsatzleiter vom Dienst | `duty-officer` |
-| Infoterminal (geplant) | `info-terminal` |
+| Infoterminal | `info-terminal` |

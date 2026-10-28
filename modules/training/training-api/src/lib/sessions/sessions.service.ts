@@ -259,7 +259,7 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
     if (session.status === 'closed') throw new ConflictException({ code: 'training.closed' });
     const row = session.attendance.getItems().find((a) => a.personId === personId);
     if (!row?.checkedInAt || row.confirmed) throw new ConflictException({ code: 'training.noUnconfirmedCheckIn' });
-    if (row.note) Object.assign(row, { status: 'excused', checkedInAt: null, confirmed: true });
+    if (row.note) Object.assign(row, { status: 'excused', checkedInAt: null, checkedInVia: null, confirmed: true });
     else session.attendance.remove(row);
     session.status = session.attendance.getItems().some((a) => a.status === 'present') ? 'held' : 'planned';
     await em.flush();
@@ -442,9 +442,9 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
       // Already recorded present by the person responsible: nothing to confirm.
       if (existing.status !== 'present') existing.confirmed = false;
       existing.status = 'present';
-      existing.checkedInAt ??= now;
+      if (!existing.checkedInAt) Object.assign(existing, { checkedInAt: now, checkedInVia: 'qr' });
     } else {
-      session.attendance.add(em.create(AttendanceEntity, { session, personId: user.personId, status: 'present', checkedInAt: now, confirmed: false, breathingApparatus: false, injured: false }));
+      session.attendance.add(em.create(AttendanceEntity, { session, personId: user.personId, status: 'present', checkedInAt: now, checkedInVia: 'qr', confirmed: false, breathingApparatus: false, injured: false }));
     }
     session.status = session.status === 'planned' ? 'held' : session.status;
     await em.flush();
@@ -490,6 +490,7 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
         passed: a.passed ?? null,
         injured: a.injured,
         checkedInAt: iso(a.checkedInAt),
+        checkedInVia: a.checkedInVia ?? null,
         confirmed: a.confirmed,
         note: a.note,
       })),

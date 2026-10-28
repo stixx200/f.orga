@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import type { BrigadeSettings } from '@forga/core-contracts';
 import type { Department, DepartmentGroup, MembershipInput, Station, Vehicle } from '@forga/masterdata-contracts';
-import { api, can, send, useSession, useTranslation } from '@forga/web-sdk';
+import { api, can, extensionsOf, send, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, EmptyState, KpiTile, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, loadPerson, MANAGE, PERSONS_WRITE, personName, READ, useDepartments, useGroups, usePersons, useStations, useVehicles } from '../api';
 import { DeleteDepartment, DepartmentDialog, GroupDialog, StationDialog, VehicleDialog } from './dialogs';
@@ -177,6 +177,22 @@ function Groups({ department, canEdit, edit }: { department: Department; canEdit
   );
 }
 
+/**
+ * Contributions of other modules to the stations of the department (extension point `masterdata.station.sections`,
+ * props `{ station }`), e.g. the info terminals of a station. Each contribution decides itself whether it shows anything.
+ */
+function StationSections({ stations }: { stations: Station[] }) {
+  const session = useSession().data;
+  const sections = extensionsOf('masterdata.station.sections').filter((e) => !e.permission || can(session, e.permission));
+  if (!sections.length) return null;
+  return stations.flatMap((station) =>
+    sections.map((section) => {
+      const Section = section.component;
+      return <Section key={`${section.module}-${station.id}`} station={station} />;
+    }),
+  );
+}
+
 function Detail({ department, edit }: { department: Department; edit: (editing: Editing) => void }) {
   const { t, i18n } = useTranslation('masterdata');
   const session = useSession().data;
@@ -259,6 +275,7 @@ function Detail({ department, edit }: { department: Department; edit: (editing: 
           ]}
         />
       </Panel>
+      <StationSections stations={own.stations} />
       {(canManage || can(session, READ, department.id)) && <Groups department={department} canEdit={canManage} edit={edit} />}
       <Members department={department} canEdit={canMembers} />
     </Stack>

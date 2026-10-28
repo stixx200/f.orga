@@ -53,7 +53,7 @@ export interface IncidentInfo {
   dispatchNumber: string;
   alarmKeyword: string;
   alarmedAt: string;
-  createdVia: 'ui' | 'api' | 'import';
+  createdVia: 'ui' | 'api' | 'import' | 'terminal';
 }
 
 /**

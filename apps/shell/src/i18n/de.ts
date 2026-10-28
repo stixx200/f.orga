@@ -6,6 +6,7 @@ export const de = {
   serverUnavailable: 'Server nicht erreichbar',
   moduleUnavailable: 'Modul {{name}} nicht verfügbar',
   notFound: 'Diese Seite gibt es nicht.',
+  kioskInactive: 'Diese Seite ist abgeschaltet: Das Modul ist nicht aktiv.',
   nav: {
     overview: 'Übersicht',
     start: 'Startseite',
@@ -287,6 +288,7 @@ export const de = {
       promotions: 'Beförderungsregeln, jährliche Beförderungsliste mit Beschluss und Durchführung.',
       clothing: 'Kleiderkammer: Schutzkleidung und Dienstkleidung, Ausgabe und Rücknahme, Größen, Waschen und Imprägnieren.',
       'duty-officer': 'Einsatzleiter vom Dienst: EvD-Dienstplan mit Tagespauschalen und ein EvD-Bericht für jeden Einsatz.',
+      'info-terminal': 'Infoterminal an der Wache: Einsatzkräfte tragen sich nach Einsätzen und Diensten selbst ein, mit Fahrzeug, Funktion und Angaben für die Entschädigung.',
     },
     noDescription: 'Zusatzmodul (Plugin) ohne Beschreibung.',
   },

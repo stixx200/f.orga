@@ -61,6 +61,7 @@ Alle Pfade liegen unter `/api`.
 | `GET` | `/core/onboarding` | `core.settings.manage` oder `core.users.manage` | Einrichtungsliste (`OnboardingItem[]`: `key`, `done`, `to`, bei Modulen `label`) |
 | `GET` | `/core/modules` | angemeldet | Aktive Module mit Name, Navigation und `frontend.entry` (`/modules/<id>/remoteEntry.js`) |
 | `GET` | `/core/modules/status` | `core.modules.manage` | Alle installierten Module mit Name, Version, `active`, `requires` und `optional` |
+| `GET` | `/core/modules/kiosk/:path` | offen | Kiosk-Seite eines aktiven Moduls (`KioskFrontend`: `moduleId`, `remote`, `exposed`, `entry`), z. B. `terminal`. Inaktiv: `404 modules.inactive` |
 | `PUT` | `/core/modules/:id` | `core.modules.manage` | Aktivieren/Deaktivieren (`ModuleActivation`). Fehler: `modules.requirementsInactive`, `modules.requiredByActive` |
 | `GET` | `/core/history/:entity/:id` | Prüfung des Moduls (`HistoryAccessRegistry`), sonst eine Berechtigung des Moduls von `:entity` | Historieneinträge des Datensatzes und seiner Kinddatensätze (`parentEntity`/`parentId`), neueste zuerst. Maskierte Felder haben `hidden: true`. Ohne Leserecht `404`. `:entity` z. B. `masterdata.person` |
 | `GET` | `/core/codes?code=` | angemeldet; Treffer je nach Rechten im Modul | Gegenstände mit genau diesem Code (`SearchHit[]`): Barcode, RFID-Chip (Trennzeichen und Schreibweise egal), Inventar-, Seriennummer oder URL eines QR-Etiketts |
@@ -201,7 +202,7 @@ Abteilungsbezogene Rechte gelten für die Abteilung des Berichts. Wer `incidents
 | `PUT` | `/incidents/incidents/:id/costs` | `incidents.costs` | Kosten und Bemerkungen des ganzen Einsatzes (`IncidentCosts`: `chargeable`, `chargeableReason` – Pflicht, wenn kostenpflichtig –, `notes`, `version`); auch nach der Freigabe der Berichte |
 | `POST` | `/incidents/incidents/:id/reports` | `incidents.reports.write` für die Abteilung | Bericht für eine weitere Abteilung anlegen (`NewReportInput`), auch bei einem Einsatz, den der Benutzer noch nicht lesen darf. Fehler: `incidents.reportExists` (`409`) |
 | `GET` | `/incidents/reports/:id` | `incidents.reports.read` | Bericht (`Report`) mit Entschädigung je Person, `compensationTotal`, `findings`. Ohne Leserecht `404` |
-| `PUT` | `/incidents/reports/:id` | `incidents.reports.read`, Schreibrecht am Bericht | Inhalt speichern (`ReportUpdate`: `ReportInput` mit Pflichtfeld `version`). Fehler: `conflict.stale`, `incidents.reportReleased`, `incidents.reportLocked`, `incidents.notDraft` (`403`), `incidents.unknownPerson`, `incidents.unknownVehicle`, `incidents.personTwiceInReport` |
+| `PUT` | `/incidents/reports/:id` | `incidents.reports.read`, Schreibrecht am Bericht | Inhalt speichern (`ReportUpdate`: `ReportInput` mit Pflichtfeld `version`; `bookingsKnownAt` und `personnel[].bookedAt` für den Abgleich mit Eintragungen vom Infoterminal). Fehler: `conflict.stale`, `incidents.reportReleased`, `incidents.reportLocked`, `incidents.notDraft` (`403`), `incidents.unknownPerson`, `incidents.unknownVehicle`, `incidents.personTwiceInReport` |
 | `GET` | `/incidents/reports/:id/pdf?lang` | `incidents.reports.read` | Bericht als PDF |
 | `GET` | `/incidents/reports/:id/previous-crew?vehicleId` | `incidents.reports.read` | Besatzung des Fahrzeugs im letzten früheren Bericht der Abteilung (`PreviousCrew`) |
 | `PUT` | `/incidents/incidents/:id/statistics` | `incidents.reports.read`, dazu Schreibrecht an einem Bericht des Einsatzes oder `incidents.reports.release` (Gesamtwehr) | Statistik des Einsatzes setzen oder entfernen (`StatisticsUpdate`: `statistics` oder `null`, `version` des Einsatzes), ohne neue Freigabe. Schreiber nur, solange einer ihrer Berichte ein ungesperrter Entwurf ist. Fehler: `auth.forbidden`, `incidents.statisticsSubmitted` (`403`), `incidents.statisticsClosed` (`409`, Jahresstatistik abgeschlossen), `incidents.statisticsNotCounted` (`400`), `conflict.stale` |
@@ -279,6 +280,42 @@ Alle Rechte gelten für die Gesamtwehr.
 | `GET` | `/clothing/persons/:personId` | `clothing.read` für eine Abteilung der Person, sonst `404` | Zugeordnete Stücke, Verlauf und Größen (`PersonClothing`) |
 | `PUT` | `/clothing/persons/:personId/sizes` | `clothing.issue` für eine Abteilung der Person | Größen der Person je Artikel (`SizeProfileInput`); leere und unbekannte Artikel entfallen. Eine Größe muss eine des Artikels sein, außer sie war schon gespeichert (`clothing.unknownSize`) |
 | `GET` | `/clothing/me` | `clothing.self` | Eigene Schutzausrüstung |
+
+## Info terminal
+
+**Verwaltung.** Abteilungsrechte; ändernde Aktionen brauchen `info-terminal.manage` für alle Abteilungen des Terminals (vorher und nachher), sonst `auth.forbidden`. Unbekannte oder nicht lesbare Terminals: `404`. Widerrufene Terminals: `409 info-terminal.revoked`.
+
+| Methode | Pfad | Recht | Zweck |
+| --- | --- | --- | --- |
+| `GET` | `/info-terminal/terminals?includeRevoked` | `info-terminal.read` | Terminals, zu deren Abteilungen eine lesbare gehört (`Terminal[]`, nie mit Schlüssel oder Link) |
+| `POST` | `/info-terminal/terminals` | `info-terminal.manage` | Anlegen (`TerminalInput`); Antwort `TerminalLink` mit dem Link. Fehler: `info-terminal.unknownStation`, `masterdata.unknownDepartment`, `info-terminal.noPublicUrl` (`503`), `info-terminal.noSecretKey` (`503`) |
+| `PUT` | `/info-terminal/terminals/:id` | `info-terminal.manage` | Bezeichnung, Abteilungen, erlaubte Aktionen, Sprache ändern (`TerminalUpdate` mit `version`) |
+| `POST` | `/info-terminal/terminals/:id/link` | `info-terminal.manage` | Link erneut anzeigen (`{ purpose: 'show' \| 'copy' \| 'open' }`), Audit `info-terminal.link-shown`. Fehler: `info-terminal.linkUnavailable` (`409`, Server-Schlüssel geändert) |
+| `POST` | `/info-terminal/terminals/:id/rotate` | `info-terminal.manage` | Neuer Link; der alte gilt sofort nicht mehr |
+| `POST` | `/info-terminal/terminals/:id/revoke` | `info-terminal.manage` | Widerrufen, endgültig |
+
+**Kiosk.** Offen für den Auth-Guard, angemeldet wird mit dem Cookie `forga_terminal` (Sitzungen und API-Tokens gelten nicht). Ändernde Methoden brauchen `x-forga: 1`. `departmentId` (Abfrage bzw. Body) muss eine Abteilung des Terminals sein (`403 info-terminal.departmentNotAllowed`). Fehler: `info-terminal.invalidKey` (`401`), `info-terminal.revoked` (`403`), `info-terminal.tooManyAttempts` bzw. `info-terminal.tooManyRequests` (`429`), `info-terminal.windowClosed` (`409`).
+
+| Methode | Pfad | Zweck |
+| --- | --- | --- |
+| `POST` | `/info-terminal/kiosk/session` | Schlüssel aus dem Link (`{ key }`) gegen das Cookie tauschen; Antwort `KioskTerminal` |
+| `GET` | `/info-terminal/kiosk/terminal` | Wache, Abteilungen des Umschalters, erlaubte Aktionen, Sprache, Einstellungen, Serverzeit |
+| `GET` | `/info-terminal/kiosk/overview?departmentId` | Einsätze und Dienste im Zeitfenster, bald öffnende Dienste, nächster Dienst (`KioskOverview`) |
+| `GET` | `/info-terminal/kiosk/members?departmentId` | Namenskacheln |
+| `GET` | `/info-terminal/kiosk/persons?departmentId&q` | Namenssuche (ab 3 Zeichen, höchstens 10) |
+| `GET` | `/info-terminal/kiosk/reports/:reportId?departmentId` | Bericht für das Terminal (`KioskReport`: Eintragungen, Personen anderer Berichte, Fahrzeuge, Funktionen). Fehler: `info-terminal.notOperational` (`403`), `info-terminal.reportNotFound` (`404`) |
+| `PUT` | `/info-terminal/kiosk/reports/:reportId/entries/:personId` | Eintragen oder ändern (`TerminalBookingInput` und `departmentId`). Fehler: `incidents.notDraft`, `incidents.reportLocked`, `incidents.reportReleased` (`403`), `incidents.unknownPerson`, `incidents.unknownVehicle`, `info-terminal.unknownFunction`, `info-terminal.endBeforeStart` (`400`), `info-terminal.personInOtherReport`, `info-terminal.entryLocked`, `incidents.ledByMpFeuer` (`409`, Bericht von MP-Feuer geführt) |
+| `DELETE` | `/info-terminal/kiosk/reports/:reportId/entries/:personId?departmentId` | Eintragung vom Terminal austragen (`204`). Fehler: `info-terminal.entryNotFound`, `info-terminal.entryLocked` |
+| `GET` | `/info-terminal/kiosk/keywords` | Alarmstichworte für „Neuer Einsatz“ |
+| `POST` | `/info-terminal/kiosk/incidents/matches` | Passende Einsätze mit Mindestdaten (`KioskIncidentInput`, `KioskMatch[]`) |
+| `POST` | `/info-terminal/kiosk/incidents` | Einsatz mit Bericht anlegen oder mit `joinIncidentId` den Bericht der Abteilung hinzufügen; Antwort `{ reportId }`. Fehler: `info-terminal.newIncidentNotAllowed` (`403`), `info-terminal.alarmTooOld`, `info-terminal.alarmInFuture` (`400`), `info-terminal.incidentNotFound` (`404`), `incidents.ledByMpFeuer` (`409`, vorhandener Bericht der Abteilung von MP-Feuer geführt) |
+| `GET` | `/info-terminal/kiosk/sessions/:sessionId?departmentId` | Dienst mit Anwesenden (`KioskSessionDetail`). Fehler: `info-terminal.trainingNotAllowed` (`403`), `info-terminal.sessionNotFound` (`404`), `training.closed` (`409`) |
+| `PUT` | `/info-terminal/kiosk/sessions/:sessionId/attendance/:personId` | Anwesenheit eintragen oder ändern (`TerminalCheckInInput` und `departmentId`), unbestätigt. Fehler: `training.unknownPerson`, `training.attendanceOutsideSession`, `info-terminal.entryLocked` |
+| `DELETE` | `/info-terminal/kiosk/sessions/:sessionId/attendance/:personId?departmentId` | Unbestätigte Eintragung vom Terminal entfernen |
+
+**Einstellungsabschnitt** `info-terminal.general`: `afterEndMinutes`, `openEndHours`, `maxAlarmAgeHours`, `idleSeconds`, `notSeenWarningDays`.
+
+**Verträge anderer Module für das Infoterminal:** `INCIDENTS_TERMINAL_BOOKING` (Einsatzberichte), `TRAINING_TERMINAL_CHECK_IN` (Dienste, optional).
 
 ## Inaktive Module
 

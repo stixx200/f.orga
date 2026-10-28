@@ -49,10 +49,23 @@ export const ModuleManifest = z.object({
   permissions: z.array(Permission).default([]),
   navigation: z.array(NavigationEntry).default([]),
   roles: z.array(RoleTemplate).default([]),
-  /** Federation name and exposed entry of the frontend package, e.g. `masterdata_web` / `./Module`. */
-  frontend: z.object({ remote: z.string(), exposed: z.string() }).optional(),
+  /**
+   * Federation name and exposed entry of the frontend package, e.g. `masterdata_web` / `./Module`. `kiosk`: a page
+   * without shell frame and login the shell serves under `/<path>` (e.g. the info terminal at `/terminal`).
+   */
+  frontend: z
+    .object({
+      remote: z.string(),
+      exposed: z.string(),
+      kiosk: z.object({ path: z.string().regex(/^[a-z][a-z0-9-]*$/), exposed: z.string() }).optional(),
+    })
+    .optional(),
 });
 export type ModuleManifest = z.input<typeof ModuleManifest>;
+
+/** The kiosk page of an active module (`GET /api/core/modules/kiosk/:path`, without login). */
+export const KioskFrontend = z.object({ moduleId: z.string(), remote: z.string(), exposed: z.string(), entry: z.string() });
+export type KioskFrontend = z.infer<typeof KioskFrontend>;
 
 /** Database schema of a module: its ID with dashes replaced by underscores. */
 export function schemaName(moduleId: string): string {

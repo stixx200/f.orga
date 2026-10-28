@@ -4,14 +4,14 @@ import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useMemo } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import type { Session } from '@forga/core-contracts';
-import { api, can, currentLanguage, setLanguage, useSession, useTranslation } from '@forga/web-sdk';
+import { api, ApiError, can, currentLanguage, setLanguage, useSession, useTranslation } from '@forga/web-sdk';
 import { EmptyState } from '@forga/web-ui';
 import { LoginPage } from './auth/LoginPage';
 import { ConfirmEmailPage } from './auth/ConfirmEmailPage';
 import { ResetPasswordPage } from './auth/ResetPasswordPage';
 import { SetupPage } from './auth/SetupPage';
 import { AppFrame } from './frame/AppFrame';
-import { type LoadedModule, loadModules } from './modules';
+import { KIOSK_PATHS, type LoadedModule, loadKiosk, loadModules } from './modules';
 import { AuditPage } from './pages/admin/AuditPage';
 import { ModulesPage } from './pages/admin/ModulesPage';
 import { RolesPage } from './pages/admin/RolesPage';
@@ -80,7 +80,20 @@ function LoggedIn({ session }: { session: Session }) {
   return <Router modules={modules} session={session} />;
 }
 
+/** A page of a module without shell frame and login, e.g. the info terminal at `/terminal`. */
+function KioskPage({ path }: { path: string }) {
+  const { t } = useTranslation('shell');
+  const { data, error } = useQuery({ queryKey: ['core', 'kiosk', path], queryFn: () => loadKiosk(path), retry: false, staleTime: Infinity });
+  if (error instanceof ApiError && error.status === 404) return <EmptyState title={t(error.code === 'modules.inactive' ? 'kioskInactive' : 'notFound')} />;
+  if (error) return <Alert color="brand" title={t('serverUnavailable')} m="xl">{error.message}</Alert>;
+  if (!data) return <Loader m="xl" />;
+  const Kiosk = data.component;
+  return <Kiosk />;
+}
+
 export function App() {
+  const kiosk = KIOSK_PATHS.find((path) => window.location.pathname === `/${path}` || window.location.pathname.startsWith(`/${path}/`));
+  if (kiosk) return <KioskPage path={kiosk} />;
   if (window.location.pathname === '/reset-password') return <ResetPasswordPage />;
   if (window.location.pathname === '/confirm-email') return <ConfirmEmailPage />;
   return <Main />;

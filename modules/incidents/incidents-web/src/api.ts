@@ -43,12 +43,21 @@ export function useIncident(id: string) {
   return useQuery({ queryKey: keys.incident(id), queryFn: () => api<Incident>(`incidents/incidents/${id}`) });
 }
 
+/** Drafts are reloaded this often, so bookings of info terminals show up in the editor. */
+const BOOKINGS_REFRESH_MS = 30_000;
+
 /**
  * The report. Not refetched on window focus: the editor keeps its own content and version, a refetch in the
- * background must not make the cached report look newer than what the editor saves.
+ * background must not make the cached report look newer than what the editor saves. Drafts are reloaded regularly
+ * for the bookings of info terminals (they do not change the version; the editor takes them over).
  */
 export function useReport(id: string) {
-  return useQuery({ queryKey: keys.report(id), queryFn: () => api<Report>(`incidents/reports/${id}`), refetchOnWindowFocus: false });
+  return useQuery({
+    queryKey: keys.report(id),
+    queryFn: () => api<Report>(`incidents/reports/${id}`),
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) => (query.state.data?.status === 'draft' && !query.state.data.locked ? BOOKINGS_REFRESH_MS : false),
+  });
 }
 
 /** IDs of the active modules (e.g. to link to the compensation module instead of duplicating it). */

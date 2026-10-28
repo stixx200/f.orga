@@ -11,6 +11,7 @@ services:
       DATABASE_URL: postgresql://forga:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is missing}@db:5432/forga
       # Set to true as soon as f.orga is served via HTTPS.
       FORGA_SECURE_COOKIES: ${FORGA_SECURE_COOKIES:-false}
+      FORGA_SECRET_KEY: ${FORGA_SECRET_KEY:-}
       # Plugin packages (.tgz) and the trusted keys of their publishers (comma separated, base64).
       FORGA_PLUGIN_DIR: /plugins
       FORGA_PLUGIN_KEYS: ${FORGA_PLUGIN_KEYS:-}

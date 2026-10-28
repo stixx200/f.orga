@@ -6,7 +6,7 @@ import { notifyError } from '@forga/web-ui';
 import { keys } from '../api';
 
 /** The report content in the form `PUT /incidents/reports/:id` expects. */
-export type Content = Required<Omit<ReportInput, 'version'>>;
+export type Content = Required<Omit<ReportInput, 'version' | 'bookingsKnownAt'>>;
 export type Personnel = Content['personnel'][number];
 
 const DEBOUNCE_MS = 800;
@@ -48,6 +48,14 @@ export function toContent(report: Report): Content {
 }
 
 export type SaveState = { status: 'idle' | 'pending' | 'saving' | 'saved' | 'failed' | 'conflict'; savedAt: Date | null };
+
+/** Bookings of an info terminal in the report (person and time of the booking), to notice new or changed ones. */
+const bookingsOf = (report: Report) =>
+  report.personnel
+    .filter((p) => p.bookedAt)
+    .map((p) => `${p.personId}@${p.bookedAt}`)
+    .toSorted()
+    .join('|');
 
 /** Unsaved content kept in the browser, so a closed tab or a lost connection loses nothing. */
 interface Buffered {
@@ -152,6 +160,10 @@ export function useReportEditor(report: Report, userId: string) {
   });
   const current = useRef(content);
   const version = useRef(report.version);
+  // Bookings of info terminals the content contains; sent with every save so the server keeps newer ones.
+  const knownAt = useRef(report.latestBookingAt);
+  const knownBookings = useRef(bookingsOf(report));
+  const [newBookings, setNewBookings] = useState(0);
   const pending = useRef<Content | null>(null);
   const conflict = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -178,7 +190,7 @@ export function useReportEditor(report: Report, userId: string) {
       saving.current = true;
       setSaveState((s) => ({ ...s, status: 'saving' }));
       try {
-        const saved = await send<Report>('PUT', `incidents/reports/${report.id}`, { ...body, version: version.current });
+        const saved = await send<Report>('PUT', `incidents/reports/${report.id}`, { ...body, version: version.current, bookingsKnownAt: knownAt.current });
         version.current = saved.version;
         queryClient.setQueryData(keys.report(report.id), saved);
         retry.current.attempt = 0;
@@ -232,6 +244,8 @@ export function useReportEditor(report: Report, userId: string) {
     pending.current = null;
     conflict.current = false;
     version.current = next.version;
+    knownAt.current = next.latestBookingAt;
+    knownBookings.current = bookingsOf(next);
     current.current = toContent(next);
     buffer(null);
     setContent(current.current);
@@ -276,6 +290,22 @@ export function useReportEditor(report: Report, userId: string) {
   useEffect(() => {
     if (report.version > version.current && !pending.current && !conflict.current && !saving.current) reset(report);
   }, [report, reset]);
+
+  // Bookings of an info terminal do not change the version: the personnel is reloaded regularly and taken over
+  // while nothing is pending (otherwise at the next chance; the server keeps them meanwhile).
+  useEffect(() => {
+    if (report.version !== version.current || pending.current || conflict.current || saving.current) return;
+    const bookings = bookingsOf(report);
+    if (bookings === knownBookings.current) return;
+    const known = new Set(knownBookings.current.split('|'));
+    const added = bookings.split('|').filter((b) => b && !known.has(b)).length;
+    knownAt.current = report.latestBookingAt;
+    knownBookings.current = bookings;
+    current.current = toContent(report);
+    setContent(current.current);
+    if (added) setNewBookings((count) => count + added);
+  }, [report]);
+  const dismissBookings = useCallback(() => setNewBookings(0), []);
   const discardLocal = useCallback(() => {
     buffer(null);
     setRestorable(null);
@@ -307,7 +337,7 @@ export function useReportEditor(report: Report, userId: string) {
     };
   }, [flush]);
 
-  return { content, update, flush, reset, saveState, restorable, restoreLocal, discardLocal, loadServer, keepMine };
+  return { content, update, flush, reset, saveState, restorable, restoreLocal, discardLocal, loadServer, keepMine, newBookings, dismissBookings };
 }
 
 export type StepId = 'times' | 'personnel' | 'narrative' | 'other' | 'check';

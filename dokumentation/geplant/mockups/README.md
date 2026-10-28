@@ -2,7 +2,7 @@
 
 **Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben.
 
-Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stammdaten und Einsatzberichte, dazu das geplante Modul Infoterminal (Kiosk-Seite je Wache). Sie funktionieren nicht und enthalten nur erfundene Daten. Farben, Schrift, Tabellen sowie Kopf- und Fußzeile folgen `Stil.md`.
+Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stammdaten und Einsatzberichte, dazu das Modul Infoterminal (Kiosk-Seite je Wache). Sie funktionieren nicht und enthalten nur erfundene Daten. Farben, Schrift, Tabellen sowie Kopf- und Fußzeile folgen `Stil.md`.
 
 ## Öffnen
 
@@ -75,7 +75,7 @@ Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stam
 | | `einsatzberichte/offene-berichte.html` | Offene Berichte nach Verfasser, Verfasser zuweisen, Erinnerung mit Bestätigung |
 | | `einsatzberichte/jahresstatistik.html` | Jahresstatistik: Vorschau mit Herkunft je Wert, Plausibilitätsprüfung, Korrektur, Abschluss |
 | | `einsatzberichte/einstellungen.html` | Entschädigungssätze mit Gültigkeit, Rundung, Freigabe in zwei Stufen (abschaltbar), Stichwort-Katalog mit Einsatzhauptart und Unterkategorie, Prüfregeln, Kataloge |
-| Infoterminal (Konzept: [`module/infoterminal.md`](../module/infoterminal.md)) | `infoterminal/start.html` | Kiosk-Seite einer Wache ohne Shell-Rahmen: Abteilungsumschalter, offene Einsätze und Dienste im Zeitfenster, „+ Neuer Einsatz“ |
+| Infoterminal (umgesetzt: [Modul Infoterminal](../../implementiert/architektur.md#modul-infoterminal-info-terminal)) | `infoterminal/start.html` | Kiosk-Seite einer Wache ohne Shell-Rahmen: Abteilungsumschalter, offene Einsätze und Dienste im Zeitfenster, „+ Neuer Einsatz“ |
 | | `infoterminal/start-jugend.html` | Ansicht der Jugendfeuerwehr am selben Terminal: nur Dienste, kein „Neuer Einsatz“ |
 | | `infoterminal/personen.html` | „Wer sind Sie?“: Namenskacheln der gewählten Abteilung mit Sprungleiste, Eingetragene mit Haken, Suche über alle Personen (auch passive und Altersabteilung) |
 | | `infoterminal/buchung.html` | Eintragen: Fahrzeug (Bezeichnung · Funkrufname (Abteilung)) oder Bereitschaft, Funktion, Atemschutz, Verdienstausfall, Arbeitszeit, abweichende Zeit; bei Bereitschaft (`#bereitschaft`) ohne Atemschutz und abweichende Zeit; Bestätigung `#d-eingetragen` |

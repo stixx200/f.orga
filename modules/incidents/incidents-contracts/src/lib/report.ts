@@ -105,6 +105,11 @@ export const PersonnelEntryInput = z
     compensationOverride: z.object({ amount: z.number().min(0), reason: z.string().trim().min(1) }).nullable().default(null),
     injured: z.boolean().default(false),
     killed: z.boolean().default(false),
+    /**
+     * Booking at an info terminal as the client loaded it (`bookedAt` of the entry). An entry booked or changed at a
+     * terminal after that is kept instead of being overwritten; one removed at the terminal is not added again.
+     */
+    bookedAt: datetime.nullable().default(null),
   })
   .refine((p) => p.personId || p.guestName.trim(), { message: 'Person or guest name required', path: ['personId'] })
   .refine((p) => !(p.vehicleId && p.standbyStationId), { message: 'Vehicle or standby, not both', path: ['standbyStationId'] });
@@ -154,6 +159,12 @@ export type Weather = z.infer<typeof Weather>;
 export const ReportInput = z.object({
   /** Version the client loaded; a newer stored version means someone else saved in between. */
   version: z.number().int().optional(),
+  /**
+   * The latest terminal booking the client knows (`latestBookingAt` of the report it loaded; `null` = none). Bookings
+   * of an info terminal made or changed after it are kept although the client does not send them. Left out, the
+   * client knows all bookings (e.g. restoring a version).
+   */
+  bookingsKnownAt: datetime.nullable().optional(),
   /**
    * The end (`returnedAt`) was confirmed by the author; a new report starts with alarm + 1 h and unconfirmed.
    * Left out (e.g. by other systems that send their own times) it counts as confirmed.
@@ -268,6 +279,12 @@ export const PersonnelEntry = z.object({
   injured: z.boolean(),
   killed: z.boolean(),
   compensation: Compensation,
+  /** `info-terminal`: booked at an info terminal (badge in the editor); `null` for entries of the author. */
+  bookedVia: z.literal('info-terminal').nullable(),
+  /** When it was booked or last changed at a terminal. */
+  bookedAt: z.string().nullable(),
+  /** Booked at a terminal and not changed by a user since: the terminal may still change or remove it. */
+  terminalEditable: z.boolean(),
 });
 export type PersonnelEntry = z.infer<typeof PersonnelEntry>;
 
@@ -325,6 +342,8 @@ export const Report = z.object({
   /** Sum of the compensation of all personnel. */
   compensationTotal: z.number(),
   version: z.number(),
+  /** Latest `bookedAt` of the personnel (`null` = no terminal bookings); sent back as `bookingsKnownAt` when saving. */
+  latestBookingAt: z.string().nullable(),
 });
 export type Report = z.infer<typeof Report>;
 
@@ -351,7 +370,7 @@ export const Incident = z.object({
   alarmMessage: z.string(),
   alarmedAt: z.string(),
   location: Location,
-  createdVia: z.enum(['ui', 'api', 'import']),
+  createdVia: z.enum(['ui', 'api', 'import', 'terminal']),
   chargeable: z.boolean(),
   chargeableReason: z.string(),
   notes: z.string(),

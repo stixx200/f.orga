@@ -44,6 +44,20 @@ export function defineWebModule(module: WebModule): WebModule {
   return module;
 }
 
+/**
+ * What a module frontend hands to the shell through its kiosk entry (e.g. `./Kiosk`): a page without shell frame and
+ * login, shown under `/<path>` of the manifest (`frontend.kiosk`). It brings its own texts and authentication.
+ */
+export interface KioskModule {
+  /** UI texts; registered under the module ID as i18next namespace. */
+  translations: Translations;
+  component: ComponentType;
+}
+
+export function defineKioskModule(module: KioskModule): KioskModule {
+  return module;
+}
+
 // On `globalThis` like the i18n instance: a module frontend may evaluate its own copy of this package.
 const registry = globalThis as typeof globalThis & { forgaExtensionPoints?: Map<string, (Extension & { module: string })[]> };
 const extensionPoints = (registry.forgaExtensionPoints ??= new Map<string, (Extension & { module: string })[]>());
