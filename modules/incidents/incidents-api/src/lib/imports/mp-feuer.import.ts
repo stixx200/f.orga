@@ -28,7 +28,7 @@ import {
   type Vehicle,
 } from '@forga/masterdata-contracts';
 import { localDate } from '../domain/compensation.js';
-import { AlarmKeywordEntity, IncidentEntity, ReportPersonnelEntity } from '../incidents.entities.js';
+import { AlarmKeywordEntity, IncidentEntity, ReportEntity, ReportPersonnelEntity, ReportVehicleEntity } from '../incidents.entities.js';
 import { rememberKeywordAlias } from '../keywords/keywords.controller.js';
 import { addCrewVehicles, RELEASE, ReportsService } from '../reports/reports.service.js';
 import { statisticsFromMpFeuer } from './mp-feuer-statistics.js';
@@ -57,6 +57,10 @@ const FIELDS = [
   field('from', 'Person von', 'Person from', ['von']),
   field('to', 'Person bis', 'Person to', ['bis']),
   field('vehicle', 'Fahrzeug', 'Vehicle', ['Funkrufname', 'Bezeichnung', 'Fzg.-Nr.']),
+  // Own times and kilometres of the person's vehicle in this report (data transfer: `EIN_FAHRZ`).
+  field('vehicleDepartedAt', 'Fahrzeug ausgerückt', 'Vehicle departed', []),
+  field('vehicleReturnedAt', 'Fahrzeug eingerückt', 'Vehicle returned', []),
+  field('vehicleKilometres', 'Fahrzeug Kilometer', 'Vehicle kilometres', []),
   field('standby', 'Bereitschaft', 'Standby', ['BE']),
   field('breathing', 'Atemschutz', 'Breathing apparatus', ['AS']),
   field('lossOfEarnings', 'Verdienstausfall', 'Loss of earnings', ['V-A', 'VA', 'Verdienstausfall']),
@@ -347,19 +351,23 @@ export class MpFeuerIncidentsImport {
           messages.push({ code: 'incidents.import.unknownFunction', params: { kind: 'function', value: functionText } });
           unmatched('function', functionText);
         }
+        const vehicleId = standby ? null : (vehicle?.id ?? null);
+        const ownVehicle = vehicleId ? this.vehicleTimes(em, report, vehicleId, values) : null;
+        // Times equal to those the person inherits (vehicle, else report) are stored as `null` and follow them.
+        const inherited = { from: ownVehicle?.departedAt ?? report.alarmedAt, to: ownVehicle?.returnedAt ?? report.returnedAt };
         const from = time(values['from']);
         const to = time(values['to']);
         report.personnel.add(
           em.create(ReportPersonnelEntity, {
             report,
             personId: person.id,
-            vehicleId: standby ? null : (vehicle?.id ?? null),
+            vehicleId,
             standbyStationId: station?.id ?? null,
             function: fn?.key ?? null,
             breathingApparatus: yes(values['breathing']),
             lossOfEarnings: yes(values['lossOfEarnings']),
-            from: from && from.getTime() !== report.alarmedAt.getTime() ? from : null,
-            to: to && to.getTime() !== report.returnedAt.getTime() ? to : null,
+            from: from && from.getTime() !== inherited.from.getTime() ? from : null,
+            to: to && to.getTime() !== inherited.to.getTime() ? to : null,
             allowances: [],
           }),
         );
@@ -376,6 +384,27 @@ export class MpFeuerIncidentsImport {
     const counts = { create: 0, update: 0, unchanged: 0, error: 0 };
     for (const r of results) counts[r.action]++;
     return { dryRun, counts, rows: results.toSorted((a, b) => a.row - b.row) };
+  }
+
+  /**
+   * The vehicle of the report with the own times and kilometres of the row (times equal to those of the report are
+   * stored as `null`); added to the report if missing. Rows without vehicle times leave the vehicle as it is.
+   */
+  private vehicleTimes(em: EntityManager, report: ReportEntity, vehicleId: string, values: Record<string, string>): ReportVehicleEntity {
+    let entry = report.vehicles.getItems().find((v) => v.vehicleId === vehicleId);
+    if (!entry) {
+      entry = em.create(ReportVehicleEntity, { report, vehicleId, departedAt: null, returnedAt: null, kilometres: null });
+      report.vehicles.add(entry);
+    }
+    const departed = time(values['vehicleDepartedAt']);
+    const returned = time(values['vehicleReturnedAt']);
+    const kilometres = Number.parseInt((values['vehicleKilometres'] ?? '').trim(), 10);
+    if (departed || returned) {
+      entry.departedAt = departed && departed.getTime() !== report.alarmedAt.getTime() ? departed : null;
+      entry.returnedAt = returned && returned.getTime() !== report.returnedAt.getTime() ? returned : null;
+    }
+    if (Number.isFinite(kilometres) && kilometres >= 0) entry.kilometres = kilometres;
+    return entry;
   }
 
   /** Unit by key, name or short name, e.g. `duty-officer`, "Einsatzleiter vom Dienst", "EvD". */

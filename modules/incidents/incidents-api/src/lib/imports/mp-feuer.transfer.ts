@@ -3,7 +3,8 @@ import { groupRows, type TransferArchive, transferFlag, transferPersonName, tran
 /**
  * Reports (`EIN_STAMM`) with their personnel (`EIN_PERS`, child rows with `EIN_INDEX` = `EIN_ID`). The report fields are
  * only in the first row of a report, the personnel rows repeat the key (department, incident number, begin).
- * Personnel numbers of MP-Feuer are counted per department, so persons are passed by name.
+ * Personnel numbers of MP-Feuer are counted per department, so persons are passed by name. The own times and kilometres
+ * of a person's vehicle in the report (`EIN_FAHRZ`, by `EIN_INDEX` and `EIN_FZG_INDEX`) come with each personnel row.
  */
 export function readIncidents(archives: readonly TransferArchive[]): TransferRow[] {
   const persons = transferPersons(archives);
@@ -11,6 +12,10 @@ export function readIncidents(archives: readonly TransferArchive[]): TransferRow
   for (const archive of archives) {
     if (!archive.has('EIN_STAMM') || !archive.has('EIN_PERS')) continue;
     const personnel = groupRows(archive.query(`select * from EIN_PERS order by EIN_PER_ZEIT_V`), 'EIN_INDEX');
+    // Vehicles per report with their own times and kilometres, keyed by report and vehicle.
+    const vehicles = new Map(
+      (archive.has('EIN_FAHRZ') ? archive.query('select * from EIN_FAHRZ') : []).map((v) => [`${v['EIN_INDEX']}|${v['EIN_FZG_INDEX']}`, v]),
+    );
     for (const s of archive.query(`select * from EIN_STAMM where EIN_ZEIT_V <> '' order by EIN_ZEIT_V`)) {
       const key = { department: archive.label, incidentNumber: s['EIN_NR'] || s['EIN_ID'], begin: s['EIN_ZEIT_V'] };
       rows.push({
@@ -44,6 +49,7 @@ export function readIncidents(archives: readonly TransferArchive[]): TransferRow
       });
       for (const p of personnel.get(s['EIN_ID']) ?? []) {
         const person = persons.get(p['EIN_PER_INDEX']);
+        const vehicle = p['EIN_FZG_INDEX'] ? vehicles.get(`${s['EIN_ID']}|${p['EIN_FZG_INDEX']}`) : undefined;
         rows.push({
           archive: archive.key,
           values: {
@@ -52,6 +58,9 @@ export function readIncidents(archives: readonly TransferArchive[]): TransferRow
             from: p['EIN_PER_ZEIT_V'],
             to: p['EIN_PER_ZEIT_B'],
             vehicle: p['EIN_FZG_RUFNAME'] || p['EIN_FZG_BEZEICHNUNG'],
+            vehicleDepartedAt: vehicle?.['EIN_FZG_ZEIT_AUS'] || vehicle?.['EIN_FZG_ZEIT_ALARM'] || '',
+            vehicleReturnedAt: vehicle?.['EIN_FZG_ZEIT_EIN'] ?? '',
+            vehicleKilometres: vehicle?.['EIN_FZG_KILOMETER'] ?? '',
             standby: transferFlag(p['EIN_PER_MERKMAL_BE']),
             breathing: transferFlag(p['EIN_PER_MERKMAL_AS']),
             lossOfEarnings: transferFlag(p['EIN_PER_MERKMAL_VA']),

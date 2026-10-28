@@ -3,6 +3,7 @@ import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { assertVersion, Audit, type AuthenticatedUser, berlinDayAfter, berlinDayStart, DomainEvents } from '@forga/core-api';
 import {
   type Acknowledgement,
+  effectiveTimes,
   IncidentInput,
   type Finding,
   type IncidentCreatedEvent,
@@ -16,6 +17,7 @@ import {
   type ReportStatus,
   type ReportUnlockedEvent,
   type StatisticsSuggestion,
+  type VehicleTimes,
 } from '@forga/incidents-contracts';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
 import { type FitnessLookup, RESPIRATORY_PROTECTION_FITNESS } from '@forga/respiratory-protection-contracts';
@@ -123,12 +125,23 @@ export const REPORT_POPULATE = ['incident', 'personnel', 'vehicles', 'involvedPa
 type ParsedReportInput = ReturnType<typeof ReportInput.parse>;
 
 
-/** Begin and end of a personnel entry; `null` in the database means the times of the report. */
+/** Own times of a vehicle of the report (`null` = those of the report); needs `vehicles` loaded. */
+export function vehicleTimes(report: ReportEntity, vehicleId: string | null | undefined): VehicleTimes | null {
+  if (!vehicleId) return null;
+  const vehicle = report.vehicles.getItems().find((v) => v.vehicleId === vehicleId);
+  return vehicle ? { departedAt: iso(vehicle.departedAt), returnedAt: iso(vehicle.returnedAt) } : null;
+}
+
+/**
+ * Begin and end of a personnel entry: own times, else those of the person's vehicle, else those of the report
+ * (`null` in the database means inherited). Persons on standby follow the report. Needs `vehicles` loaded.
+ */
 export function assignmentTimes(entry: ReportPersonnelEntity, report: ReportEntity): { from: string; to: string } {
-  return {
-    from: (entry.from ?? report.alarmedAt).toISOString(),
-    to: (entry.to ?? report.returnedAt).toISOString(),
-  };
+  return effectiveTimes(
+    { from: iso(entry.from), to: iso(entry.to) },
+    { alarmedAt: report.alarmedAt.toISOString(), returnedAt: report.returnedAt.toISOString() },
+    entry.standbyStationId ? null : vehicleTimes(report, entry.vehicleId),
+  );
 }
 
 /** Uses the keyword and the incident city to pre-fill the statistics. */
@@ -451,7 +464,7 @@ export class ReportsService {
     const incident = report.incident;
     const keyword = context.keywords.get(incident.alarmKeyword);
     const kind = keyword?.compensationKind ?? 'incident';
-    const siblings = await em.find(ReportEntity, { incident, id: { $ne: report.id } }, { populate: ['personnel'] });
+    const siblings = await em.find(ReportEntity, { incident, id: { $ne: report.id } }, { populate: ['personnel', 'vehicles'] });
     const personIds = report.personnel.getItems().flatMap((p) => (p.personId ? [p.personId] : []));
 
     // Assignments of the same persons in other incidents around the same time.
@@ -467,7 +480,7 @@ export class ReportsService {
               returnedAt: { $gte: new Date(report.alarmedAt.getTime() - window) },
             },
           },
-          { populate: ['report.incident'] },
+          { populate: ['report.incident', 'report.vehicles'] },
         )
       : [];
 
@@ -523,6 +536,7 @@ export class ReportsService {
         otherIncidents: others.flatMap((o) =>
           o.personId ? [{ dispatchNumber: o.report.incident.dispatchNumber, personId: o.personId, ...assignmentTimes(o, o.report) }] : [],
         ),
+        vehicleTimes: report.vehicles.getItems().map((v) => ({ vehicleId: v.vehicleId, departedAt: iso(v.departedAt), returnedAt: iso(v.returnedAt) })),
         vehicles: new Map([...context.vehicles.values()].map((v) => [v.id, { seats: v.seats, designation: v.designation }])),
         qualifications: new Map([...context.persons.values()].map((p) => [p.id, p.qualifications])),
         persons: new Map([...context.persons.values()].map((p) => [p.id, { status: p.status, departmentIds: p.departmentIds, birthDate: p.birthDate }])),
@@ -824,7 +838,7 @@ export class ReportsService {
 
   /**
    * Moves the alarm time of the reports that still start with the old alarm time of the incident, and with it
-   * the default end (alarm + 1 h) of reports whose end is not confirmed, and personnel starting at the old time.
+   * the default end (alarm + 1 h) of reports whose end is not confirmed, and personnel and vehicles starting at the old time.
    */
   moveAlarm(incident: IncidentEntity, previous: Date, next: Date): void {
     const shift = next.getTime() - previous.getTime();
@@ -835,6 +849,9 @@ export class ReportsService {
       if (!report.endConfirmed) report.returnedAt = new Date(report.returnedAt.getTime() + shift);
       for (const p of report.personnel.isInitialized() ? report.personnel.getItems() : []) {
         if (p.from && p.from.getTime() === previous.getTime()) p.from = next;
+      }
+      for (const v of report.vehicles.isInitialized() ? report.vehicles.getItems() : []) {
+        if (v.departedAt && v.departedAt.getTime() === previous.getTime()) v.departedAt = next;
       }
     }
   }

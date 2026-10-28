@@ -2,9 +2,11 @@ import {
   DEFAULT_RULE_LEVELS,
   type IncidentSettings,
   type IncidentStatistics,
+  inheritedTimes,
   type MainType,
   type RuleId,
   type RuleLevel,
+  type VehicleTimes,
 } from '@forga/incidents-contracts';
 
 const HOUR = 3_600_000;
@@ -59,6 +61,8 @@ export interface RuleInput {
   sameIncident: { department: string; assignments: Pick<Assignment, 'personId' | 'from' | 'to'>[] }[];
   /** Assignments of the same persons in other incidents. */
   otherIncidents: { dispatchNumber: string; personId: string; from: string; to: string }[];
+  /** Own times of the vehicles of the report (`null` = the times of the report); vehicles missing here have none. */
+  vehicleTimes?: readonly ({ vehicleId: string } & VehicleTimes)[];
   /** Seats and designation per vehicle ID. */
   vehicles: ReadonlyMap<string, { seats: number; designation: string }>;
   /** Valid qualification keys per person ID. */
@@ -146,6 +150,19 @@ export function evaluateRules(input: RuleInput, settings: IncidentSettings): Raw
     if (input.primary ? reportFrom !== incidentAlarm : reportFrom < incidentAlarm) add('incident-time-differs');
   }
 
+  // Vehicles with own times: departed before returned (else an error) and within the times of the report.
+  const vehicleName = (id: string) => input.vehicles.get(id)?.designation ?? id;
+  const ownVehicleTimes = new Map<string, VehicleTimes>();
+  for (const v of input.vehicleTimes ?? []) {
+    if (!v.departedAt && !v.returnedAt) continue;
+    ownVehicleTimes.set(v.vehicleId, v);
+    const window = inheritedTimes(input.times, v);
+    if (time(window.to)! <= time(window.from)!) add('vehicle-times-invalid', v.vehicleId, { vehicle: vehicleName(v.vehicleId) });
+    else if (reportTo > reportFrom && (time(window.from)! < reportFrom || time(window.to)! > reportTo)) {
+      add('vehicle-times-outside', v.vehicleId, { vehicle: vehicleName(v.vehicleId) });
+    }
+  }
+
   const vehicleRequired = (input.keyword?.requiresVehicle ?? true) && (input.unit?.vehicleRequired ?? true);
   const crew = new Map<string, number>();
 
@@ -154,7 +171,12 @@ export function evaluateRules(input: RuleInput, settings: IncidentSettings): Raw
     const invalid = new Date(p.to) <= new Date(p.from);
     if (invalid) add('times-invalid', p.key, { person: p.label });
     else if (durationHours(p) > long) add('personnel-duration-long', p.key, { person: p.label, hours: long });
-    if (!invalid && reportTo > reportFrom && (time(p.from)! < reportFrom || time(p.to)! > reportTo)) add('personnel-times-outside', p.key, { person: p.label });
+    // Persons on a vehicle with own times are compared with the vehicle, the others with the report.
+    const vehicle = p.vehicleId && !p.standbyStationId ? ownVehicleTimes.get(p.vehicleId) : undefined;
+    const window = vehicle ? inheritedTimes(input.times, vehicle) : { from: input.times.alarmedAt, to: input.times.returnedAt };
+    if (!invalid && reportTo > reportFrom && time(window.to)! > time(window.from)! && (time(p.from)! < time(window.from)! || time(p.to)! > time(window.to)!)) {
+      add('personnel-times-outside', p.key, vehicle ? { person: p.label, vehicle: vehicleName(p.vehicleId!) } : { person: p.label });
+    }
     if (p.duringWorkingHours && p.lossOfEarnings) add('working-hours-and-loss-of-earnings', p.key, { person: p.label });
     if (p.rateMissing) add('rate-missing', p.key, { person: p.label });
     if (p.vehicleId) crew.set(p.vehicleId, (crew.get(p.vehicleId) ?? 0) + 1);

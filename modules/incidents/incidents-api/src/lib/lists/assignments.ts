@@ -75,7 +75,7 @@ export class AssignmentLines {
 
     const reports = await this.em
       .fork()
-      .find(ReportEntity, { $and: where }, { populate: ['incident', 'personnel'], orderBy: { alarmedAt: 'asc' } });
+      .find(ReportEntity, { $and: where }, { populate: ['incident', 'personnel', 'vehicles'], orderBy: { alarmedAt: 'asc' } });
     const personIds = reports.flatMap((r) => r.personnel.getItems().flatMap((p) => (p.personId ? [p.personId] : [])));
     const [settings, keywords, departments, persons] = await Promise.all([
       this.contexts.settingsOnly(),

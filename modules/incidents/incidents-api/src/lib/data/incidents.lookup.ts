@@ -93,7 +93,7 @@ export class IncidentsLookupService implements IncidentsLookup {
   }
 
   async compensationPreview(incidentId: string, statute: { rates: CompensationRate[]; rounding: Rounding; minimumHours: number | null }): Promise<CompensationPreview | null> {
-    const incident = await this.em.fork().findOne(IncidentEntity, incidentId, { populate: ['reports', 'reports.personnel'] });
+    const incident = await this.em.fork().findOne(IncidentEntity, incidentId, { populate: ['reports', 'reports.personnel', 'reports.vehicles'] });
     if (!incident) return null;
     const settings = { ...(await this.contexts.settingsOnly()), ...statute };
     const keyword = await this.em.fork().findOne(AlarmKeywordEntity, { key: incident.alarmKeyword });

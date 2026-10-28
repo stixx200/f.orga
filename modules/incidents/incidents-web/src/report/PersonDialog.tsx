@@ -1,10 +1,11 @@
 import { Button, Group, NumberInput, Radio, Select, SimpleGrid, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { useState } from 'react';
-import type { Compensation } from '@forga/incidents-contracts';
-import { formatMoney, fromLocalInput, toLocalInput, useLocalized, useTranslation } from '@forga/web-sdk';
+import { type Compensation, inheritedTimes } from '@forga/incidents-contracts';
+import { formatDateTime, formatMoney, fromLocalInput, toLocalInput, useLocalized, useTranslation } from '@forga/web-sdk';
 import { ResponsiveDialog } from '@forga/web-ui';
 import { useFunctions } from '../api';
-import type { Personnel } from './editor';
+import { type Content, type Personnel, vehicleOf } from './editor';
+import { StandbyAction } from './StandbyAction';
 
 export interface Target {
   value: string;
@@ -20,13 +21,19 @@ export const placeOf = (target: string): Pick<Personnel, 'vehicleId' | 'standbyS
   standbyStationId: target.startsWith('s:') ? target.slice(2) : null,
 });
 
-/** Function, place, times, breathing apparatus and compensation details of one person in the report. */
-export function PersonDialog({ name, entry, targets, compensation, times, disabled, onSave, onRemove, onClose }: {
+/**
+ * Function, place, times, breathing apparatus and compensation details of one person in the report. Without own
+ * times the person follows the vehicle (if it has own times), else the report; one click puts the person on standby.
+ */
+export function PersonDialog({ name, entry, targets, standbyStations, compensation, times, vehicles, disabled, onSave, onRemove, onClose }: {
   name: string;
   entry: Personnel;
   targets: Target[];
+  /** Stations of the report's department for the standby action. */
+  standbyStations: { id: string; name: string }[];
   compensation?: Compensation;
   times: { alarmedAt: string; returnedAt: string };
+  vehicles: Content['vehicles'];
   disabled: boolean;
   onSave: (entry: Personnel) => void;
   onRemove: () => void;
@@ -39,6 +46,10 @@ export function PersonDialog({ name, entry, targets, compensation, times, disabl
   const [draft, setDraft] = useState<Personnel>(entry);
   const set = <K extends keyof Personnel>(key: K, value: Personnel[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const damage = draft.killed ? 'killed' : draft.injured ? 'injured' : 'none';
+  // Times the person follows without own ones: those of the vehicle at the chosen place, else those of the report.
+  const vehicle = vehicleOf({ vehicles }, draft);
+  const inherited = inheritedTimes(times, vehicle);
+  const [own, setOwn] = useState(Boolean(entry.from || entry.to));
   const time = (key: 'from' | 'to', fallback: string) => (
     <TextInput
       label={t(`person.${key}`)}
@@ -70,15 +81,21 @@ export function PersonDialog({ name, entry, targets, compensation, times, disabl
     >
       <Stack gap="sm">
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          <Select
-            label={t('person.place')}
-            data={targets}
-            value={targetOf(draft)}
-            onChange={(value) => setDraft((d) => ({ ...d, ...placeOf(value ?? '') }))}
-            placeholder={t('person.noPlace')}
-            clearable
-            disabled={disabled}
-          />
+          <Group gap="xs" align="end" wrap="nowrap">
+            <Select
+              label={t('person.place')}
+              data={targets}
+              value={targetOf(draft)}
+              onChange={(value) => setDraft((d) => ({ ...d, ...placeOf(value ?? '') }))}
+              placeholder={t('person.noPlace')}
+              clearable
+              disabled={disabled}
+              flex={1}
+            />
+            {!disabled && !draft.standbyStationId && (
+              <StandbyAction variant="button" stations={standbyStations} onChoose={(id) => setDraft((d) => ({ ...d, vehicleId: null, standbyStationId: id }))} />
+            )}
+          </Group>
           <Select
             label={t('person.function')}
             data={functions.filter((f) => f.active).map((f) => ({ value: f.key, label: localized(f.name) }))}
@@ -87,9 +104,30 @@ export function PersonDialog({ name, entry, targets, compensation, times, disabl
             clearable
             disabled={disabled}
           />
-          {time('from', times.alarmedAt)}
-          {time('to', times.returnedAt)}
         </SimpleGrid>
+        <Switch
+          label={t('person.ownTimes')}
+          checked={own}
+          onChange={(e) => {
+            const checked = e.currentTarget.checked;
+            setOwn(checked);
+            if (!checked) setDraft((d) => ({ ...d, from: null, to: null }));
+          }}
+          disabled={disabled}
+        />
+        {own ? (
+          <SimpleGrid cols={{ base: 1, sm: 2 }}>
+            {time('from', inherited.from)}
+            {time('to', inherited.to)}
+          </SimpleGrid>
+        ) : (
+          <Text size="sm" c="dimmed">
+            {t(vehicle?.departedAt || vehicle?.returnedAt ? 'person.followsVehicle' : 'person.followsReport', {
+              from: formatDateTime(inherited.from, i18n.language),
+              to: formatDateTime(inherited.to, i18n.language),
+            })}
+          </Text>
+        )}
         <Switch label={t('person.breathingApparatus')} checked={draft.breathingApparatus ?? false} onChange={(e) => set('breathingApparatus', e.currentTarget.checked)} disabled={disabled} />
         {draft.breathingApparatus && (
           <Group align="end">

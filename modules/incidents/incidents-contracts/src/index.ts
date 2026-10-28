@@ -9,3 +9,4 @@ export * from './lib/annual-statistics.js';
 export * from './lib/units.js';
 export * from './lib/statistics-questions.js';
 export * from './lib/lookup.js';
+export * from './lib/assignment-times.js';
