@@ -177,8 +177,8 @@ seite('shell/module.html', 'Module', '''
 <div class="raster drei">
 ''' + modul('Stammdaten', '1.0.0', 'Personen, Abteilungen, Wachen, Fahrzeuge, Lehrgänge, Listen.', True, 'Wird benötigt von: Einsatzberichte') +
 modul('Einsatzberichte', '1.0.0', 'Einsätze und Berichte je Abteilung, Freigabe, Statistik, Entschädigungsberechnung, API.', True, 'Benötigt: Stammdaten · nutzt optional: Geräte') +
-modul('Übungsdienst', '–', 'Übungen und Dienste, Anwesenheit, Ausbildungsnachweis.', False, 'Benötigt: Stammdaten', release='Release 2') +
-modul('Atemschutz', '–', 'Eignungsuntersuchung, Belastungsübung, Einsatznachweis, Tauglichkeitsampel.', False, 'Benötigt: Stammdaten, Übungsdienst', release='Release 2') +
+modul('Dienste', '–', 'Übungsdienste und Sonderdienste, Anwesenheit, Ausbildungsnachweis.', False, 'Benötigt: Stammdaten', release='Release 2') +
+modul('Atemschutz', '–', 'Eignungsuntersuchung, Belastungsübung, Einsatznachweis, Tauglichkeitsampel.', False, 'Benötigt: Stammdaten, Dienste', release='Release 2') +
 modul('Entschädigungen', '–', 'Auszahlungsläufe, Abrechnung je Person als PDF, Export für die Kämmerei.', False, 'Benötigt: Stammdaten', release='Release 2') +
 modul('Geräte', '–', 'Geräte mit Kategorien und Vorlagen, Prüffristen, Prüfprotokolle.', False, 'Benötigt: Stammdaten', release='Release 3') +
 '''

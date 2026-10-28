@@ -73,7 +73,7 @@ Im Frontend kommt eine vierte Stelle hinzu: die **Erweiterungspunkte**. Ein Modu
 | --- | --- | --- | --- | --- | --- |
 | Stammdaten `masterdata` | – | Katalogeinträge, Abteilungen, Gruppen, Standorte, Fahrzeuge, Personen mit Mitgliedschaften, Qualifikationen, Dienstgraden, Ehrungen, Ämtern, Ruhezeiten, Lehrgänge mit Terminen, Teilnahmen und Meldungen | `masterdata.*` | 16 (Mitglieder, Geburtstage, Jubiläen, Qualifikationsmatrix …) | Personen, Werdegang |
 | Einsatzberichte `incidents` | masterdata; optional equipment, respiratory-protection, compensation, cost-recovery, duty-officer | Alarmstichworte, Einsätze, Berichte mit Personal, Fahrzeugen, Beteiligten, anderen Kräften, Revisionen, Statistikjahre | `incidents.*` | 5 | MP-Feuer |
-| Übungsdienst `training` | masterdata; optional respiratory-protection, compensation | Dienstarten, Dienste, Teilnahmen | `training.general` | 7 | Dienste |
+| Dienste `training` | masterdata; optional respiratory-protection, compensation | Dienstarten (Übungsdienst, Sonderdienst, Sonstiges), Dienste, Teilnahmen | `training.general` | 7 | Dienste |
 | Atemschutz `respiratory-protection` | masterdata; optional incidents, training | Nachweise, Status | `respiratory-protection.rule` | 8 | Untersuchungen, Belastungsübungen |
 | Entschädigungen `compensation` | masterdata; optional incidents, training, duty-officer | Auszahlungsläufe, Positionen, Funktionsträger | `compensation.general` | 2 | – |
 | Geräte `equipment` | masterdata; optional incidents, training | Kategorien, Gerätetypen, Geräte, Prüfungen, Mängel, Verbrauch | `equipment.settings` | 6 | Bestand |
@@ -120,7 +120,7 @@ Die fachlichen Module verbinden sich über Service-Tokens (durchgezogen, synchro
 flowchart LR
   MD["Stammdaten<br/>masterdata"]
   INC["Einsatzberichte<br/>incidents"]
-  TRN["Übungsdienst<br/>training"]
+  TRN["Dienste<br/>training"]
   RP["Atemschutz<br/>respiratory-protection"]
   COMP["Entschädigungen<br/>compensation"]
   EQ["Geräte<br/>equipment"]

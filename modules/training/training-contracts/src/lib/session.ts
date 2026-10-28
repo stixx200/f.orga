@@ -9,13 +9,24 @@ import { LocalizedText } from '@forga/core-contracts';
 export const RecordKind = z.enum(['stress-exercise', 'training-track', 'briefing', 'exercise-under-ba', 'chemical-suit-exercise']);
 export type RecordKind = z.infer<typeof RecordKind>;
 
-/** How a session type is compensated: like an exercise, with its own rate (fire watch) or not at all. */
-export const SessionCompensation = z.enum(['training', 'fire-watch', 'none']);
+/**
+ * How a session type is compensated: like an exercise, with the rate of special services or of fire watches, or not
+ * at all.
+ */
+export const SessionCompensation = z.enum(['training', 'special-service', 'fire-watch', 'none']);
 export type SessionCompensation = z.infer<typeof SessionCompensation>;
+
+/**
+ * Category of a session type: `training` (Übungsdienst: exercises, lessons), `special-service` (Sonderdienst, e.g.
+ * supporting the equipment officer, fire safety education, fire watch) or `other` (e.g. meetings).
+ */
+export const SessionCategory = z.enum(['training', 'special-service', 'other']);
+export type SessionCategory = z.infer<typeof SessionCategory>;
 
 export const SessionTypeInput = z.object({
   key: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
   name: LocalizedText,
+  category: SessionCategory.default('training'),
   /** Counts for the participation rate of a person. */
   countsForParticipation: z.boolean().default(true),
   compensation: SessionCompensation.default('training'),
@@ -30,7 +41,11 @@ export type SessionType = z.infer<typeof SessionType>;
 
 const t = (key: string, de: string, en: string, extra: Partial<z.input<typeof SessionTypeInput>> = {}, sortOrder = 0): SessionTypeInput => ({ key, name: { de, en }, sortOrder, ...extra });
 
-/** Session types of a volunteer brigade in Baden-Württemberg. */
+/**
+ * Session types of a volunteer brigade in Baden-Württemberg (template). Special services count for no participation
+ * rate and are paid with the special-service rate; the fire watch keeps its own rate.
+ */
+const special = { category: 'special-service', compensation: 'special-service', countsForParticipation: false } as const;
 export const SESSION_TYPE_TEMPLATE: SessionTypeInput[] = [
   t('exercise', 'Übung', 'Exercise', {}, 10),
   t('lesson', 'Unterricht', 'Lesson', {}, 20),
@@ -40,8 +55,10 @@ export const SESSION_TYPE_TEMPLATE: SessionTypeInput[] = [
   t('chemical-suit', 'CSA-Übung', 'Chemical suit exercise', { record: 'chemical-suit-exercise' }, 60),
   t('machinist', 'Maschinistenfortbildung', 'Pump operator training', {}, 70),
   t('maintenance', 'Arbeitsdienst / Gerätepflege', 'Maintenance', {}, 80),
-  t('fire-watch', 'Brandsicherheitswache', 'Fire watch', { compensation: 'fire-watch', countsForParticipation: false }, 90),
-  t('meeting', 'Sitzung / Ausschuss', 'Meeting / committee', { compensation: 'none', countsForParticipation: false }, 100),
+  t('fire-watch', 'Brandsicherheitswache', 'Fire watch', { ...special, compensation: 'fire-watch' }, 90),
+  t('equipment-support', 'Unterstützung Gerätewart', 'Supporting the equipment officer', special, 92),
+  t('fire-safety-education', 'Brandschutzerziehung', 'Fire safety education', special, 94),
+  t('meeting', 'Sitzung / Ausschuss', 'Meeting / committee', { category: 'other', compensation: 'none', countsForParticipation: false }, 100),
   t('youth', 'Jugendfeuerwehrdienst', 'Youth fire brigade session', { compensation: 'none' }, 110),
 ];
 
@@ -158,7 +175,7 @@ export interface MySession {
 export interface MyTraining {
   upcoming: MySession[];
   past: MySession[];
-  /** Closed sessions of the own departments this year and how many the person attended. */
+  /** Closed sessions of the own departments this year that count for the participation, and how many the person attended. */
   year: { sessions: number; present: number; excused: number };
 }
 

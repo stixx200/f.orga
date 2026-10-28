@@ -97,7 +97,7 @@ Offen:
 2. Betriebsanleitung (Installation, Sicherung, Wiederherstellung, Update).
 3. Parallelbetrieb mit MP-Feuer für einen Abrechnungszeitraum.
 
-## Release 2 – Übungsdienst, Atemschutz, Entschädigungen
+## Release 2 – Dienste, Atemschutz, Entschädigungen
 
 Umgesetzt, mit Oberflächen ohne eigene Mockups (Gestaltung nach den Bausteinen aus Release 1). Release 2 ist vollständig umgesetzt.
 

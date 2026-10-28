@@ -34,7 +34,7 @@ Die folgenden Abschnitte beschreiben das Zielbild.
 | --- | --- | --- |
 | F1–F11 | Stammdaten, Organisation | Abteilungen nach Typ, Sonderaufgaben-Kennzeichen der Abteilung (Rettungsdienst, NAW, Strahlenschutz, Gefahrstoff, Höhenrettung, Tauchdienst, Führungseinheit ab Stufe C), Wachen mit Kennzeichen „ständig besetzt“ |
 | F12–F25 | Stammdaten, Personen | Status und Mitgliedschaft am Stichtag, Abteilungstyp, Geschlecht, Beschäftigungsart, Führerschein C/CE, Qualifikationen Atemschutzgeräteträger, Gruppenführer und Zugführer, Kennzeichen Musiker |
-| F26–F27 | Einsatzberichte, Übungsdienst | verletzte bzw. tödlich verunglückte eigene Einsatzkräfte aus Einsätzen; Verletzte aus abgeschlossenen Diensten (F26). Tödliche Unfälle außerhalb von Einsätzen manuell. |
+| F26–F27 | Einsatzberichte, Dienste | verletzte bzw. tödlich verunglückte eigene Einsatzkräfte aus Einsätzen; Verletzte aus abgeschlossenen Diensten (F26). Tödliche Unfälle außerhalb von Einsätzen manuell. |
 | F28–F62 | Einsatzberichte | Statistikmerkmale der Hauptberichte (siehe [Einsatzberichte](module/einsatzberichte.md#statistikmerkmale-feuerwehrstatistik-bw)). Rettungsdienst und Krankentransport (F46–F49) erfasst die Feuerwehr nicht; diese Felder bleiben leer ([E12](entscheidungen.md#e12-rettungsdienst-und-krankentransport-nicht-erfassen)). |
 | F63–F120 | Stammdaten, Fahrzeuge | Fahrzeuge im Dienst am Stichtag, gruppiert nach ihrer **Statistik-Kategorie** |
 | F121–F129 | manuell | Funkgeräte und Meldeempfänger, bis das Modul [Geräte](../implementiert/architektur.md#modul-geräte-equipment) den Bestand liefert |

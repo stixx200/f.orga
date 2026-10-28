@@ -15,6 +15,7 @@ function TypeDialog({ type, onClose }: { type?: SessionType; onClose: () => void
   const [form, setForm] = useState<Required<SessionTypeInput>>(() => ({
     key: type?.key ?? '',
     name: type?.name ?? { de: '', en: '' },
+    category: type?.category ?? 'training',
     countsForParticipation: type?.countsForParticipation ?? true,
     compensation: type?.compensation ?? 'training',
     record: type?.record ?? null,
@@ -47,8 +48,16 @@ function TypeDialog({ type, onClose }: { type?: SessionType; onClose: () => void
         <TextInput label={t('settingsPage.nameDe')} value={form.name.de} onChange={(e) => setForm({ ...form, name: { ...form.name, de: e.currentTarget.value } })} required />
         <TextInput label={t('settingsPage.nameEn')} value={form.name.en} onChange={(e) => setForm({ ...form, name: { ...form.name, en: e.currentTarget.value } })} />
         <Select
+          label={t('settingsPage.category')}
+          description={t('settingsPage.categoryHint')}
+          data={(['training', 'special-service', 'other'] as const).map((c) => ({ value: c, label: t(`category.${c}`) }))}
+          value={form.category}
+          onChange={(v) => v && setForm({ ...form, category: v as SessionType['category'] })}
+          allowDeselect={false}
+        />
+        <Select
           label={t('settingsPage.compensation')}
-          data={(['training', 'fire-watch', 'none'] as const).map((c) => ({ value: c, label: t(`compensation.${c}`) }))}
+          data={(['training', 'special-service', 'fire-watch', 'none'] as const).map((c) => ({ value: c, label: t(`compensation.${c}`) }))}
           value={form.compensation}
           onChange={(v) => v && setForm({ ...form, compensation: v as SessionType['compensation'] })}
           allowDeselect={false}
@@ -87,6 +96,7 @@ function TypesTab() {
         empty={t('settingsPage.noTypes')}
         columns={[
           { key: 'name', header: t('settingsPage.name'), render: (x) => <><Text fw={700} size="sm">{localized(x.name)}</Text><Text size="xs" c="dimmed">{x.key}</Text></> },
+          { key: 'category', header: t('settingsPage.category'), render: (x) => t(`category.${x.category}`) },
           { key: 'compensation', header: t('settingsPage.compensation'), render: (x) => t(`compensation.${x.compensation}`) },
           { key: 'record', header: t('settingsPage.record'), render: (x) => (x.record ? t(`record.${x.record}`) : '–') },
           { key: 'counts', header: t('settingsPage.counts'), render: (x) => (x.countsForParticipation ? '✓' : '–') },

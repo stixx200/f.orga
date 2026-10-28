@@ -279,7 +279,7 @@ export const de = {
     descriptions: {
       masterdata: 'Personen, Abteilungen, Wachen, Fahrzeuge, Lehrgänge, Listen.',
       incidents: 'Einsätze und Berichte je Abteilung, Freigabe, Statistik, Entschädigungsberechnung, API.',
-      training: 'Übungen und Dienste, Anwesenheit, Nachweise, Dienstbuch, Dienstbeteiligung.',
+      training: 'Übungsdienste, Sonderdienste und weitere Dienste, Anwesenheit, Nachweise, Dienstbuch, Dienstbeteiligung.',
       'respiratory-protection': 'Eignungsuntersuchung, Belastungsübung, Unterweisung, Einsatzübung, Tauglichkeitsampel, Atemschutznachweis.',
       compensation: 'Auszahlungsläufe aus Einsätzen und Diensten, Korrekturposten, Abrechnung je Person, Jahressummen.',
       equipment: 'Geräte mit Kategorien und Prüfarten, Prüfungen, Mängel, Fristen, Aussonderung.',

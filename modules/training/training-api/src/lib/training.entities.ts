@@ -1,7 +1,7 @@
 import { defineEntity, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
 import type { LocalizedText } from '@forga/core-contracts';
-import type { AttendanceStatus, RecordKind, SessionCompensation, SessionStatus } from '@forga/training-contracts';
+import type { AttendanceStatus, RecordKind, SessionCategory, SessionCompensation, SessionStatus } from '@forga/training-contracts';
 
 export const SessionTypeSchema = defineEntity({
   name: 'SessionTypeEntity',
@@ -11,6 +11,7 @@ export const SessionTypeSchema = defineEntity({
     id: p.uuid().primary().onCreate(() => uuidv7()),
     key: p.string().unique(),
     name: p.json<LocalizedText>(),
+    category: p.string().$type<SessionCategory>().default('training'),
     countsForParticipation: p.boolean().default(true),
     compensation: p.string().$type<SessionCompensation>().default('training'),
     record: p.string().$type<RecordKind>().nullable(),

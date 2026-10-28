@@ -1,6 +1,6 @@
 # Dokumentation f.orga
 
-f.orga ist eine webbasierte, modulare Verwaltungssoftware für kleine und mittlere Freiwillige Feuerwehren. Sie deckt Einsatzberichte, Stammdaten, Übungsdienst, Atemschutz, Geräte, Entschädigungen, Kostenersatz und Beförderungen ab. Jedes Thema ist ein eigenes Modul mit Backend und Frontend und lässt sich in die Shell laden. Die Oberfläche ist zwischen Deutsch und Englisch umschaltbar. Der Code ist englisch, diese Dokumentation deutsch.
+f.orga ist eine webbasierte, modulare Verwaltungssoftware für kleine und mittlere Freiwillige Feuerwehren. Sie deckt Einsatzberichte, Stammdaten, Dienste (Übungs- und Sonderdienste), Atemschutz, Geräte, Entschädigungen, Kostenersatz und Beförderungen ab. Jedes Thema ist ein eigenes Modul mit Backend und Frontend und lässt sich in die Shell laden. Die Oberfläche ist zwischen Deutsch und Englisch umschaltbar. Der Code ist englisch, diese Dokumentation deutsch.
 
 ## Aufbau dieses Ordners
 

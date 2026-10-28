@@ -227,6 +227,20 @@ describe('compensation', () => {
     expect(await item()).toBeUndefined();
   });
 
+  it('pays special services with the special-service rate of the statute', async () => {
+    expect(SAMPLE_STATUTE.trainingRates).toContainEqual({ kind: 'special-service', validFrom: '2026-01-01', amount: 12 });
+    const youth = (await post('/masterdata/departments', { name: 'Jugendfeuerwehr Ahornfeld', shortName: 'JF Ahornfeld', type: 'youth' }).expect(201)).body.id as string;
+    const kim = (await post('/masterdata/persons', { firstName: 'Kim', lastName: 'Test', status: 'youth', birthDate: '2012-01-01', memberships: [{ departmentId: youth, from: '2024-01-01', primary: true }] }).expect(201)).body.id as string;
+    const session = (await post('/training/sessions', { type: 'equipment-support', title: 'Schlauchpflege', startsAt: '2026-04-11T07:00:00Z', endsAt: '2026-04-11T09:10:00Z', departmentIds: [ids.ahornfeld, youth] }).expect(201)).body.id;
+    await put(`/training/sessions/${session}/attendance`, [{ personId: ids.lena, status: 'present' }, { personId: kim, status: 'present' }]).expect(200);
+    await post(`/training/sessions/${session}/close`, {}).expect(200);
+    // Started hours like training (2 h 10 min → 3 h) × 12 €; youth members only when the statute pays their status.
+    const items = await openItems('Sonderdienst · Schlauchpflege');
+    expect(items).toEqual([expect.objectContaining({ personId: ids.lena, source: 'training', kind: 'compensation', hours: 3, rate: 12, amount: 36, departmentId: ids.ahornfeld })]);
+    await post(`/training/sessions/${session}/reopen`, {}).expect(200);
+    expect(await openItems('Sonderdienst · Schlauchpflege')).toHaveLength(0);
+  });
+
   it('leaves the amount open when no rate is configured for the date', async () => {
     const session = (await post('/training/sessions', { type: 'exercise', title: 'Ohne Satz', startsAt: '2019-05-05T18:00:00Z', endsAt: '2019-05-05T20:00:00Z', departmentIds: [ids.ahornfeld] }).expect(201)).body.id;
     await put(`/training/sessions/${session}/attendance`, [{ personId: ids.lena, status: 'present' }]).expect(200);

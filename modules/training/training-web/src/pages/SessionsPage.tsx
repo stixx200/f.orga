@@ -3,7 +3,7 @@ import { DateInput } from '@mantine/dates';
 import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import type { Session, SessionCopyResult } from '@forga/training-contracts';
+import type { Session, SessionCategory, SessionCopyResult } from '@forga/training-contracts';
 import { apiUrl, can, formatDateTime, formatTime, fromLocalInput, send, useSession as useLogin, useTranslation } from '@forga/web-sdk';
 import { DataTable, notifySuccess, PageHeader, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, PLAN, useDepartments, useSessions, useTypeName, useTypes } from '../api';
@@ -121,6 +121,7 @@ export function SessionsPage() {
   const [month, setMonth] = useState(() => new Date());
   const [departmentId, setDepartmentId] = useState<string | null>(null);
   const [type, setType] = useState<string | null>(null);
+  const [category, setCategory] = useState<SessionCategory | null>(null);
   const [planning, setPlanning] = useState(false);
   const [copying, setCopying] = useState(false);
   const [view, setView] = useState<'list' | 'calendar' | 'week'>(() => {
@@ -140,7 +141,7 @@ export function SessionsPage() {
       // Without storage the choice only lasts for this visit.
     }
   };
-  const { data: sessions = [], isLoading } = useSessions({ ...(view === 'week' ? weekRange(month) : monthRange(month)), departmentId: departmentId ?? undefined, type: type ?? undefined });
+  const { data: sessions = [], isLoading } = useSessions({ ...(view === 'week' ? weekRange(month) : monthRange(month)), departmentId: departmentId ?? undefined, type: type ?? undefined, category: category ?? undefined });
   // The month and list views step by month, the week view by week (keeping the day within the month view).
   const shift = (steps: number) => setMonth((m) => (view === 'week' ? new Date(m.getFullYear(), m.getMonth(), m.getDate() + 7 * steps) : new Date(m.getFullYear(), m.getMonth() + steps, 1)));
   const locale = i18n.language === 'de' ? 'de-DE' : 'en-GB';
@@ -150,6 +151,11 @@ export function SessionsPage() {
       ? t('sessions.week', { week: weekNumber(month), from: new Date(`${week.from}T12:00:00`).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }), to: new Date(`${week.to}T12:00:00`).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' }) })
       : month.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
   const department = (id: string) => departments.find((d) => d.id === id)?.shortName ?? '';
+  // Special services and other sessions name their category with the kind.
+  const typeLabel = (key: string) => {
+    const kind = types.find((x) => x.key === key)?.category;
+    return kind && kind !== 'training' ? `${t(`category.${kind}`)} · ${typeName(key)}` : typeName(key);
+  };
 
   return (
     <Stack gap="lg">
@@ -174,7 +180,18 @@ export function SessionsPage() {
             {t('sessions.schedule', { year: month.getFullYear() })}
           </Button>
           <Select label={t('fields.department')} placeholder={t('sessions.allDepartments')} data={departments.map((d) => ({ value: d.id, label: d.name }))} value={departmentId} onChange={setDepartmentId} clearable />
-          <Select label={t('fields.type')} placeholder={t('sessions.allTypes')} data={types.map((x) => ({ value: x.key, label: typeName(x.key) }))} value={type} onChange={setType} clearable />
+          <Select
+            label={t('settingsPage.category')}
+            placeholder={t('sessions.allCategories')}
+            data={(['training', 'special-service', 'other'] as const).map((c) => ({ value: c, label: t(`categories.${c}`) }))}
+            value={category}
+            onChange={(v) => {
+              setCategory(v as SessionCategory | null);
+              setType(null);
+            }}
+            clearable
+          />
+          <Select label={t('fields.type')} placeholder={t('sessions.allTypes')} data={types.filter((x) => !category || x.category === category).map((x) => ({ value: x.key, label: typeName(x.key) }))} value={type} onChange={setType} clearable />
         </Group>
       </Group>
       {view === 'calendar' ? (
@@ -189,7 +206,7 @@ export function SessionsPage() {
         empty={isLoading ? t('loading') : t('sessions.empty')}
         columns={[
           { key: 'date', header: t('fields.startsAt'), render: (s) => `${formatDateTime(s.startsAt, i18n.language)} – ${formatTime(s.endsAt, i18n.language)}` },
-          { key: 'title', header: t('fields.title'), render: (s) => <><Text fw={700} size="sm" c="brand">{s.title}</Text><Text size="xs" c="dimmed">{typeName(s.type)}</Text></> },
+          { key: 'title', header: t('fields.title'), render: (s) => <><Text fw={700} size="sm" c="brand">{s.title}</Text><Text size="xs" c="dimmed">{typeLabel(s.type)}</Text></> },
           { key: 'departments', header: t('fields.departments'), render: (s) => <Group gap={4}>{s.departmentIds.map((d) => <StatusBadge key={d}>{department(d)}</StatusBadge>)}</Group> },
           { key: 'present', header: t('sessions.present'), align: 'right', render: (s) => s.attendance.filter((a) => a.status === 'present').length || '–' },
           { key: 'status', header: t('fields.status'), render: (s) => <SessionStatusBadge status={s.status} /> },

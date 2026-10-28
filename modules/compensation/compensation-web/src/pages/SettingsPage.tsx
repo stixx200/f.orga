@@ -68,7 +68,7 @@ function Form({ value }: { value: CompensationSettings }) {
       <ConfirmDialog opened={template} onClose={() => setTemplate(false)} title={t('settings.template')} description={t('settings.templateHint')} confirmLabel={t('settings.templateApply')} onConfirm={() => { setForm((f) => ({ ...f, ...SAMPLE_STATUTE })); setTemplate(false); }} />
       <Rates
         title={t('settings.trainingRates')}
-        kinds={['training', 'fire-watch']}
+        kinds={['training', 'special-service', 'fire-watch']}
         kindLabel={(k) => t(`settings.rateKinds.${k}`)}
         rates={form.trainingRates}
         rounding={form.trainingRounding}

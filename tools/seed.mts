@@ -638,7 +638,10 @@ async function bankAccounts(persons: PersonRef[]): Promise<void> {
   console.log(`  ${updated} Bankverbindungen ergänzt`);
 }
 
-/** Training sessions every second week per department this year; past ones with attendance, older ones closed. */
+/**
+ * Training sessions every second week per department this year; past ones with attendance, older ones closed. Some
+ * special services (supporting the equipment officer, fire safety education), the past ones closed and compensated.
+ */
 async function training(members: Map<string, PersonRef[]>, departments: Map<string, string>): Promise<void> {
   reseed(1871);
   await call('POST', 'training/types/templates/bw', {});
@@ -677,7 +680,30 @@ async function training(members: Map<string, PersonRef[]>, departments: Map<stri
       if (startsAt.getTime() < Date.now() - 14 * 86_400_000) await call('POST', `training/sessions/${session.id}/close`, {});
     }
   }
-  console.log(`  ${count} Dienste geplant`);
+  // Special services (Sonderdienste): recorded as sessions, not as incidents, and compensated with the special-service rate.
+  const specials = [
+    { type: 'equipment-support', title: 'Unterstützung Gerätewart: Schlauchpflege', days: 40, hours: 3 },
+    { type: 'fire-safety-education', title: 'Brandschutzerziehung Kindergarten Sonnenschein', days: 30, hours: 2 },
+    { type: 'equipment-support', title: 'Unterstützung Gerätewart: Prüfung Leitern', days: 20, hours: 4 },
+    { type: 'fire-safety-education', title: 'Brandschutzerziehung Grundschule Klasse 3', days: -14, hours: 2 },
+  ];
+  let special = 0;
+  for (const [index, { type, title, days, hours }] of specials.entries()) {
+    const [name, persons] = [...members.entries()][index % members.size];
+    const departmentId = departments.get(name);
+    const helpers = persons.filter((p) => p.status === 'active').slice(index, index + 3);
+    if (!departmentId || !helpers.length) continue;
+    const date = new Date(Date.now() - days * 86_400_000);
+    const startsAt = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0);
+    const session = await call<{ id: string }>('POST', 'training/sessions', {
+      type, title, startsAt: startsAt.toISOString(), endsAt: new Date(startsAt.getTime() + hours * 3_600_000).toISOString(), departmentIds: [departmentId], responsiblePersonId: helpers[0]!.id,
+    });
+    special++;
+    if (days < 14) continue;
+    await call('PUT', `training/sessions/${session.id}/attendance`, helpers.map((p) => ({ personId: p.id, status: 'present' })));
+    await call('POST', `training/sessions/${session.id}/close`, {});
+  }
+  console.log(`  ${count} Übungsdienste und ${special} Sonderdienste geplant`);
 }
 
 /** Evidence of the breathing apparatus wearers: most are fit, some expire soon, a few are not fit. */
@@ -1151,7 +1177,7 @@ async function main(): Promise<void> {
   console.log('Einsatzleiter vom Dienst (evd.ics, EvD-Berichte) …');
   await dutyOfficer(persons, accounts, departments);
 
-  console.log('Übungsdienst …');
+  console.log('Dienste …');
   await training(members, departments);
 
   console.log('Atemschutz …');

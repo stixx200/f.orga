@@ -96,6 +96,7 @@ describe('training sessions', () => {
     expect(closed.body).toMatchObject({ status: 'closed', closedBy: 'Admin' });
     expect(events[0]).toMatchObject({
       type: 'stress-exercise',
+      category: 'training',
       compensation: 'training',
       records: [{ personId: ids.jonas, kind: 'stress-exercise', kilojoules: 85, passed: true }],
     });
@@ -289,6 +290,45 @@ describe('training sessions: corrections, persons, participation and audit', () 
 
     const list = (await get(`/core/lists/training.participation?from=2020-01-01&to=2030-12-31&departmentId=${ids.ahornfeld}`).expect(200)).body;
     expect(list.rows.find((r: { name: string }) => r.name === 'Test, Nora')).toMatchObject({ department: 'Ahornfeld', sessions: 1, present: 0, rate: 0 });
+  });
+
+  it('records special services as sessions of their own category, outside the participation rate', async () => {
+    // The module is called "Dienste" now; ID, paths and permissions stay `training`.
+    const modules = (await get('/core/modules').expect(200)).body as { id: string; name: { de: string; en: string } }[];
+    expect(modules.find((m) => m.id === 'training')!.name).toEqual({ de: 'Dienste', en: 'Services' });
+
+    const types = (await get('/training/types').expect(200)).body as { key: string; category: string; compensation: string; countsForParticipation: boolean }[];
+    const type = (key: string) => types.find((x) => x.key === key);
+    expect(type('equipment-support')).toMatchObject({ category: 'special-service', compensation: 'special-service', countsForParticipation: false });
+    expect(type('fire-safety-education')).toMatchObject({ category: 'special-service', compensation: 'special-service', countsForParticipation: false });
+    expect(type('fire-watch')).toMatchObject({ category: 'special-service', compensation: 'fire-watch' });
+    expect(type('meeting')).toMatchObject({ category: 'other', compensation: 'none' });
+    expect(type('exercise')).toMatchObject({ category: 'training', compensation: 'training', countsForParticipation: true });
+    // A type created without a category is a training type.
+    expect((await post('/training/types', { key: 'workshop', name: { de: 'Werkstatt', en: 'Workshop' } }).expect(201)).body).toMatchObject({ category: 'training' });
+
+    const events: SessionClosedEvent[] = [];
+    test.app.get(DomainEvents).subscribe<SessionClosedEvent>(TRAINING_EVENTS.sessionClosed, (e) => {
+      events.push(e);
+    });
+    const before = (await get('/training/participation?from=2020-01-01&to=2030-12-31').expect(200)).body as { personId: string; sessions: number; present: number }[];
+    const special = (await post('/training/sessions', { type: 'fire-safety-education', title: 'Brandschutzerziehung Kindergarten', startsAt: at(-150), endsAt: at(-30), departmentIds: [ids.ahornfeld] }).expect(201)).body.id;
+    await put(`/training/sessions/${special}/attendance`, [{ personId: ids.lena, status: 'present' }]).expect(200);
+    await post(`/training/sessions/${special}/close`, {}).expect(200);
+    expect(events.find((e) => e.sessionId === special)).toMatchObject({ category: 'special-service', compensation: 'special-service', attendances: [expect.objectContaining({ personId: ids.lena, minutes: 120 })] });
+
+    // Lists and filters by category.
+    const of = async (category: string) => ((await get(`/training/sessions?from=2020-01-01&to=2030-12-31&category=${category}`).expect(200)).body as { id: string }[]).map((s) => s.id);
+    expect(await of('special-service')).toEqual([special]);
+    expect(await of('training')).not.toContain(special);
+    expect(await of('training')).toContain(ids.session);
+    await get('/training/sessions?category=incident').expect(400);
+
+    // The special service counts neither for the members of Ahornfeld nor for the person present.
+    const after = (await get('/training/participation?from=2020-01-01&to=2030-12-31').expect(200)).body as { personId: string; sessions: number; present: number }[];
+    for (const personId of [ids.lena, ids.nora]) {
+      expect(after.find((p) => p.personId === personId)).toMatchObject({ sessions: before.find((p) => p.personId === personId)!.sessions, present: before.find((p) => p.personId === personId)!.present });
+    }
   });
 
   it('records closing and reopening in the audit log', async () => {

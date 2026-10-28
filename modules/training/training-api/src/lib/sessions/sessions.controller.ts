@@ -8,6 +8,7 @@ import {
   type CheckIn,
   type Participation,
   SESSION_TYPE_TEMPLATE,
+  SessionCategory,
   type Session,
   SessionCopy,
   type SessionCopyResult,
@@ -29,6 +30,7 @@ export function toTypeDto(type: SessionTypeEntity): SessionType {
     id: type.id,
     key: type.key,
     name: type.name,
+    category: type.category,
     countsForParticipation: type.countsForParticipation,
     compensation: type.compensation,
     record: type.record ?? null,
@@ -101,8 +103,9 @@ export class SessionsController {
     @Query('to') to?: string,
     @Query('departmentId') departmentId?: string,
     @Query('type') type?: string,
+    @Query('category', new ZodPipe(SessionCategory.optional())) category?: SessionCategory,
   ): Promise<Session[]> {
-    return this.sessions.list(user, { from, to, departmentId, type });
+    return this.sessions.list(user, { from, to, departmentId, type, category });
   }
 
   @Post('sessions')

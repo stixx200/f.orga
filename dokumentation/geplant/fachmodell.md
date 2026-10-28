@@ -165,10 +165,28 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Erinnerung | `Reminder` |
 | Frist | deadline |
 | Nachweis | `Evidence` |
-| Übungsdienst | `Training` |
+| Dienste (Modul) | `Training`, Modul `training` |
 | Atemschutz | `RespiratoryProtection` |
 | Eignungsuntersuchung | medical fitness examination |
 | Prüfung (eines Geräts) | `Inspection` |
+
+### Dienste
+
+„Dienst“ ist der Oberbegriff für alles, was das Modul Dienste plant und mit Anwesenheit erfasst. Die Art des Dienstes legt seine Kategorie fest.
+
+| Fachbegriff | Code |
+| --- | --- |
+| Dienst | session (`Session`, `SessionEntity`) |
+| Art des Dienstes | session type (`SessionType`, `key`) |
+| Kategorie | `category` (`SessionCategory`) |
+| Übungsdienst (Übung, Unterricht, Ausbildung) | `category: 'training'` |
+| Sonderdienst (z. B. Unterstützung Gerätewart, Brandschutzerziehung, Brandsicherheitswache) | `category: 'special-service'` |
+| Sonstiger Dienst (z. B. Sitzung) | `category: 'other'` |
+| Entschädigungsart der Art | `compensation` (`training`, `special-service`, `fire-watch`, `none`) |
+| Satz Sonderdienst (Satzung) | `TrainingRate` mit `kind: 'special-service'` |
+| Dienstbeteiligung | participation, zählt nur Arten mit `countsForParticipation` |
+
+Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es keine Abteilung vom Typ Sonderdienst; die Teilnehmer gehören zu den Abteilungen des Dienstes. Davon getrennt bleiben die tageweise entschädigten Dienste des EvD-Dienstplans (Modul Einsatzleiter vom Dienst).
 
 ### Kostenersatz
 
@@ -215,7 +233,7 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | --- | --- |
 | Einsatzleiter vom Dienst (EvD) | duty officer, Modul `duty-officer`, Rollenvorlage `duty-officer` |
 | EvD-Dienst, Dienstplan | duty roster (`DutyAssignment`, `DutyAssignmentEntity`) |
-| Sonderdienst (Art eines Dienstes im Dienstplan) | duty kind (`DutyKind`, Einstellung `dutyKinds`) |
+| Art eines Dienstes im EvD-Dienstplan (tageweise, z. B. EvD) | duty kind (`DutyKind`, Einstellung `dutyKinds`) |
 | EvD-Pauschale je Diensttag | duty compensation (`dutyCompensation`), Ereignis `duty-officer.duty.changed` |
 | EvD-Bericht | Bericht der Einheit `duty-officer` (`DUTY_OFFICER_UNIT`) |
 | „EvD-Bericht für jeden Einsatz anlegen“ | `reportRequired` (Einstellung `duty-officer.general`) |
@@ -232,7 +250,7 @@ Die Modul-ID ist zugleich das Präfix der Berechtigungen und der Pfad in API und
 | Kern | `core` |
 | Stammdaten | `masterdata` |
 | Einsatzberichte | `incidents` |
-| Übungsdienst | `training` |
+| Dienste | `training` |
 | Atemschutz | `respiratory-protection` |
 | Entschädigungen | `compensation` |
 | Geräte | `equipment` |

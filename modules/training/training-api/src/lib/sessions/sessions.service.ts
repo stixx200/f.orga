@@ -14,6 +14,7 @@ import {
   type SessionCopyResult,
   SessionInput,
   TRAINING_EVENTS,
+  type SessionCategory,
   type SessionReference,
   type TrainingCasualties,
   type TrainingSessions,
@@ -81,7 +82,8 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
     return sessions.map((s) => ({ sessionId: s.id, departmentIds: [...s.departmentIds], status: s.status }));
   }
 
-  async list(user: AuthenticatedUser, filter: { from?: string; to?: string; departmentId?: string; type?: string }): Promise<Session[]> {
+  /** Sessions in a period; `category` keeps those whose type belongs to it (e.g. only special services). */
+  async list(user: AuthenticatedUser, filter: { from?: string; to?: string; departmentId?: string; type?: string; category?: SessionCategory }): Promise<Session[]> {
     const visible = this.visible(user);
     if (!visible) return [];
     const where: FilterQuery<SessionEntity>[] = [visible];
@@ -89,7 +91,9 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
     if (filter.to) where.push({ startsAt: { $lt: berlinDayAfter(filter.to) } });
     if (filter.departmentId) where.push({ departmentIds: { $overlap: [filter.departmentId] } });
     if (filter.type) where.push({ type: filter.type });
-    const sessions = await this.em.fork().find(SessionEntity, { $and: where }, { populate: ['attendance'], orderBy: { startsAt: 'asc' }, limit: 1000 });
+    const em = this.em.fork();
+    if (filter.category) where.push({ type: { $in: (await em.find(SessionTypeEntity, { category: filter.category })).map((t) => t.key) } });
+    const sessions = await em.find(SessionEntity, { $and: where }, { populate: ['attendance'], orderBy: { startsAt: 'asc' }, limit: 1000 });
     return sessions.map((s) => this.toDto(s, []));
   }
 
@@ -323,6 +327,7 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
       startsAt: session.startsAt.toISOString(),
       endsAt: session.endsAt.toISOString(),
       departmentIds: session.departmentIds,
+      category: type.category,
       compensation: type.compensation,
       attendances: present.map((a) => {
         const from = a.from ?? session.startsAt;

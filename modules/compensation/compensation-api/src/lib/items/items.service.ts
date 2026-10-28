@@ -258,14 +258,16 @@ export class ItemsService implements OnModuleInit, CompensationStatute {
   }
 
   /**
-   * Closed training session: hours × training or fire-watch rate of the statute, at most `maxPerService`, for persons
-   * with a status the statute pays (`paidStatuses`, e.g. not the youth fire brigade). The item belongs to the session's
-   * department of the person, for a guest from another department to the person's primary department.
+   * Closed session: hours × training, special-service or fire-watch rate of the statute, at most `maxPerService`, for
+   * persons with a status the statute pays (`paidStatuses`, e.g. not the youth fire brigade). The item belongs to the
+   * session's department of the person, for a guest from another department to the person's primary department.
+   * Items of special services are labelled "Sonderdienst · <title>".
    */
   async fromTraining(e: SessionClosedEvent): Promise<void> {
     const config = await this.config();
     const day = berlinDate(new Date(e.startsAt));
     const persons = new Map((await this.directory.snapshots([...new Set(e.attendances.map((a) => a.personId))], day)).map((p) => [p.id, p]));
+    const label = e.compensation === 'special-service' ? `Sonderdienst · ${e.title}` : e.title;
     const rows: DesiredItem[] =
       e.compensation === 'none'
         ? []
@@ -274,11 +276,11 @@ export class ItemsService implements OnModuleInit, CompensationStatute {
             if (person && !(config.paidStatuses as string[]).includes(person.status)) return [];
             const date = berlinDate(new Date(a.from));
             const hours = billableHours(a.from, a.to, config.trainingRounding);
-            const rate = trainingRateOn(config.trainingRates, e.compensation === 'fire-watch' ? 'fire-watch' : 'training', date);
+            const rate = trainingRateOn(config.trainingRates, e.compensation === 'none' ? 'training' : e.compensation, date);
             const own = person ? [person.primaryDepartmentId, ...person.departmentIds].find((d) => d && e.departmentIds.includes(d)) : undefined;
             const departmentId = own ?? person?.primaryDepartmentId ?? e.departmentIds[0] ?? null;
             // Without a rate for the date the amount stays open: the run cannot be closed until it is entered.
-            return [{ personId: a.personId, departmentId, kind: 'compensation', label: e.title, date, from: new Date(a.from), to: new Date(a.to), hours, rate, amount: rate === null ? null : capped(round2(hours * rate), config.maxPerService), workingHours: false }];
+            return [{ personId: a.personId, departmentId, kind: 'compensation', label, date, from: new Date(a.from), to: new Date(a.to), hours, rate, amount: rate === null ? null : capped(round2(hours * rate), config.maxPerService), workingHours: false }];
           });
     await this.apply('training', e.sessionId, rows);
   }

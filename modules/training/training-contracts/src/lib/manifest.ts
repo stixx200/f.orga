@@ -2,22 +2,22 @@ import type { ModuleManifest } from '@forga/core-contracts';
 
 export const TRAINING_MANIFEST = {
   id: 'training',
-  name: { de: 'Übungsdienst', en: 'Training' },
+  name: { de: 'Dienste', en: 'Services' },
   version: '0.1.0',
   requires: ['masterdata'],
   optional: ['respiratory-protection', 'compensation'],
   permissions: [
     { id: 'training.self', name: { de: 'Eigene Dienste sehen und sich entschuldigen', en: 'See own sessions and send excuses' }, scope: 'department' },
-    { id: 'training.read', name: { de: 'Dienste lesen', en: 'Read training sessions' }, scope: 'department' },
-    { id: 'training.plan', name: { de: 'Dienste planen', en: 'Plan training sessions' }, scope: 'department' },
+    { id: 'training.read', name: { de: 'Dienste lesen', en: 'Read sessions' }, scope: 'department' },
+    { id: 'training.plan', name: { de: 'Dienste planen', en: 'Plan sessions' }, scope: 'department' },
     { id: 'training.attendance', name: { de: 'Anwesenheit erfassen', en: 'Record attendance' }, scope: 'department' },
-    { id: 'training.close', name: { de: 'Dienste abschließen', en: 'Close training sessions' }, scope: 'department' },
+    { id: 'training.close', name: { de: 'Dienste abschließen', en: 'Close sessions' }, scope: 'department' },
     { id: 'training.settings.manage', name: { de: 'Diensttypen verwalten', en: 'Manage session types' }, scope: 'brigade' },
   ],
   navigation: [
     { label: { de: 'Dienste', en: 'Sessions' }, path: 'sessions', permission: 'training.read', icon: 'calendar' },
     { label: { de: 'Dienstbeteiligung', en: 'Participation' }, path: 'participation', permission: 'training.read', icon: 'chart' },
-    { label: { de: 'Übungsdienst', en: 'Training' }, path: 'settings', permission: 'training.settings.manage', icon: 'settings', section: 'administration' },
+    { label: { de: 'Dienste', en: 'Services' }, path: 'settings', permission: 'training.settings.manage', icon: 'settings', section: 'administration' },
   ],
   roles: [
     { key: 'member', permissions: ['training.self'] },
