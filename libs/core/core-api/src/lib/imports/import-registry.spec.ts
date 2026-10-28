@@ -74,6 +74,30 @@ describe('ImportRegistry.run', () => {
     await expect(runWith({ color: { Grün: 'green' } })).rejects.toMatchObject({ response: { code: 'imports.unknownMappingTarget', kind: 'color', value: 'Grün', key: 'green' } });
   });
 
+  it('offers the extras of other modules and lets their module remember a choice', async () => {
+    const remembered: string[] = [];
+    const extras: string[] = [];
+    const withExtras = registry(remembered);
+    withExtras.registerLookupExtras('other', {
+      kind: 'color',
+      entries: async () => [{ key: 'other:none', name }],
+      remember: async (key, value) => {
+        extras.push(`${value}→${key}`);
+      },
+    });
+    expect((await withExtras.entries('color'))?.map((e) => e.key)).toEqual(['red', 'blue', 'other:none']);
+    expect(await withExtras.entries('shape')).toBeUndefined();
+    await withExtras.run(profile([]), rows, { user, options: {}, dryRun: false, mappings: { color: { Grün: 'other:none', Gelb: 'blue' } } });
+    expect(extras).toEqual(['Grün→other:none']);
+    expect(remembered).toEqual(['Gelb→blue']);
+  });
+
+  it('requires the module prefix for keys of extras', async () => {
+    const result = registry();
+    result.registerLookupExtras('other', { kind: 'color', entries: async () => [{ key: 'none', name }], remember: async () => undefined });
+    await expect(result.entries('color')).rejects.toThrow('must start with "other:"');
+  });
+
   it('offers creating entries only with the permission', () => {
     expect(registry().lookups(user)).toEqual([{ kind: 'color', name, keyFormat: 'slug', creatable: false }]);
   });

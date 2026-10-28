@@ -59,6 +59,20 @@ export interface ImportLookup {
   remember?(key: string, value: string): Promise<void>;
 }
 
+/**
+ * Further targets a module offers for the values of another module's lookup `kind`, e.g. "no function – during
+ * working hours" (incidents) beside the functions of the catalog (masterdata). The entries are listed after those of
+ * the lookup and may be chosen like them; the module remembers a choice itself, so its profile can apply it in the
+ * next import. Profiles that do not know an extra key treat it as unmatched.
+ */
+export interface ImportLookupExtras {
+  kind: string;
+  /** Keys start with `<module>:`, so they never collide with keys of the lookup, e.g. `incidents:ignore`. */
+  entries(): Promise<ImportLookupEntry[]>;
+  /** Called after an apply for every used mapping to one of the entries. */
+  remember(key: string, value: string): Promise<void>;
+}
+
 /** One data row with field keys and the 1-based row number in the file. */
 export interface ImportRow {
   row: number;
@@ -106,6 +120,7 @@ export interface TransferReader {
 export class ImportRegistry {
   private readonly profiles = new Map<string, { module: string; profile: ImportProfile }>();
   private readonly lookupsByKind = new Map<string, ImportLookup>();
+  private readonly extrasByKind = new Map<string, { module: string; extras: ImportLookupExtras }[]>();
 
   register(module: string, profile: ImportProfile): void {
     if (!profile.id.startsWith(`${module}.`)) {
@@ -119,8 +134,34 @@ export class ImportRegistry {
     this.lookupsByKind.set(lookup.kind, lookup);
   }
 
+  /** Adds the targets of `module` to the lookup `extras.kind` (which may be registered by another module). */
+  registerLookupExtras(module: string, extras: ImportLookupExtras): void {
+    this.extrasByKind.set(extras.kind, [...(this.extrasByKind.get(extras.kind) ?? []), { module, extras }]);
+  }
+
   lookup(kind: string): ImportLookup | undefined {
     return this.lookupsByKind.get(kind);
+  }
+
+  /** The entries of the lookup `kind` followed by the extras of other modules; `undefined` for an unknown lookup. */
+  async entries(kind: string): Promise<ImportLookupEntry[] | undefined> {
+    return (await this.targets(kind))?.map((t) => t.entry);
+  }
+
+  /** Entries of a lookup with the extras that offer them (none for the lookup's own entries). */
+  private async targets(kind: string): Promise<{ entry: ImportLookupEntry; extras?: ImportLookupExtras }[] | undefined> {
+    const lookup = this.lookup(kind);
+    if (!lookup) return undefined;
+    const own = (await lookup.entries()).map((entry) => ({ entry }));
+    const added = await Promise.all(
+      (this.extrasByKind.get(kind) ?? []).map(async ({ module, extras }) =>
+        (await extras.entries()).map((entry) => {
+          if (!entry.key.startsWith(`${module}:`)) throw new Error(`Import lookup extra "${entry.key}" of module "${module}" must start with "${module}:".`);
+          return { entry, extras };
+        }),
+      ),
+    );
+    return [...own, ...added.flat()];
   }
 
   lookups(user: AuthenticatedUser): ImportLookupInfo[] {
@@ -138,10 +179,13 @@ export class ImportRegistry {
    * Throws `imports.unknownLookup` or `imports.unknownMappingTarget` for mappings that point nowhere.
    */
   async run(profile: ImportProfile, rows: ImportRow[], { mappings, ...input }: ImportRunInput): Promise<ImportResult> {
+    // Per kind the extras offering a key; a chosen key of an extra is remembered by its module.
+    const extrasOf = new Map<string, Map<string, ImportLookupExtras>>();
     for (const [kind, values] of Object.entries(mappings)) {
-      const lookup = this.lookup(kind);
-      if (!lookup) throw new BadRequestException({ code: 'imports.unknownLookup', kind });
-      const keys = new Set((await lookup.entries()).map((e) => e.key));
+      const targets = await this.targets(kind);
+      if (!targets) throw new BadRequestException({ code: 'imports.unknownLookup', kind });
+      const keys = new Set(targets.map((t) => t.entry.key));
+      extrasOf.set(kind, new Map(targets.flatMap((t) => (t.extras ? [[t.entry.key, t.extras] as const] : []))));
       for (const [value, key] of Object.entries(values)) {
         if (!keys.has(key)) throw new BadRequestException({ code: 'imports.unknownMappingTarget', kind, value, key });
       }
@@ -167,7 +211,10 @@ export class ImportRegistry {
     });
     // The choices are remembered as aliases only when the import was applied.
     if (!input.dryRun) {
-      for (const { kind, value, key } of used.values()) await this.lookup(kind)?.remember?.(key, value);
+      for (const { kind, value, key } of used.values()) {
+        const extras = extrasOf.get(kind)?.get(key);
+        await (extras ? extras.remember(key, value) : this.lookup(kind)?.remember?.(key, value));
+      }
     }
     return { ...result, unmatched: [...unmatched.values()] };
   }

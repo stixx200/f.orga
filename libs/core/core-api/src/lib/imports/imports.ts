@@ -162,11 +162,12 @@ export class ImportsController {
     return this.registry.lookups(user);
   }
 
+  /** Entries of the lookup, followed by the targets other modules add (e.g. "no function – during working hours"). */
   @Get('lookups/:kind')
-  entries(@Param('kind') kind: string, @CurrentUser() user: AuthenticatedUser): Promise<ImportLookupEntry[]> {
-    const lookup = this.registry.lookup(kind);
-    if (!lookup || !this.registry.available(user).length) throw new NotFoundException({ code: 'imports.unknownLookup', kind });
-    return lookup.entries();
+  async entries(@Param('kind') kind: string, @CurrentUser() user: AuthenticatedUser): Promise<ImportLookupEntry[]> {
+    const entries = this.registry.available(user).length ? await this.registry.entries(kind) : undefined;
+    if (!entries) throw new NotFoundException({ code: 'imports.unknownLookup', kind });
+    return entries;
   }
 
   /** Creates an entry for an unknown value, e.g. a course name missing in the catalog. Needs the lookup's permission. */

@@ -127,6 +127,30 @@ export const IncidentSettings = z.object({
 });
 export type IncidentSettings = z.infer<typeof IncidentSettings>;
 
+/**
+ * What the MP-Feuer import makes of a function text that is no function, e.g. "Arbeitszeit Stadt Erbach": no
+ * function, but the assignment was during working hours (`during-working-hours`), with loss of earnings
+ * (`loss-of-earnings`), or nothing (`ignore`).
+ */
+export const ImportFunctionTarget = z.enum(['during-working-hours', 'loss-of-earnings', 'ignore']);
+export type ImportFunctionTarget = z.infer<typeof ImportFunctionTarget>;
+
+/** Key of a target in the lookup `function` of the imports (mapping `{ function: { <text>: <key> } }`). */
+export const importFunctionTargetKey = (target: ImportFunctionTarget) => `incidents:${target}` as const;
+
+/**
+ * Function texts of the MP-Feuer import remembered with their target (`ImportFunctionTarget`); compared like
+ * aliases (case, umlauts, punctuation). Added when a text is mapped to a target in an import.
+ */
+export const ImportFunctionRules = z.object({
+  rules: z
+    .array(z.object({ value: z.string().trim().min(1).max(200), target: ImportFunctionTarget }))
+    .max(500)
+    .default([]),
+});
+export type ImportFunctionRules = z.infer<typeof ImportFunctionRules>;
+
 export const INCIDENTS_SETTINGS = {
   'incidents.general': IncidentSettings,
+  'incidents.importFunctionRules': ImportFunctionRules,
 } as const;

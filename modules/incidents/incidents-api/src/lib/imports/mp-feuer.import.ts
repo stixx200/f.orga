@@ -32,6 +32,7 @@ import { localDate } from '../domain/compensation.js';
 import { AlarmKeywordEntity, IncidentEntity, ReportEntity, ReportPersonnelEntity, ReportVehicleEntity } from '../incidents.entities.js';
 import { rememberKeywordAlias } from '../keywords/keywords.controller.js';
 import { addCrewVehicles, RELEASE, REPORT_POPULATE, ReportsService } from '../reports/reports.service.js';
+import { functionTargetOf, ImportFunctionTargets } from './function-targets.js';
 import { statisticsFromMpFeuer } from './mp-feuer-statistics.js';
 import { readIncidents } from './mp-feuer.transfer.js';
 
@@ -117,7 +118,7 @@ function releaseSignature(report: ReportEntity): string {
     ms(report.returnedAt),
     report.personnel
       .getItems()
-      .map((p) => JSON.stringify([p.personId, p.vehicleId, p.standbyStationId, ms(p.from), ms(p.to), p.breathingApparatus, p.lossOfEarnings, p.function]))
+      .map((p) => JSON.stringify([p.personId, p.vehicleId, p.standbyStationId, ms(p.from), ms(p.to), p.breathingApparatus, p.lossOfEarnings, p.duringWorkingHours, p.function]))
       .toSorted(),
     report.vehicles
       .getItems()
@@ -138,6 +139,7 @@ export class MpFeuerIncidentsImport {
     private readonly reports: ReportsService,
     @Inject(ORGANIZATION) private readonly organization: Organization,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
+    private readonly functionTargets: ImportFunctionTargets,
   ) {}
 
   profile(): ImportProfile {
@@ -199,11 +201,12 @@ export class MpFeuerIncidentsImport {
   }
 
   private async apply(em: EntityManager, rows: ImportRow[], { options, dryRun, mapped, unmatched }: ImportContext): Promise<ImportRunResult> {
-    const [departments, vehicles, stations, functions] = await Promise.all([
+    const [departments, vehicles, stations, functions, functionRules] = await Promise.all([
       this.organization.departments(),
       this.organization.vehicles({ includeRetired: true }),
       this.organization.stations(),
       this.organization.catalog('function'),
+      this.functionTargets.rules(),
     ]);
     const units = await this.reports.units.active();
     const keywordEntities = await em.find(AlarmKeywordEntity, {});
@@ -388,9 +391,17 @@ export class MpFeuerIncidentsImport {
           messages.push({ code: 'incidents.api.unknownVehicle', params: { kind: 'vehicle', value: vehicleText } });
           unmatched('vehicle', vehicleText);
         }
+        // A function text may also stand for a flag (e.g. "Arbeitszeit Stadt Erbach": during working hours), remembered
+        // from an earlier import or chosen now.
         const functionText = (values['function'] ?? '').trim();
-        const fn = this.function(functions, functionText) ?? functions.find((f) => f.active && functionText && f.key === mapped('function', functionText));
-        if (functionText && !fn) {
+        let fn = this.function(functions, functionText);
+        let functionTarget = fn || !functionText ? undefined : functionRules.get(normalizeHeading(functionText));
+        if (functionText && !fn && !functionTarget) {
+          const key = mapped('function', functionText);
+          fn = functions.find((f) => f.active && f.key === key);
+          functionTarget = functionTargetOf(key);
+        }
+        if (functionText && !fn && !functionTarget) {
           messages.push({ code: 'incidents.import.unknownFunction', params: { kind: 'function', value: functionText } });
           unmatched('function', functionText);
         }
@@ -408,7 +419,8 @@ export class MpFeuerIncidentsImport {
             standbyStationId: station?.id ?? null,
             function: fn?.key ?? null,
             breathingApparatus: yes(values['breathing']),
-            lossOfEarnings: yes(values['lossOfEarnings']),
+            lossOfEarnings: yes(values['lossOfEarnings']) || functionTarget === 'loss-of-earnings',
+            duringWorkingHours: functionTarget === 'during-working-hours',
             from: from && from.getTime() !== inherited.from.getTime() ? from : null,
             to: to && to.getTime() !== inherited.to.getTime() ? to : null,
             allowances: [],
