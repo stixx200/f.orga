@@ -68,8 +68,70 @@ Die Datei hat den eigenen Projektnamen `forga-stages` und feste Volumenamen (`fo
 
 **Anmeldesperre:** Nach fünf falschen Passwörtern ist der Benutzername eine Minute gesperrt, aber nur für die Adresse, von der die Versuche kamen; der Inhaber meldet sich von seinem Gerät weiter an. Hinter einem Reverse Proxy braucht das `FORGA_TRUST_PROXY`, sonst sperren Fehlversuche den Benutzernamen für alle.
 
+## Datensicherung
+
+**Was gesichert werden muss:** Alle Daten liegen in der PostgreSQL-Datenbank, auch Binärdaten: Anhänge (Fotos, Alarmfax, Unterlagen; `core.attachment`), Wappen und Briefkopf, die erlassenen PDF-Kostenbescheide und hochgeladene Importdateien. Außerhalb der Datenbank liegen nur die Plugins (Volume `forga-plugins` bzw. `forga_real_plugins`). Eine Sicherung besteht deshalb aus einem Abzug je Datenbank und, falls Plugins installiert sind, dem Plugin-Ordner. Die Umgebungsdatei `docker/.env` (Passwörter, `FORGA_SECRET_KEY`) gehört getrennt und geschützt aufbewahrt; ohne den alten `FORGA_SECRET_KEY` lassen sich die Links der Infoterminals nach einer Wiederherstellung nicht mehr anzeigen (neuer Link nötig).
+
+**Komplette Sicherung** mit `docker/backup.sh`: im laufenden Betrieb (konsistenter Abzug, der Dienst hält nicht an) je Datenbank-Dienst der Compose-Datei ein `pg_dump` (komprimiertes Format von `pg_dump`) und je Anwendungs-Container der Inhalt von `/plugins`, auf Wunsch auch `docker/.env`, in einen Ordner `forga-JJJJ-MM-TT_HHMM`. Ältere Sicherungen über die Aufbewahrung hinaus löscht das Skript.
+
+```bash
+docker/backup.sh -f docker/compose.stages.yml -d /srv/backup/forga -k 30 --with-env
+```
+
+| Option | Bedeutung | Standard |
+| --- | --- | --- |
+| `-f` | Compose-Datei; gesichert werden alle Dienste, deren Name mit `db` beginnt (bei den Stufen `db-real` und `db-test`) | `docker/compose.yml` |
+| `-d` | Zielordner | `./backup` |
+| `-k` | Anzahl aufbewahrter Sicherungen | `30` |
+| `--with-env` | `docker/.env` mitsichern (Passwörter, `FORGA_SECRET_KEY`) | aus |
+
+**Regelmäßig**, z. B. nächtlich um 2:30 Uhr:
+
+- Linux (Cron des Benutzers, der Docker bedienen darf; `crontab -e`):
+
+  ```cron
+  30 2 * * * /opt/f.orga/docker/backup.sh -f docker/compose.stages.yml -d /srv/backup/forga -k 30 --with-env >> /var/log/forga-backup.log 2>&1
+  ```
+
+- macOS (Docker Desktop): eine LaunchAgent-Datei `~/Library/LaunchAgents/de.forga.backup.plist`, geladen mit `launchctl load ~/Library/LaunchAgents/de.forga.backup.plist`; sie läuft nur, solange der Benutzer angemeldet und Docker Desktop gestartet ist.
+
+  ```xml
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  <plist version="1.0"><dict>
+    <key>Label</key><string>de.forga.backup</string>
+    <key>ProgramArguments</key><array>
+      <string>/bin/sh</string><string>-c</string>
+      <string>PATH=/usr/local/bin:/opt/homebrew/bin:$PATH /Pfad/zu/f.orga/docker/backup.sh -f docker/compose.stages.yml -d "$HOME/Backups/forga" -k 30 --with-env</string>
+    </array>
+    <key>StartCalendarInterval</key><dict><key>Hour</key><integer>2</integer><key>Minute</key><integer>30</integer></dict>
+    <key>StandardOutPath</key><string>/tmp/forga-backup.log</string>
+    <key>StandardErrorPath</key><string>/tmp/forga-backup.log</string>
+  </dict></plist>
+  ```
+
+Der Zielordner sollte auf einem anderen Datenträger liegen als die Docker-Volumes, mit einer weiteren Kopie außer Haus (z. B. verschlüsseltes NAS oder Cloud-Speicher der Feuerwehr). Ein Abzug lässt sich auch einzeln von Hand erstellen: `docker compose -f docker/compose.stages.yml exec -T db-real pg_dump -U forga -d forga -Fc > forga-real.dump`.
+
+Die Abzüge enthalten personenbezogene Daten und Gesundheitsdaten (Atemschutz-Tauglichkeit): Sicherungsziel verschlüsselt und nur für Berechtigte zugänglich ablegen, eine Kopie außerhalb des Gebäudes halten.
+
+**Wiederherstellen** (ersetzt den aktuellen Stand vollständig):
+
+```bash
+F=docker/compose.stages.yml
+docker compose -f $F stop forga-real
+docker compose -f $F exec -T db-real dropdb -U forga forga
+docker compose -f $F exec -T db-real createdb -U forga forga
+docker compose -f $F exec -T db-real pg_restore -U forga -d forga --no-owner < /srv/backup/forga/forga-2026-10-28_0230/db-real.dump
+docker compose -f $F start forga-real
+# Plugins (falls gesichert): docker compose -f $F exec -T forga-real tar xzf - -C /plugins < …/forga-real-plugins.tgz, danach Neustart
+```
+
+Beim Start spielt der Server fehlende Migrationen ein; ein Abzug aus einer älteren Version lässt sich also mit einem neueren Image wiederherstellen, nicht umgekehrt. Die Wiederherstellung sollte gelegentlich geprüft werden, am einfachsten ins Testsystem (`db-test`/`forga-test` statt `db-real`/`forga-real`).
+
+**Größe:** Anhänge machen den größten Teil aus (bei etwa 300 Einsätzen im Jahr mit je fünf Fotos zu 2 MB rund 3 GB im Jahr); die übrigen Daten bleiben im Bereich weniger hundert MB.
+
 ## Einschränkungen des aktuellen Stands
 
 - HTTPS ist nicht eingerichtet. Ohne vorgeschalteten Reverse Proxy mit TLS gehört der Stack deshalb nicht ins Internet.
-- Sicherung und Wiederherstellung sind noch nicht eingerichtet.
+- Die Sicherung läuft nicht automatisch im Stack; sie wird auf dem Host eingerichtet (siehe [Datensicherung](#datensicherung)).
 - Die Sperre nach Fehlversuchen bei der Anmeldung und die Begrenzung von „Passwort vergessen“ liegen im Speicher des Prozesses. Ein Neustart setzt sie zurück.
