@@ -116,6 +116,7 @@ function SettingsForm({ initial }: { initial: IncidentSettings }) {
         <Tabs.Tab value="compensation">{t('settingsPage.tabs.compensation')}</Tabs.Tab>
         <Tabs.Tab value="keywords">{t('settingsPage.tabs.keywords')}</Tabs.Tab>
         <Tabs.Tab value="rules">{t('settingsPage.tabs.rules')}</Tabs.Tab>
+        <Tabs.Tab value="mp-feuer">{t('settingsPage.tabs.mpFeuer')}</Tabs.Tab>
       </Tabs.List>
       <Tabs.Panel value="compensation">
         <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
@@ -224,6 +225,30 @@ function SettingsForm({ initial }: { initial: IncidentSettings }) {
               })}
             </Table.Tbody>
           </Table>
+          {saveButton}
+        </Panel>
+      </Tabs.Panel>
+      <Tabs.Panel value="mp-feuer">
+        <Panel title={t('settingsPage.parallel')} maw={720}>
+          <Stack gap="sm">
+            <Text size="sm" c="dimmed">{t('settingsPage.parallelHint')}</Text>
+            <Select
+              label={t('settingsPage.externalLeading')}
+              description={t('settingsPage.externalLeadingHint')}
+              data={[{ value: '', label: 'f.orga' }, { value: 'mp-feuer', label: 'MP-Feuer' }]}
+              value={form.externalLeading ?? ''}
+              onChange={(v) => set('externalLeading', v === 'mp-feuer' ? 'mp-feuer' : null)}
+              allowDeselect={false}
+            />
+            <DateInput
+              label={t('settingsPage.externalEventsFrom')}
+              description={t('settingsPage.externalEventsFromHint')}
+              value={form.externalEventsFrom}
+              onChange={(v) => set('externalEventsFrom', v || null)}
+              valueFormat="DD.MM.YYYY"
+              clearable
+            />
+          </Stack>
           {saveButton}
         </Panel>
       </Tabs.Panel>

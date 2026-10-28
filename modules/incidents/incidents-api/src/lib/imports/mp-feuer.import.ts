@@ -1,6 +1,7 @@
 import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import {
+  berlinDayStart,
   berlinTime,
   findByAlias,
   hasAlias,
@@ -30,7 +31,7 @@ import {
 import { localDate } from '../domain/compensation.js';
 import { AlarmKeywordEntity, IncidentEntity, ReportEntity, ReportPersonnelEntity, ReportVehicleEntity } from '../incidents.entities.js';
 import { rememberKeywordAlias } from '../keywords/keywords.controller.js';
-import { addCrewVehicles, RELEASE, ReportsService } from '../reports/reports.service.js';
+import { addCrewVehicles, RELEASE, REPORT_POPULATE, ReportsService } from '../reports/reports.service.js';
 import { statisticsFromMpFeuer } from './mp-feuer-statistics.js';
 import { readIncidents } from './mp-feuer.transfer.js';
 
@@ -99,6 +100,30 @@ function statusOf(text: string | undefined): ReportStatus {
 function time(value: string | undefined): Date | null {
   const local = parseLocalDateTime(value ?? '');
   return local ? berlinTime(local) : null;
+}
+
+const released = (status: ReportStatus) => status.startsWith('released');
+const ms = (date: Date | null | undefined) => date?.getTime() ?? null;
+
+/**
+ * What the other modules take from a released report (status, times, personnel, vehicles, keyword); a re-import
+ * announces a report again only if this changed.
+ */
+function releaseSignature(report: ReportEntity): string {
+  return JSON.stringify([
+    report.status,
+    report.incident.alarmKeyword,
+    ms(report.alarmedAt),
+    ms(report.returnedAt),
+    report.personnel
+      .getItems()
+      .map((p) => JSON.stringify([p.personId, p.vehicleId, p.standbyStationId, ms(p.from), ms(p.to), p.breathingApparatus, p.lossOfEarnings, p.function]))
+      .toSorted(),
+    report.vehicles
+      .getItems()
+      .map((v) => JSON.stringify([v.vehicleId, ms(v.alarmedAt), ms(v.departedAt), ms(v.returnedAt), v.kilometres]))
+      .toSorted(),
+  ]);
 }
 
 /** Matches "Nachname Vorname" in any order of the two parts. */
@@ -188,6 +213,9 @@ export class MpFeuerIncidentsImport {
     const results: ImportRowResult[] = [];
     const handled = new Map<string, Set<string>>();
     const createdIncidents: IncidentEntity[] = [];
+    const external = await this.reports.externalOperation();
+    // Released state of each replaced report before the import (`null`: new), for the events after it.
+    const before = new Map<string, string | null>();
 
     // One report per department (or unit), incident number and begin.
     const groups = new Map<string, ImportRow[]>();
@@ -271,12 +299,14 @@ export class MpFeuerIncidentsImport {
 
       let report = current.reports.getItems().find((r) => (unit ? r.unit === unit.key : r.departmentId === department!.id));
       const created = !report;
-      if (report && !report.externallyManaged) {
+      // Reports a person has edited in f.orga (or taken over) stay as they are.
+      if (report && !report.managedBy) {
         for (const { row } of group) results.push({ row, action: 'unchanged', label, messages: [{ code: 'incidents.import.reportEdited' }] });
         continue;
       }
       report ??= await this.reports.createReport(em, current, unit ? { unit: unit.key } : department!.id, null);
       await em.populate(report, ['personnel', 'vehicles']);
+      if (!before.has(report.id)) before.set(report.id, created ? null : releaseSignature(report));
 
       // MP-Feuer may hold several reports of a department for one dispatch number; f.orga keeps one and merges their personnel.
       const earlier = handled.get(report.id);
@@ -303,7 +333,7 @@ export class MpFeuerIncidentsImport {
           locked: status !== 'draft',
           lockedBy: status !== 'draft' ? 'MP-Feuer' : null,
           lockedAt: status !== 'draft' ? new Date() : null,
-          externallyManaged: true,
+          managedBy: 'mp-feuer',
         });
         // Chargeable applies to the whole incident; one department's report marking it is enough.
         if (yes(first['chargeable'])) current.chargeable = true;
@@ -311,11 +341,24 @@ export class MpFeuerIncidentsImport {
         const otherDepartments = current.reports.getItems().some((r) => r !== report && r.departmentId);
         if (group.some((r) => yes(r.values['primary'])) && !(unit && otherDepartments)) await this.reports.setPrimary(em, report, true);
         else if (otherDepartments) report.primary = false;
-        // The statistics belong to the incident; MP-Feuer keeps them with the primary report.
-        if (report.primary && statistics) current.statistics = statistics;
+        // The statistics belong to the incident; MP-Feuer keeps them with the primary report. Statistics f.orga keeps
+        // (e.g. corrected by a releaser) are overwritten on a re-import only while MP-Feuer leads.
+        if (report.primary && statistics && (external.leading || !current.statistics || createdIncidents.includes(current))) current.statistics = statistics;
+        // While MP-Feuer leads, the incident data follow its primary report (f.orga does not change them).
+        if (external.leading && report.primary && !createdIncidents.includes(current)) {
+          em.assign(current, {
+            alarmKeyword: keyword,
+            alarmMessage: first['message'] ?? '',
+            alarmedAt: begin,
+            location: { street: first['street'] ?? '', postalCode: first['postalCode'] ?? '', city: first['city'] ?? '', district: first['district'] ?? '', object: first['object'] ?? '' },
+          });
+        }
 
+        // Personnel and vehicles come again from the rows; a vehicle removed in MP-Feuer goes as well.
         for (const item of report.personnel.getItems()) em.remove(item);
         report.personnel.removeAll();
+        for (const item of report.vehicles.getItems()) em.remove(item);
+        report.vehicles.removeAll();
       }
       const date = localDate(begin.toISOString());
       const members = membersOnDate(persons, date);
@@ -380,6 +423,7 @@ export class MpFeuerIncidentsImport {
       await em.flush();
       // `createdVia: import`: modules adding their own reports to new incidents leave imported (historic) ones alone.
       for (const incident of createdIncidents) await this.reports.publishCreated(incident);
+      if (external.eventsFrom) await this.announce(before, external.eventsFrom);
     }
     const counts = { create: 0, update: 0, unchanged: 0, error: 0 };
     for (const r of results) counts[r.action]++;
@@ -408,6 +452,25 @@ export class MpFeuerIncidentsImport {
     }
     if (Number.isFinite(kilometres) && kilometres >= 0) entry.kilometres = kilometres;
     return entry;
+  }
+
+  /**
+   * Tells the other modules about releases of MP-Feuer from `from` on (setting `externalEventsFrom`), like a release in
+   * f.orga: a released report whose release data changed is announced (compensation items are created or corrected),
+   * a report MP-Feuer no longer marks as released is withdrawn.
+   */
+  private async announce(before: Map<string, string | null>, from: string): Promise<void> {
+    const em = this.em.fork();
+    const reports = await em.find(ReportEntity, { id: { $in: [...before.keys()] }, alarmedAt: { $gte: berlinDayStart(from) } }, { populate: REPORT_POPULATE });
+    for (const report of reports) {
+      const previous = before.get(report.id) ?? null;
+      const wasReleased = previous !== null && released(JSON.parse(previous)[0] as ReportStatus);
+      if (released(report.status)) {
+        if (releaseSignature(report) !== previous) await this.reports.publishReleased(em, report, report.status === 'released-billing' ? 'billing' : 'compensation');
+      } else if (wasReleased) {
+        await this.reports.publishUnlocked(report, 'mp-feuer');
+      }
+    }
   }
 
   /** Unit by key, name or short name, e.g. `duty-officer`, "Einsatzleiter vom Dienst", "EvD". */

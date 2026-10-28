@@ -3,7 +3,7 @@ import { type ReactNode, useState } from 'react';
 import type { Report } from '@forga/incidents-contracts';
 import { can, formatMoney, send, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, Panel, useAction } from '@forga/web-ui';
-import { keys, RELEASE, UNLOCK, useNames, useReportAccess, useSettings } from './api';
+import { keys, ledByMpFeuer, RELEASE, UNLOCK, useNames, useReportAccess, useSettings } from './api';
 
 /** Long labels wrap in narrow panels instead of being cut off. */
 const WRAP = { root: { height: 'auto', minHeight: 36, paddingBlock: 8 }, label: { whiteSpace: 'normal' as const } };
@@ -71,7 +71,8 @@ export function WorkflowActions({ report, onDone, framed }: { report: Report; on
   if (mayUnlock && (report.locked || report.status.startsWith('released'))) {
     buttons.push(<Button key="unlock" variant="default" onClick={() => setDialog('unlock')}>{t('workflow.unlock')}</Button>);
   }
-  if (!buttons.length) return null;
+  // While MP-Feuer leads, its reports are released and corrected there.
+  if (!buttons.length || ledByMpFeuer(settings, report)) return null;
 
   const content = (
     <Stack gap="xs">

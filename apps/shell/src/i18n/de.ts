@@ -558,6 +558,7 @@ export const de = {
       archive: 'Transferdatei',
       department: 'Abteilung in f.orga',
       asNamed: 'wie in der Datei: {{name}}',
+      remembered: 'Abteilungen, Einheiten und Optionen sind wie bei der letzten Datenübernahme vorbelegt.',
       unitNeeded: 'Keine Einsatzabteilung: Einsatzberichte werden nur übernommen, wenn Sie eine Einheit wählen, sonst übersprungen.',
       rows: '{{count}} Datensätze',
       skip: 'Überspringen',

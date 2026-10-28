@@ -271,6 +271,10 @@ export const PersonnelEntry = z.object({
 });
 export type PersonnelEntry = z.infer<typeof PersonnelEntry>;
 
+/** System that keeps a report as long as no person edits it in f.orga. */
+export const ReportManagedBy = z.enum(['api', 'mp-feuer']);
+export type ReportManagedBy = z.infer<typeof ReportManagedBy>;
+
 export const Report = z.object({
   id: z.uuid(),
   incidentId: z.uuid(),
@@ -287,6 +291,8 @@ export const Report = z.object({
   lockedAt: z.string().nullable(),
   returnComment: z.string().nullable(),
   authorPersonId: z.uuid().nullable(),
+  /** System keeping the report until a person edits it: the external API or the MP-Feuer import; `null`: f.orga. */
+  managedBy: ReportManagedBy.nullable(),
   /** The author confirmed the end; until then the rule `end-unconfirmed` keeps the times step open. */
   endConfirmed: z.boolean(),
   times: z.object({
@@ -367,6 +373,7 @@ export const Incident = z.object({
       status: ReportStatus,
       locked: z.boolean(),
       authorPersonId: z.uuid().nullable(),
+      managedBy: ReportManagedBy.nullable(),
     }),
   ),
   version: z.number(),

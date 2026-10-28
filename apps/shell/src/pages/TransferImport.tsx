@@ -40,12 +40,27 @@ export function TransferImport({ profiles }: { profiles: ImportProfileInfo[] }) 
   const [unmatched, setUnmatched] = useState<Record<string, ImportUnmatched[]>>({});
   const [stale, setStale] = useState<Record<string, boolean>>({});
 
+  const known = (name: string | null | undefined) => (name && departments.some((d) => d.name === name) ? name : null);
   const uploadAll = useAction((selected: File[]) => uploadFiles<TransferUpload>('core/imports/transfers', selected), {
     onSuccess: (u) => {
       setTransfer(u);
-      setAssigned(Object.fromEntries(u.archives.map((a) => [a.key, suggestDepartment(a, departments)])));
-      setOptions(Object.fromEntries(u.datasets.map((d) => [d.profile, Object.fromEntries((profiles.find((p) => p.id === d.profile)?.options ?? []).map((o) => [o.key, o.default]))])));
-      setUnits({});
+      // Choices of earlier transfers come first (the routine transfer needs no new choices), then the suggestions.
+      const { remembered } = u;
+      setAssigned(Object.fromEntries(u.archives.map((a) => [a.key, known(remembered.departments[a.key]) ?? suggestDepartment(a, departments)])));
+      setOptions(
+        Object.fromEntries(
+          u.datasets.map((d) => [d.profile, Object.fromEntries((profiles.find((p) => p.id === d.profile)?.options ?? []).map((o) => [o.key, remembered.options[d.profile]?.[o.key] ?? o.default]))]),
+        ),
+      );
+      setUnits(
+        Object.fromEntries(
+          u.datasets.flatMap((d) => {
+            const offered = new Set(d.units?.entries.map((e) => e.key) ?? []);
+            const chosen = Object.entries(remembered.units[d.profile] ?? {}).filter(([archive, unit]) => offered.has(unit) && u.archives.some((a) => a.key === archive));
+            return chosen.length ? [[d.profile, Object.fromEntries(chosen)]] : [];
+          }),
+        ),
+      );
       setStages({});
       setResults({});
       setMappings({});
@@ -122,6 +137,7 @@ export function TransferImport({ profiles }: { profiles: ImportProfileInfo[] }) 
     <Stack gap="lg">
       <Panel title={t('imports.transfer.archives')}>
         <Text size="sm" mb="md">{t('imports.transfer.archivesHint')}</Text>
+        {Object.keys(transfer.remembered.departments).length > 0 && <Notice kind="info">{t('imports.transfer.remembered')}</Notice>}
         <Table withTableBorder striped>
           <Table.Thead>
             <Table.Tr>

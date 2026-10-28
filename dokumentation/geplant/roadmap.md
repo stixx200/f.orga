@@ -95,7 +95,7 @@ Offen:
 
 1. Migration der Echtdaten aus MP-Feuer in einer Testinstallation, Abgleich mit den heutigen Auswertungen.
 2. Betriebsanleitung (Installation, Sicherung, Wiederherstellung, Update).
-3. Parallelbetrieb mit MP-Feuer für einen Abrechnungszeitraum.
+3. Parallelbetrieb mit MP-Feuer für einen Abrechnungszeitraum (Arbeitsweise: [parallelbetrieb-mp-feuer.md](../implementiert/parallelbetrieb-mp-feuer.md)).
 
 ## Release 2 – Dienste, Atemschutz, Entschädigungen
 

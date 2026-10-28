@@ -6,7 +6,7 @@ import { Link, useParams } from 'react-router';
 import type { Report } from '@forga/incidents-contracts';
 import { apiUrl, can, extensionsOf, formatDateTime, formatMoney, formatTime, send, useSession, useTranslation } from '@forga/web-sdk';
 import { ActionBar, Attachments, ConfirmDialog, DataTable, EmptyState, HistoryTimeline, Notice, notifyError, notifySuccess, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
-import { keys, RELEASE, useIncident, useNames, useReport, useReportAccess, useRevisions } from '../api';
+import { keys, ledByMpFeuer, RELEASE, useIncident, useNames, useReport, useReportAccess, useRevisions, useSettings } from '../api';
 import { DepartmentBadge, ReportStatusBadge } from '../parts';
 import { WorkflowActions } from '../WorkflowActions';
 import { CheckSection } from './CheckSection';
@@ -47,7 +47,8 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
   const { content, update, flush, reset, saveState, restorable, restoreLocal, discardLocal, loadServer, keepMine } = useReportEditor(report, userId);
   const [step, setStep] = useState<StepId>('times');
   const { reasons, setReason, clearReasons } = useStoredReasons(userId, report.id);
-  const [dialog, setDialog] = useState<'submit' | 'versions' | 'history' | 'takeOver' | null>(null);
+  const [dialog, setDialog] = useState<'submit' | 'versions' | 'history' | 'takeOver' | 'mpFeuer' | null>(null);
+  const { data: settings } = useSettings();
   // Releasers read drafts of authors; editing one locks it for the author, so it needs a confirmation.
   const [takenOver, setTakenOver] = useState(false);
   const { data: revisions = [] } = useRevisions(report.id, dialog === 'versions');
@@ -56,8 +57,10 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
   const writer = useReportAccess().write(report);
   // The own draft of a releaser is not someone else's.
   const ownDraft = Boolean(session?.user.personId) && report.authorPersonId === session?.user.personId;
-  const draftOfAuthor = releaser && report.status === 'draft' && !report.locked && !takenOver && !ownDraft;
-  const editable = releaser ? !report.status.startsWith('released') && !draftOfAuthor : writer && report.status === 'draft' && !report.locked;
+  // Parallel operation: MP-Feuer keeps its reports; a releaser may take one over into f.orga.
+  const fromMpFeuer = ledByMpFeuer(settings, report);
+  const draftOfAuthor = !fromMpFeuer && releaser && report.status === 'draft' && !report.locked && !takenOver && !ownDraft;
+  const editable = !fromMpFeuer && (releaser ? !report.status.startsWith('released') && !draftOfAuthor : writer && report.status === 'draft' && !report.locked);
   const errors = blocking(mergeFindings(report.findings));
   const warnings = openWarnings(mergeFindings(report.findings));
   const missingReasons = warnings.filter((f) => !reasons[findingKey(f)]?.trim());
@@ -92,6 +95,15 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
       },
     },
   );
+  const takeOverFromMpFeuer = useAction(() => send<Report>('POST', `incidents/reports/${report.id}/take-over`), {
+    success: t('editor.mpFeuerTakenOver'),
+    invalidate: [keys.incidents],
+    onSuccess: (saved) => {
+      queryClient.setQueryData(keys.report(report.id), saved);
+      reset(saved);
+      setDialog(null);
+    },
+  });
   const restore = useAction((revisionId: string) => send<Report>('POST', `incidents/reports/${report.id}/revisions/${revisionId}/restore`), {
     success: t('editor.restored'),
     invalidate: [keys.revisions(report.id)],
@@ -138,6 +150,7 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
             <ReportStatusBadge status={report.status} locked={report.locked} />
             {incident && <StatusBadge>{`${incident.alarmKeyword} · ${incident.dispatchNumber}`}</StatusBadge>}
             <StatusBadge>{t('editor.number', { number: report.number })}</StatusBadge>
+            {report.managedBy === 'mp-feuer' && <StatusBadge tone="primary">{t('editor.fromMpFeuer')}</StatusBadge>}
           </Group>
         }
       />
@@ -154,6 +167,20 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
           {t('editor.unsavedFound', { at: formatDateTime(restorable.at, i18n.language) })}
         </Notice>
       )}
+      {fromMpFeuer && (
+        <Notice kind="info" action={releaser && <Button size="xs" variant="outline" onClick={() => setDialog('mpFeuer')}>{t('editor.mpFeuerTakeOver')}</Button>}>
+          {t('editor.ledByMpFeuer')}
+        </Notice>
+      )}
+      <ConfirmDialog
+        opened={dialog === 'mpFeuer'}
+        onClose={() => setDialog(null)}
+        title={t('editor.mpFeuerTakeOverTitle')}
+        description={t('editor.mpFeuerTakeOverText')}
+        confirmLabel={t('editor.mpFeuerTakeOver')}
+        loading={takeOverFromMpFeuer.isPending}
+        onConfirm={() => takeOverFromMpFeuer.mutate(undefined)}
+      />
       {draftOfAuthor && (
         <Notice kind="info" action={<Button size="xs" variant="outline" onClick={() => setDialog('takeOver')}>{t('editor.takeOver')}</Button>}>
           {t('editor.readOnlyDraft')}

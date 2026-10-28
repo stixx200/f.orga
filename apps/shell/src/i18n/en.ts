@@ -560,6 +560,7 @@ export const en: typeof de = {
       archive: 'Transfer file',
       department: 'Department in f.orga',
       asNamed: 'as in the file: {{name}}',
+      remembered: 'Departments, units and options are preset as in the last data transfer.',
       unitNeeded: 'Not an operational department: incident reports are only imported if you choose a unit, otherwise skipped.',
       rows: '{{count}} records',
       skip: 'Skip',

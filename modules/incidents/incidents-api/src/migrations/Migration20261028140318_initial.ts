@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261028133006_initial extends Migration {
+export class Migration20261028140318_initial extends Migration {
 
-  override name = 'Migration20261028133006_initial';
+  override name = 'Migration20261028140318_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"incidents\";");
@@ -11,7 +11,7 @@ export class Migration20261028133006_initial extends Migration {
     this.addSql("create table \"incidents\".\"incident\" (\"id\" uuid not null, \"dispatch_number\" varchar(255) not null, \"internal_number\" boolean not null default false, \"alarm_keyword\" varchar(255) not null, \"alarm_message\" text not null default '', \"alarmed_at\" timestamptz not null, \"location\" jsonb not null, \"created_via\" varchar(255) not null default 'ui', \"chargeable\" boolean not null default false, \"chargeable_reason\" text not null default '', \"notes\" text not null default '', \"statistics\" jsonb null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"incidents\".\"incident\" add constraint \"incident_dispatch_number_unique\" unique (\"dispatch_number\");");
     this.addSql("create index \"incident_alarmed_at_index\" on \"incidents\".\"incident\" (\"alarmed_at\");");
-    this.addSql("create table \"incidents\".\"report\" (\"id\" uuid not null, \"incident_id\" uuid not null, \"department_id\" varchar(255) null, \"unit\" varchar(255) null, \"number\" varchar(255) not null, \"primary\" boolean not null default false, \"status\" varchar(255) not null default 'draft', \"locked\" boolean not null default false, \"locked_by\" varchar(255) null, \"locked_at\" timestamptz null, \"return_comment\" text null, \"author_person_id\" varchar(255) null, \"alarmed_at\" timestamptz not null, \"departed_at\" timestamptz null, \"arrived_at\" timestamptz null, \"ended_at\" timestamptz null, \"returned_at\" timestamptz not null, \"end_confirmed\" boolean not null default true, \"situation\" text not null default '', \"actions\" text not null default '', \"cause\" text not null default '', \"incident_commander\" varchar(255) not null default '', \"weather\" jsonb not null, \"equipment\" text not null default '', \"acknowledgements\" jsonb not null, \"externally_managed\" boolean not null default false, \"version\" int not null default 1, primary key (\"id\"));");
+    this.addSql("create table \"incidents\".\"report\" (\"id\" uuid not null, \"incident_id\" uuid not null, \"department_id\" varchar(255) null, \"unit\" varchar(255) null, \"number\" varchar(255) not null, \"primary\" boolean not null default false, \"status\" varchar(255) not null default 'draft', \"locked\" boolean not null default false, \"locked_by\" varchar(255) null, \"locked_at\" timestamptz null, \"return_comment\" text null, \"author_person_id\" varchar(255) null, \"alarmed_at\" timestamptz not null, \"departed_at\" timestamptz null, \"arrived_at\" timestamptz null, \"ended_at\" timestamptz null, \"returned_at\" timestamptz not null, \"end_confirmed\" boolean not null default true, \"situation\" text not null default '', \"actions\" text not null default '', \"cause\" text not null default '', \"incident_commander\" varchar(255) not null default '', \"weather\" jsonb not null, \"equipment\" text not null default '', \"acknowledgements\" jsonb not null, \"managed_by\" varchar(255) null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("create unique index \"report_one_primary_per_incident\" on \"incidents\".\"report\" (\"incident_id\") where \"primary\";");
     this.addSql("alter table \"incidents\".\"report\" add constraint \"report_incident_id_department_id_unique\" unique (\"incident_id\", \"department_id\");");
     this.addSql("alter table \"incidents\".\"report\" add constraint \"report_department_id_number_unique\" unique (\"department_id\", \"number\");");

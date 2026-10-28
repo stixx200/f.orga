@@ -9,6 +9,7 @@ import type {
   Location,
   MainType,
   PartyRole,
+  ReportManagedBy,
   ReportStatus,
   StatisticsCheck,
   StatisticsValue,
@@ -121,8 +122,11 @@ export const ReportSchema = defineEntity({
     weather: p.json<Weather>(),
     equipment: p.text().default(''),
     acknowledgements: p.json<StoredAcknowledgement[]>(),
-    /** Created by an external system and not edited by a person yet; only then the API may change it. */
-    externallyManaged: p.boolean().default(false),
+    /**
+     * System that created the report and keeps it until a person edits it in f.orga: `api` (only then the API adds
+     * personnel) or `mp-feuer` (a new import replaces it); `null`: f.orga.
+     */
+    managedBy: p.string().$type<ReportManagedBy>().nullable(),
     personnel: () => p.oneToMany(ReportPersonnelEntity).mappedBy('report').orphanRemoval(),
     vehicles: () => p.oneToMany(ReportVehicleEntity).mappedBy('report').orphanRemoval(),
     involvedParties: () => p.oneToMany(InvolvedPartyEntity).mappedBy('report').orphanRemoval(),
