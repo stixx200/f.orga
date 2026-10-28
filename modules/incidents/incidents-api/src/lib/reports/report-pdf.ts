@@ -187,7 +187,7 @@ export class ReportPdf {
 
     const content: unknown[] = [
       { text: t.title(report.number), style: 'title' },
-      { text: [department, ...(unit ? [] : [report.primary ? t.primary : t.secondary]), t.statusNames[dto.status]].join(' · '), style: 'small', margin: [0, 0, 0, 8] },
+      { text: [department, ...(unit && !report.primary ? [] : [report.primary ? t.primary : t.secondary]), t.statusNames[dto.status]].join(' · '), style: 'small', margin: [0, 0, 0, 8] },
       heading(t.incident),
       facts([
         [t.dispatchNumber, incident.dispatchNumber],

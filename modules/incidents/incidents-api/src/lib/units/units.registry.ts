@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ModuleStateService } from '@forga/core-api';
 import type { Language, LocalizedText } from '@forga/core-contracts';
 import { IncidentUnit, type IncidentUnits } from '@forga/incidents-contracts';
 
@@ -6,6 +7,8 @@ import { IncidentUnit, type IncidentUnits } from '@forga/incidents-contracts';
 @Injectable()
 export class IncidentUnitsRegistry implements IncidentUnits {
   private readonly units = new Map<string, IncidentUnit>();
+
+  constructor(private readonly modules: ModuleStateService) {}
 
   register(unit: Parameters<IncidentUnits['register']>[0]): void {
     const parsed = IncidentUnit.parse(unit);
@@ -18,6 +21,12 @@ export class IncidentUnitsRegistry implements IncidentUnits {
 
   all(): IncidentUnit[] {
     return [...this.units.values()];
+  }
+
+  /** The units of active modules, e.g. to assign imported reports to. */
+  async active(): Promise<IncidentUnit[]> {
+    const inactive = await this.modules.inactiveIds();
+    return this.all().filter((unit) => !unit.module || !inactive.has(unit.module));
   }
 }
 

@@ -116,8 +116,8 @@ function ReportCard({ summary, report, readable, onMakePrimary }: { summary: Inc
       title={names.ownerName(summary)}
       aside={
         <Group gap={4}>
-          {/* Reports of brigade-wide units (e.g. the duty officer) are never primary: they are named as such. */}
-          {summary.unit ? <DepartmentBadge name={t('report.unitReport')} primary={false} unit /> : <DepartmentBadge name={t(summary.primary ? 'report.primary' : 'report.secondary')} primary={summary.primary} />}
+          {/* Reports of brigade-wide units (e.g. the duty officer) are named as such unless they are primary (incident without department report). */}
+          {summary.unit && !summary.primary ? <DepartmentBadge name={t('report.unitReport')} primary={false} unit /> : <DepartmentBadge name={t(summary.primary ? 'report.primary' : 'report.secondary')} primary={summary.primary} />}
           <ReportStatusBadge status={summary.status} locked={summary.locked} />
         </Group>
       }
@@ -206,8 +206,10 @@ export function IncidentPage() {
 
   if (error) return <EmptyState title={t('incident.notFound')} />;
   if (!incident) return null;
-  const missing = departments.filter((d) => d.type !== 'veterans' && d.type !== 'youth' && canWrite(d.id) && !incident.reports.some((r) => r.departmentId === d.id));
+  const missing = departments.filter((d) => d.type === 'operational' && canWrite(d.id) && !incident.reports.some((r) => r.departmentId === d.id));
   const primary = incident.reports.find((r) => r.primary);
+  // A unit report may be primary only while the incident has no department report.
+  const hasDepartmentReport = incident.reports.some((r) => r.departmentId);
   const target = incident.reports.find((r) => r.id === primaryFor);
   const forReview = incident.reports.filter((r) => r.status === 'review');
   // The incident data belong to the writers of the primary report while all reports are unlocked drafts; releasers
@@ -247,7 +249,7 @@ export function IncidentPage() {
             summary={summary}
             report={reports[index]?.data}
             readable={access.read(summary)}
-            onMakePrimary={!summary.primary && summary.departmentId && canWrite(summary.departmentId) && !summary.locked && !summary.status.startsWith('released') && !primary?.status.startsWith('released') ? () => setPrimaryFor(summary.id) : undefined}
+            onMakePrimary={!summary.primary && (summary.departmentId ? canWrite(summary.departmentId) : !hasDepartmentReport && access.write(summary)) && !summary.locked && !summary.status.startsWith('released') && !primary?.status.startsWith('released') ? () => setPrimaryFor(summary.id) : undefined}
           />
         ))}
       </SimpleGrid>
@@ -284,8 +286,8 @@ export function IncidentPage() {
         opened={!!target}
         onClose={() => setPrimaryFor(null)}
         title={t('incident.makePrimaryTitle')}
-        description={t('incident.makePrimaryText', { next: names.departmentName(target?.departmentId), current: names.departmentName(primary?.departmentId) || '–' })}
-        confirmLabel={t('incident.makePrimaryConfirm', { name: names.department(target?.departmentId) })}
+        description={t('incident.makePrimaryText', { next: target ? names.ownerName(target) : '', current: (primary && names.ownerName(primary)) || '–' })}
+        confirmLabel={t('incident.makePrimaryConfirm', { name: target ? names.owner(target) : '' })}
         onConfirm={() => {
           if (target) makePrimary.mutate(target.id);
           setPrimaryFor(null);

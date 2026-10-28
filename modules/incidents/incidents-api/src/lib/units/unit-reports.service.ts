@@ -55,6 +55,13 @@ export class UnitReportsService implements IncidentUnitReports {
     const report = await em.findOne(ReportEntity, { incident: incidentId, unit }, { populate: ['incident'] });
     if (!report) return;
     if (report.status !== 'draft' || report.locked) throw new ConflictException({ code: 'incidents.unitReportNotDraft', status: report.status });
+    if (report.primary) {
+      // Primary only while the incident has no department report: another unit report takes over; the only report of
+      // an incident stays (the incident would be left without reports).
+      const [next] = await em.find(ReportEntity, { incident: report.incident, id: { $ne: report.id } }, { orderBy: { number: 'asc' } });
+      if (!next) throw new ConflictException({ code: 'incidents.unitReportOnlyReport' });
+      await this.reports.setPrimary(em, next, true);
+    }
     const deleted = { id: report.id, number: report.number, incident: report.incident };
     await em.remove(report).flush();
     await this.audit.log('incidents.report-deleted', { reportId: deleted.id, reportNumber: deleted.number, dispatchNumber: deleted.incident.dispatchNumber });

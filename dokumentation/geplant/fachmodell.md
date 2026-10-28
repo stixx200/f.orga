@@ -23,7 +23,7 @@ Feuerwehr (Gesamtwehr, genau eine je Installation)
 | Begriff | Bedeutung |
 | --- | --- |
 | Einsatz | Ein Ereignis der Leitstelle mit einer Leitstellennummer. Mehrere Abteilungen können beteiligt sein. |
-| Einsatzbericht | Der Bericht **einer** Abteilung zu einem Einsatz. Genau einer je Einsatz ist der Hauptbericht. Daneben gibt es Berichte gesamtwehrweiter Einheiten (z. B. den EvD-Bericht), die keiner Abteilung angehören und nie Hauptbericht sind. |
+| Einsatzbericht | Der Bericht **einer** Einsatzabteilung zu einem Einsatz; andere Abteilungen (Jugend, Alters-, Führungseinheiten, Sonderdienste) schreiben keine. Genau einer je Einsatz ist der Hauptbericht. Daneben gibt es Berichte gesamtwehrweiter Einheiten (z. B. den EvD-Bericht), die keiner Abteilung angehören; Hauptbericht ist ein solcher nur, solange der Einsatz keinen Abteilungsbericht hat. |
 | Einsatzleiter vom Dienst (EvD) | Führungskraft, die nach Dienstplan für die ganze Feuerwehr Bereitschaft hat. Er bekommt je Diensttag eine Pauschale und schreibt zu jedem Einsatz einen eigenen EvD-Bericht. |
 | Kosten und Bemerkungen | Gelten für den ganzen Einsatz, nicht je Bericht: kostenpflichtig mit Begründung, Bemerkungen und der Tatbestand für den Kostenersatz. Der Kommandant (oder wer das Recht hat) trägt sie ein. |
 | Funktion | Rolle einer Person im Einsatz: Einsatzleiter, Gruppenführer, Maschinist, Angriffstrupp, … (konfigurierbarer Katalog) |

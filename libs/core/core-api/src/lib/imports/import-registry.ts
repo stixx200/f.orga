@@ -84,6 +84,15 @@ export interface TransferReader {
   order: number;
   /** All archives at once, so a reader can resolve references between them. */
   read(archives: readonly TransferArchive[]): TransferRow[];
+  /**
+   * Units the rows of an archive can be assigned to instead of its department (`TransferRequest.units`). The rows of
+   * such an archive get the field `unit` with the key of the unit.
+   */
+  units?: {
+    label: LocalizedText;
+    none: LocalizedText;
+    entries(): Promise<ImportLookupEntry[]>;
+  };
 }
 
 /** Collects the import profiles of all modules. Modules register in `onModuleInit`. */

@@ -21,7 +21,7 @@ export function CreateIncidentDialog({ opened, onClose }: { opened: boolean; onC
   const session = useSession().data;
   const { data: keywords = [] } = useKeywords();
   const { data: departments = [] } = useDepartments();
-  const writable = departments.filter((d) => d.type !== 'veterans' && d.type !== 'youth' && (can(session, WRITE, d.id) || session?.permissions[RELEASE] === 'brigade'));
+  const writable = departments.filter((d) => d.type === 'operational' && (can(session, WRITE, d.id) || session?.permissions[RELEASE] === 'brigade'));
   const [form, setForm] = useState(() => ({
     alarmKeyword: null as string | null,
     alarmedAt: toLocalInput(new Date().toISOString()),

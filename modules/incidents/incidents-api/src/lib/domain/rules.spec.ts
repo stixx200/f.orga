@@ -26,7 +26,6 @@ const base = (extra: Partial<RuleInput> = {}): RuleInput => ({
   situation: 'Rauch aus Fenster',
   actions: 'Innenangriff',
   statistics: { ownMunicipality: true, mainType: 'fire', fireSize: 'small-b', technicalCategory: null, falseAlarmType: null, disasterPreAlarm: false, disasterOperation: false, rescued: 0, rescuedSmokeInhalation: 0, dead: 0, vehicleFire: false, trafficAccident: false, animalsRescued: 0 },
-  departmentType: 'operational',
   keyword: { mainType: 'fire', requiresVehicle: true },
   personnel: [person('jonas')],
   sameIncident: [],
@@ -60,11 +59,10 @@ describe('evaluateRules', () => {
     expect(rules(base({ keyword: { mainType: null, requiresVehicle: false }, statistics: null }))).toEqual([]);
   });
 
-  it('requires a vehicle or standby, except for command units and keywords without vehicles', () => {
+  it('requires a vehicle or standby, except for keywords without vehicles', () => {
     const onFoot = [person('jonas', { vehicleId: null })];
     expect(rules(base({ personnel: onFoot }))).toEqual(['error:vehicle-missing:jonas']);
     expect(rules(base({ personnel: [person('jonas', { vehicleId: null, standbyStationId: 'station' })] }))).toEqual([]);
-    expect(rules(base({ personnel: onFoot, departmentType: 'command' }))).toEqual([]);
     expect(rules(base({ personnel: onFoot, keyword: { mainType: 'fire', requiresVehicle: false } }))).toEqual([]);
   });
 
@@ -150,8 +148,6 @@ describe('evaluateRules', () => {
       expect(rules(base({ ...own, persons: facts({ status }) }))).toEqual(['warning:person-not-operational:jonas']);
     }
     expect(rules(base({ ...own, persons: facts({ departmentIds: ['ahornfeld'] }) }))).toEqual(['warning:person-not-member:jonas']);
-    // Command units take their personnel from all departments.
-    expect(rules(base({ ...own, departmentType: 'command', persons: facts({ departmentIds: ['ahornfeld'] }) }))).toEqual([]);
     // 18th birthday on the day after the incident.
     expect(rules(base({ ...own, persons: facts({ birthDate: '2008-10-22' }) }))).toEqual(['warning:person-too-young:jonas']);
     expect(rules(base({ ...own, persons: facts({ birthDate: '2008-10-21' }) }))).toEqual([]);

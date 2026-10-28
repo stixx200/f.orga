@@ -14,7 +14,7 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { defineEntity, EntityManager, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import { type ImportResult, type TransferArchiveInfo, TransferRequest, type TransferUpload } from '@forga/core-contracts';
+import { type ImportResult, type TransferArchiveInfo, type TransferDataset, TransferRequest, type TransferUpload } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { CurrentUser } from '../security/decorators.js';
@@ -78,7 +78,12 @@ export class TransferService {
     await em.nativeDelete(ImportTransferEntity, { createdAt: { $lt: new Date(Date.now() - IMPORT_EXPIRY_MS) } });
     const transfer = em.create(ImportTransferEntity, { id: uuidv7(), userId: user.id, archives, datasets, createdAt: new Date() });
     await em.flush();
-    return { id: transfer.id, archives, datasets: datasets.map((d) => ({ profile: d.profile, rowCount: d.rows.length })) };
+    const infos: TransferDataset[] = [];
+    for (const d of datasets) {
+      const units = profiles.find((candidate) => candidate.id === d.profile)?.transfer.units;
+      infos.push({ profile: d.profile, rowCount: d.rows.length, ...(units && { units: { label: units.label, none: units.none, entries: await units.entries() } }) });
+    }
+    return { id: transfer.id, archives, datasets: infos };
   }
 
   async run(user: AuthenticatedUser, id: string, request: ParsedRequest, dryRun: boolean): Promise<ImportResult> {
@@ -87,9 +92,19 @@ export class TransferService {
     const dataset = transfer.datasets.find((d) => d.profile === request.profile);
     if (!profile || !dataset || !user.can(profile.permission)) throw new NotFoundException({ code: 'imports.unknownProfile' });
 
+    // Units only for profiles offering them; the others ignore the assignment.
+    const units = profile.transfer?.units ? request.units : {};
+    if (Object.keys(units).length) {
+      const known = new Set((await profile.transfer!.units!.entries()).map((e) => e.key));
+      for (const unit of Object.values(units)) if (!known.has(unit)) throw new BadRequestException({ code: 'imports.unknownUnit', unit });
+    }
     const rows = dataset.rows.map(({ archive, values }, index) => ({
       row: index + 1,
-      values: 'department' in values ? { ...values, department: request.departments[archive] ?? values['department'] } : values,
+      values: {
+        ...values,
+        ...('department' in values ? { department: request.departments[archive] ?? values['department'] } : {}),
+        ...(units[archive] ? { unit: units[archive] } : {}),
+      },
     }));
     const options = Object.fromEntries((profile.options ?? []).map((o) => [o.key, request.options[o.key] ?? o.default]));
     const result = await this.registry.run(profile, rows, { user, options, dryRun, mappings: request.mappings });

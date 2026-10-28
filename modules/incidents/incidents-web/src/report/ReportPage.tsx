@@ -160,7 +160,7 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
         title={t('editor.title', { department })}
         badges={
           <Group gap={4}>
-            {report.unit ? <DepartmentBadge name={t('report.unitReport')} primary={false} unit /> : <DepartmentBadge name={t(report.primary ? 'report.primary' : 'report.secondary')} primary={report.primary} />}
+            {report.unit && !report.primary ? <DepartmentBadge name={t('report.unitReport')} primary={false} unit /> : <DepartmentBadge name={t(report.primary ? 'report.primary' : 'report.secondary')} primary={report.primary} />}
             <ReportStatusBadge status={report.status} locked={report.locked} />
             {incident && <StatusBadge>{`${incident.alarmKeyword} · ${incident.dispatchNumber}`}</StatusBadge>}
             <StatusBadge>{t('editor.number', { number: report.number })}</StatusBadge>
