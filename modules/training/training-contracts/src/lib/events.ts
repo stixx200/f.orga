@@ -1,4 +1,4 @@
-import type { RecordKind } from './session.js';
+import type { RecordKind, SessionCategory, SessionCompensation } from './session.js';
 
 /**
  * Own forces injured in closed training sessions of a year (annual statistics F26).
@@ -45,7 +45,8 @@ export interface SessionClosedEvent {
   startsAt: string;
   endsAt: string;
   departmentIds: string[];
-  compensation: 'training' | 'fire-watch' | 'none';
+  category: SessionCategory;
+  compensation: SessionCompensation;
   attendances: { personId: string; from: string; to: string; minutes: number; breathingApparatus: boolean; injured: boolean }[];
   records: { personId: string; kind: RecordKind; date: string; kilojoules: number | null; passed: boolean | null }[];
 }

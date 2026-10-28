@@ -20,11 +20,11 @@ const ExportQuery = z.object({
 });
 
 const SHEETS = {
-  de: { perPerson: 'Betrag pro Person', perDepartment: 'Summe je Abteilung', assignments: 'Einsätze', duties: 'Sonderdienste', problems: 'Hinweise', overlaps: 'Überschneidungen' },
-  en: { perPerson: 'Amount per person', perDepartment: 'Total per department', assignments: 'Assignments', duties: 'Special services', problems: 'Notes', overlaps: 'Overlaps' },
+  de: { perPerson: 'Betrag pro Person', perDepartment: 'Summe je Abteilung', assignments: 'Einsätze', duties: 'EvD-Dienste', problems: 'Hinweise', overlaps: 'Überschneidungen' },
+  en: { perPerson: 'Amount per person', perDepartment: 'Total per department', assignments: 'Assignments', duties: 'Duty officer services', problems: 'Notes', overlaps: 'Overlaps' },
 } as const;
 
-/** A special service from the duty roster (duty officer module) within the period. */
+/** A duty officer service from the duty roster (duty officer module) within the period. */
 export interface DutyLine {
   personId: string;
   name: string;
@@ -42,13 +42,13 @@ const HEAD = {
     department: 'Abteilung', name: 'Name', incidents: 'Einsätze', hours: 'Stunden', amount: 'Betrag (€)', persons: 'Personen',
     begin: 'Beginn', end: 'Ende', dispatch: 'Leitstellen-Nr.', keyword: 'Stichwort', report: 'Bericht', status: 'Status',
     problem: 'Hinweis', other: 'Überschneidet mit', total: 'GESAMT', period: 'Zeitraum', created: 'Erstellt am',
-    duty: 'Dienst', days: 'Tage', rate: 'Satz (€)', duties: 'Sonderdienste',
+    duty: 'Dienst', days: 'Tage', rate: 'Satz (€)', duties: 'EvD-Dienste',
   },
   en: {
     department: 'Department', name: 'Name', incidents: 'Incidents', hours: 'Hours', amount: 'Amount (€)', persons: 'Persons',
     begin: 'Begin', end: 'End', dispatch: 'Dispatch no.', keyword: 'Keyword', report: 'Report', status: 'Status',
     problem: 'Note', other: 'Overlaps with', total: 'TOTAL', period: 'Period', created: 'Created on',
-    duty: 'Service', days: 'Days', rate: 'Rate (€)', duties: 'Special services',
+    duty: 'Service', days: 'Days', rate: 'Rate (€)', duties: 'Duty officer services',
   },
 } as const;
 
@@ -80,7 +80,7 @@ const sheet = addStyledSheet;
 
 /**
  * Compensation export for the treasury: replaces the former `auswertung.py`.
- * Sheets: amount per person, total per department, assignments, special services, notes, overlaps.
+ * Sheets: amount per person, total per department, assignments, duty officer services, notes, overlaps.
  */
 export async function buildCompensationWorkbook(
   lines: AssignmentLine[],
@@ -97,7 +97,7 @@ export async function buildCompensationWorkbook(
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'f.orga';
 
-  // Amount per person (incidents and special services), grouped by the person's primary department.
+  // Amount per person (incidents and duty officer services), grouped by the person's primary department.
   const byPerson = new Map<string, AssignmentLine[]>();
   for (const line of persons) byPerson.set(line.personId as string, [...(byPerson.get(line.personId as string) ?? []), line]);
   const totals = new Map<string, { department: string; name: string; incidents: number; hours: number; duties: number; amount: number }>();
@@ -192,7 +192,7 @@ export class CompensationExportController {
     @Optional() @Inject(DUTY_ROSTER) private readonly roster?: DutyRoster,
   ) {}
 
-  /** Special services of the duty roster starting within the period; none without the active duty officer module. */
+  /** Duty officer services of the duty roster starting within the period; none without the active duty officer module. */
   private async duties(from: string, to: string, language: Language): Promise<DutyLine[]> {
     if (!this.roster || (await this.modules.inactiveIds()).has('duty-officer')) return [];
     const list = await this.roster.startingIn(from, to);

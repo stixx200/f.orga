@@ -354,7 +354,7 @@ describe('evaluations', () => {
       .expect(200);
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(response.body as ArrayBuffer);
-    expect(workbook.worksheets.map((w) => w.name)).toEqual(['Betrag pro Person', 'Summe je Abteilung', 'Einsätze', 'Sonderdienste', 'Hinweise', 'Überschneidungen']);
+    expect(workbook.worksheets.map((w) => w.name)).toEqual(['Betrag pro Person', 'Summe je Abteilung', 'Einsätze', 'EvD-Dienste', 'Hinweise', 'Überschneidungen']);
     const perPerson = workbook.getWorksheet('Betrag pro Person')!;
     const total = perPerson.getRow(perPerson.rowCount);
     expect(total.getCell(2).value).toBe('GESAMT');

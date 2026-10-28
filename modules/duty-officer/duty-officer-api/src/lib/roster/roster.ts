@@ -163,8 +163,8 @@ export class DutyRosterImport {
       id: 'duty-officer.roster',
       name: { de: 'EvD-Dienst (iCal)', en: 'Duty officer roster (iCal)' },
       description: {
-        de: 'Sonderdienste wie den Einsatzleiter vom Dienst aus einem Kalender (.ics) übernehmen. Die Person wird am Namen im Termintitel erkannt; ein erneuter Import aktualisiert die Termine.',
-        en: 'Take over special services such as the duty officer from a calendar (.ics). The person is recognised by the name in the event title; importing again updates the events.',
+        de: 'EvD-Dienste wie den Einsatzleiter vom Dienst aus einem Kalender (.ics) übernehmen. Die Person wird am Namen im Termintitel erkannt; ein erneuter Import aktualisiert die Termine.',
+        en: 'Take over duty officer services such as the duty officer from a calendar (.ics). The person is recognised by the name in the event title; importing again updates the events.',
       },
       permission: DUTY_OFFICER_ROSTER,
       fields: [
@@ -234,7 +234,7 @@ export class DutyRosterImport {
   }
 }
 
-/** Duty roster: special services such as duty officer, compensated per day. */
+/** Duty roster: duty officer services, compensated per day. */
 @Controller('duty-officer/roster')
 export class RosterController {
   constructor(
@@ -268,7 +268,7 @@ export class RosterController {
     return toDutyDto(duty, settings);
   }
 
-  /** Publishes the special services of a period again (e.g. after activating the compensation module). */
+  /** Publishes the duty officer services of a period again (e.g. after activating the compensation module). */
   @Post('republish')
   @HttpCode(200)
   @RequirePermissions(DUTY_OFFICER_ROSTER)

@@ -117,7 +117,7 @@ describe('duty roster', () => {
     const response = await get('/incidents/compensation/export?from=2026-10-01&to=2026-10-31&lang=de').buffer(true).parse(binary()).expect(200);
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(response.body as ArrayBuffer);
-    expect(workbook.getWorksheet('Sonderdienste')!.getRow(4).values).toEqual(expect.arrayContaining(['Test, Jonas', 'Einsatzleiter vom Dienst (EvD)', 7, 10, 70]));
+    expect(workbook.getWorksheet('EvD-Dienste')!.getRow(4).values).toEqual(expect.arrayContaining(['Test, Jonas', 'Einsatzleiter vom Dienst (EvD)', 7, 10, 70]));
 
     // The duty officers read the roster; group leaders do not, and only the managers change it.
     expect((await get('/duty-officer/roster', officer).expect(200)).body).toHaveLength(1);

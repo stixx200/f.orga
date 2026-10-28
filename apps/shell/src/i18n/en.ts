@@ -281,7 +281,7 @@ export const en: typeof de = {
     descriptions: {
       masterdata: 'Persons, departments, stations, vehicles, courses, lists.',
       incidents: 'Incidents and reports per department, release, statistics, compensation, API.',
-      training: 'Exercises and duties, attendance, records, service book, participation.',
+      training: 'Training, special services and other sessions, attendance, records, service book, participation.',
       'respiratory-protection': 'Medical check, stress exercise, briefing, exercise, fitness traffic light, BA record.',
       compensation: 'Payout runs from incidents and duties, corrections, statement per person, annual totals.',
       equipment: 'Equipment with categories and inspection types, inspections, defects, deadlines, retirement.',

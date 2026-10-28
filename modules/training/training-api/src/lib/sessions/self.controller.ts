@@ -3,7 +3,7 @@ import { EntityManager } from '@mikro-orm/core';
 import { type AuthenticatedUser, berlinDayStart, CurrentUser, RequirePermissions, ZodPipe } from '@forga/core-api';
 import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { ExcuseInput, type MySession, type MyTraining } from '@forga/training-contracts';
-import { AttendanceEntity, SessionEntity } from '../training.entities.js';
+import { AttendanceEntity, SessionEntity, SessionTypeEntity } from '../training.entities.js';
 
 const SELF = 'training.self';
 const WEEKS_AHEAD = 8;
@@ -45,10 +45,12 @@ export class TrainingSelfController {
     const now = new Date();
     const em = this.em.fork();
     const own = { departmentIds: { $overlap: person.departmentIds } };
+    // The year counts like the participation rate: only sessions whose type counts for it (not special services).
+    const counting = (await em.find(SessionTypeEntity, { countsForParticipation: true })).map((t) => t.key);
     const [upcoming, past, year] = await Promise.all([
       em.find(SessionEntity, { ...own, endsAt: { $gte: now }, startsAt: { $lt: new Date(now.getTime() + WEEKS_AHEAD * 7 * 86_400_000) } }, { populate: ['attendance'], orderBy: { startsAt: 'asc' } }),
       em.find(SessionEntity, { ...own, endsAt: { $lt: now, $gte: new Date(now.getTime() - PAST_DAYS * 86_400_000) } }, { populate: ['attendance'], orderBy: { startsAt: 'desc' } }),
-      em.find(SessionEntity, { ...own, status: 'closed', startsAt: { $gte: berlinDayStart(`${now.getFullYear()}-01-01`) } }, { populate: ['attendance'] }),
+      em.find(SessionEntity, { ...own, type: { $in: counting }, status: 'closed', startsAt: { $gte: berlinDayStart(`${now.getFullYear()}-01-01`) } }, { populate: ['attendance'] }),
     ]);
     const mine = (s: SessionEntity) => s.attendance.getItems().find((a) => a.personId === person.id)?.status;
     return {

@@ -262,7 +262,7 @@ Belüftung, Brandwache, Übergabe an Polizei, Ölspur abgestreut … => Ventilat
 Bemerkung => Note
 Benötigt: Stammdaten => Requires: Master data
 Benötigt: Stammdaten · nutzt optional: Geräte => Requires: Master data · optionally uses: Equipment
-Benötigt: Stammdaten, Übungsdienst => Requires: Master data, Training
+Benötigt: Stammdaten, Dienste => Requires: Master data, Services
 Benutzer => Users
 Benutzer sperren => Lock user
 Benutzer und Rollenzuweisung => Users and role assignment
@@ -1108,8 +1108,8 @@ Typ => Type
 Überschneidung mit anderem Einsatz => Overlap with another incident
 Übersicht => Overview
 Übersicht aller Mockups => All mockups
-Übungen und Dienste, Anwesenheit, Ausbildungsnachweis. => Exercises and duties, attendance, training record.
-Übungsdienst => Training
+Übungsdienste und Sonderdienste, Anwesenheit, Ausbildungsnachweis. => Training and special services, attendance, training record.
+Dienste => Services
 Uhrzeit => Time
 MS-FW 1144
 MS-FW 144

@@ -72,7 +72,7 @@ Umgesetzt (Backend), siehe [implementiert/architektur.md](../implementiert/archi
 - Entschädigung je Person, Abrechnungsexport (Excel wie `auswertung.py`)
 - Statistikmerkmale nach der Landesvorlage (ohne Rettungsdienst/Krankentransport, [E12](entscheidungen.md#e12-rettungsdienst-und-krankentransport-nicht-erfassen)) mit Vorbefüllung
 - API für externe Systeme, MP-Feuer-Import der Einsätze, Listen
-- Dienstplan für Sonderdienste mit iCal-Import, heute im Modul Einsatzleiter vom Dienst mit EvD-Bericht zu jedem Einsatz ([E13](entscheidungen.md#e13-einsatzleiter-pauschale-über-dienstplan))
+- Dienstplan für EvD-Dienste mit iCal-Import, heute im Modul Einsatzleiter vom Dienst mit EvD-Bericht zu jedem Einsatz ([E13](entscheidungen.md#e13-einsatzleiter-pauschale-über-dienstplan))
 
 Offen:
 
@@ -97,7 +97,7 @@ Offen:
 2. Betriebsanleitung (Installation, Sicherung, Wiederherstellung, Update).
 3. Parallelbetrieb mit MP-Feuer für einen Abrechnungszeitraum.
 
-## Release 2 – Übungsdienst, Atemschutz, Entschädigungen
+## Release 2 – Dienste, Atemschutz, Entschädigungen
 
 Umgesetzt, mit Oberflächen ohne eigene Mockups (Gestaltung nach den Bausteinen aus Release 1). Release 2 ist vollständig umgesetzt.
 

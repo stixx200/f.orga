@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261027165606_initial extends Migration {
+export class Migration20261028091818_initial extends Migration {
 
-  override name = 'Migration20261027165606_initial';
+  override name = 'Migration20261028091818_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"training\";");
@@ -11,7 +11,7 @@ export class Migration20261027165606_initial extends Migration {
     this.addSql("create table \"training\".\"attendance\" (\"id\" uuid not null, \"session_id\" uuid not null, \"person_id\" varchar(255) not null, \"status\" varchar(255) not null, \"from\" timestamptz null, \"to\" timestamptz null, \"role\" varchar(255) null, \"breathing_apparatus\" boolean not null default false, \"kilojoules\" int null, \"passed\" boolean null, \"injured\" boolean not null default false, \"checked_in_at\" timestamptz null, \"confirmed\" boolean not null default true, \"note\" text not null default '', primary key (\"id\"));");
     this.addSql("create index \"attendance_person_id_index\" on \"training\".\"attendance\" (\"person_id\");");
     this.addSql("alter table \"training\".\"attendance\" add constraint \"attendance_session_id_person_id_unique\" unique (\"session_id\", \"person_id\");");
-    this.addSql("create table \"training\".\"session_type\" (\"id\" uuid not null, \"key\" varchar(255) not null, \"name\" jsonb not null, \"counts_for_participation\" boolean not null default true, \"compensation\" varchar(255) not null default 'training', \"record\" varchar(255) null, \"active\" boolean not null default true, \"sort_order\" int not null default 0, \"version\" int not null default 1, primary key (\"id\"));");
+    this.addSql("create table \"training\".\"session_type\" (\"id\" uuid not null, \"key\" varchar(255) not null, \"name\" jsonb not null, \"category\" varchar(255) not null default 'training', \"counts_for_participation\" boolean not null default true, \"compensation\" varchar(255) not null default 'training', \"record\" varchar(255) null, \"active\" boolean not null default true, \"sort_order\" int not null default 0, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"training\".\"session_type\" add constraint \"session_type_key_unique\" unique (\"key\");");
     this.addSql("alter table \"training\".\"attendance\" add constraint \"attendance_session_id_foreign\" foreign key (\"session_id\") references \"training\".\"session\" (\"id\") on delete cascade;");
   }

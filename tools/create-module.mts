@@ -3,7 +3,7 @@
  * in the server, the dev ports, the test database and the Docker build.
  *
  *   npx tsx tools/create-module.mts <id> "<Name de>" "<Name en>" <dev-port>
- *   e.g. npx tsx tools/create-module.mts training "Übungsdienst" "Training" 4203
+ *   e.g. npx tsx tools/create-module.mts training "Dienste" "Services" 4203
  *
  * Afterwards: `npm install`, `npx nx sync`, then entities and `npm run migration:create -- <id> initial`.
  */

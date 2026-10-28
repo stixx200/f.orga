@@ -1,7 +1,7 @@
 import type { Translations } from '@forga/web-sdk';
 
 const de = {
-  module: 'Übungsdienst',
+  module: 'Dienste',
   loading: 'Wird geladen …',
   notFound: 'Diese Seite gibt es nicht.',
   status: { planned: 'Geplant', held: 'Durchgeführt', closed: 'Abgeschlossen' },
@@ -34,6 +34,7 @@ const de = {
     next: 'Nächster Monat',
     allDepartments: 'Alle Abteilungen',
     allTypes: 'Alle Arten',
+    allCategories: 'Alle Dienste',
     schedule: 'Dienstplan {{year}} (PDF)',
     viewList: 'Liste',
     viewCalendar: 'Monat',
@@ -143,7 +144,9 @@ const de = {
     all: 'Alle Dienste',
     none: 'In den nächsten 30 Tagen sind keine Dienste geplant.',
   },
-  compensation: { training: 'Wie Übungsdienst', 'fire-watch': 'Brandsicherheitswache', none: 'Keine Entschädigung' },
+  compensation: { training: 'Satz Übungsdienst', 'special-service': 'Satz Sonderdienst', 'fire-watch': 'Satz Brandsicherheitswache', none: 'Keine Entschädigung' },
+  category: { training: 'Übungsdienst', 'special-service': 'Sonderdienst', other: 'Sonstiges' },
+  categories: { training: 'Übungsdienste', 'special-service': 'Sonderdienste', other: 'Sonstige' },
   record: {
     'stress-exercise': 'Belastungsübung',
     'training-track': 'Atemschutzstrecke',
@@ -152,7 +155,7 @@ const de = {
     'chemical-suit-exercise': 'CSA-Übung',
   },
   settingsPage: {
-    title: 'Übungsdienst',
+    title: 'Dienste',
     types: 'Arten von Diensten',
     general: 'Allgemein',
     snippets: 'Textbausteine',
@@ -164,13 +167,15 @@ const de = {
     template: 'Vorlage Baden-Württemberg ergänzen',
     newType: '+ Neue Art',
     editType: 'Art bearbeiten',
-    noTypes: 'Noch keine Arten angelegt. Übernimm die Vorlage Baden-Württemberg.',
+    noTypes: 'Noch keine Arten angelegt. Übernehmen Sie die Vorlage Baden-Württemberg.',
     key: 'Schlüssel',
     name: 'Bezeichnung',
     nameDe: 'Bezeichnung (deutsch)',
     nameEn: 'Bezeichnung (englisch)',
     sortOrder: 'Reihenfolge',
     compensation: 'Entschädigung',
+    category: 'Kategorie',
+    categoryHint: 'Sonderdienste wie Unterstützung Gerätewart oder Brandschutzerziehung werden als eigener Dienst erfasst, nicht als Einsatz.',
     record: 'Nachweis Atemschutz',
     recordHint: 'Wird beim Abschluss für jede anwesende Person an den Atemschutz übergeben.',
     countsForParticipation: 'Zählt für die Dienstbeteiligung',
@@ -229,7 +234,7 @@ const de = {
 };
 
 const en: typeof de = {
-  module: 'Training',
+  module: 'Services',
   loading: 'Loading …',
   notFound: 'This page does not exist.',
   status: { planned: 'Planned', held: 'Held', closed: 'Closed' },
@@ -262,6 +267,7 @@ const en: typeof de = {
     next: 'Next month',
     allDepartments: 'All departments',
     allTypes: 'All kinds',
+    allCategories: 'All sessions',
     schedule: 'Schedule {{year}} (PDF)',
     viewList: 'List',
     viewCalendar: 'Month',
@@ -371,7 +377,9 @@ const en: typeof de = {
     all: 'All sessions',
     none: 'No sessions planned in the next 30 days.',
   },
-  compensation: { training: 'Like training', 'fire-watch': 'Fire watch', none: 'No compensation' },
+  compensation: { training: 'Training rate', 'special-service': 'Special service rate', 'fire-watch': 'Fire watch rate', none: 'No compensation' },
+  category: { training: 'Training', 'special-service': 'Special service', other: 'Other' },
+  categories: { training: 'Training', 'special-service': 'Special services', other: 'Other' },
   record: {
     'stress-exercise': 'Stress exercise',
     'training-track': 'Breathing apparatus track',
@@ -380,7 +388,7 @@ const en: typeof de = {
     'chemical-suit-exercise': 'Chemical suit exercise',
   },
   settingsPage: {
-    title: 'Training',
+    title: 'Services',
     types: 'Kinds of sessions',
     general: 'General',
     snippets: 'Text snippets',
@@ -399,6 +407,8 @@ const en: typeof de = {
     nameEn: 'Name (English)',
     sortOrder: 'Order',
     compensation: 'Compensation',
+    category: 'Category',
+    categoryHint: 'Special services such as supporting the equipment officer or fire safety education are recorded as a session of their own, not as an incident.',
     record: 'Respiratory protection record',
     recordHint: 'Handed over to respiratory protection for every person present when closing.',
     countsForParticipation: 'Counts for participation',

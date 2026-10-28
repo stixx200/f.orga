@@ -16,8 +16,12 @@ export type ItemKind = z.infer<typeof ItemKind>;
 export const Rounding = z.enum(['started-hour', 'started-half-hour', 'exact-minutes']);
 export type Rounding = z.infer<typeof Rounding>;
 
+/** Kinds of sessions with an hourly rate: training (Übungsdienst), special service (Sonderdienst), fire watch. */
+export const TrainingRateKind = z.enum(['training', 'special-service', 'fire-watch']);
+export type TrainingRateKind = z.infer<typeof TrainingRateKind>;
+
 /** Hourly rate of a session kind valid from a date (statute parameter). */
-export const TrainingRate = z.object({ kind: z.enum(['training', 'fire-watch']), validFrom: date, amount: money.min(0) });
+export const TrainingRate = z.object({ kind: TrainingRateKind, validFrom: date, amount: money.min(0) });
 export type TrainingRate = z.infer<typeof TrainingRate>;
 
 /** Annual allowance for a function (§ 16 Abs. 2 FwG), with the maximum number of holders. */
@@ -83,7 +87,7 @@ export const DEFAULT_COURSE_ALLOWANCES: CourseAllowance[] = [
 export const HouseholdRate = z.object({ validFrom: date, amount: money.min(0) });
 export type HouseholdRate = z.infer<typeof HouseholdRate>;
 
-/** Statuses of the person file whose attendance at training sessions is compensated (statute). */
+/** Statuses of the person file whose attendance at sessions (training and special services) is compensated (statute). */
 export const PaidStatus = z.enum(['probation', 'active', 'passive', 'youth', 'veterans']);
 export type PaidStatus = z.infer<typeof PaidStatus>;
 
@@ -92,7 +96,7 @@ export const CompensationSettings = z.object({
   /** Statute values start empty; the sample statute is only taken over explicitly (`SAMPLE_STATUTE`). */
   trainingRates: z.array(TrainingRate).default([]),
   trainingRounding: Rounding.default('started-hour'),
-  /** Statuses of the persons whose training attendance is compensated; youth members only when the statute says so. */
+  /** Statuses of the persons whose attendance at sessions is compensated; youth members only when the statute says so. */
   paidStatuses: z.array(PaidStatus).default(['active', 'probation']),
   /** Hourly rates for incidents; while empty, the incident reports compute with their own settings. */
   incidentRates: z.array(IncidentRate).default([]),
@@ -137,12 +141,14 @@ export type CompensationSettings = z.infer<typeof CompensationSettings>;
 export const COMPENSATION_SETTINGS = { 'compensation.general': CompensationSettings } as const;
 
 /**
- * Sample statute ("Vorlage"): example rates (15 €/h), household rate, course and function allowances. Only applied
- * when the administration takes it over in the settings; the values have to be replaced by the local statute.
+ * Sample statute ("Vorlage"): example rates (15 €/h, special services 12 €/h), household rate, course and function
+ * allowances. Only applied when the administration takes it over in the settings; the values are examples and have to
+ * be replaced by the local statute.
  */
 export const SAMPLE_STATUTE = {
   trainingRates: [
     { kind: 'training', validFrom: '2026-01-01', amount: 15 },
+    { kind: 'special-service', validFrom: '2026-01-01', amount: 12 },
     { kind: 'fire-watch', validFrom: '2026-01-01', amount: 15 },
   ],
   incidentRates: [

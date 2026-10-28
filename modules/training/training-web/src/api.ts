@@ -17,7 +17,7 @@ export const keys = {
 
 const LONG = 5 * 60_000;
 
-export function useSessions(filter: { from?: string; to?: string; departmentId?: string; type?: string }) {
+export function useSessions(filter: { from?: string; to?: string; departmentId?: string; type?: string; category?: string }) {
   return useQuery({ queryKey: [...keys.sessions, filter], queryFn: () => api<Session[]>(withQuery('training/sessions', filter)) });
 }
 

@@ -39,7 +39,7 @@ const de = {
   },
   device: { 'compressed-air': 'Pressluftatmer', rebreather: 'Regenerationsgerät', filter: 'Filtergerät' },
   examinationGroup: { 'up-to-5kg': 'Geräte bis 5 kg (G 26.2)', 'over-5kg': 'Geräte über 5 kg (G 26.3)' },
-  source: { manual: 'erfasst', training: 'Übungsdienst', incidents: 'Einsatzbericht', import: 'Import' },
+  source: { manual: 'erfasst', training: 'Dienst', incidents: 'Einsatzbericht', import: 'Import' },
   overview: {
     title: 'Atemschutztauglichkeit',
     subtitle: 'Geräteträger mit Ampel nach der eingestellten Regel',
@@ -213,7 +213,7 @@ const en: typeof de = {
   },
   device: { 'compressed-air': 'Compressed air', rebreather: 'Rebreather', filter: 'Filter device' },
   examinationGroup: { 'up-to-5kg': 'Devices up to 5 kg (G 26.2)', 'over-5kg': 'Devices over 5 kg (G 26.3)' },
-  source: { manual: 'recorded', training: 'Training', incidents: 'Incident report', import: 'Import' },
+  source: { manual: 'recorded', training: 'Session', incidents: 'Incident report', import: 'Import' },
   overview: {
     title: 'Respiratory protection fitness',
     subtitle: 'Wearers with traffic light according to the configured rule',
