@@ -42,15 +42,13 @@ export function currentRank(person: Person, date = today()): string | null {
   return ranks[0]?.rank ?? null;
 }
 
+/** Qualification entries of the person valid on the date. */
+export function currentQualifications(person: Person, date = today()): PersonQualification[] {
+  return person.qualifications.getItems().filter((q) => q.acquiredOn <= date && (!q.validUntil || q.validUntil >= date));
+}
+
 export function validQualifications(person: Person, date = today()): string[] {
-  return [
-    ...new Set(
-      person.qualifications
-        .getItems()
-        .filter((q) => q.acquiredOn <= date && (!q.validUntil || q.validUntil >= date))
-        .map((q) => q.qualification),
-    ),
-  ].toSorted();
+  return [...new Set(currentQualifications(person, date).map((q) => q.qualification))].toSorted();
 }
 
 /**
@@ -251,6 +249,7 @@ export class PersonsService {
         acquiredOn: q.acquiredOn,
         validUntil: q.validUntil ?? null,
         courseAttendanceId: q.courseAttendanceId ?? null,
+        description: q.description,
         notes: q.notes,
       })),
       ranks: sortBy(person.ranks.getItems(), (r) => r.since).map((r: RankAssignment) => ({

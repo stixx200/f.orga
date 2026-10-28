@@ -29,7 +29,7 @@ afterAll(() => test?.app.close());
 describe('catalogs', () => {
   it('applies the BW templates once and validates keys', async () => {
     const first = await post('catalog/templates/bw', {}).expect(201);
-    expect(first.body.added).toMatchObject({ rank: 11, 'vehicle-type': 19, qualification: 20 });
+    expect(first.body.added).toMatchObject({ rank: 11, 'vehicle-type': 19, qualification: 21 });
     const second = await post('catalog/templates/bw', {}).expect(201);
     expect(second.body.added).toEqual({});
 

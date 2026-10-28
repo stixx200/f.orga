@@ -425,12 +425,12 @@ Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elt
   | Dienstgrad `probation` | `promotions` | Dienstgrad von Personen in Probezeit ohne Dienstgrad-Eintrag |
   | Funktion `duty-officer` | `duty-officer` | Funktion des EvD in neuen EvD-Berichten |
 - Zusatzfelder je Art prüft `CatalogAttributes`:
-  - Qualifikation: `validityMonths`
+  - Qualifikation: `validityMonths`, `describe` (Sammeleintrag, siehe „Anderer Lehrgang“ bei den Personen)
   - Fahrzeugtyp: `crew`, `seats`, `statisticsCategory`
   - Dienstgrad: `abbreviation`, `level`
   - Funktion: `abbreviation`
 - **Vorlagen für Baden-Württemberg:**
-  - `BW_CATALOG_TEMPLATE`: Dienstgrade nach VwV 2022, Qualifikationen (auch die Musiker-Lehrgänge Grundausbildung, D2, D3, C1, C2 für die Beförderungsregeln), Funktionen (im Einsatz), Ämter (Kommandant, Stellvertreter, Abteilungskommandant, Jugendfeuerwehrwart, Gerätewarte, Schriftführer …), Fahrzeugtypen, Ehrungen, Austrittsgründe
+  - `BW_CATALOG_TEMPLATE`: Dienstgrade nach VwV 2022, Qualifikationen (auch die Musiker-Lehrgänge Grundausbildung, D2, D3, C1, C2 für die Beförderungsregeln, und der Sammeleintrag „Anderer Lehrgang“ `other-course` mit `describe`), Funktionen (im Einsatz), Ämter (Kommandant, Stellvertreter, Abteilungskommandant, Jugendfeuerwehrwart, Gerätewarte, Schriftführer …), Fahrzeugtypen, Ehrungen, Austrittsgründe
   - `BW_COURSE_TEMPLATE`: 14 Lehrgänge mit vermittelten Qualifikationen und Voraussetzungen
 
   Beim Anwenden kommen nur fehlende Schlüssel hinzu.
@@ -482,6 +482,7 @@ Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elt
 - Der aktuelle Dienstgrad ist der jüngste Eintrag in `ranks`. Beförderungen laufen über die Beförderungslisten (Modul `promotions`), deren Durchführung den Dienstgrad einträgt. Dienstgrade direkt eintragen oder löschen (Altdaten, Korrekturen) darf nur, wer `masterdata.persons.write` für die Gesamtwehr hat; Abteilungskommandanten sehen stattdessen einen Hinweis.
 - **Ämter** mit Abteilung brauchen `masterdata.persons.write` für diese Abteilung, Ämter der Gesamtwehr (ohne Abteilung) das Recht für die Gesamtwehr; das gilt für Anlegen, Ändern (alte und neue Abteilung) und Löschen. Der Dialog bietet nur die Abteilungen an, für die der Benutzer schreiben darf.
 - Qualifikationen gelten bis `validUntil`. Fehlt das Datum, wird es aus `validityMonths` des Katalogs berechnet.
+- **Anderer Lehrgang (Sammeleintrag):** Ein Qualifikationseintrag mit dem Zusatzfeld `describe` („Beschreibung erforderlich“, Kontrollkästchen im Katalogdialog) steht für Lehrgänge ohne eigenen Katalogeintrag, z. B. „Erste Hilfe“ oder „Holz in Spannung“ aus MP-Feuer. Die Qualifikation der Person trägt dann in `description` den eigentlichen Lehrgang; ohne Beschreibung lehnt der Server ab (`masterdata.descriptionRequired`), bei anderen Einträgen wird sie leer gespeichert. Angezeigt wird „Anderer Lehrgang: Erste Hilfe“ (`qualificationLabel`): Kopf und Qualifikationstabelle der Akte, „Mein Bereich“, Fristen „Qualifikation läuft ab“ (je Beschreibung eine Frist). Die Qualifikationsmatrix zeigt in der Spalte des Sammeleintrags die Beschreibungen statt „x“. Vermittelt ein Lehrgang des Lehrgangskatalogs einen solchen Eintrag, ist die Beschreibung der deutsche Name des Lehrgangs; „schon vorhanden“ gilt dann nur bei gleicher Beschreibung.
 
 **Lehrgänge**
 - **Katalog:** Neben Ebene, vermittelten Qualifikationen und Voraussetzungen (andere Lehrgänge) hat ein Lehrgang weitere Bedingungen: gültige Qualifikationen (`requiredQualifications`, z. B. eine Untersuchung), ein Mindestalter zum Lehrgangsbeginn (`minimumAge`; ein unbekanntes Geburtsdatum schließt nicht aus) und die zugelassenen Status (`allowedStatuses`, Standard Probezeit und aktiv; in der BW-Vorlage Truppmann Teil 1 auch Jugendfeuerwehr). Dazu ein Soll je Abteilung (`targets`) für den Lehrgangsbedarf. Die BW-Vorlage setzt für Atemschutzgeräteträger ein Mindestalter von 18 Jahren (Vorlagewert nach FwDV 7, mit der geltenden Vorschrift abzugleichen).
@@ -511,7 +512,7 @@ Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elt
 | `masterdata.complete` | Komplettdaten einschließlich Geburtsdatum und Arbeitgeber | `masterdata.persons.sensitive` |
 | `masterdata.birthdays` | Geburtstage im Zeitraum, runde markiert | `masterdata.persons.sensitive` |
 | `masterdata.jubilees` | Dienstjubiläen (10, 15, … 70 Jahre) im Jahr | `masterdata.persons.read` |
-| `masterdata.qualification-matrix` | Matrix Person × aktive Qualifikation | `masterdata.persons.read` |
+| `masterdata.qualification-matrix` | Matrix Person × aktive Qualifikation (Sammeleinträge mit den Beschreibungen) | `masterdata.persons.read` |
 | `masterdata.breathing-apparatus` | Personen mit gültiger Qualifikation Atemschutz | `masterdata.persons.read` |
 | `masterdata.probation` | Personen in der Probezeit mit Ende und Stand Truppmann Teil 1 | `masterdata.persons.read` |
 | `masterdata.age-limits` | Personen, die im Jahr 18, 55 oder 65 werden | `masterdata.persons.sensitive` |

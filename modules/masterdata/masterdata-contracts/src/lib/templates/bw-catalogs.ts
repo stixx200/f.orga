@@ -42,7 +42,10 @@ const QUALIFICATIONS: Entry[] = [
   { key: 'music-d3', name: { de: 'Musik: Lehrgang D3', en: 'Music: course D3' } },
   { key: 'music-c1', name: { de: 'Musik: Lehrgang C1', en: 'Music: course C1' } },
   { key: 'music-c2', name: { de: 'Musik: Lehrgang C2', en: 'Music: course C2' } },
-].map((entry) => ({ ...entry, attributes: { validityMonths: null } }));
+].map((entry) => ({ ...entry, attributes: { validityMonths: null, describe: false } }));
+
+/** Collective entry for courses without an own entry (e.g. first aid); the description names the actual course. */
+const OTHER_COURSE: Entry = { key: 'other-course', name: { de: 'Anderer Lehrgang', en: 'Other course' }, attributes: { validityMonths: null, describe: true } };
 
 const FUNCTIONS: Entry[] = [
   { key: 'incident-commander', name: { de: 'Einsatzleiter', en: 'Incident commander' }, attributes: { abbreviation: 'EL' } },
@@ -122,7 +125,7 @@ const OFFICES: Entry[] = [
 /** Catalog template for fire brigades in Baden-Württemberg. Applying it only adds missing keys. */
 export const BW_CATALOG_TEMPLATE: CatalogEntryInput[] = [
   ...entries('rank', RANKS),
-  ...entries('qualification', QUALIFICATIONS),
+  ...entries('qualification', [...QUALIFICATIONS, OTHER_COURSE]),
   ...entries('function', FUNCTIONS),
   ...entries('vehicle-type', VEHICLE_TYPES),
   ...entries('honor', HONORS),
