@@ -695,6 +695,17 @@ export class NoticesService {
     }).then((n) => this.logged('cost-recovery.notice-discarded', n, { reason }));
   }
 
+  /** Deletes a draft (never submitted or issued); its file number may be used again. */
+  async remove(id: string): Promise<void> {
+    const em = this.em.fork();
+    const notice = await this.load(em, id);
+    if (notice.status !== 'draft') throw new ConflictException({ code: 'cost-recovery.notDraft', status: notice.status });
+    const dto = toNoticeDto(notice);
+    em.remove(notice);
+    await em.flush();
+    await this.logged('cost-recovery.notice-deleted', dto);
+  }
+
   /** Lifts an issued notice (Aufhebung), e.g. waiver for undue hardship, also a paid one (payments are then refunded). */
   cancel(id: string, reason: string): Promise<Notice> {
     return this.transition(id, IN_EFFECT_STATUSES, (n) => {

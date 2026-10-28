@@ -349,7 +349,15 @@ describe('cost recovery', () => {
     expect((await post(`/cost-recovery/notices/${notice.id}/discard`, {}).expect(200)).body.status).toBe('discarded');
     const candidate = ((await get('/cost-recovery/candidates?from=2026-01-01&to=2026-12-31').expect(200)).body as { incidentId: string; noticeId: string | null }[]).find((c) => c.incidentId === incident.id);
     expect(candidate?.noticeId).toBeNull();
-    await post('/cost-recovery/notices', { incidentId: incident.id }).expect(201);
+    const draft = (await post('/cost-recovery/notices', { incidentId: incident.id }).expect(201)).body as { id: string; number: string };
+
+    // A draft can also be deleted: it disappears, and the next notice may take its number.
+    await test.http.delete(`/api/cost-recovery/notices/${draft.id}`).set('Cookie', admin).set(UI).expect(204);
+    await get(`/cost-recovery/notices/${draft.id}`).expect(404);
+    expect((await get(`/cost-recovery/incidents/${incident.id}/notices`).expect(200)).body.map((n: { id: string }) => n.id)).not.toContain(draft.id);
+    // Discarded, submitted or issued notices stay.
+    expect((await test.http.delete(`/api/cost-recovery/notices/${notice.id}`).set('Cookie', admin).set(UI).expect(409)).body.code).toBe('cost-recovery.notDraft');
+    expect((await post('/cost-recovery/notices', { incidentId: incident.id }).expect(201)).body.number).toBe(draft.number);
   });
 
   it('sets the legal ground only for existing, chargeable incidents', async () => {

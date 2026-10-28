@@ -217,7 +217,7 @@ function NoticeView({ notice, showIncident, onToggleIncident }: { notice: Notice
   const id = notice.id;
   const [form, setForm] = useState<Form>(() => formOf(notice));
   const [confirm, setConfirm] = useState<Action | null>(null);
-  const [dialog, setDialog] = useState<'objection' | 'cancel' | 'discard' | 'paid' | 'remind' | 'refund' | null>(null);
+  const [dialog, setDialog] = useState<'objection' | 'cancel' | 'discard' | 'delete' | 'paid' | 'remind' | 'refund' | null>(null);
   const [discardReason, setDiscardReason] = useState('');
   const editable = (notice.status === 'draft' || notice.status === 'review') && can(session, WRITE);
   const dirty = editable && JSON.stringify(form) !== JSON.stringify(formOf(notice));
@@ -248,6 +248,7 @@ function NoticeView({ notice, showIncident, onToggleIncident }: { notice: Notice
     },
   });
   const navigate = useNavigate();
+  const remove = useAction(() => send('DELETE', `cost-recovery/notices/${id}`), { invalidate: [keys.all], onSuccess: () => navigate('/cost-recovery/notices') });
   const amend = useAction(() => send<Notice>('POST', `cost-recovery/notices/${id}/amend`), { invalidate: [keys.all], success: t('notice.amendCreated'), onSuccess: (created) => navigate(`/cost-recovery/notices/${created.id}`) });
   // In effect, also when paid: objection, amendment and cancellation apply (an overpayment is refunded).
   const inEffect = IN_EFFECT_STATUSES.includes(notice.status);
@@ -291,7 +292,9 @@ function NoticeView({ notice, showIncident, onToggleIncident }: { notice: Notice
                 </Menu.Dropdown>
               </Menu>
             )}
-            {(notice.status === 'draft' || notice.status === 'review') && can(session, WRITE) && <Button variant="default" color="red" onClick={() => setDialog('discard')}>{t('notice.discard')}</Button>}
+            {/* Drafts are deleted; notices in review are discarded and stay in the list. */}
+            {notice.status === 'draft' && can(session, WRITE) && <Button variant="default" color="red" onClick={() => setDialog('delete')}>{t('notice.delete')}</Button>}
+            {notice.status === 'review' && can(session, WRITE) && <Button variant="default" color="red" onClick={() => setDialog('discard')}>{t('notice.discard')}</Button>}
             {inEffect && can(session, ISSUE) && <Button variant="default" color="red" onClick={() => setDialog('cancel')}>{t('notice.cancel')}</Button>}
           </Group>
         }
@@ -333,6 +336,9 @@ function NoticeView({ notice, showIncident, onToggleIncident }: { notice: Notice
         <ConfirmDialog opened onClose={() => setConfirm(null)} title={t(`confirm.${confirm}.title`)} description={<>{confirmText(confirm)}{dirty ? ` ${t('notice.savedFirst')}` : ''}</>} confirmLabel={t(`confirm.${confirm}.button`)} loading={step.isPending} onConfirm={() => step.mutate(confirm)} />
       )}
       {dialog === 'cancel' && <ConfirmDialog opened onClose={() => setDialog(null)} title={t('confirm.cancel.title')} description={t('confirm.cancel.text')} reason={t('confirm.cancel.reason')} confirmLabel={t('confirm.cancel.button')} loading={cancel.isPending} onConfirm={(reason) => cancel.mutate(reason)} />}
+      {dialog === 'delete' && (
+        <ConfirmDialog opened onClose={() => setDialog(null)} title={t('confirm.delete.title')} description={t('confirm.delete.text')} confirmLabel={t('confirm.delete.button')} loading={remove.isPending} onConfirm={() => remove.mutate(undefined)} />
+      )}
       {dialog === 'discard' && (
         <ConfirmDialog opened onClose={() => setDialog(null)} title={t('confirm.discard.title')} description={t('confirm.discard.text')} confirmLabel={t('confirm.discard.button')} loading={discard.isPending} onConfirm={() => discard.mutate(undefined)}>
           <TextInput label={t('confirm.discard.reason')} value={discardReason} onChange={(e) => setDiscardReason(e.currentTarget.value)} />

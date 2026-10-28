@@ -1,4 +1,4 @@
-import { Button, Group, Select, Stack, Switch, Text, TextInput } from '@mantine/core';
+import { Button, Checkbox, Group, Select, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { IconSearch } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -10,7 +10,7 @@ import { NoticeStatusBadge } from '../parts';
 
 const STATUSES: NoticeStatus[] = ['draft', 'review', 'issued', 'handed-over', 'paid', 'objection', 'cancelled', 'amended', 'discarded'];
 
-/** Notices with search, status and overdue filter; handover to the treasury of the filtered notices. */
+/** Notices with search, status and overdue filter; export and handover to the treasury of the selected notices. */
 export function NoticesPage() {
   const { t, i18n } = useTranslation('cost-recovery');
   const navigate = useNavigate();
@@ -26,12 +26,24 @@ export function NoticesPage() {
   const [confirm, setConfirm] = useState(false);
   const filter: ListFilter = { year: year ? Number(year) : undefined, status: status ?? undefined, q: q.trim() || undefined, overdue: overdue ? 'true' : undefined, refund: refund ? 'true' : undefined };
   const { data = [], isLoading } = useNotices(filter);
+  // Chosen notices (only the shown ones count, so a changed filter cannot export hidden ones).
+  const [selection, setSelection] = useState<Set<string>>(() => new Set());
+  const chosen = data.filter((n) => selection.has(n.id)).map((n) => n.id);
+  const allChosen = data.length > 0 && chosen.length === data.length;
+  const toggle = (id: string, checked: boolean) =>
+    setSelection((s) => {
+      const next = new Set(s);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
   const format = t(`settings.handoverFormats.${settings?.handover?.format ?? 'xlsx'}`);
-  const exportFile = useAction(() => download('GET', 'cost-recovery/export', filter));
-  const handOver = useAction(() => download('POST', 'cost-recovery/export/hand-over', { ...filter, status: undefined }), {
+  const exportFile = useAction(() => download('GET', 'cost-recovery/export', { ids: chosen.join(',') }));
+  const handOver = useAction(() => download('POST', 'cost-recovery/export/hand-over', { ids: chosen.join(',') }), {
     invalidate: [keys.all],
     onSuccess: (response) => {
       setConfirm(false);
+      setSelection(new Set());
       notifySuccess(t('notices.handedOver', { count: Number(response.headers.get('X-Handed-Over') ?? 0), changes: Number(response.headers.get('X-Changes') ?? 0) }));
     },
   });
@@ -42,8 +54,8 @@ export function NoticesPage() {
         title={t('notices.title')}
         actions={
           <Group gap="sm">
-            <Button variant="default" loading={exportFile.isPending} onClick={() => exportFile.mutate(undefined)}>{t('notices.export', { format })}</Button>
-            {can(session, WRITE) && <Button onClick={() => setConfirm(true)}>{t('notices.exportAndHandOver')}</Button>}
+            <Button variant="default" loading={exportFile.isPending} disabled={!chosen.length} onClick={() => exportFile.mutate(undefined)}>{t('notices.export', { format })}</Button>
+            {can(session, WRITE) && <Button disabled={!chosen.length} onClick={() => setConfirm(true)}>{t('notices.exportAndHandOver')}</Button>}
           </Group>
         }
       />
@@ -54,12 +66,35 @@ export function NoticesPage() {
         <Switch label={t('notices.onlyOverdue')} checked={overdue} onChange={(e) => setOverdue(e.currentTarget.checked)} mb={8} />
         <Switch label={t('notices.onlyRefund')} checked={refund} onChange={(e) => setRefund(e.currentTarget.checked)} mb={8} />
       </Group>
+      <Group gap="md">
+        <Checkbox
+          label={t('notices.selectAll')}
+          checked={allChosen}
+          indeterminate={chosen.length > 0 && !allChosen}
+          onChange={(e) => {
+            const checked = e.currentTarget.checked;
+            setSelection(checked ? new Set(data.map((n) => n.id)) : new Set());
+          }}
+          disabled={!data.length}
+        />
+        <Text size="sm" c="dimmed">{chosen.length ? t('notices.selected', { count: chosen.length }) : t('notices.selectHint')}</Text>
+        {chosen.length > 0 && <Button variant="subtle" size="compact-sm" onClick={() => setSelection(new Set())}>{t('notices.clearSelection')}</Button>}
+      </Group>
       <DataTable<Notice>
         rows={data}
         rowKey={(n) => n.id}
         onRowClick={(n) => navigate(`/cost-recovery/notices/${n.id}`)}
         empty={isLoading ? t('loading') : t('notices.empty')}
         columns={[
+          {
+            key: 'select',
+            header: '',
+            width: 40,
+            render: (n) => (
+              // The checkbox does not open the notice like a click on the row.
+              <Checkbox aria-label={t('notices.select')} checked={selection.has(n.id)} onClick={(e) => e.stopPropagation()} onChange={(e) => toggle(n.id, e.currentTarget.checked)} />
+            ),
+          },
           { key: 'number', header: t('fields.number'), render: (n) => <Text size="sm" fw={700} c="brand">{n.number}</Text> },
           { key: 'incident', header: t('fields.incident'), render: (n) => <><Text size="sm">{n.alarmKeyword} · {n.dispatchNumber}</Text><Text size="xs" c="dimmed">{formatDate(n.alarmedAt, i18n.language)} · {offense(n.offenseKey)}</Text></> },
           { key: 'debtors', header: t('fields.debtors'), render: (n) => n.debtors.map((d) => d.name).join('; ') },
