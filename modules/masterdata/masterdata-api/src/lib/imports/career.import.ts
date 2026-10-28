@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { findByAlias, type ImportContext, type ImportProfile, type ImportRow, type ImportRunResult, parseDate } from '@forga/core-api';
 import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
-import type { CatalogKind } from '@forga/masterdata-contracts';
+import { type CatalogKind, requiresDescription } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { HonorAward, Person, PersonQualification, RankAssignment } from '../masterdata.entities.js';
 import { PersonsService, WRITE } from '../persons/persons.service.js';
@@ -53,8 +53,8 @@ export class CareerImport {
       id: 'masterdata.career',
       name: { de: 'Lehrgänge, Dienstgrade und Ehrungen', en: 'Courses, ranks and honors' },
       description: {
-        de: 'Eine Zeile je Lehrgang, Beförderung oder Ehrung einer Person. Die Bezeichnung wird dem Katalog zugeordnet (z. B. „Truppführer, Lehrgang auf Kreisebene“ → Truppführer). Schon vorhandene Einträge mit demselben Datum bleiben unverändert.',
-        en: 'One row per course, promotion or honor of a person. The name is matched to the catalog (e.g. "Truppführer, Lehrgang auf Kreisebene" → squad leader). Existing entries with the same date stay unchanged.',
+        de: 'Eine Zeile je Lehrgang, Beförderung oder Ehrung einer Person. Die Bezeichnung wird dem Katalog zugeordnet (z. B. „Truppführer, Lehrgang auf Kreisebene“ → Truppführer). Wird eine Bezeichnung einem Sammeleintrag wie „Anderer Lehrgang“ zugeordnet, wird sie dort als Beschreibung übernommen. Schon vorhandene Einträge mit demselben Datum bleiben unverändert.',
+        en: 'One row per course, promotion or honor of a person. The name is matched to the catalog (e.g. "Truppführer, Lehrgang auf Kreisebene" → squad leader). A name assigned to a collective entry like "Other course" is kept there as description. Existing entries with the same date stay unchanged.',
       },
       permission: WRITE,
       fields: FIELDS,
@@ -102,7 +102,7 @@ export class CareerImport {
           name: { de: name, en: name },
           sortOrder: 1000,
           active: true,
-          attributes: kind === 'rank' ? { abbreviation: '', level: 0 } : kind === 'qualification' ? { validityMonths: null } : {},
+          attributes: kind === 'rank' ? { abbreviation: '', level: 0 } : kind === 'qualification' ? { validityMonths: null, describe: false } : {},
           aliases: [],
         });
         catalog.push(entry);
@@ -117,9 +117,13 @@ export class CareerImport {
 
       let exists: boolean;
       if (kind === 'qualification') {
-        exists = person.qualifications.getItems().some((q) => q.qualification === key && q.acquiredOn === date);
+        // A collective entry like "other course" keeps the imported name as description, so every course stays visible
+        // and a repeated import finds its entry again. The entry's own name describes nothing.
+        const description = requiresDescription(entry) ? name : '';
+        if (description && [entry.key, entry.name.de, entry.name.en].some((n) => n.toLowerCase() === description.toLowerCase())) { fail('masterdata.descriptionRequired'); continue; }
+        exists = person.qualifications.getItems().some((q) => q.qualification === key && q.acquiredOn === date && q.description === description);
         const months = entry.attributes['validityMonths'] as number | null | undefined;
-        if (!exists) person.qualifications.add(em.create(PersonQualification, { person, qualification: key, acquiredOn: date, validUntil: validUntil ?? (months ? addMonths(date, months) : null), courseAttendanceId: null, notes: '' }));
+        if (!exists) person.qualifications.add(em.create(PersonQualification, { person, qualification: key, acquiredOn: date, validUntil: validUntil ?? (months ? addMonths(date, months) : null), courseAttendanceId: null, description, notes: '' }));
       } else if (kind === 'rank') {
         exists = person.ranks.getItems().some((r) => r.rank === key && r.since === date);
         if (!exists) person.ranks.add(em.create(RankAssignment, { person, rank: key, since: date, notes: '' }));

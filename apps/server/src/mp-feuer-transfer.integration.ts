@@ -577,3 +577,52 @@ describe('MP-Feuer data transfer with the reports of the whole brigade as duty o
     expect((await get('/incidents/incidents?from=2025-08-01&to=2025-08-02')).body.flatMap((i: { reports: unknown[] }) => i.reports)).toHaveLength(3);
   });
 });
+
+/** A course of Erna Kurs in an MP-Feuer archive. */
+const course = (id: string, name: string, from: string) => ({ PER_ID: id, PER_INDEX: 'P-ERNA', PER_LEHRG_KURZ: '', PER_LEHRG_LANG: name, PER_ZEITRAUM_VD: from, PER_ZEITRAUM_BD: '', PER_BESTAETIG_DAT: '', PER_GUELTIG_BD: '', PER_LEHRG_OK: 1 });
+/** Qualifications "other course" of Erna Kurs. */
+const otherCourses = async () =>
+  ((await get(`/masterdata/persons/${await personId('Kurs')}`).expect(200)).body.qualifications as { qualification: string; acquiredOn: string; description: string }[])
+    .filter((q) => q.qualification === 'other-course')
+    .map(({ acquiredOn, description }) => ({ acquiredOn, description }));
+
+describe('MP-Feuer data transfer with courses assigned to the collective entry "other course"', () => {
+  let transfer: string;
+  const departments = { '03': 'Abteilung Musterstadt' };
+  const run = (profile: string, apply: boolean, mappings: Record<string, Record<string, string>> = {}) =>
+    post(`/core/imports/transfers/${transfer}/${apply ? 'apply' : 'preview'}`, { profile, departments, mappings }).expect(200);
+  const archive = transferZip({
+    PER_STAMM: [person('P-ERNA', '0001', 'Erna', 'Kurs')],
+    PER_LEHRG: [course('L1', 'Erste Hilfe', '2022-03-01'), course('L2', 'Holz in Spannung', '2023-04-01'), course('L3', 'Anderer Lehrgang', '2023-05-01')],
+  });
+
+  it('reads the archive and the person', async () => {
+    const response = await test.http.post('/api/core/imports/transfers').set('Cookie', admin).set(UI).attach('files', archive, 'MPTRA_03_2026-10-28-074935_Abt._Musterstadt.zip').expect(201);
+    transfer = response.body.id;
+    expect((await run('masterdata.persons', true)).body.counts).toMatchObject({ create: 1, error: 0 });
+  });
+
+  it('keeps the original names as descriptions; the entry name alone describes nothing', async () => {
+    const preview = await run('masterdata.career', false);
+    expect(preview.body.unmatched).toEqual([
+      { kind: 'qualification', value: 'Erste Hilfe', count: 1 },
+      { kind: 'qualification', value: 'Holz in Spannung', count: 1 },
+    ]);
+    const mappings = { qualification: { 'Erste Hilfe': 'other-course', 'Holz in Spannung': 'other-course' } };
+    const applied = await run('masterdata.career', true, mappings);
+    expect(applied.body.counts).toMatchObject({ create: 2, error: 1 });
+    expect(applied.body.rows.find((r: { action: string }) => r.action === 'error').messages).toEqual([{ code: 'masterdata.descriptionRequired' }]);
+    expect(await otherCourses()).toEqual([
+      { acquiredOn: '2022-03-01', description: 'Erste Hilfe' },
+      { acquiredOn: '2023-04-01', description: 'Holz in Spannung' },
+    ]);
+    // The choices are remembered as aliases, so the next import assigns the names without asking.
+    expect((await catalogEntry('qualification', 'other-course')).aliases).toEqual(['Erste Hilfe', 'Holz in Spannung']);
+  });
+
+  it('finds the described entries again in a repeated import', async () => {
+    const again = await run('masterdata.career', true);
+    expect(again.body).toMatchObject({ counts: { create: 0, unchanged: 2, error: 1 }, unmatched: [] });
+    expect(await otherCourses()).toHaveLength(2);
+  });
+});

@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Group, List, MultiSelect, NumberInput, Select, SimpleGrid, Stack, Switch, Tabs, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Checkbox, Group, List, MultiSelect, NumberInput, Select, SimpleGrid, Stack, Switch, Tabs, Text, TextInput } from '@mantine/core';
 import { IconTrash } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -11,9 +11,9 @@ import { useCourses } from '../persons/CoursesTab';
 
 type Editing = { kind: CatalogKind; entry?: CatalogEntry } | { kind: 'course'; course?: Course } | null;
 
-const ATTRIBUTE_FIELDS: Record<CatalogKind, { key: string; type: 'text' | 'number' | 'category' }[]> = {
+const ATTRIBUTE_FIELDS: Record<CatalogKind, { key: string; type: 'text' | 'number' | 'category' | 'flag' }[]> = {
   function: [{ key: 'abbreviation', type: 'text' }],
-  qualification: [{ key: 'validityMonths', type: 'number' }],
+  qualification: [{ key: 'validityMonths', type: 'number' }, { key: 'describe', type: 'flag' }],
   'vehicle-type': [{ key: 'crew', type: 'text' }, { key: 'seats', type: 'number' }, { key: 'statisticsCategory', type: 'category' }],
   honor: [],
   'exit-reason': [],
@@ -61,7 +61,7 @@ function EntryDialog({ kind, entry, onClose }: { kind: CatalogKind; entry?: Cata
           <TextInput label={t('catalogs.nameEn')} value={form.en} onChange={(e) => setForm({ ...form, en: e.currentTarget.value })} />
         </SimpleGrid>
         <SimpleGrid cols={2}>
-          {ATTRIBUTE_FIELDS[kind].map((f) =>
+          {ATTRIBUTE_FIELDS[kind].filter((f) => f.type !== 'flag').map((f) =>
             f.type === 'number' ? (
               <NumberInput key={f.key} label={t(`catalogs.attributes.${f.key}`)} value={(form.attributes[f.key] as number | null) ?? ''} onChange={(v) => attribute(f.key, v === '' ? null : Number(v))} min={0} />
             ) : f.type === 'category' ? (
@@ -80,6 +80,9 @@ function EntryDialog({ kind, entry, onClose }: { kind: CatalogKind; entry?: Cata
           )}
           <NumberInput label={t('catalogs.sortOrder')} value={form.sortOrder} onChange={(v) => setForm({ ...form, sortOrder: Number(v) || 0 })} />
         </SimpleGrid>
+        {ATTRIBUTE_FIELDS[kind].filter((f) => f.type === 'flag').map((f) => (
+          <Checkbox key={f.key} label={t(`catalogs.attributes.${f.key}`)} description={t(`catalogs.${f.key}Hint`)} checked={form.attributes[f.key] === true} onChange={(e) => attribute(f.key, e.currentTarget.checked)} />
+        ))}
         <Switch label={t('catalogs.active')} description={t('catalogs.activeHint')} checked={form.active} onChange={(e) => setForm({ ...form, active: e.currentTarget.checked })} />
         <AliasesInput value={form.aliases} onChange={(aliases) => setForm({ ...form, aliases })} />
       </Stack>
@@ -269,7 +272,7 @@ function CatalogTable({ kind, onEdit }: { kind: CatalogKind; onEdit: (entry?: Ca
           { key: 'name', header: t('catalogs.name'), render: (e) => <Text fw={700} size="sm">{e.name.de}</Text> },
           { key: 'en', header: t('catalogs.nameEn'), render: (e) => e.name.en },
           { key: 'key', header: t('catalogs.key'), render: (e) => <code>{e.key}</code> },
-          ...ATTRIBUTE_FIELDS[kind].map((f) => ({ key: f.key, header: t(`catalogs.attributes.${f.key}`), render: (e: CatalogEntry) => String(e.attributes[f.key] ?? '') })),
+          ...ATTRIBUTE_FIELDS[kind].map((f) => ({ key: f.key, header: t(`catalogs.attributes.${f.key}`), render: (e: CatalogEntry) => (f.type === 'flag' ? (e.attributes[f.key] === true ? '✓' : '') : String(e.attributes[f.key] ?? '')) })),
           { key: 'active', header: t('catalogs.status'), render: (e) => <StatusBadge tone={e.active ? 'done' : 'neutral'}>{t(e.active ? 'catalogs.activeBadge' : 'catalogs.inactiveBadge')}</StatusBadge> },
           {
             key: 'actions',

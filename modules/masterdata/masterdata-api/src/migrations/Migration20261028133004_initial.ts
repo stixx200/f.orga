@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261028125234_initial extends Migration {
+export class Migration20261028133004_initial extends Migration {
 
-  override name = 'Migration20261028125234_initial';
+  override name = 'Migration20261028133004_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"masterdata\";");
@@ -21,7 +21,7 @@ export class Migration20261028125234_initial extends Migration {
     this.addSql("create table \"masterdata\".\"department_group\" (\"id\" uuid not null, \"department_id\" uuid not null, \"name\" varchar(255) not null, \"leader_id\" uuid null, \"member_ids\" jsonb not null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"course_nomination\" (\"id\" uuid not null, \"person_id\" uuid not null, \"course_id\" uuid not null, \"priority\" int not null default 2, \"desired_period\" varchar(255) not null default '', \"status\" varchar(255) not null default 'nominated', \"notes\" text not null default '', \"run_id\" uuid null, \"attendance_id\" varchar(255) null, \"created_at\" timestamptz not null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"course_attendance\" (\"id\" uuid not null, \"person_id\" uuid not null, \"course_id\" uuid not null, \"run_id\" uuid null, \"starts_on\" date not null, \"ends_on\" date null, \"result\" varchar(255) not null, \"location\" varchar(255) not null default '', \"notes\" text not null default '', primary key (\"id\"));");
-    this.addSql("create table \"masterdata\".\"person_qualification\" (\"id\" uuid not null, \"person_id\" uuid not null, \"qualification\" varchar(255) not null, \"acquired_on\" date not null, \"valid_until\" date null, \"course_attendance_id\" varchar(255) null, \"notes\" text not null default '', primary key (\"id\"));");
+    this.addSql("create table \"masterdata\".\"person_qualification\" (\"id\" uuid not null, \"person_id\" uuid not null, \"qualification\" varchar(255) not null, \"acquired_on\" date not null, \"valid_until\" date null, \"course_attendance_id\" varchar(255) null, \"description\" varchar(255) not null default '', \"notes\" text not null default '', primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"rank_assignment\" (\"id\" uuid not null, \"person_id\" uuid not null, \"rank\" varchar(255) not null, \"since\" date not null, \"notes\" text not null default '', primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"rest_period\" (\"id\" uuid not null, \"person_id\" uuid not null, \"reason\" varchar(255) not null, \"from\" date not null, \"to\" date null, \"notes\" text not null default '', primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"station\" (\"id\" uuid not null, \"name\" varchar(255) not null, \"department_id\" uuid not null, \"street\" varchar(255) not null default '', \"postal_code\" varchar(255) not null default '', \"city\" varchar(255) not null default '', \"permanently_staffed\" boolean not null default false, \"notes\" text not null default '', \"version\" int not null default 1, primary key (\"id\"));");

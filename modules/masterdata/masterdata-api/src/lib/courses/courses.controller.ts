@@ -48,6 +48,7 @@ import {
   type NominationStatus,
   OPEN_NOMINATION_STATUSES,
   type QualificationChangedEvent,
+  requiresDescription,
 } from '@forga/masterdata-contracts';
 import { CatalogEntry, CatalogService } from '../catalog/catalog.js';
 import { Department, Person, PersonQualification } from '../masterdata.entities.js';
@@ -600,7 +601,13 @@ export class CoursesController {
       throw new ConflictException({ code: 'masterdata.coursePassedAlready' });
     }
     const valid = new Set(validQualifications(person, passedOn));
-    const held = entries.length > 0 && entries.every((entry) => valid.has(entry.key));
+    // A collective entry like "other course" is described by the course name and held only with that description.
+    const description = (entry: CatalogEntry) => (requiresDescription(entry) ? course.name.de : '');
+    const holds = (entry: CatalogEntry) =>
+      requiresDescription(entry)
+        ? person.qualifications.getItems().some((q) => q.qualification === entry.key && q.description === description(entry) && q.acquiredOn <= passedOn && (!q.validUntil || q.validUntil >= passedOn))
+        : valid.has(entry.key);
+    const held = entries.length > 0 && entries.every(holds);
     if (passed && held && !confirmHeld) throw new ConflictException({ code: 'masterdata.qualificationsHeld' });
     // The ID is needed before the flush to link the granted qualifications.
     const attendance = em.create(CourseAttendance, { id: uuidv7(), ...fields, person, course });
@@ -614,7 +621,7 @@ export class CoursesController {
     // Held before: a documented attendance only, without new qualifications and without the event for the allowance.
     if (held) return { attendance, publish: async () => undefined };
 
-    const granted = entries.filter((entry) => !valid.has(entry.key));
+    const granted = entries.filter((entry) => !holds(entry));
     for (const entry of granted) {
       const months = entry.attributes['validityMonths'] as number | null | undefined;
       person.qualifications.add(
@@ -624,6 +631,7 @@ export class CoursesController {
           acquiredOn: passedOn,
           validUntil: months ? addMonths(passedOn, months) : null,
           courseAttendanceId: attendance.id,
+          description: description(entry),
         }),
       );
     }
