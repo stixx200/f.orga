@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { Finding, PreviousCrew, Report } from '@forga/incidents-contracts';
 import { api, formatDate, formatMoney, useLocalized, useTranslation } from '@forga/web-sdk';
 import { Notice, notifyError, notifySuccess, Panel, StatusBadge } from '@forga/web-ui';
-import { personName, useFunctions, usePersons, useStations, useVehicles } from '../api';
+import { personName, useFunctions, useNames, usePersons, useStations, useVehicles } from '../api';
 import type { Content, Personnel } from './editor';
 import { mergeFindings, useFindingText } from './findings';
 import { PersonDialog, placeOf, type Target, targetOf } from './PersonDialog';
@@ -47,6 +47,7 @@ export function PersonnelSection({ content, report, update, disabled, findings }
   const { data: persons = [] } = usePersons();
   const { data: vehicles = [] } = useVehicles();
   const { data: stations = [] } = useStations();
+  const names = useNames();
   const { data: functions = [] } = useFunctions();
   const [personIds, setPersonIds] = useState<string[]>([]);
   const [guest, setGuest] = useState('');
@@ -61,7 +62,7 @@ export function PersonnelSection({ content, report, update, disabled, findings }
   const ownStations = stations.filter((s) => !report.departmentId || s.departmentId === report.departmentId);
   const usedStationIds = [...new Set(content.personnel.flatMap((p) => (p.standbyStationId ? [p.standbyStationId] : [])))];
   const targets: Target[] = [
-    ...[...new Set([...usedVehicleIds, ...ownVehicles.map((v) => v.id)])].map((id) => ({ value: `v:${id}`, label: vehicles.find((v) => v.id === id)?.designation ?? id })),
+    ...[...new Set([...usedVehicleIds, ...ownVehicles.map((v) => v.id)])].map((id) => ({ value: `v:${id}`, label: names.vehicle(id) || id })),
     ...[...new Set([...usedStationIds, ...ownStations.map((s) => s.id)])].map((id) => ({ value: `s:${id}`, label: t('personnel.standbyAt', { station: stations.find((s) => s.id === id)?.name ?? '' }) })),
   ];
   // The place to add to: the last used vehicle unless one is chosen.
@@ -128,7 +129,7 @@ export function PersonnelSection({ content, report, update, disabled, findings }
   const groups = [
     ...usedVehicleIds.map((id) => {
       const vehicle = vehicles.find((v) => v.id === id);
-      return { key: `v:${id}`, title: vehicle?.designation ?? id, subtitle: vehicle?.radioCallSign ?? '', seats: vehicle?.seats, standby: false };
+      return { key: `v:${id}`, title: vehicle?.designation ?? id, subtitle: [vehicle?.radioCallSign, vehicle && vehicle.departmentId !== report.departmentId ? names.department(vehicle.departmentId) : ''].filter(Boolean).join(' · '), seats: vehicle?.seats, standby: false };
     }),
     ...usedStationIds.map((id) => ({ key: `s:${id}`, title: t('personnel.standby'), subtitle: stations.find((s) => s.id === id)?.name ?? '', seats: undefined, standby: true })),
     ...(content.personnel.some((p) => !targetOf(p)) ? [{ key: '', title: t('personnel.withoutPlace'), subtitle: '', seats: undefined, standby: false }] : []),
