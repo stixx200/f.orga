@@ -989,6 +989,7 @@ window.FORGA_EN = {
 "Zurück": "Back",
 "Zurück an Verfasser": "Return to author",
 "Zurück an Verfasser …": "Return to author …",
+"Zurück zur Übersicht": "Back to overview",
 "Zurückgeben": "Return",
 "Zusatzmodul installieren": "Install add-on module",
 "Zusatzspalten": "Extra columns",

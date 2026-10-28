@@ -602,6 +602,10 @@ hr.trenner { border: 0; border-top: 1px solid var(--gitter); margin: 16px 0; }
 .tk-kopf .tk-wache strong { display: block; font-size: 1.15rem; line-height: 1.2; overflow-wrap: break-word; }
 .tk-kopf .tk-uhr { margin-left: auto; font-size: 1.6rem; font-weight: bold; color: var(--neben); font-variant-numeric: tabular-nums; }
 .tk-inhalt { flex: 1; width: 100%; max-width: 1180px; margin: 0 auto; padding: 24px 24px 48px; }
+/* „Zurück zur Übersicht“: groß, links im klebenden Kopf, auf jedem Bildschirm außer der Übersicht selbst */
+.tk-heim { display: inline-flex; align-items: center; gap: 12px; min-height: 64px; padding: 8px 24px 8px 18px; margin-right: 8px; flex: none; background: var(--dienst); border-radius: var(--radius); box-shadow: var(--e2); color: #fff; font-weight: bold; font-size: 1.1rem; letter-spacing: .02em; text-transform: uppercase; text-decoration: none; }
+.tk-heim:hover { background: var(--dienst-dunkel); color: #fff; box-shadow: var(--e4); }
+.tk-heim .sym { width: 30px; height: 30px; stroke-width: 2.2; }
 .tk-zurueck { display: inline-flex; align-items: center; min-height: 48px; margin-bottom: 8px; font-weight: bold; text-decoration: none; }
 .tk-titel { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 16px; margin-bottom: 16px; }
 .tk-titel h1 { margin: 0; font-size: 1.9rem; }
@@ -673,6 +677,9 @@ a.tk-ereignis:hover { box-shadow: var(--e4); border-color: var(--dienst); }
   .tk-kopf .tk-wache strong { font-size: 1rem; }
   .tk-kopf .tk-uhr { font-size: 1.1rem; }
   .tk-kopf .sprache button { min-width: 40px; padding: 0 8px; }
+  .tk-heim { min-height: 56px; padding: 6px 14px 6px 10px; gap: 8px; font-size: .9rem; margin-right: 0; }
+  .tk-heim .sym { width: 26px; height: 26px; }
+  .tk-heim + img { display: none; }
   .tk-inhalt { padding: 16px 16px 40px; }
   .tk-titel h1 { font-size: 1.45rem; }
   .tk-abteilungen a { min-height: 48px; padding: 6px 8px; font-size: .85rem; }

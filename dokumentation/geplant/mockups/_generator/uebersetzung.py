@@ -1468,6 +1468,7 @@ zuletzt gesehen heute 14:31 => last seen today 14:31
 Ansicht Jugendfeuerwehr (nur Dienste) => Youth fire brigade view (services only)
 B3 Brand Scheune · Bericht Abteilung Musterstadt. Ändern oder Austragen bis 19:12 hier am Terminal. Zurück zur Übersicht in 10 s. => B3 Brand Scheune · report of the Musterstadt department. Change or remove until 19:12 here at the terminal. Back to the overview in 10 s.
 Abteilung wählen => Choose department
+Zurück zur Übersicht => Back to overview
 Dienst · heute 14:00–16:30 · Jugendfeuerwehr Musterstadt => Service · today 14:00–16:30 · Jugendfeuerwehr Musterstadt
 Eintragen bis 17:30 => Sign-in until 17:30
 Jugendfeuerwehrdienst: Leon Hartmann => Youth fire brigade service: Leon Hartmann
