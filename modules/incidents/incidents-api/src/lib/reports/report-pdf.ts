@@ -238,7 +238,8 @@ export class ReportPdf {
       ...paragraph(t.actions, report.actions),
       ...paragraph(t.cause, report.cause),
       ...paragraph(t.equipment, report.equipment),
-      ...(report.primary ? [heading(t.statistics), statisticsBlock(report.statistics ?? null, t)] : []),
+      // The statistics belong to the incident; the primary report shows them.
+      ...(report.primary ? [heading(t.statistics), statisticsBlock(report.incident.statistics ?? null, t)] : []),
       ...(dto.involvedParties.length
         ? [
             heading(t.parties),

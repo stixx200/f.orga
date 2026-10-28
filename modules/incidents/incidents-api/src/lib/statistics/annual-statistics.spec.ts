@@ -57,7 +57,7 @@ const input = (extra: Partial<StatisticsInput>): StatisticsInput => ({
   permanentlyStaffedStations: 0,
   members: [],
   vehicles: [],
-  primaryReports: [],
+  incidents: [],
   ownCasualties: [],
   ...extra,
 });
@@ -94,7 +94,7 @@ describe('computeAnnualStatistics', () => {
     const values = asMap(
       computeAnnualStatistics(
         input({
-          primaryReports: [
+          incidents: [
             stats({ fireSize: 'small-b', rescued: 2, rescuedSmokeInhalation: 1 }),
             stats({ fireSize: 'medium', vehicleFire: true, dead: 1 }),
             stats({ ownMunicipality: false, fireSize: 'large' }),

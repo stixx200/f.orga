@@ -28,7 +28,6 @@ const content = (vehicles: object[], extra: object = {}) => ({
   times: { alarmedAt: T('13:00'), returnedAt: T('16:00') },
   situation: 'Rauch aus Dachstuhl',
   actions: 'Innenangriff',
-  statistics: { mainType: 'fire', fireSize: 'small-b' },
   personnel: [
     { personId: ids.jonas, vehicleId: ids.lf },
     { personId: ids.max, vehicleId: ids.tsf },
@@ -60,6 +59,8 @@ beforeAll(async () => {
   const incident = await post('/incidents/incidents', { dispatchNumber: '2026-200001', alarmKeyword: 'B2', alarmedAt: T('13:00'), location: { city: 'Musterstadt' }, departmentIds: [ids.musterstadt] }).expect(201);
   ids.incident = incident.body.id;
   ids.report = incident.body.reports[0].id;
+  // The statistics belong to the incident, so the report can be submitted and released.
+  await put(`/incidents/incidents/${ids.incident}/statistics`, { statistics: { mainType: 'fire', fireSize: 'small-b' }, version: incident.body.version }).expect(200);
   later.vehicleId = ids.tsf;
 });
 

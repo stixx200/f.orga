@@ -94,37 +94,6 @@ const MAIL = {
   },
 } satisfies Record<Language, unknown>;
 
-export function toIncidentDto(incident: IncidentEntity): IncidentDto {
-  return {
-    id: incident.id,
-    dispatchNumber: incident.dispatchNumber,
-    internalNumber: incident.internalNumber,
-    alarmKeyword: incident.alarmKeyword,
-    alarmMessage: incident.alarmMessage,
-    alarmedAt: incident.alarmedAt.toISOString(),
-    location: incident.location,
-    createdVia: incident.createdVia,
-    chargeable: incident.chargeable,
-    chargeableReason: incident.chargeableReason,
-    notes: incident.notes,
-    reports: incident.reports
-      .getItems()
-      .toSorted((a, b) => Number(b.primary) - Number(a.primary) || a.number.localeCompare(b.number))
-      .map((r) => ({
-        id: r.id,
-        departmentId: r.departmentId ?? null,
-        unit: r.unit ?? null,
-        number: r.number,
-        primary: r.primary,
-        status: r.status,
-        locked: r.locked,
-        authorPersonId: r.authorPersonId ?? null,
-        hasStatistics: Boolean(r.statistics),
-      })),
-    version: incident.version,
-  };
-}
-
 /** Error code of a failed action, e.g. `incidents.findingsOpen`; unexpected errors give `incidents.releaseFailed`. */
 function errorCode(error: unknown): string {
   const response = (error as { getResponse?: () => unknown }).getResponse?.();
@@ -179,15 +148,14 @@ export class IncidentsController {
     if (departmentId) where.push({ reports: { departmentId } });
     if (status) where.push({ reports: { status: status as Report['status'] } });
     if (mine === 'true') where.push({ reports: { authorPersonId: user.personId ?? '-' } });
-    if (withoutStatistics === 'true') where.push({ reports: { primary: true, statistics: null } });
     const em = this.em.fork();
-    let incidents = await em.find(IncidentEntity, where.length ? { $and: where } : {}, { populate: ['reports'], orderBy: { alarmedAt: 'desc' }, limit: 500 });
     if (withoutStatistics === 'true') {
       // Only keywords that count in the statistics need them.
-      const counted = new Set((await em.find(AlarmKeywordEntity, { mainType: { $ne: null } })).map((k) => k.key));
-      incidents = incidents.filter((i) => counted.has(i.alarmKeyword));
+      const counted = (await em.find(AlarmKeywordEntity, { mainType: { $ne: null } })).map((k) => k.key);
+      where.push({ statistics: null, alarmKeyword: { $in: counted } });
     }
-    return incidents.map(toIncidentDto);
+    const incidents = await em.find(IncidentEntity, where.length ? { $and: where } : {}, { populate: ['reports'], orderBy: { alarmedAt: 'desc' }, limit: 500 });
+    return this.reports.incidentDtos(em, incidents, user);
   }
 
   /**
@@ -227,8 +195,7 @@ export class IncidentsController {
     await this.reports.publishCreated(incident, { units: input.units, personId: user.personId ?? null });
     // A requested unit report the owning module did not create (e.g. its handler failed) is written by the creator.
     for (const unit of input.units) await this.unitReports.createUnitReport(incident.id, unit, { authorPersonId: user.personId ?? null, personnel: [] });
-    const created = await this.em.fork().findOneOrFail(IncidentEntity, incident.id, { populate: ['reports'] });
-    return toIncidentDto(created);
+    return this.incidentDto(incident.id, user);
   }
 
   /**
@@ -297,9 +264,11 @@ export class IncidentsController {
   @Get('incidents/:id')
   @RequirePermissions(READ)
   async get(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<IncidentDto> {
-    const incident = await this.em.fork().findOne(IncidentEntity, id, { populate: ['reports'] });
+    const em = this.em.fork();
+    const incident = await em.findOne(IncidentEntity, id, { populate: ['reports'] });
     if (!incident || !this.visible(user, incident)) throw new NotFoundException();
-    return toIncidentDto(incident);
+    const [dto] = await this.reports.incidentDtos(em, [incident], user);
+    return dto;
   }
 
   /**
@@ -345,7 +314,29 @@ export class IncidentsController {
       location: input.location,
     });
     await em.flush();
-    return toIncidentDto(incident);
+    return this.incidentDto(incident.id, user);
+  }
+
+  /**
+   * Statistics of the incident (once per incident, not per report), set or removed (`null`) with the version the
+   * client loaded. Releasers change them until the year of the annual statistics is closed, also after the release
+   * (no new release, no events); writers of a report of the incident while one of their reports is an unlocked draft.
+   */
+  @Put('incidents/:id/statistics')
+  @RequirePermissions(READ)
+  async statistics(
+    @Param('id') id: string,
+    @Body(new ZodPipe(StatisticsUpdate)) input: ReturnType<typeof StatisticsUpdate.parse>,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<IncidentDto> {
+    const em = this.em.fork();
+    const incident = await em.findOne(IncidentEntity, id, { populate: ['reports'] });
+    if (!incident || !this.visible(user, incident)) throw new NotFoundException();
+    await this.reports.setStatistics(em, incident, input.statistics, input.version, user);
+    await em.flush();
+    await this.audit.log('incidents.statistics-changed', { incidentId: incident.id, dispatchNumber: incident.dispatchNumber, removed: !input.statistics });
+    const [dto] = await this.reports.incidentDtos(em, [incident], user);
+    return dto;
   }
 
   /** Costs and notes apply to the whole incident, not to one report; also after the reports are released. */
@@ -354,6 +345,7 @@ export class IncidentsController {
   async costs(
     @Param('id') id: string,
     @Body(new ZodPipe(IncidentCosts)) input: ReturnType<typeof IncidentCosts.parse>,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<IncidentDto> {
     const em = this.em.fork();
     // `incidents.costs` applies to the whole brigade, like releasing.
@@ -362,7 +354,8 @@ export class IncidentsController {
     assertVersion(incident, input.version);
     em.assign(incident, { chargeable: input.chargeable, chargeableReason: input.chargeable ? input.chargeableReason : '', notes: input.notes });
     await em.flush();
-    return toIncidentDto(incident);
+    const [dto] = await this.reports.incidentDtos(em, [incident], user);
+    return dto;
   }
 
   /**
@@ -427,26 +420,6 @@ export class IncidentsController {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
     res.send(pdf);
-  }
-
-  /**
-   * Statistics of a primary report, changed by a releaser without a new release, also after the release
-   * (the release events for compensation and respiratory protection are not sent again).
-   */
-  @Put('reports/:id/statistics')
-  @RequirePermissions(RELEASE)
-  async updateStatistics(
-    @Param('id') id: string,
-    @Body(new ZodPipe(StatisticsUpdate)) input: ReturnType<typeof StatisticsUpdate.parse>,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<Report> {
-    if (user.grant(RELEASE) !== 'brigade') throw new ForbiddenException({ code: 'auth.forbidden', permissions: [RELEASE] });
-    const em = this.em.fork();
-    const report = await this.reports.load(em, id, user);
-    await this.reports.setStatistics(em, report, input.statistics, input.version);
-    await em.flush();
-    await this.audit.log('incidents.statistics-changed', { reportId: report.id, reportNumber: report.number, removed: !input.statistics });
-    return this.reports.toDto(em, report);
   }
 
   /**
@@ -744,6 +717,13 @@ export class IncidentsController {
   }
 
   // ----- Helpers -----
+
+  /** The incident as the API returns it, freshly loaded (e.g. with the reports other modules added). */
+  private async incidentDto(id: string, user: AuthenticatedUser): Promise<IncidentDto> {
+    const em = this.em.fork();
+    const [dto] = await this.reports.incidentDtos(em, [await em.findOneOrFail(IncidentEntity, id, { populate: ['reports'] })], user);
+    return dto;
+  }
 
   /** Incidents with the dispatch number, ignoring case and spaces. */
   private async findByDispatchNumber(em: EntityManager, dispatchNumber: string): Promise<IncidentEntity[]> {

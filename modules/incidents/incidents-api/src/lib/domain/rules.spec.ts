@@ -25,7 +25,7 @@ const base = (extra: Partial<RuleInput> = {}): RuleInput => ({
   times: { alarmedAt: T('13:05'), returnedAt: T('15:50') },
   situation: 'Rauch aus Fenster',
   actions: 'Innenangriff',
-  statistics: { ownMunicipality: true, mainType: 'fire', fireSize: 'small-b', technicalCategory: null, falseAlarmType: null, disasterPreAlarm: false, disasterOperation: false, rescued: 0, rescuedSmokeInhalation: 0, dead: 0, vehicleFire: false, trafficAccident: false, animalsRescued: 0 },
+  incidentHasStatistics: true,
   keyword: { mainType: 'fire', requiresVehicle: true },
   personnel: [person('jonas')],
   sameIncident: [],
@@ -52,11 +52,10 @@ describe('evaluateRules', () => {
     ]);
   });
 
-  it('requires statistics on the primary report only, and none for uncounted keywords', () => {
-    expect(rules(base({ statistics: null }))).toEqual(['error:statistics-missing']);
-    expect(rules(base({ primary: false }))).toEqual(['error:statistics-not-allowed']);
-    expect(rules(base({ keyword: { mainType: null, requiresVehicle: false } }))).toEqual(['error:statistics-not-allowed']);
-    expect(rules(base({ keyword: { mainType: null, requiresVehicle: false }, statistics: null }))).toEqual([]);
+  it('reports missing incident statistics on the primary report only, and only for counted keywords', () => {
+    expect(rules(base({ incidentHasStatistics: false }))).toEqual(['error:statistics-missing']);
+    expect(rules(base({ primary: false, incidentHasStatistics: false }))).toEqual([]);
+    expect(rules(base({ keyword: { mainType: null, requiresVehicle: false }, incidentHasStatistics: false }))).toEqual([]);
   });
 
   it('requires a vehicle or standby, except for keywords without vehicles', () => {
@@ -122,8 +121,8 @@ describe('evaluateRules', () => {
     // Primary report: same alarm as the incident; departments alerted later start later, but never earlier.
     expect(rules(base({ incidentAlarmedAt: T('13:00') }))).toEqual(['warning:incident-time-differs']);
     expect(rules(base({ incidentAlarmedAt: T('13:05') }))).toEqual([]);
-    expect(rules(base({ primary: false, statistics: null, incidentAlarmedAt: T('13:00') }))).toEqual([]);
-    expect(rules(base({ primary: false, statistics: null, incidentAlarmedAt: T('13:10') }))).toEqual(['warning:incident-time-differs']);
+    expect(rules(base({ primary: false, incidentAlarmedAt: T('13:00') }))).toEqual([]);
+    expect(rules(base({ primary: false, incidentAlarmedAt: T('13:10') }))).toEqual(['warning:incident-time-differs']);
   });
 
   it('checks the times of each person against the report and the configured long duration', () => {
@@ -186,7 +185,7 @@ describe('evaluateRules', () => {
   });
 
   it('takes the persons of a brigade-wide unit (e.g. the duty officer) from every department, with a vehicle only if the unit needs one', () => {
-    const unit = { primary: false, statistics: null, departmentId: undefined, persons: facts({ departmentIds: ['ahornfeld'] }) };
+    const unit = { primary: false, departmentId: undefined, persons: facts({ departmentIds: ['ahornfeld'] }) };
     expect(rules(base({ ...unit, unit: { vehicleRequired: false }, personnel: [person('jonas', { vehicleId: null })] }))).toEqual([]);
     expect(rules(base({ ...unit, unit: { vehicleRequired: true }, personnel: [person('jonas', { vehicleId: null })] }))).toEqual(['error:vehicle-missing:jonas']);
   });

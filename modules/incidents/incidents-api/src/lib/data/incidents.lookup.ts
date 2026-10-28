@@ -45,7 +45,6 @@ export class IncidentsLookupService implements IncidentsLookup {
 
   private async summary(incident: IncidentEntity): Promise<ChargeableIncident> {
     const reports = incident.reports.getItems();
-    const primary = reports.find((r) => r.primary) ?? reports[0];
     const keyword = await this.em.fork().findOne(AlarmKeywordEntity, { key: incident.alarmKeyword });
     return {
       incidentId: incident.id,
@@ -54,8 +53,8 @@ export class IncidentsLookupService implements IncidentsLookup {
       alarmedAt: incident.alarmedAt.toISOString(),
       location: locationText(incident.location),
       object: incident.location.object,
-      mainType: primary?.statistics?.mainType ?? keyword?.mainType ?? null,
-      falseAlarmType: primary?.statistics?.falseAlarmType ?? keyword?.falseAlarmType ?? null,
+      mainType: incident.statistics?.mainType ?? keyword?.mainType ?? null,
+      falseAlarmType: incident.statistics?.falseAlarmType ?? keyword?.falseAlarmType ?? null,
       released: releaseLevel(reports) === 'billing',
       releaseLevel: releaseLevel(reports),
       departmentIds: reports.flatMap((r) => (r.departmentId ? [r.departmentId] : [])),

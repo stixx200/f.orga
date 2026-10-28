@@ -40,6 +40,12 @@ const content = (personnel: object[], extra: object = {}) => ({
 
 const statistics = { mainType: 'fire', fireSize: 'small-b' };
 
+/** Sets the statistics of an incident with the version currently stored, as the incident page does. */
+const setStatistics = async (incidentId: string, value: object | null = statistics, cookie = admin) => {
+  const current = await get(`/incidents/incidents/${incidentId}`, cookie);
+  return put(`/incidents/incidents/${incidentId}/statistics`, { statistics: value, version: current.body?.version ?? 0 }, cookie);
+};
+
 beforeAll(async () => {
   test = await startTestApp();
   admin = await setUp(test);
@@ -126,7 +132,10 @@ describe('incidents and reports', () => {
     await put(`/incidents/incidents/${ids.incident}`, { ...data, version: undefined }, writer).expect(400);
     await put(`/incidents/incidents/${ids.incident}`, { ...data, alarmKeyword: 'B2' }, writer).expect(200);
     await put(`/incidents/incidents/${ids.incident}`, { ...data, alarmKeyword: 'B2' }, writer).expect(409);
-    expect(report.body.statisticsSuggestion).toEqual({ ownMunicipality: true, mainType: 'fire', technicalCategory: null, falseAlarmType: null });
+    // The statistics belong to the incident, pre-filled from keyword and location; reports carry none.
+    expect(incident.body).toMatchObject({ statistics: null, statisticsCounted: true, statisticsEditable: true });
+    expect(incident.body.statisticsSuggestion).toEqual({ ownMunicipality: true, mainType: 'fire', technicalCategory: null, falseAlarmType: null });
+    expect(report.body).not.toHaveProperty('statistics');
   });
 
   it('keeps costs and notes once for the whole incident, entered by the commander', async () => {
@@ -145,13 +154,14 @@ describe('incidents and reports', () => {
   });
 
   it('computes compensation and checks personnel against the other report of the incident', async () => {
+    // The writer of the primary report enters the statistics of the incident.
+    await setStatistics(ids.incident, statistics, writer).then((r) => expect(r.status).toBe(200));
     const musterstadt = await save(ids.musterstadtReport, content(
       [
         { personId: ids.jonas, vehicleId: ids.lf, function: 'attack-team', breathingApparatus: true, breathingMinutes: 28 },
         { personId: ids.max, vehicleId: ids.lf, breathingApparatus: true },
         { guestName: 'Kamerad Nachbarwehr', vehicleId: ids.lf },
       ],
-      { statistics },
     ), writer).expect(200);
     expect(musterstadt.body.personnel[0].compensation).toEqual({ hours: 3, rate: 15, allowances: 0, amount: 45, overridden: false });
     expect(musterstadt.body.personnel[2].compensation.amount).toBe(0);
@@ -168,9 +178,6 @@ describe('incidents and reports', () => {
     expect(ahornfeld.body.personnel[0].compensation).toMatchObject({ hours: 1, amount: 15 });
     // Jonas belongs to Musterstadt and stays beyond the end of the report.
     expect(rules(ahornfeld.body)).toEqual(['warning:personnel-times-outside', 'warning:person-not-member', 'error:personnel-overlap-incident']);
-    // Secondary reports carry no statistics.
-    const withStatistics = await save(ids.ahornfeldReport, content([{ personId: ids.lena, standbyStationId: ids.station }], { statistics })).expect(200);
-    expect(rules(withStatistics.body)).toEqual(['error:statistics-not-allowed']);
     await save(ids.ahornfeldReport, content([{ personId: ids.lena, standbyStationId: ids.station }])).expect(200);
   });
 
@@ -208,7 +215,7 @@ describe('incidents and reports', () => {
     // Once submitted, the author can neither submit again nor change the report until it is returned.
     const again = await post(`/incidents/reports/${ids.musterstadtReport}/submit`, {}, writer).expect(403);
     expect(again.body.code).toBe('incidents.notDraft');
-    await save(ids.musterstadtReport, content([{ personId: ids.jonas, vehicleId: ids.lf }], { statistics }), writer).expect(403);
+    await save(ids.musterstadtReport, content([{ personId: ids.jonas, vehicleId: ids.lf }]), writer).expect(403);
   });
 
   it('returns a report to the author and accepts it again', async () => {
@@ -254,7 +261,7 @@ describe('incidents and reports', () => {
     expect((await save(ids.musterstadtReport, content([])).expect(403)).body.code).toBe('incidents.reportReleased');
     const revisions = (await get(`/incidents/reports/${ids.musterstadtReport}/revisions`).expect(200)).body as { id: string }[];
     expect((await post(`/incidents/reports/${ids.musterstadtReport}/revisions/${revisions.at(-1)!.id}/restore`, {}).expect(403)).body.code).toBe('incidents.reportReleased');
-    // Making another report primary would take the statistics away from the released one.
+    // A released primary report keeps its role until it is unlocked.
     expect((await post(`/incidents/reports/${ids.ahornfeldReport}/primary`, {}).expect(403)).body.code).toBe('incidents.reportReleased');
     expect((await post(`/incidents/reports/${ids.musterstadtReport}/primary`, {}).expect(403)).body.code).toBe('incidents.reportReleased');
     expect((await post(`/incidents/reports/${ids.musterstadtReport}/author`, { authorPersonId: null }).expect(403)).body.code).toBe('incidents.reportReleased');
@@ -266,11 +273,12 @@ describe('incidents and reports', () => {
     expect(audit.find((e) => e.action === 'incidents.report-unlocked')?.details.reason).toBe('Personal korrigieren');
   });
 
-  it('switches the primary report and moves the statistics', async () => {
+  it('switches the primary report and keeps the statistics with the incident', async () => {
     const ahornfeld = await post(`/incidents/reports/${ids.ahornfeldReport}/primary`, {}).expect(200);
-    expect(ahornfeld.body).toMatchObject({ primary: true, statistics: expect.objectContaining({ mainType: 'fire', fireSize: 'small-b' }) });
-    const musterstadt = await get(`/incidents/reports/${ids.musterstadtReport}`).expect(200);
-    expect(musterstadt.body).toMatchObject({ primary: false, statistics: null });
+    expect(ahornfeld.body.primary).toBe(true);
+    expect(rules(ahornfeld.body)).not.toContain('error:statistics-missing');
+    expect((await get(`/incidents/reports/${ids.musterstadtReport}`).expect(200)).body.primary).toBe(false);
+    expect((await get(`/incidents/incidents/${ids.incident}`).expect(200)).body.statistics).toMatchObject({ mainType: 'fire', fireSize: 'small-b' });
     await test.http.delete(`/api/incidents/reports/${ids.ahornfeldReport}`).set('Cookie', admin).set(UI).expect(409);
   });
 
@@ -317,7 +325,8 @@ describe('API for external systems', () => {
     const report = await get(`/incidents/reports/${first.body.reports[0].id}`).expect(200);
     expect(report.body).toMatchObject({ authorPersonId: ids.max, personnel: [{ personId: ids.max, vehicleId: ids.lf, function: 'group-leader' }] });
     // Overlandhilfe: Ehingen is not a home municipality.
-    expect(report.body.statisticsSuggestion).toMatchObject({ ownMunicipality: false, mainType: 'technical-assistance', technicalCategory: 'rescue-persons' });
+    const incident = (await get(`/incidents/incidents/${report.body.incidentId}`).expect(200)).body;
+    expect(incident.statisticsSuggestion).toMatchObject({ ownMunicipality: false, mainType: 'technical-assistance', technicalCategory: 'rescue-persons' });
 
     const second = await test.http.post('/api/incidents/v1/incidents').set(bearer).send(payload).expect(200);
     expect(second.body).toMatchObject({ created: false, reports: [{ created: false, updated: false }] });
@@ -445,7 +454,7 @@ describe('MP-Feuer import', () => {
     expect(report.times).toMatchObject({ alarmedAt: '2025-10-21T11:05:00.000Z', returnedAt: '2025-10-21T13:50:00.000Z' });
     // Picklist "Verlauf" and free text "Bericht" together; statistics key and counts of MP-Feuer.
     expect(report).toMatchObject({ situation: 'Rauch aus Dach', actions: 'Löschmaßnahmen\n\nBrand im Dachstuhl gelöscht' });
-    expect(report.statistics).toMatchObject({ mainType: 'fire', fireSize: 'medium', rescued: 1, ownMunicipality: true });
+    expect((await get(`/incidents/incidents/${incident.id}`)).body.statistics).toMatchObject({ mainType: 'fire', fireSize: 'medium', rescued: 1, ownMunicipality: true });
     expect(report.personnel.map((p: { function: string | null }) => p.function)).toEqual([null, 'machinist']);
     expect(report.personnel.map((p: { personId: string; vehicleId: string; breathingApparatus: boolean; lossOfEarnings: boolean }) => [p.personId, p.vehicleId, p.breathingApparatus, p.lossOfEarnings])).toEqual([
       [ids.jonas, ids.lf, true, false],
@@ -474,12 +483,14 @@ describe('annual statistics', () => {
     expect(value('F20:D')).toBe(1);
     expect(value('F70:D')).toBe(1);
     expect(value('F63:D')).toBe(1);
-    // Primary reports: B2 incident (statistics moved to Ahornfeld, fire small B), internal BSW incident without statistics.
+    // Incidents: B2 (fire small B, once although with two reports); the BSW incidents do not count; the TH-VU incident of
+    // the API has no statistics yet.
     expect(value('F28:D')).toBe(1);
     expect(value('F30:D')).toBe(1);
     const check = (code: string) => preview.body.checks.find((c: { code: string }) => c.code === code);
     expect(check('statistics.fireSizes').ok).toBe(true);
     expect(check('statistics.unreleasedPrimaryReports')).toMatchObject({ ok: false });
+    expect(check('statistics.incidentsWithoutStatistics')).toMatchObject({ ok: false, params: { count: 1 } });
 
     const corrected = await put('/incidents/statistics/2026/corrections', { corrections: { 'F129:D': 238, 'F13:D': 5 } }).expect(200);
     expect(corrected.body.values.find((v: { question: string }) => v.question === 'F129')).toMatchObject({ source: 'manual', computed: 0, value: 238 });
@@ -506,6 +517,11 @@ describe('annual statistics', () => {
     expect(closed.body).toMatchObject({ changedSinceClose: false });
     await put('/incidents/statistics/2026/corrections', { corrections: { 'F1:D': 1 } }).expect(409);
     await get('/incidents/statistics/2026', writer).expect(403);
+    // The statistics of the incidents of a closed year are fixed, for releasers as well.
+    expect((await setStatistics(ids.incident, { mainType: 'fire', fireSize: 'medium' })).body.code).toBe('incidents.statisticsClosed');
+    expect((await get(`/incidents/incidents/${ids.incident}`).expect(200)).body).toMatchObject({ statisticsEditable: false, statistics: expect.objectContaining({ fireSize: 'small-b' }) });
+    await post('/incidents/statistics/2026/reopen', {}).expect(200);
+    expect((await get(`/incidents/incidents/${ids.incident}`).expect(200)).body.statisticsEditable).toBe(true);
   });
 });
 
@@ -545,7 +561,6 @@ describe('undo and payout check', () => {
     const old = await post('/incidents/incidents', { alarmKeyword: 'B1', alarmedAt: '2025-12-31T10:00:00+01:00', departmentIds: [ids.musterstadt] }).expect(201);
     await save(old.body.reports[0].id, content([{ personId: ids.max, vehicleId: ids.lf }], {
       times: { alarmedAt: '2025-12-31T10:00:00+01:00', returnedAt: '2025-12-31T11:00:00+01:00' },
-      statistics,
     })).expect(200);
     const december = await get('/incidents/compensation/check?from=2025-12-01&to=2025-12-31').expect(200);
     expect(december.body.problems).toEqual(
@@ -558,7 +573,8 @@ describe('undo and payout check', () => {
     await put('/core/settings/incidents.general', { homeMunicipalities: ['Musterstadt'], compensationRelease: false }).expect(200);
     const incident = await post('/incidents/incidents', { alarmKeyword: 'B1', alarmedAt: T('22:00'), departmentIds: [ids.musterstadt] }).expect(201);
     const reportId = incident.body.reports[0].id;
-    await save(reportId, content([{ personId: ids.max, vehicleId: ids.lf }], { times: { alarmedAt: T('22:00'), returnedAt: T('23:00') }, statistics })).expect(200);
+    await setStatistics(incident.body.id);
+    await save(reportId, content([{ personId: ids.max, vehicleId: ids.lf }], { times: { alarmedAt: T('22:00'), returnedAt: T('23:00') } })).expect(200);
     const refused = await post(`/incidents/reports/${reportId}/release`, { level: 'compensation' }).expect(400);
     expect(refused.body.code).toBe('incidents.compensationReleaseDisabled');
     // A draft is submitted before it is released.
@@ -599,12 +615,14 @@ const valueOf = (body: { values: { question: string; column: string; value: numb
 const draft = async (dispatchNumber: string, departmentIds: string[], cookie = admin) =>
   (await post('/incidents/incidents', { dispatchNumber, alarmKeyword: 'B1', alarmedAt: day('10:00'), location: { street: 'Lindenweg', city: 'Musterstadt', object: 'Sägewerk Kurz' }, departmentIds }, cookie).expect(201)).body;
 const ready = (extra: object = {}) =>
-  content([{ personId: ids.max, vehicleId: ids.lf }], { times: { alarmedAt: day('10:00'), returnedAt: day('11:30') }, statistics, ...extra });
+  content([{ personId: ids.max, vehicleId: ids.lf }], { times: { alarmedAt: day('10:00'), returnedAt: day('11:30') }, ...extra });
 
 describe('review fixes', () => {
   it('lists the incidents of a period with their departments', async () => {
     const list = await get('/core/lists/incidents.incidents?from=2026-10-01&to=2026-10-31&lang=de').expect(200);
-    expect(list.body.rows.find((r: { dispatchNumber: string }) => r.dispatchNumber === '2026-104711')).toMatchObject({ department: 'Abteilung Musterstadt' });
+    // One row per report; both reports of the incident start at the same time.
+    const rows = (list.body.rows as { dispatchNumber: string; department: string }[]).filter((r) => r.dispatchNumber === '2026-104711');
+    expect(rows.map((r) => r.department).toSorted()).toEqual(['Abteilung Ahornfeld', 'Abteilung Musterstadt']);
   });
 
   it('needs a department of writers and deletes the incident with its last report', async () => {
@@ -631,16 +649,18 @@ describe('review fixes', () => {
   it('moves the reports with the alarm time and refuses changes of released incidents', async () => {
     const incident = await draft('2026-900003', [ids.musterstadt]);
     const reportId = incident.reports[0].id;
-    const moved = await put(`/incidents/incidents/${incident.id}`, { dispatchNumber: '2026-900003', alarmKeyword: 'B1', alarmedAt: day('09:45'), version: incident.version }).expect(200);
+    await put(`/incidents/incidents/${incident.id}`, { dispatchNumber: '2026-900003', alarmKeyword: 'B1', alarmedAt: day('09:45'), version: incident.version }).expect(200);
     // The unconfirmed default end moves along.
     expect((await get(`/incidents/reports/${reportId}`).expect(200)).body.times).toMatchObject({ alarmedAt: '2026-09-15T07:45:00.000Z', returnedAt: '2026-09-15T08:45:00.000Z' });
+    await setStatistics(incident.id);
     const saved = (await save(reportId, ready()).expect(200)).body;
     // A primary report starting later than the incident is flagged.
     expect(rules(saved)).toEqual(['warning:incident-time-differs']);
     await save(reportId, ready({ times: { alarmedAt: day('09:45'), returnedAt: day('11:30') } })).expect(200);
     await post(`/incidents/reports/${reportId}/submit`, {}).expect(200);
     await post(`/incidents/reports/${reportId}/release`, { level: 'compensation' }).expect(200);
-    const refused = await put(`/incidents/incidents/${incident.id}`, { dispatchNumber: '2026-900003', alarmKeyword: 'B2', alarmedAt: day('09:45'), version: moved.body.version }).expect(409);
+    const { version } = (await get(`/incidents/incidents/${incident.id}`).expect(200)).body;
+    const refused = await put(`/incidents/incidents/${incident.id}`, { dispatchNumber: '2026-900003', alarmKeyword: 'B2', alarmedAt: day('09:45'), version }).expect(409);
     expect(refused.body.code).toBe('incidents.incidentReleased');
   });
 
@@ -657,6 +677,7 @@ describe('review fixes', () => {
   it('releases several reports at once and reminds of the release for billing', async () => {
     const incident = await draft('2026-900005', [ids.musterstadt, ids.ahornfeld]);
     const [musterstadt, ahornfeld] = incident.reports;
+    await setStatistics(incident.id);
     await save(musterstadt.id, ready()).expect(200);
     // Max is in the other incidents of the day as well.
     await post(`/incidents/reports/${musterstadt.id}/submit`, { acknowledgements: [{ rule: 'personnel-overlap-other', subject: ids.max, reason: 'Übung' }] }).expect(200);
@@ -666,8 +687,9 @@ describe('review fixes', () => {
     expect(tasks.find((t) => t.subject.id === musterstadt.id)?.kind).toBe('report-billing');
 
     // Cost recovery only counts reports released for billing.
-    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: '', version: incident.version }).expect(400);
-    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Brandmeldeanlage', version: incident.version }).expect(200);
+    const { version } = (await get(`/incidents/incidents/${incident.id}`).expect(200)).body;
+    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: '', version }).expect(400);
+    await put(`/incidents/incidents/${incident.id}/costs`, { chargeable: true, chargeableReason: 'Brandmeldeanlage', version }).expect(200);
     await del(`/incidents/reports/${ahornfeld.id}`).expect(204);
     const lookup = test.app.get<IncidentsLookup>(INCIDENTS_LOOKUP);
     const find = async () => (await lookup.chargeable('2026-09-15', '2026-09-15')).find((c) => c.incidentId === incident.id);
@@ -675,18 +697,21 @@ describe('review fixes', () => {
     await post(`/incidents/reports/${musterstadt.id}/release`, { level: 'billing' }).expect(200);
     expect(await find()).toMatchObject({ released: true, releaseLevel: 'billing' });
 
-    // Releasers complete the statistics of a released primary report without releasing it again.
-    const released = (await get(`/incidents/reports/${musterstadt.id}`).expect(200)).body;
+    // Releasers change the statistics of the incident after the release without releasing again.
+    const before = (await get(`/incidents/incidents/${incident.id}`).expect(200)).body;
     const events: unknown[] = [];
     test.app.get(DomainEvents).subscribe(INCIDENTS_EVENTS.reportReleased, (e) => {
       events.push(e);
     });
-    const changed = await put(`/incidents/reports/${musterstadt.id}/statistics`, { statistics: { mainType: 'fire', fireSize: 'medium', rescued: 2 }, version: released.version }).expect(200);
-    expect(changed.body).toMatchObject({ status: 'released-billing', statistics: expect.objectContaining({ fireSize: 'medium', rescued: 2 }) });
+    const changed = await put(`/incidents/incidents/${incident.id}/statistics`, { statistics: { mainType: 'fire', fireSize: 'medium', rescued: 2 }, version: before.version }).expect(200);
+    expect(changed.body.statistics).toMatchObject({ fireSize: 'medium', rescued: 2 });
+    expect((await get(`/incidents/reports/${musterstadt.id}`).expect(200)).body).toMatchObject({ status: 'released-billing', locked: true });
     expect(events).toEqual([]);
-    await put(`/incidents/reports/${musterstadt.id}/statistics`, { statistics: { mainType: 'fire', fireSize: 'small-a' }, version: released.version }).expect(409);
-    await put(`/incidents/reports/${musterstadt.id}/statistics`, { statistics: { mainType: 'fire' }, version: changed.body.version }).expect(400);
-    await put(`/incidents/reports/${musterstadt.id}/statistics`, { statistics: { mainType: 'fire', fireSize: 'medium' }, version: changed.body.version }, writer).expect(403);
+    await put(`/incidents/incidents/${incident.id}/statistics`, { statistics: { mainType: 'fire', fireSize: 'small-a' }, version: before.version }).expect(409);
+    await put(`/incidents/incidents/${incident.id}/statistics`, { statistics: { mainType: 'fire' }, version: changed.body.version }).expect(400);
+    // The writer's only report is released: the statistics are the releasers' now.
+    const refused = await put(`/incidents/incidents/${incident.id}/statistics`, { statistics: { mainType: 'fire', fireSize: 'medium' }, version: changed.body.version }, writer).expect(403);
+    expect(refused.body.code).toBe('incidents.statisticsSubmitted');
   });
 
   it('finds incidents by location and lists those without statistics', async () => {
@@ -696,7 +721,7 @@ describe('review fixes', () => {
     expect((await get('/core/search?q=Lindenweg Musterstadt').expect(200)).body.length).toBeGreaterThan(0);
     const without = (await get('/incidents/incidents?from=2026-09-15&to=2026-09-15&withoutStatistics=true').expect(200)).body as { id: string }[];
     expect(without.map((i) => i.id)).toContain(incident.id);
-    await save(incident.reports[0].id, ready()).expect(200);
+    await setStatistics(incident.id).then((r) => expect(r.status).toBe(200));
     const after = (await get('/incidents/incidents?from=2026-09-15&to=2026-09-15&withoutStatistics=true').expect(200)).body as { id: string }[];
     expect(after.map((i) => i.id)).not.toContain(incident.id);
   });
@@ -719,6 +744,7 @@ describe('review fixes', () => {
     const incident = await draft('2026-900007', [ids.musterstadt, ids.ahornfeld]);
     const [musterstadt, ahornfeld] = incident.reports;
     await post(`/incidents/reports/${musterstadt.id}/author`, { authorPersonId: tom }).expect(200);
+    await setStatistics(incident.id, statistics, writer);
     await save(musterstadt.id, ready({ authorPersonId: tom, personnel: [{ personId: tom, vehicleId: ids.lf }] }), writer).expect(200);
     await post(`/incidents/reports/${musterstadt.id}/submit`, {}, writer).expect(200);
     await post(`/incidents/reports/${musterstadt.id}/return`, { comment: 'Please add the commander' }, commander).expect(200);
@@ -742,14 +768,19 @@ describe('review fixes', () => {
   });
 
   it('keeps the values of closed annual statistics and tells when the data changed since', async () => {
+    await post('/incidents/statistics/2026/close', { force: true }).expect(200);
+    const fires = valueOf((await get('/incidents/statistics/2026').expect(200)).body, 'F28:D');
+    // A vehicle put into service after closing is not counted in the closed statistics.
+    const mtw = (await post('/masterdata/vehicles', { designation: 'TSF 2', vehicleType: 'tsf', departmentId: ids.ahornfeld }).expect(201)).body.id;
     const closed = (await get('/incidents/statistics/2026').expect(200)).body;
-    // Fires of the reports released after closing are not counted in the closed statistics.
     expect(closed).toMatchObject({ changedSinceClose: true });
-    expect(valueOf(closed, 'F28:D')).toBe(1);
+    expect(valueOf(closed, 'F28:D')).toBe(fires);
     await post('/incidents/statistics/2026/reopen', {}).expect(200);
     const reopened = (await get('/incidents/statistics/2026').expect(200)).body;
     expect(reopened.changedSinceClose).toBe(false);
+    // The fires of the incidents with statistics, each once.
     expect(valueOf(reopened, 'F28:D')).toBeGreaterThan(1);
+    await del(`/masterdata/vehicles/${mtw}`).expect(204);
   });
 
   it('offers the crew of the vehicle from the last incident of the department', async () => {
@@ -767,9 +798,13 @@ describe('review fixes', () => {
 const aug = (time: string) => `2026-08-10T${time}:00+02:00`;
 /** Ready to submit; every incident of these tests at its own hour, so the crew does not overlap. */
 const augReady = (hour: number, extra: object = {}) =>
-  content([{ personId: ids.max, vehicleId: ids.lf }], { times: { alarmedAt: aug(`${hour}:00`), returnedAt: aug(`${hour}:45`) }, statistics, ...extra });
-const augIncident = async (dispatchNumber: string, hour: number, departmentIds: string[], cookie = admin, extra: object = {}) =>
-  (await post('/incidents/incidents', { dispatchNumber, alarmKeyword: 'B1', alarmedAt: aug(`${hour}:00`), location: { street: 'Mühlweg', city: 'Ahornfeld' }, departmentIds, ...extra }, cookie).expect(201)).body;
+  content([{ personId: ids.max, vehicleId: ids.lf }], { times: { alarmedAt: aug(`${hour}:00`), returnedAt: aug(`${hour}:45`) }, ...extra });
+/** A new incident; with a counted keyword it gets its statistics, so its reports can be submitted. */
+const augIncident = async (dispatchNumber: string, hour: number, departmentIds: string[], cookie = admin, extra: { alarmKeyword?: string } = {}) => {
+  const created = (await post('/incidents/incidents', { dispatchNumber, alarmKeyword: 'B1', alarmedAt: aug(`${hour}:00`), location: { street: 'Mühlweg', city: 'Ahornfeld' }, departmentIds, ...extra }, cookie).expect(201)).body;
+  if (created.statisticsCounted) await setStatistics(created.id).then((r) => expect(r.status).toBe(200));
+  return (await get(`/incidents/incidents/${created.id}`).expect(200)).body;
+};
 const tasksOf = async (cookie: string, asOf = '2026-08-12') => (await get(`/core/tasks?asOf=${asOf}`, cookie).expect(200)).body as { kind: string; subject: { id: string } }[];
 const auditOf = async () => (await get('/core/audit').expect(200)).body as { action: string; details: Record<string, unknown> }[];
 
@@ -875,13 +910,12 @@ describe('review round 2', () => {
 
   it('removes statistics and accepts them only for keywords that count', async () => {
     const incident = await augIncident('2026-950005', 15, [ids.musterstadt]);
-    const reportId = incident.reports[0].id as string;
-    const saved = (await save(reportId, augReady(15)).expect(200)).body;
-    const removed = (await put(`/incidents/reports/${reportId}/statistics`, { statistics: null, version: saved.version }).expect(200)).body;
-    expect(removed.statistics).toBeNull();
+    expect(incident.statistics).toMatchObject({ mainType: 'fire' });
+    const removed = (await put(`/incidents/incidents/${incident.id}/statistics`, { statistics: null, version: incident.version }).expect(200)).body;
+    expect(removed).toMatchObject({ statistics: null, statisticsSuggestion: expect.objectContaining({ mainType: 'fire' }) });
     const watch = await augIncident('2026-950006', 16, [ids.musterstadt], admin, { alarmKeyword: 'BSW' });
-    const report = (await get(`/incidents/reports/${watch.reports[0].id}`).expect(200)).body;
-    const refused = await put(`/incidents/reports/${report.id}/statistics`, { statistics, version: report.version }).expect(400);
+    expect(watch).toMatchObject({ statisticsCounted: false, statisticsSuggestion: null });
+    const refused = await put(`/incidents/incidents/${watch.id}/statistics`, { statistics, version: watch.version }).expect(400);
     expect(refused.body.code).toBe('incidents.statisticsNotCounted');
   });
 
@@ -925,5 +959,55 @@ describe('reports of operational departments only', () => {
       .expect(200);
     expect(result.body.warnings).toEqual([{ code: 'incidents.departmentNotOperational', value: 'Alters Musterstadt' }]);
     expect(result.body.reports).toEqual([expect.objectContaining({ departmentId: ids.musterstadt })]);
+  });
+});
+
+describe('statistics of the incident', () => {
+  it('lets the writers of its reports and the releasers enter them, not readers', async () => {
+    const role = (await post('/core/roles', { name: 'Leser Test', permissions: ['incidents.reports.read'] }).expect(201)).body.id;
+    await post('/core/users', { username: 'leser', displayName: 'Leser Test', password: 'auch-sehr-geheim', roles: [{ roleId: role, departmentId: ids.musterstadt }] }).expect(201);
+    const reader = await test.login({ username: 'leser', password: 'auch-sehr-geheim' });
+    const incident = (await post('/incidents/incidents', { dispatchNumber: '2026-960001', alarmKeyword: 'B1', alarmedAt: '2026-07-01T10:00:00+02:00', location: { city: 'Musterstadt' }, departmentIds: [ids.musterstadt, ids.ahornfeld] }).expect(201)).body;
+    const [primary, secondary] = incident.reports as { id: string }[];
+
+    // Missing statistics are an error of the primary report only.
+    expect(rules((await get(`/incidents/reports/${primary.id}`).expect(200)).body)).toContain('error:statistics-missing');
+    expect(rules((await get(`/incidents/reports/${secondary.id}`).expect(200)).body)).not.toContain('error:statistics-missing');
+
+    // Readers see them, but do not change them.
+    expect((await get(`/incidents/incidents/${incident.id}`, reader).expect(200)).body.statisticsEditable).toBe(false);
+    expect((await setStatistics(incident.id, statistics, reader)).status).toBe(403);
+    // The writer of the secondary report, the writer of the primary report and the releaser do.
+    expect((await get(`/incidents/incidents/${incident.id}`, ahornfeldWriter).expect(200)).body.statisticsEditable).toBe(true);
+    expect((await setStatistics(incident.id, { mainType: 'fire', fireSize: 'small-a' }, ahornfeldWriter)).status).toBe(200);
+    expect((await setStatistics(incident.id, statistics, writer)).status).toBe(200);
+    const saved = await setStatistics(incident.id, { mainType: 'fire', fireSize: 'medium', rescued: 1 });
+    expect(saved.status).toBe(200);
+    expect(rules((await get(`/incidents/reports/${primary.id}`).expect(200)).body)).not.toContain('error:statistics-missing');
+
+    // Optimistic version: a stale version is refused.
+    expect((await put(`/incidents/incidents/${incident.id}/statistics`, { statistics, version: saved.body.version - 1 }, writer).expect(409)).body.code).toBe('conflict.stale');
+    // Audit and history of the incident.
+    expect((await auditOf()).find((e) => e.action === 'incidents.statistics-changed' && e.details['incidentId'] === incident.id)?.details).toMatchObject({ dispatchNumber: '2026-960001', removed: false });
+    const history = (await get(`/core/history/incidents.incident/${incident.id}`).expect(200)).body as { entity: string }[];
+    expect(history.length).toBeGreaterThan(1);
+  });
+
+  it('counts each incident once with its statistics in the annual statistics', async () => {
+    const at = '2027-03-01T10:00:00+01:00';
+    const joint = (await post('/incidents/incidents', { dispatchNumber: '2027-000001', alarmKeyword: 'B1', alarmedAt: at, location: { city: 'Musterstadt' }, departmentIds: [ids.musterstadt, ids.ahornfeld] }).expect(201)).body;
+    await setStatistics(joint.id, { mainType: 'fire', fireSize: 'small-a', rescued: 2 });
+    const overland = (await post('/incidents/incidents', { dispatchNumber: '2027-000002', alarmKeyword: 'TH1', alarmedAt: at, location: { city: 'Ehingen' }, departmentIds: [ids.musterstadt] }).expect(201)).body;
+    await setStatistics(overland.id, { mainType: 'technical-assistance', technicalCategory: 'other', ownMunicipality: false });
+    await post('/incidents/incidents', { dispatchNumber: '2027-000003', alarmKeyword: 'B1', alarmedAt: at, departmentIds: [ids.musterstadt] }).expect(201);
+
+    const year = (await get('/incidents/statistics/2027').expect(200)).body;
+    expect(valueOf(year, 'F28:D')).toBe(1);
+    expect(valueOf(year, 'F29:D')).toBe(1);
+    expect(valueOf(year, 'F55:D')).toBe(2);
+    expect(valueOf(year, 'F34:D')).toBe(1);
+    expect(year.checks.find((c: { code: string }) => c.code === 'statistics.incidentsWithoutStatistics')).toMatchObject({ ok: false, params: { count: 1 } });
+    const without = (await get('/incidents/incidents?from=2027-03-01&to=2027-03-01&withoutStatistics=true').expect(200)).body as { dispatchNumber: string }[];
+    expect(without.map((i) => i.dispatchNumber)).toEqual(['2027-000003']);
   });
 });

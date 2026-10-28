@@ -219,20 +219,21 @@ async function personsWorkbook(persons: PlannedPerson[]): Promise<Buffer> {
 
 // --- incidents ----------------------------------------------------------------------------------
 
-const KEYWORDS: { key: string; weight: number; minutes: [number, number]; situation: string; actions: string; cause: string }[] = [
-  { key: 'B1', weight: 8, minutes: [40, 90], situation: 'Brennender Müllcontainer', actions: 'Ablöschen mit 1 C-Rohr unter PA', cause: 'Unbekannt' },
-  { key: 'B2', weight: 4, minutes: [90, 180], situation: 'Rauch aus Kellerfenster eines Wohnhauses', actions: 'Innenangriff mit 1 C-Rohr, Belüftung, Kontrolle mit Wärmebildkamera', cause: 'Technischer Defekt' },
-  { key: 'B3', weight: 1, minutes: [180, 360], situation: 'Scheune in Vollbrand', actions: 'Riegelstellung zum Wohnhaus, Brandbekämpfung mit 3 C-Rohren und DLK, Nachlöscharbeiten', cause: 'Unbekannt' },
-  { key: 'B-BMA', weight: 9, minutes: [30, 60], situation: 'Auslösung Brandmeldeanlage', actions: 'Erkundung, Melder zurückgestellt, Übergabe an Betreiber', cause: 'Täuschungsalarm durch Wasserdampf' },
-  { key: 'B-PKW', weight: 3, minutes: [45, 90], situation: 'PKW-Brand im Motorraum', actions: 'Ablöschen mit Schaum, Batterie abgeklemmt, Fahrbahn gereinigt', cause: 'Technischer Defekt' },
-  { key: 'TH1', weight: 6, minutes: [30, 90], situation: 'Baum auf Fahrbahn', actions: 'Baum mit Motorsäge zerkleinert und Fahrbahn geräumt', cause: 'Sturm' },
-  { key: 'TH-VU', weight: 3, minutes: [60, 150], situation: 'Verkehrsunfall, eine Person eingeklemmt', actions: 'Sicherung, Patientenbetreuung, Seitenöffnung mit hydraulischem Rettungsgerät', cause: 'Verkehrsunfall' },
-  { key: 'TH-Öl', weight: 5, minutes: [30, 90], situation: 'Ölspur über ca. 500 m', actions: 'Abstreuen mit Bindemittel, Absicherung', cause: 'Defektes Fahrzeug' },
-  { key: 'TH-Person', weight: 3, minutes: [30, 60], situation: 'Hilflose Person hinter verschlossener Tür', actions: 'Türöffnung, Übergabe an Rettungsdienst', cause: 'Medizinischer Notfall' },
-  { key: 'TH-Wasser', weight: 3, minutes: [90, 240], situation: 'Wasser im Keller nach Starkregen', actions: 'Auspumpen mit Tauchpumpe und Wassersauger', cause: 'Unwetter' },
-  { key: 'TH-Insekten', weight: 2, minutes: [30, 60], situation: 'Wespennest am Kindergarten', actions: 'Nest entfernt', cause: 'Natürlich' },
-  { key: 'TH-Tier', weight: 1, minutes: [30, 90], situation: 'Katze auf Baum', actions: 'Rettung mit Steckleiter', cause: 'Natürlich' },
-  { key: 'BSW', weight: 3, minutes: [180, 300], situation: 'Brandsicherheitswache Veranstaltung Stadthalle', actions: 'Brandsicherheitswache ohne Vorkommnisse', cause: '' },
+/** `statistics`: statistics key of MP-Feuer; the import makes it the statistics of the incident. */
+const KEYWORDS: { key: string; weight: number; minutes: [number, number]; situation: string; actions: string; cause: string; statistics: string }[] = [
+  { key: 'B1', weight: 8, minutes: [40, 90], situation: 'Brennender Müllcontainer', actions: 'Ablöschen mit 1 C-Rohr unter PA', cause: 'Unbekannt', statistics: '#L Kleinbrände B' },
+  { key: 'B2', weight: 4, minutes: [90, 180], situation: 'Rauch aus Kellerfenster eines Wohnhauses', actions: 'Innenangriff mit 1 C-Rohr, Belüftung, Kontrolle mit Wärmebildkamera', cause: 'Technischer Defekt', statistics: '#L Kleinbrände B' },
+  { key: 'B3', weight: 1, minutes: [180, 360], situation: 'Scheune in Vollbrand', actions: 'Riegelstellung zum Wohnhaus, Brandbekämpfung mit 3 C-Rohren und DLK, Nachlöscharbeiten', cause: 'Unbekannt', statistics: '#L Mittelbrände' },
+  { key: 'B-BMA', weight: 9, minutes: [30, 60], situation: 'Auslösung Brandmeldeanlage', actions: 'Erkundung, Melder zurückgestellt, Übergabe an Betreiber', cause: 'Täuschungsalarm durch Wasserdampf', statistics: '#L Fehlalarm.BMA' },
+  { key: 'B-PKW', weight: 3, minutes: [45, 90], situation: 'PKW-Brand im Motorraum', actions: 'Ablöschen mit Schaum, Batterie abgeklemmt, Fahrbahn gereinigt', cause: 'Technischer Defekt', statistics: '#L Kleinbrände B' },
+  { key: 'TH1', weight: 6, minutes: [30, 90], situation: 'Baum auf Fahrbahn', actions: 'Baum mit Motorsäge zerkleinert und Fahrbahn geräumt', cause: 'Sturm', statistics: '#L TH7-Sturm' },
+  { key: 'TH-VU', weight: 3, minutes: [60, 150], situation: 'Verkehrsunfall, eine Person eingeklemmt', actions: 'Sicherung, Patientenbetreuung, Seitenöffnung mit hydraulischem Rettungsgerät', cause: 'Verkehrsunfall', statistics: '#L TH1-Menschenrettung' },
+  { key: 'TH-Öl', weight: 5, minutes: [30, 90], situation: 'Ölspur über ca. 500 m', actions: 'Abstreuen mit Bindemittel, Absicherung', cause: 'Defektes Fahrzeug', statistics: '#L TH3-Ölspur' },
+  { key: 'TH-Person', weight: 3, minutes: [30, 60], situation: 'Hilflose Person hinter verschlossener Tür', actions: 'Türöffnung, Übergabe an Rettungsdienst', cause: 'Medizinischer Notfall', statistics: '#L TH1-Menschenrettung' },
+  { key: 'TH-Wasser', weight: 3, minutes: [90, 240], situation: 'Wasser im Keller nach Starkregen', actions: 'Auspumpen mit Tauchpumpe und Wassersauger', cause: 'Unwetter', statistics: '#L TH6-Hochwasser/Unwetter' },
+  { key: 'TH-Insekten', weight: 2, minutes: [30, 60], situation: 'Wespennest am Kindergarten', actions: 'Nest entfernt', cause: 'Natürlich', statistics: '#L TH5-Insekten' },
+  { key: 'TH-Tier', weight: 1, minutes: [30, 90], situation: 'Katze auf Baum', actions: 'Rettung mit Steckleiter', cause: 'Natürlich', statistics: '#L TH4-Tierrettung' },
+  { key: 'BSW', weight: 3, minutes: [180, 300], situation: 'Brandsicherheitswache Veranstaltung Stadthalle', actions: 'Brandsicherheitswache ohne Vorkommnisse', cause: '', statistics: '' },
 ];
 const PLACES: Record<string, string[]> = {
   Musterstadt: ['Hauptstraße', 'Bahnhofstraße', 'Industriestraße', 'Ehinger Straße', 'Schloßberg'],
@@ -267,7 +268,7 @@ async function incidentsWorkbook(members: Map<string, PersonRef[]>): Promise<{ f
     'Pers.-Nr.', 'Name', 'von', 'bis', 'BE', 'AS', 'V-A', 'Fzg.-Nr.', 'Bezeichnung', 'Funkrufname',
     'Einsatz-Nr.', 'Beginn', 'Ende', 'Einsatz-Ort', 'Ortsteil (Obj.)', 'Straße (Obj.)', 'PLZ (Obj.)', 'Ort (Obj.)',
     'Alarmstichwort', 'Leitstellen-Nr.', 'Erläuterung', 'Lage', 'Verlauf', 'Ursache', 'Leitung',
-    'bei Ges. Stat. anzeigen', 'Zusatzfeld 2', 'Bezeichnung',
+    'bei Ges. Stat. anzeigen', 'Zusatzfeld 2', 'Bezeichnung', 'Statistik',
   ];
   reseed(4711);
   const operational = DEPARTMENTS.filter((d) => d.type === 'operational');
@@ -336,6 +337,8 @@ async function incidentsWorkbook(members: Map<string, PersonRef[]>): Promise<{ f
           primary ? 'Ja' : 'Nein',
           status,
           exportName(department),
+          // The incidents of the last week still lack their statistics (incident page, view "without statistics").
+          primary && ageDays > 7 ? keyword.statistics : '',
         ]);
       });
     }
@@ -1047,6 +1050,9 @@ async function dutyOfficer(persons: PersonRef[], accounts: Map<string, PersonRef
     // The first EvD report is written and submitted by the duty officer of that day.
     const evd = incident.reports.find((r) => r.unit === 'duty-officer');
     if (index !== 0 || !evd) continue;
+    // The statistics belong to the incident, entered once for all its reports.
+    const { version } = await call<{ version: number }>('GET', `incidents/incidents/${incident.id}`);
+    await call('PUT', `incidents/incidents/${incident.id}/statistics`, { statistics: { mainType: 'fire', fireSize: 'small-b', rescued: 1 }, version });
     const report = await call<{ version: number; personnel: { personId: string | null; function: string | null }[] }>('GET', `incidents/reports/${evd.id}`);
     const saved = await call<{ findings: { rule: string; level: string; subject: string | null; acknowledged: boolean }[] }>('PUT', `incidents/reports/${evd.id}`, {
       version: report.version,
@@ -1085,12 +1091,15 @@ async function costRecovery(): Promise<void> {
     console.log('  Bescheide vorhanden');
     return;
   }
-  const incidents = await call<{ id: string; alarmKeyword: string; createdVia: string; version: number; reports: { id: string; primary: boolean }[] }[]>('GET', `incidents/incidents?from=${year - 1}-01-01&to=${year}-12-31`);
+  const incidents = await call<{ id: string; alarmKeyword: string; createdVia: string; version: number; statistics: object | null; reports: { id: string; primary: boolean }[] }[]>('GET', `incidents/incidents?from=${year - 1}-01-01&to=${year}-12-31`);
   // Imported incidents only: the new ones of the duty officer step have drafts (and an EvD report) still being written.
   const alarms = incidents.filter((i) => /BMA/i.test(i.alarmKeyword) && i.createdVia === 'import').slice(0, 3);
   for (const incident of alarms) {
     const primary = incident.reports.find((r) => r.primary) ?? incident.reports[0];
     if (!primary) continue;
+    if (!incident.statistics) {
+      await call('PUT', `incidents/incidents/${incident.id}/statistics`, { statistics: { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' }, version: incident.version });
+    }
     // Released reports are changed through the workflow: unlock, add the operator as party, submit, release again.
     const status = (await call<{ status: string }>('GET', `incidents/reports/${primary.id}`)).status;
     if (status.startsWith('released')) await call('POST', `incidents/reports/${primary.id}/unlock`, { reason: 'Betreiber als Beteiligten ergänzt (Demodaten)', toStatus: 'draft' });
@@ -1098,7 +1107,6 @@ async function costRecovery(): Promise<void> {
     const saved = await call<{ findings: { rule: string; level: string; subject: string | null; acknowledged: boolean }[] }>('PUT', `incidents/reports/${primary.id}`, {
       ...report,
       involvedParties: [{ role: 'owner', name: 'Muster Logistik GmbH', street: 'Industriestraße 4', postalCode: '12345', city: 'Musterstadt' }],
-      statistics: report['statistics'] ?? { mainType: 'false-alarm', falseAlarmType: 'fire-alarm-system' },
     });
     // Notices need reports released for billing.
     const acknowledgements = saved.findings.filter((f) => f.level === 'warning' && !f.acknowledged).map((f) => ({ rule: f.rule, subject: f.subject, reason: 'Demodaten' }));

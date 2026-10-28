@@ -10,7 +10,7 @@ Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stam
 
 - **Handyansicht**: Fenster unter 860 px schmal ziehen oder den Gerätemodus der Entwicklerwerkzeuge nutzen. Das Menü öffnet sich über ☰, die Suche über die Lupe.
 - **Sprache**: Umschalter DE/EN oben rechts, auf dem Handy im Menü, auf der Anmeldeseite oben rechts. Die Wahl bleibt im Browser gespeichert. Ein Link mit `?sprache=en` öffnet eine Seite direkt auf Englisch.
-- **Dialoge**: Ein Link mit `#<dialog-id>` öffnet einen Dialog direkt, z. B. `einsatzberichte/pruefung.html#d-sperre`. Im Berichtseditor springt `#s4` zu Schritt 4. `#<id>` einer Auswahl wählt sie aus, z. B. `infoterminal/buchung.html#bereitschaft`.
+- **Dialoge**: Ein Link mit `#<dialog-id>` öffnet einen Dialog direkt, z. B. `einsatzberichte/pruefung.html#d-sperre`. Im Berichtseditor springt `#s6` zum Schritt „Prüfen“. `#<id>` einer Auswahl wählt sie aus, z. B. `infoterminal/buchung.html#bereitschaft`.
 
 ## Gestaltung
 
@@ -68,9 +68,9 @@ Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stam
 | | `stammdaten/listen.html` | Listenvorlagen inkl. Probezeit und Altersgrenzen, Unterschriftenliste mit Sprache der Liste |
 | | `stammdaten/import.html` | Import-Assistent: Spalten zuordnen, Vorschau mit Fehlern |
 | Einsatzberichte | `einsatzberichte/einsaetze.html` | Einsatzliste mit Haupt- und Nebenbericht je Abteilung, Status, Sperre |
-| | `einsatzberichte/einsatz.html` | Einsatz mit Berichtskarten je Abteilung, Hauptbericht hervorgehoben, Hauptbericht wechseln mit Bestätigung |
+| | `einsatzberichte/einsatz.html` | Einsatz mit Berichtskarten je Abteilung, Hauptbericht hervorgehoben, Hauptbericht wechseln mit Bestätigung, Karte „Statistik“ des Einsatzes mit allen Merkmalen der Landesvorlage |
 | | `einsatzberichte/bericht.html` | Berichtseditor, Nebenbericht Musterstadt, Schritt Personal mit Fehler und Warnung, Versionen mit Wiederherstellen |
-| | `einsatzberichte/bericht-haupt.html` | Berichtseditor, Hauptbericht Weidenhain, Schritt Statistik mit allen Merkmalen der Landesvorlage |
+| | `einsatzberichte/bericht-haupt.html` | Berichtseditor, Hauptbericht Weidenhain, Schritt Prüfen ohne Befunde |
 | | `einsatzberichte/pruefung.html` | Prüfliste des Kommandanten, zweistufige Freigabe (Entschädigungsauszahlung, dann Abrechnung), Zurückgeben, Sperre aufheben, leerer Zustand, Auszahlungslauf mit „Probleme vor der Auszahlung“ vor dem Export |
 | | `einsatzberichte/offene-berichte.html` | Offene Berichte nach Verfasser, Verfasser zuweisen, Erinnerung mit Bestätigung |
 | | `einsatzberichte/jahresstatistik.html` | Jahresstatistik: Vorschau mit Herkunft je Wert, Plausibilitätsprüfung, Korrektur, Abschluss |
@@ -89,7 +89,7 @@ Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stam
 
 ### Berichtseditor
 
-Sechs Schritte. Jeder Schritt zeigt seinen Zustand (vollständig, Fehler, bitte prüfen). Auf dem Handy erscheinen nur die Nummern, der Titel des aktuellen Schritts steht darunter. Am Ende jedes Schritts führen „Zurück“ und „Weiter“ zum Nachbarschritt.
+Fünf Schritte. Jeder Schritt zeigt seinen Zustand (vollständig, Fehler, bitte prüfen). Auf dem Handy erscheinen nur die Nummern, der Titel des aktuellen Schritts steht darunter. Am Ende jedes Schritts führen „Zurück“ und „Weiter“ zum Nachbarschritt.
 
 1. **Zeiten & Ort**
 2. **Personal & Fahrzeuge**
@@ -98,17 +98,18 @@ Sechs Schritte. Jeder Schritt zeigt seinen Zustand (vollständig, Fehler, bitte 
    - Personen, die schon in einem anderen Bericht stehen, sind nicht wählbar.
    - Ein Tipp auf eine Person öffnet den Dialog mit Fahrzeugwechsel, Funktion, Zeiten, Atemschutz, Verdienstausfall, Arbeitszeit und „Selbst zu Schaden gekommen“ (für die eigenen Verletzten der Statistik).
 3. **Lage & Verlauf** mit Textbausteinen und Wetterlage
-4. **Statistik**. Im Nebenbericht steht nur ein Verweis auf den Hauptbericht. Im Hauptbericht stehen:
+4. **Beteiligte & Sonstiges**
+5. **Prüfen**: alle Fehler und Warnungen mit Sprung zum Abschnitt; fehlt die Statistik des Einsatzes, führt der Fehler am Hauptbericht zur Seite des Einsatzes
+
+Die **Statistik** steht nicht im Bericht, sondern einmal je Einsatz auf der Seite des Einsatzes (Karte „Statistik“):
    - Einsatzort: eigene Gemeinde oder Überlandhilfe
    - Einsatzhauptart
    - je nach Art: Brandgröße (Kleinbrand A/B, Mittel-, Großbrand), TH-Kategorie 1–8 (ankreuzen, was zutrifft; die kleinste Nummer zählt) oder Fehlalarmart (gutgläubig, böswillig, BMA)
    - Kennzeichen Fahrzeugbrand, Verkehrsunfall, Kat-Voralarm, Kat-Einsatz
    - gerettete Personen, davon mit Rauchgasvergiftung, Tote, gerettete Tiere
    - eigene verletzte und tödlich verunglückte Einsatzkräfte aus dem Personal aller Berichte
-5. **Beteiligte & Sonstiges**
-6. **Prüfen**: alle Fehler und Warnungen mit Sprung zum Abschnitt
 
-„Fertig melden“ ist immer aktiv. Mit offenen Fehlern führt es zu Schritt 6, sonst fragt ein Dialog nach. Gespeichert wird automatisch, es gibt keine Schaltfläche „Speichern“. Die Aktionsleiste zeigt Zeitpunkt und offene Fehler. „Versionen“ listet jede gespeicherte Version mit Zeitpunkt, Benutzer und Änderung; „Wiederherstellen“ legt eine neue Version mit dem alten Stand an.
+„Fertig melden“ ist immer aktiv. Mit offenen Fehlern führt es zu Schritt 5, sonst fragt ein Dialog nach. Gespeichert wird automatisch, es gibt keine Schaltfläche „Speichern“. Die Aktionsleiste zeigt Zeitpunkt und offene Fehler. „Versionen“ listet jede gespeicherte Version mit Zeitpunkt, Benutzer und Änderung; „Wiederherstellen“ legt eine neue Version mit dem alten Stand an.
 
 ## Ändern
 

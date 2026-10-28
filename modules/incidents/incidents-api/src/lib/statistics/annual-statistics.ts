@@ -17,8 +17,8 @@ export interface StatisticsInput {
   permanentlyStaffedStations: number;
   members: PersonSnapshot[];
   vehicles: Vehicle[];
-  /** Statistics of the primary reports of the year (counted once per incident). */
-  primaryReports: IncidentStatistics[];
+  /** Statistics of the incidents of the year (each incident once). */
+  incidents: IncidentStatistics[];
   /** Own personnel injured or killed in any report of the year, with the type of the report's department. */
   ownCasualties: { departmentType: string; injured: boolean; killed: boolean }[];
   /** Own forces injured in training sessions (training module), with the type of the session's first department. */
@@ -115,8 +115,8 @@ export function computeAnnualStatistics(input: StatisticsInput): ComputedValue[]
   }
   for (const casualty of input.trainingCasualties ?? []) add('F26', COLUMN_OF[casualty.departmentType] ?? 'D', 'training');
 
-  // Pages 4–7: incidents, each once via its primary report. Pages 5–7 count the own municipality only.
-  for (const s of input.primaryReports) {
+  // Pages 4–7: incidents, each once with its statistics. Pages 5–7 count the own municipality only.
+  for (const s of input.incidents) {
     const own = s.ownMunicipality;
     if (s.mainType === 'fire') {
       if (own) {

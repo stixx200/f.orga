@@ -46,6 +46,76 @@ def berichtkarte(abt, haupt, verfasser, status, personal, fahrzeuge, zeit, hinwe
   <div class="formular-fuss" style="justify-content:space-between;align-items:center">{akt}<a class="knopf klein sekundaer" href="{ziel}">Bericht öffnen</a></div>
 </section>'''
 
+def zaehler(label, wert, hilfe=''):
+    h = f'<div class="hilfe">{hilfe}</div>' if hilfe else ''
+    return f'<div class="feld"><label>{label}</label><div class="zaehler"><button type="button" data-zaehler="-1" aria-label="weniger">−</button><input type="number" inputmode="numeric" min="0" value="{wert}"><button type="button" data-zaehler="1" aria-label="mehr">+</button></div>{h}</div>'
+
+def wahl(name, optionen, typ='radio', klasse=''):
+    t = ''
+    for wert, text, klein, an in optionen:
+        k = f'<small>{klein}</small>' if klein else ''
+        t += f'<label><input type="{typ}" name="{name}" value="{wert}"{" checked" if an else ""}><span>{text}{k}</span></label>'
+    return f'<div class="wahl {klasse}" id="wahl-{name}">{t}</div>'
+
+TH = [('1', 'Menschenrettung'), ('2', 'Gefahrstoff (ohne Ölspur)'), ('3', 'Ölspur'), ('4', 'Tierrettung (ohne Insekten)'),
+      ('5', 'Insekten'), ('6', 'Hochwasser / Unwetter'), ('7', 'Sturm'), ('8', 'sonstige Technische Hilfe')]
+
+STATISTIK_EINSATZ = '''
+<section class="karte" id="statistik">
+  <div class="karte-kopf"><h2>Statistik</h2></div>
+  <p class="meta" style="margin:0 0 8px">Gilt für den ganzen Einsatz und zählt einmal in der Jahresstatistik. Eintragen können die Verfasser der Berichte dieses Einsatzes, solange ein Bericht in Bearbeitung ist, und die Freigeber bis zum Abschluss der Jahresstatistik.</p>
+  <div class="meldung info"><span class="ic">i</span><span>Vorbefüllt aus dem Stichwort <strong>B2</strong> und der Anschrift. Bitte prüfen und bei Bedarf ändern.</span></div>
+  <div class="stat-block">
+    <h3>Einsatzort</h3><p class="meta">Weidenhain liegt in der eigenen Gemeinde (Stadt Musterstadt).</p>
+    ''' + wahl('ort', [('eigen', 'Eigene Gemeinde', '', True), ('ueberland', 'Überlandhilfe', 'außerhalb der Gemeinde', False)], klasse='eng') + '''
+  </div>
+  <div class="stat-block">
+    <h3>Einsatzhauptart</h3><p class="meta">Genau eine Art.</p>
+    ''' + wahl('art', [('brand', 'Brand / Explosion', '', True), ('th', 'Technische Hilfe', '', False), ('fehl', 'Fehlalarm', '', False),
+                       ('sonst', 'Sonstiges', '', False)], klasse='eng') + '''
+  </div>
+  <div class="stat-block bedingt" data-wenn="art=brand">
+    <h3>Brandgröße</h3><p class="meta">Nach den eingesetzten Löschmitteln.</p>
+    ''' + wahl('bg', [('ka', 'Kleinbrand A', 'Kleinlöschgeräte, kein Strahlrohr', False), ('kb', 'Kleinbrand B', 'höchstens 1 C-Rohr', False),
+                      ('mittel', 'Mittelbrand', '2–3 C-Rohre', True), ('gross', 'Großbrand', 'mehr als 3 C-Rohre', False)]) + '''
+  </div>
+  <div class="stat-block bedingt" data-wenn="art=th" hidden>
+    <h3>Art der Technischen Hilfe</h3><p class="meta">Alles ankreuzen, was zutrifft. Es zählt die kleinste Nummer.</p>
+    <div class="wahl" id="th-gruppe">''' + ''.join(f'<label><input type="checkbox" name="th" value="{n}"><span class="rang">{n}</span><span class="th-name">{t}</span></label>' for n, t in TH) + '''</div>
+    <p class="ergebnis">Zählt als: <strong data-rang-ergebnis="th-gruppe">–</strong></p>
+  </div>
+  <div class="stat-block bedingt" data-wenn="art=fehl" hidden>
+    <h3>Fehlalarm</h3>
+    ''' + wahl('fa', [('gut', 'in gutem Glauben', '', True), ('boes', 'böswillig', '', False), ('bma', 'Brandmeldeanlage', '', False)], klasse='eng') + '''
+  </div>
+  <div class="stat-block">
+    <h3>Kennzeichen</h3>
+    <div class="wahl">
+      <label><input type="checkbox" name="kz"><span>Fahrzeugbrand</span></label>
+      <label><input type="checkbox" name="kz"><span>Verkehrsunfall</span></label>
+      <label><input type="checkbox" name="kz"><span>Katastrophen-Voralarm</span></label>
+      <label><input type="checkbox" name="kz"><span>Katastrophen-Einsatz</span></label>
+    </div>
+  </div>
+  <div class="stat-block">
+    <h3>Personen und Tiere</h3>
+    <div class="felder">
+      ''' + zaehler('Gerettete Personen', 1) + zaehler('davon mit Rauchgasvergiftung', 1, 'höchstens so viele wie gerettet') + zaehler('Tote Personen', 0) + zaehler('Gerettete Tiere', 0) + '''
+    </div>
+  </div>
+  <div class="stat-block">
+    <h3>Eigene Einsatzkräfte</h3>
+    <dl class="daten"><dt>verletzt</dt><dd>0</dd><dt>tödlich verunglückt</dt><dd>0</dd></dl>
+    <p class="meta" style="margin:6px 0 0">Aus dem Personal aller Berichte dieses Einsatzes. Eintragen bei der Person im Abschnitt Personal.</p>
+  </div>
+  <div class="stat-block">
+    <h3>Aus allen Berichten des Einsatzes</h3>
+    <dl class="daten"><dt>Einsatzkräfte</dt><dd>29 (ohne Doppelungen)</dd><dt>Fahrzeuge</dt><dd>5</dd><dt>unter Atemschutz</dt><dd>6</dd><dt>Dauer</dt><dd>3 h 15 min</dd></dl>
+  </div>
+  <div class="formular-fuss"><button type="button" class="knopf text">Statistik entfernen</button><button type="button" class="knopf primaer">Statistik speichern</button></div>
+</section>'''
+
+
 seite('einsatzberichte/einsatz.html', 'B2 Brand Wohnung', '''
 <section class="karte">
   <div class="raster vier">
@@ -57,10 +127,10 @@ seite('einsatzberichte/einsatz.html', 'B2 Brand Wohnung', '''
   <p class="meta" style="margin:10px 0 0">Angelegt über API (Alarmfax-Parser Leitstelle) am 21.10.2026 13:06 · Berichtsentwürfe automatisch für die alarmierten Abteilungen erstellt.</p>
 </section>
 <div class="raster drei" style="margin-bottom:16px">
-''' + berichtkarte('Abteilung Weidenhain', True, 'Sabine Hagel', S_ENTWURF, '8 Personen', 'MLF 10/6 · Bereitschaft (2)', '13:05 – 16:20', 'Statistik vorbefüllt, noch nicht geprüft.', 'bericht-haupt.html') +
+''' + berichtkarte('Abteilung Weidenhain', True, 'Sabine Hagel', S_ENTWURF, '8 Personen', 'MLF 10/6 · Bereitschaft (2)', '13:05 – 16:20', '', 'bericht-haupt.html') +
 berichtkarte('Abteilung Musterstadt', False, 'Tobias Rief', S_ENTWURF, '17 Personen', 'LF 20/16 · DLA(K) 23-12 · ELW 1', '13:07 – 15:50', 'Markus Vogt steht auch im Bericht der Führungsgruppe.') +
 berichtkarte('Führungsgruppe Musterstadt', False, 'Markus Vogt', S_ENTWURF, '4 Personen', 'ELW 1 (mit Musterstadt)', '13:10 – 16:20', 'Markus Vogt steht auch im Bericht Musterstadt (ELW 1, 13:07–15:50). Bitte nur einem Bericht zuordnen.') + '''
-</div>
+</div>''' + STATISTIK_EINSATZ + '''
 <section class="karte">
   <div class="karte-kopf"><h2>Bericht für weitere Abteilung</h2></div>
   <div class="filter" style="margin:0"><div class="feld"><label>Abteilung</label><select><option>Birkenhain</option><option>Pappelhain</option><option>Ahornfeld</option><option>Eschenbrunn</option><option>Sonderdienste</option></select></div><a class="knopf sekundaer" href="bericht.html">+ Bericht anlegen</a></div>
@@ -75,7 +145,7 @@ berichtkarte('Führungsgruppe Musterstadt', False, 'Markus Vogt', S_ENTWURF, '4 
     aktionen='<a class="knopf" href="#">Einsatz drucken</a>',
     dialoge=dialog('d-haupt', 'Hauptbericht wechseln?', '''
   <p>Der Bericht der <strong>Abteilung Musterstadt</strong> wird Hauptbericht. Der Bericht der <strong>Abteilung Weidenhain</strong> wird Nebenbericht.</p>
-  <div class="meldung warnung"><span class="ic">!</span><span>Die Statistikmerkmale gehen auf den neuen Hauptbericht über. Der Verfasser Tobias Rief muss sie prüfen. Sabine Hagel bekommt eine Benachrichtigung.</span></div>''',
+  <div class="meldung info"><span class="ic">i</span><span>Die Statistik gehört zum Einsatz und bleibt unverändert. Sabine Hagel bekommt eine Benachrichtigung.</span></div>''',
     ABBRECHEN + '<button class="knopf primaer" value="ok">Musterstadt zum Hauptbericht machen</button>'))
 
 # ---------- Berichtseditor ----------
@@ -145,7 +215,7 @@ def schritt_nav(zurueck=None, weiter=None):
     w = f'<button type="button" class="knopf sekundaer" data-reiter="{weiter[0]}" data-nach-oben>Weiter: {weiter[1]} ›</button>' if weiter else ''
     return f'<div class="formular-fuss" style="justify-content:space-between;margin-top:8px">{z}{w}</div>'
 
-TITEL = {'s1': 'Zeiten &amp; Ort', 's2': 'Personal &amp; Fahrzeuge', 's3': 'Lage &amp; Verlauf', 's4': 'Statistik', 's5': 'Beteiligte &amp; Sonstiges', 's6': 'Prüfen'}
+TITEL = {'s1': 'Zeiten &amp; Ort', 's2': 'Personal &amp; Fahrzeuge', 's3': 'Lage &amp; Verlauf', 's5': 'Beteiligte &amp; Sonstiges', 's6': 'Prüfen'}
 
 def schritte(aktiv, zustand):
     """zustand: dict schritt -> ('fertig'|'fehler'|'', Kurztext)"""
@@ -158,80 +228,6 @@ def schritte(aktiv, zustand):
         zt = f'<span class="zustand">{txt}</span>' if txt else ''
         teile.append(f'<li><button type="button" class="{kl}" data-reiter="{k}"{cur}><span class="nr">{nr}</span><span class="text">{TITEL[k]}{zt}</span></button></li>')
     return '<ol class="schritte" aria-label="Abschnitte des Berichts">' + ''.join(teile) + '</ol>' + f'<p class="schritt-titel" aria-hidden="true">{TITEL[aktiv]}</p>'
-
-def zaehler(label, wert, hilfe=''):
-    h = f'<div class="hilfe">{hilfe}</div>' if hilfe else ''
-    return f'<div class="feld"><label>{label}</label><div class="zaehler"><button type="button" data-zaehler="-1" aria-label="weniger">−</button><input type="number" inputmode="numeric" min="0" value="{wert}"><button type="button" data-zaehler="1" aria-label="mehr">+</button></div>{h}</div>'
-
-def wahl(name, optionen, typ='radio', klasse=''):
-    t = ''
-    for wert, text, klein, an in optionen:
-        k = f'<small>{klein}</small>' if klein else ''
-        t += f'<label><input type="{typ}" name="{name}" value="{wert}"{" checked" if an else ""}><span>{text}{k}</span></label>'
-    return f'<div class="wahl {klasse}" id="wahl-{name}">{t}</div>'
-
-TH = [('1', 'Menschenrettung'), ('2', 'Gefahrstoff (ohne Ölspur)'), ('3', 'Ölspur'), ('4', 'Tierrettung (ohne Insekten)'),
-      ('5', 'Insekten'), ('6', 'Hochwasser / Unwetter'), ('7', 'Sturm'), ('8', 'sonstige Technische Hilfe')]
-
-STATISTIK_HAUPT = '''
-<div class="meldung info"><span class="ic">i</span><span>Vorbefüllt aus dem Stichwort <strong>B2</strong> und der Anschrift. Bitte prüfen und bei Bedarf ändern. Diese Angaben zählen für die Jahresstatistik der Gesamtwehr.</span></div>
-<section class="karte">
-  <div class="stat-block">
-    <h3>Einsatzort</h3><p class="meta">Weidenhain liegt in der eigenen Gemeinde (Stadt Musterstadt).</p>
-    ''' + wahl('ort', [('eigen', 'Eigene Gemeinde', '', True), ('ueberland', 'Überlandhilfe', 'außerhalb der Gemeinde', False)], klasse='eng') + '''
-  </div>
-  <div class="stat-block">
-    <h3>Einsatzhauptart</h3><p class="meta">Genau eine Art.</p>
-    ''' + wahl('art', [('brand', 'Brand / Explosion', '', True), ('th', 'Technische Hilfe', '', False), ('fehl', 'Fehlalarm', '', False),
-                       ('sonst', 'Sonstiges', '', False)], klasse='eng') + '''
-  </div>
-  <div class="stat-block bedingt" data-wenn="art=brand">
-    <h3>Brandgröße</h3><p class="meta">Nach den eingesetzten Löschmitteln.</p>
-    ''' + wahl('bg', [('ka', 'Kleinbrand A', 'Kleinlöschgeräte, kein Strahlrohr', False), ('kb', 'Kleinbrand B', 'höchstens 1 C-Rohr', False),
-                      ('mittel', 'Mittelbrand', '2–3 C-Rohre', True), ('gross', 'Großbrand', 'mehr als 3 C-Rohre', False)]) + '''
-  </div>
-  <div class="stat-block bedingt" data-wenn="art=th" hidden>
-    <h3>Art der Technischen Hilfe</h3><p class="meta">Alles ankreuzen, was zutrifft. Es zählt die kleinste Nummer.</p>
-    <div class="wahl" id="th-gruppe">''' + ''.join(f'<label><input type="checkbox" name="th" value="{n}"><span class="rang">{n}</span><span class="th-name">{t}</span></label>' for n, t in TH) + '''</div>
-    <p class="ergebnis">Zählt als: <strong data-rang-ergebnis="th-gruppe">–</strong></p>
-  </div>
-  <div class="stat-block bedingt" data-wenn="art=fehl" hidden>
-    <h3>Fehlalarm</h3>
-    ''' + wahl('fa', [('gut', 'in gutem Glauben', '', True), ('boes', 'böswillig', '', False), ('bma', 'Brandmeldeanlage', '', False)], klasse='eng') + '''
-  </div>
-  <div class="stat-block">
-    <h3>Kennzeichen</h3>
-    <div class="wahl">
-      <label><input type="checkbox" name="kz"><span>Fahrzeugbrand</span></label>
-      <label><input type="checkbox" name="kz"><span>Verkehrsunfall</span></label>
-      <label><input type="checkbox" name="kz"><span>Katastrophen-Voralarm</span></label>
-      <label><input type="checkbox" name="kz"><span>Katastrophen-Einsatz</span></label>
-    </div>
-  </div>
-  <div class="stat-block">
-    <h3>Personen und Tiere</h3>
-    <div class="felder">
-      ''' + zaehler('Gerettete Personen', 1) + zaehler('davon mit Rauchgasvergiftung', 1, 'höchstens so viele wie gerettet') + zaehler('Tote Personen', 0) + zaehler('Gerettete Tiere', 0) + '''
-    </div>
-  </div>
-  <div class="stat-block">
-    <h3>Eigene Einsatzkräfte</h3>
-    <dl class="daten"><dt>verletzt</dt><dd>0</dd><dt>tödlich verunglückt</dt><dd>0</dd></dl>
-    <p class="meta" style="margin:6px 0 0">Aus dem Personal aller Berichte dieses Einsatzes. Eintragen bei der Person im Abschnitt Personal.</p>
-  </div>
-</section>
-<section class="karte">
-  <h3>Aus allen Berichten des Einsatzes</h3>
-  <dl class="daten"><dt>Einsatzkräfte</dt><dd>29 (ohne Doppelungen)</dd><dt>Fahrzeuge</dt><dd>5</dd><dt>unter Atemschutz</dt><dd>6</dd><dt>Dauer</dt><dd>3 h 15 min</dd></dl>
-</section>'''
-
-STATISTIK_NEBEN = '''
-<div class="meldung info"><span class="ic">i</span><span>Dies ist ein <strong>Nebenbericht</strong>. Die Statistikmerkmale des Einsatzes stehen im Hauptbericht der Abteilung Weidenhain. Hier ist nichts auszufüllen.</span><a class="knopf klein aktion" href="bericht-haupt.html#s4">Hauptbericht ansehen</a></div>
-<section class="karte">
-  <h3>Eigene Einsatzkräfte in diesem Bericht</h3>
-  <dl class="daten"><dt>verletzt</dt><dd>0</dd><dt>tödlich verunglückt</dt><dd>0</dd></dl>
-  <p class="meta" style="margin:6px 0 0">Zählen für die Jahresstatistik aus allen Berichten. Eintragen bei der Person im Abschnitt Personal.</p>
-</section>'''
 
 PERSON_DIALOG = dialog('d-person', 'Jonas Keller', '''
   <div class="meldung warnung"><span class="ic">!</span><span>Eignungsuntersuchung Atemschutz seit 02.10.2026 abgelaufen.</span></div>
@@ -269,7 +265,7 @@ def versionen_dialog(eintraege):
         '<button class="knopf" value="abbrechen">Schließen</button>')
 
 
-def berichtseite(pfad, titel, *, haupt, aktiv, zustand, kopfplaketten, personal, statistik, pruefung, status, fertig_frei, brot_abt, versionen):
+def berichtseite(pfad, titel, *, haupt, aktiv, zustand, kopfplaketten, personal, pruefung, status, fertig_frei, brot_abt, versionen):
     s2_meldungen = '' if haupt else '''
 <div class="meldung fehler" role="alert"><span class="ic">✕</span><span><span class="art">Fehler:</span> <strong>Markus Vogt</strong> steht auch im Bericht der Führungsgruppe (13:10–16:20). Eine Person darf im selben Einsatz nicht gleichzeitig in zwei Berichten stehen.</span><button type="button" class="knopf klein aktion">Hier entfernen</button></div>
 <div class="meldung warnung"><span class="ic">!</span><span><span class="art">Warnung:</span> <strong>Jonas Keller</strong> ist unter Atemschutz eingetragen, die Eignungsuntersuchung ist seit 02.10.2026 abgelaufen.</span><button type="button" class="knopf klein aktion" data-dialog="d-ignorieren">Begründen …</button></div>'''
@@ -329,11 +325,7 @@ def berichtseite(pfad, titel, *, haupt, aktiv, zustand, kopfplaketten, personal,
     <div class="feld"><label>Wetterlage</label><select><option>kein Einfluss</option><option>Regen</option><option>Schnee</option><option>Glätte</option><option>Sturm</option><option>Hitze</option><option>Gewitter</option><option>Nebel</option></select></div>
   </div>
 </section>
-''' + schritt_nav(('s2', 'Personal &amp; Fahrzeuge'), ('s4', 'Statistik')) + f'''
-</div>
-
-<div class="reiter-inhalt{' aktiv' if aktiv == 's4' else ''}" id="s4">
-''' + statistik + schritt_nav(('s3', 'Lage &amp; Verlauf'), ('s5', 'Beteiligte &amp; Sonstiges')) + f'''
+''' + schritt_nav(('s2', 'Personal &amp; Fahrzeuge'), ('s5', 'Beteiligte &amp; Sonstiges')) + f'''
 </div>
 
 <div class="reiter-inhalt{' aktiv' if aktiv == 's5' else ''}" id="s5">
@@ -362,7 +354,7 @@ def berichtseite(pfad, titel, *, haupt, aktiv, zustand, kopfplaketten, personal,
   <div class="feld" style="margin-top:10px"><span class="label">Anhänge</span><div class="plaketten"><span class="plakette">Alarmfax.pdf</span><span class="plakette">Foto_1.jpg</span><button type="button" class="knopf klein">+ Datei oder Foto</button></div></div>
 </section>
 </div>
-''' + schritt_nav(('s4', 'Statistik'), ('s6', 'Prüfen')) + f'''
+''' + schritt_nav(('s3', 'Lage &amp; Verlauf'), ('s6', 'Prüfen')) + f'''
 </div>
 
 <div class="reiter-inhalt{' aktiv' if aktiv == 's6' else ''}" id="s6">
@@ -388,9 +380,9 @@ def berichtseite(pfad, titel, *, haupt, aktiv, zustand, kopfplaketten, personal,
 
 
 berichtseite('einsatzberichte/bericht.html', 'Bericht Abteilung Musterstadt', haupt=False, aktiv='s2',
-    zustand={'s1': ('fertig', 'vollständig'), 's2': ('fehler', '1 Fehler · 1 Warnung'), 's3': ('fertig', 'vollständig'), 's4': ('fertig', 'im Hauptbericht'), 's5': ('fertig', 'optional')},
+    zustand={'s1': ('fertig', 'vollständig'), 's2': ('fehler', '1 Fehler · 1 Warnung'), 's3': ('fertig', 'vollständig'), 's5': ('fertig', 'optional')},
     kopfplaketten=N('Nebenbericht') + S_ENTWURF + '<span class="plakette">B2 Brand Wohnung · 2026-104711</span><span class="plakette">Verfasser: Tobias Rief</span>',
-    personal=FAHRZEUGE_MUSTERSTADT, statistik=STATISTIK_NEBEN,
+    personal=FAHRZEUGE_MUSTERSTADT,
     pruefung='''  <div class="meldung fehler"><span class="ic">✕</span><span><span class="art">Fehler · Personal:</span> Markus Vogt doppelt im Einsatz (Führungsgruppe).</span><button type="button" class="knopf klein aktion" data-reiter="s2">Zum Abschnitt</button></div>
   <div class="meldung warnung"><span class="ic">!</span><span><span class="art">Warnung · Personal:</span> Jonas Keller ohne gültige Eignungsuntersuchung unter Atemschutz.</span><button type="button" class="knopf klein aktion" data-dialog="d-ignorieren">Begründen …</button></div>
   <div class="meldung ok"><span class="ic">✓</span><span>Zeiten plausibel · Lage und Verlauf ausgefüllt · alle Personen einem Fahrzeug oder der Bereitschaft zugeordnet</span></div>
@@ -403,15 +395,15 @@ berichtseite('einsatzberichte/bericht.html', 'Bericht Abteilung Musterstadt', ha
         ('21.10.2026 17:02', 'Tobias Rief', 'Bericht angelegt'),
     ]))
 
-berichtseite('einsatzberichte/bericht-haupt.html', 'Bericht Abteilung Weidenhain', haupt=True, aktiv='s4',
-    zustand={'s1': ('fertig', 'vollständig'), 's2': ('fertig', '8 Personen'), 's3': ('fertig', 'vollständig'), 's4': ('', 'bitte prüfen'), 's5': ('fertig', 'optional')},
+berichtseite('einsatzberichte/bericht-haupt.html', 'Bericht Abteilung Weidenhain', haupt=True, aktiv='s6',
+    zustand={'s1': ('fertig', 'vollständig'), 's2': ('fertig', '8 Personen'), 's3': ('fertig', 'vollständig'), 's5': ('fertig', 'optional')},
     kopfplaketten=H('Hauptbericht') + S_ENTWURF + '<span class="plakette">B2 Brand Wohnung · 2026-104711</span><span class="plakette">Verfasser: Sabine Hagel</span>',
-    personal=FAHRZEUGE_WEIDENHAIN, statistik=STATISTIK_HAUPT,
-    pruefung='''  <div class="meldung ok"><span class="ic">✓</span><span>Keine Fehler und keine Warnungen. Zeiten plausibel · Personal vollständig zugeordnet · Statistikmerkmale vollständig.</span></div>''',
+    personal=FAHRZEUGE_WEIDENHAIN,
+    pruefung='''  <div class="meldung ok"><span class="ic">✓</span><span>Keine Fehler und keine Warnungen. Zeiten plausibel · Personal vollständig zugeordnet · Statistik des Einsatzes vollständig.</span></div>
+  <p class="meta" style="margin:0">Fehlt die Statistik des Einsatzes, meldet der Hauptbericht einen Fehler mit „Zum Einsatz“; sie steht auf der Seite des Einsatzes.</p>''',
     status='Automatisch gespeichert 14:05 · keine Fehler', fertig_frei=True, brot_abt='Weidenhain',
     versionen=versionen_dialog([
-        ('22.10.2026 14:05', 'Sabine Hagel', 'Statistik: Brandgröße Mittelbrand'),
-        ('22.10.2026 13:48', 'Sabine Hagel', 'Statistik: 1 gerettete Person'),
+        ('22.10.2026 14:05', 'Sabine Hagel', 'Personal geändert (8 Personen)'),
         ('21.10.2026 20:30', 'Sabine Hagel', 'Lage und Verlauf geändert'),
         ('21.10.2026 17:10', 'Sabine Hagel', 'Bericht angelegt'),
     ]))
@@ -652,8 +644,7 @@ seite('einsatzberichte/einstellungen.html', 'Einstellungen Einsatzberichte', '''
   ''' + tabelle(['Regel', 'Stufe'], [
       regel('Hauptbericht fehlt (beim Freigeben)', 'Fehler'),
       regel('Bericht leer (Lage/Verlauf)', 'Fehler'),
-      regel('Statistik fehlt im Hauptbericht', 'Fehler'),
-      regel('Statistik bei Sonderdienst / Sonstiges', 'Fehler'),
+      regel('Statistik des Einsatzes fehlt (Hauptbericht)', 'Fehler'),
       regel('Kein Personal', 'Fehler'),
       regel('Fahrzeug fehlt', 'Fehler'),
       regel('Personaldoppelung im Einsatz', 'Fehler'),

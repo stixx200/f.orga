@@ -55,6 +55,8 @@ export const IncidentSchema = defineEntity({
     chargeable: p.boolean().default(false),
     chargeableReason: p.text().default(''),
     notes: p.text().default(''),
+    /** Statistics features, once per incident (not per report); `null` until filled in. */
+    statistics: p.json<IncidentStatistics>().nullable(),
     reports: () => p.oneToMany(ReportEntity).mappedBy('incident'),
     version: p.integer().version(),
   },
@@ -116,7 +118,6 @@ export const ReportSchema = defineEntity({
     actions: p.text().default(''),
     cause: p.text().default(''),
     incidentCommander: p.string().default(''),
-    statistics: p.json<IncidentStatistics>().nullable(),
     weather: p.json<Weather>(),
     equipment: p.text().default(''),
     acknowledgements: p.json<StoredAcknowledgement[]>(),

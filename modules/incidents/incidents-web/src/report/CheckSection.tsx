@@ -1,4 +1,5 @@
 import { Button, Stack, Text, Textarea } from '@mantine/core';
+import { Link } from 'react-router';
 import type { Finding } from '@forga/incidents-contracts';
 import { useTranslation } from '@forga/web-sdk';
 import { Notice, Panel } from '@forga/web-ui';
@@ -6,34 +7,34 @@ import { type StepId, stepOf } from './editor';
 import { findingKey, mergeFindings, useFindingText } from './findings';
 
 /** All findings of the rules: errors block submitting, warnings need a reason. */
-export function CheckSection({ findings, reasons, setReason, goTo, editable, statisticsIncomplete }: {
+export function CheckSection({ findings, reasons, setReason, goTo, editable, incidentId }: {
   findings: Finding[];
   reasons: Record<string, string>;
   setReason: (key: string, value: string) => void;
   goTo: (step: StepId) => void;
   editable: boolean;
-  /** Statistics changed but not complete (and so not saved). */
-  statisticsIncomplete?: boolean;
+  /** The statistics belong to the incident: their finding leads to the page of the incident. */
+  incidentId: string;
 }) {
   const { t } = useTranslation('incidents');
   const findingText = useFindingText();
   const errors = mergeFindings(findings).filter((f) => f.level === 'error');
   const warnings = mergeFindings(findings).filter((f) => f.level === 'warning');
+  const action = (f: Finding) => {
+    const step = stepOf(f);
+    if (step === 'incident') return <Button component={Link} to={`/incidents/incidents/${incidentId}`} size="xs" variant="outline">{t('check.toIncident')}</Button>;
+    return <Button size="xs" variant="outline" onClick={() => goTo(step)}>{t('check.goTo')}</Button>;
+  };
   return (
     <Panel title={t('check.title')}>
       <Stack gap="sm">
-        {statisticsIncomplete && (
-          <Notice kind="error" action={<Button size="xs" variant="outline" onClick={() => goTo('statistics')}>{t('check.goTo')}</Button>}>
-            {t('statistics.incomplete')}
-          </Notice>
-        )}
         {errors.map((f) => (
-          <Notice key={findingKey(f)} kind="error" action={<Button size="xs" variant="outline" onClick={() => goTo(stepOf(f))}>{t('check.goTo')}</Button>}>
+          <Notice key={findingKey(f)} kind="error" action={action(f)}>
             {findingText(f)}
           </Notice>
         ))}
         {warnings.map((f) => (
-          <Notice key={findingKey(f)} kind="warning" action={<Button size="xs" variant="outline" onClick={() => goTo(stepOf(f))}>{t('check.goTo')}</Button>}>
+          <Notice key={findingKey(f)} kind="warning" action={action(f)}>
             <Stack gap={6}>
               <span>{findingText(f)}</span>
               {f.acknowledged ? (
@@ -53,7 +54,7 @@ export function CheckSection({ findings, reasons, setReason, goTo, editable, sta
             </Stack>
           </Notice>
         ))}
-        {!findings.length && !statisticsIncomplete && <Notice kind="done">{t('check.allGood')}</Notice>}
+        {!findings.length && <Notice kind="done">{t('check.allGood')}</Notice>}
         <Text size="sm" c="dimmed">{t('check.hint')}</Text>
       </Stack>
     </Panel>

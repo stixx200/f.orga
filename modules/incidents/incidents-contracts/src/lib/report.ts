@@ -165,8 +165,6 @@ export const ReportInput = z.object({
   actions: text,
   cause: text,
   incidentCommander: text,
-  /** Only on the primary report; `null` until filled in. */
-  statistics: IncidentStatistics.nullable().default(null),
   weather: Weather.default({ influence: false, conditions: [] }),
   equipment: text,
   personnel: z.array(PersonnelEntryInput).default([]),
@@ -225,11 +223,14 @@ export type ReleaseManyResult = z.infer<typeof ReleaseManyResult>;
 export const Unlock = z.object({ reason: z.string().trim().min(1), toStatus: z.enum(['draft', 'review']).default('review') });
 export type Unlock = z.input<typeof Unlock>;
 
-/** Statistics of a primary report, changed or removed (`null`) by a releaser without a new release (also after the release). */
+/**
+ * Statistics of an incident (`PUT incidents/incidents/:id/statistics`), set or removed (`null`) with the version of
+ * the incident the client loaded.
+ */
 export const StatisticsUpdate = z.object({ statistics: IncidentStatistics.nullable(), version: z.number().int() });
 export type StatisticsUpdate = z.input<typeof StatisticsUpdate>;
 
-/** Pre-filled statistics from keyword, location and personnel; the author confirms or corrects them. */
+/** Pre-filled statistics from keyword and location; the writers confirm or correct them. */
 export const StatisticsSuggestion = z.object({
   ownMunicipality: z.boolean(),
   mainType: MainType.nullable(),
@@ -299,9 +300,6 @@ export const Report = z.object({
   actions: z.string(),
   cause: z.string(),
   incidentCommander: z.string(),
-  statistics: IncidentStatistics.nullable(),
-  /** Only for the primary report while `statistics` is empty. */
-  statisticsSuggestion: StatisticsSuggestion.nullable(),
   weather: Weather,
   equipment: z.string(),
   personnel: z.array(PersonnelEntry),
@@ -351,6 +349,14 @@ export const Incident = z.object({
   chargeable: z.boolean(),
   chargeableReason: z.string(),
   notes: z.string(),
+  /** Statistics features of the incident (once per incident, not per report); `null` until filled in. */
+  statistics: IncidentStatistics.nullable(),
+  /** Pre-filled from keyword and location while `statistics` is empty and the keyword counts. */
+  statisticsSuggestion: StatisticsSuggestion.nullable(),
+  /** The keyword counts in the annual statistics (it has a main type); only then statistics are entered. */
+  statisticsCounted: z.boolean(),
+  /** The current user may change the statistics now (see `PUT incidents/incidents/:id/statistics`). */
+  statisticsEditable: z.boolean(),
   reports: z.array(
     z.object({
       id: z.uuid(),
@@ -361,8 +367,6 @@ export const Incident = z.object({
       status: ReportStatus,
       locked: z.boolean(),
       authorPersonId: z.uuid().nullable(),
-      /** Only for the primary report: statistics filled in. */
-      hasStatistics: z.boolean(),
     }),
   ),
   version: z.number(),

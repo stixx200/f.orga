@@ -239,7 +239,9 @@ describe('MP-Feuer data transfer', () => {
     const report = (await get(`/incidents/reports/${fire.reports[0].id}`)).body;
     expect(report.times.returnedAt).toBe('2025-06-01T10:00:00.000Z');
     expect(report).toMatchObject({ situation: 'Mülleimer in Vollbrand', actions: 'Abgelöscht\n\nMit Kübelspritze gelöscht.', incidentCommander: 'Probe Anna' });
-    expect(report.statistics).toMatchObject({ mainType: 'fire', fireSize: 'small-a' });
+    // The statistics of the primary report become those of the incident.
+    expect((await get(`/incidents/incidents/${report.incidentId}`)).body.statistics).toMatchObject({ mainType: 'fire', fireSize: 'small-a' });
+    expect(report).not.toHaveProperty('statistics');
     // Anna keeps her own end of MP-Feuer although her vehicle has times of its own; the alarm of the LF is that of the report.
     expect(report.personnel).toMatchObject([
       { personId: await personId('Probe'), vehicleId: ids.lf, breathingApparatus: true, function: 'machinist', from: '2025-06-01T08:00:00.000Z', to: '2025-06-01T09:30:00.000Z' },
@@ -546,24 +548,25 @@ describe('MP-Feuer data transfer with the reports of the whole brigade as duty o
     const applied = await run(true, { '00': 'duty-officer' });
     expect(applied.body.counts).toMatchObject({ create: 5, error: 0 });
 
-    type Summary = { id: string; departmentId: string | null; unit: string | null; number: string; primary: boolean; status: string; hasStatistics: boolean };
-    const incidents = (await get('/incidents/incidents?from=2025-08-01&to=2025-08-02')).body as { dispatchNumber: string; reports: Summary[] }[];
+    type Summary = { id: string; departmentId: string | null; unit: string | null; number: string; primary: boolean; status: string };
+    const incidents = (await get('/incidents/incidents?from=2025-08-01&to=2025-08-02')).body as { dispatchNumber: string; statistics: object | null; reports: Summary[] }[];
     // Same dispatch number: the EvD report joins the incident of Musterstadt, whose report is primary.
     const joint = incidents.find((i) => i.dispatchNumber === '1250000900')!;
     expect(joint.reports).toEqual([
-      expect.objectContaining({ departmentId: ids.musterstadt, unit: null, primary: true, hasStatistics: true }),
-      expect.objectContaining({ departmentId: null, unit: 'duty-officer', primary: false, hasStatistics: false, number: 'EvD-2025-001', status: 'released-billing' }),
+      expect.objectContaining({ departmentId: ids.musterstadt, unit: null, primary: true }),
+      expect.objectContaining({ departmentId: null, unit: 'duty-officer', primary: false, number: 'EvD-2025-001', status: 'released-billing' }),
     ]);
-    expect((await get(`/incidents/reports/${joint.reports[0].id}`)).body.statistics).toMatchObject({ mainType: 'fire', fireSize: 'small-b' });
+    // The statistics of the incident are those of the primary report in MP-Feuer (Musterstadt), not of the EvD report.
+    expect(joint.statistics).toMatchObject({ mainType: 'fire', fireSize: 'small-b' });
     const evd = (await get(`/incidents/reports/${joint.reports[1].id}`)).body;
     expect(evd).toMatchObject({ situation: 'Einsatzleitung übernommen', personnel: [expect.objectContaining({ personId: await personId('Probe') })] });
 
-    // Only the duty officer: his report is the primary report with the statistics.
+    // Only the duty officer: his report is the primary report and brings the statistics of the incident.
     const alone = incidents.find((i) => i.dispatchNumber === '1250000901')!;
-    expect(alone.reports).toEqual([expect.objectContaining({ unit: 'duty-officer', primary: true, hasStatistics: true, number: 'EvD-2025-002' })]);
-    expect((await get(`/incidents/reports/${alone.reports[0].id}`)).body.statistics).toMatchObject({ mainType: 'fire', fireSize: 'small-a' });
+    expect(alone.reports).toEqual([expect.objectContaining({ unit: 'duty-officer', primary: true, number: 'EvD-2025-002' })]);
+    expect(alone.statistics).toMatchObject({ mainType: 'fire', fireSize: 'small-a' });
 
-    // Each incident counts once in the annual statistics, via its primary report.
+    // Each incident counts once in the annual statistics, with its statistics.
     const after = await annualValues();
     expect(after('F28:D') - before('F28:D')).toBe(2);
     expect(after('F29:D') - before('F29:D')).toBe(1);

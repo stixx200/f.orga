@@ -1,12 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type Finding, type IncidentStatisticsInput, inheritedTimes, type Report, type ReportInput, type VehicleTimes } from '@forga/incidents-contracts';
+import { type Finding, inheritedTimes, type Report, type ReportInput, type VehicleTimes } from '@forga/incidents-contracts';
 import { api, ApiError, send, useSession } from '@forga/web-sdk';
 import { notifyError } from '@forga/web-ui';
 import { keys } from '../api';
 
 /** The report content in the form `PUT /incidents/reports/:id` expects. */
-export type Content = Required<Omit<ReportInput, 'statistics' | 'version'>> & { statistics: IncidentStatisticsInput | null };
+export type Content = Required<Omit<ReportInput, 'version'>>;
 export type Personnel = Content['personnel'][number];
 
 const DEBOUNCE_MS = 800;
@@ -35,7 +35,6 @@ export function toContent(report: Report): Content {
     actions: report.actions,
     cause: report.cause,
     incidentCommander: report.incidentCommander,
-    statistics: report.statistics,
     weather: report.weather,
     equipment: report.equipment,
     personnel: report.personnel.map(({ id: _id, compensation: _c, from, to, ...p }) => {
@@ -311,17 +310,16 @@ export function useReportEditor(report: Report, userId: string) {
   return { content, update, flush, reset, saveState, restorable, restoreLocal, discardLocal, loadServer, keepMine };
 }
 
-export type StepId = 'times' | 'personnel' | 'narrative' | 'statistics' | 'other' | 'check';
-export const STEPS: StepId[] = ['times', 'personnel', 'narrative', 'statistics', 'other', 'check'];
+export type StepId = 'times' | 'personnel' | 'narrative' | 'other' | 'check';
+export const STEPS: StepId[] = ['times', 'personnel', 'narrative', 'other', 'check'];
 
-/** The section of the editor where a finding can be fixed. */
-export function stepOf(finding: Finding): StepId {
+/** The section of the editor where a finding can be fixed; `incident` for the statistics on the page of the incident. */
+export function stepOf(finding: Finding): StepId | 'incident' {
   switch (finding.rule) {
     case 'report-empty':
       return 'narrative';
     case 'statistics-missing':
-    case 'statistics-not-allowed':
-      return 'statistics';
+      return 'incident';
     case 'times-invalid':
       return finding.subject ? 'personnel' : 'times';
     case 'duration-long':
@@ -333,14 +331,4 @@ export function stepOf(finding: Finding): StepId {
     default:
       return 'personnel';
   }
-}
-
-/** Statistics as the server accepts them, or `null` while required answers are missing. */
-export function completeStatistics(s: IncidentStatisticsInput | null): IncidentStatisticsInput | null {
-  if (!s?.mainType) return null;
-  if (s.mainType === 'fire' && !s.fireSize) return null;
-  if (s.mainType === 'technical-assistance' && !s.technicalCategory) return null;
-  if (s.mainType === 'false-alarm' && !s.falseAlarmType) return null;
-  if ((s.rescuedSmokeInhalation ?? 0) > (s.rescued ?? 0)) return null;
-  return s;
 }
