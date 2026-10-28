@@ -5,7 +5,7 @@ const de = {
   loading: 'Wird geladen …',
   notFound: 'Diese Seite gibt es nicht.',
   runStatus: { draft: 'Entwurf', closed: 'Abgeschlossen', 'handed-over': 'An Kämmerei übergeben', paid: 'Ausgezahlt' },
-  source: { incident: 'Einsatz', training: 'Dienst', function: 'Funktionspauschale', manual: 'von Hand', duty: 'Sonderdienst', course: 'Lehrgang' },
+  source: { incident: 'Einsatz', training: 'Dienst', function: 'Funktionspauschale', manual: 'von Hand', duty: 'EvD-Dienst', course: 'Lehrgang' },
   kind: { compensation: 'Entschädigung', 'loss-of-earnings': 'Verdienstausfall', 'flat-rate': 'Pauschale', expenses: 'Auslagen' },
   problem: {
     'amount-missing': 'Betrag fehlt (Verdienstausfall oder kein Satz)',
@@ -279,7 +279,7 @@ const en: typeof de = {
   loading: 'Loading …',
   notFound: 'This page does not exist.',
   runStatus: { draft: 'Draft', closed: 'Closed', 'handed-over': 'Handed over to treasury', paid: 'Paid' },
-  source: { incident: 'Incident', training: 'Session', function: 'Function allowance', manual: 'manual', duty: 'Special service', course: 'Course' },
+  source: { incident: 'Incident', training: 'Session', function: 'Function allowance', manual: 'manual', duty: 'Duty officer service', course: 'Course' },
   kind: { compensation: 'Compensation', 'loss-of-earnings': 'Loss of earnings', 'flat-rate': 'Flat rate', expenses: 'Expenses' },
   problem: {
     'amount-missing': 'Amount missing (loss of earnings or no rate)',

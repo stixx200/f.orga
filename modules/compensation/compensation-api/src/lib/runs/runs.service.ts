@@ -42,7 +42,7 @@ const SOURCE_TEXT: Record<string, { de: string; en: string }> = {
   training: { de: 'Dienst', en: 'Session' },
   function: { de: 'Funktionspauschale', en: 'Function allowance' },
   manual: { de: 'von Hand', en: 'Manual' },
-  duty: { de: 'Sonderdienst', en: 'Special service' },
+  duty: { de: 'EvD-Dienst', en: 'Duty officer service' },
   course: { de: 'Lehrgang', en: 'Course' },
 };
 

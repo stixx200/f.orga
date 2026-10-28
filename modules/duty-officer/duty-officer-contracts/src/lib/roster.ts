@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { LocalizedText } from '@forga/core-contracts';
 
 /**
- * A special service from the duty roster, e.g. duty officer (Einsatzleiter vom Dienst, EvD).
+ * A duty officer service from the duty roster, e.g. duty officer (Einsatzleiter vom Dienst, EvD).
  * It is compensated per day and not part of an incident report.
  */
 export const DutyAssignmentInput = z
@@ -33,7 +33,7 @@ export const DutyAssignment = z.object({
 });
 export type DutyAssignment = z.infer<typeof DutyAssignment>;
 
-/** Republishes the special services of a period (e.g. for the compensation module installed later). */
+/** Republishes the duty officer services of a period (e.g. for the compensation module installed later). */
 export const DutyPeriodQuery = z.object({ from: z.iso.date(), to: z.iso.date() });
 export type DutyPeriodQuery = z.infer<typeof DutyPeriodQuery>;
 
@@ -42,7 +42,7 @@ export const DUTY_OFFICER_EVENTS = {
   dutyChanged: 'duty-officer.duty.changed',
 } as const;
 
-/** A special service of the duty roster was saved or deleted (`deleted`), with its compensation per day. */
+/** A duty officer service of the duty roster was saved or deleted (`deleted`), with its compensation per day. */
 export interface DutyChangedEvent {
   dutyId: string;
   personId: string;
@@ -56,7 +56,7 @@ export interface DutyChangedEvent {
   deleted: boolean;
 }
 
-/** A special service with its compensation, for other modules (e.g. the compensation export of the incident reports). */
+/** A duty officer service with its compensation, for other modules (e.g. the compensation export of the incident reports). */
 export interface DutyPeriod {
   id: string;
   personId: string;

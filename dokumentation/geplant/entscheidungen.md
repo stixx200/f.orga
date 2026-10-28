@@ -135,7 +135,7 @@ Offene Entscheidungen haben einen Vorschlag. Solange sie offen sind, wird nach d
 ## E13 Einsatzleiter-Pauschale über Dienstplan
 
 - **Frage**: Wird die Pauschalentschädigung des Einsatzleiters im Einsatzbericht erfasst?
-- **Entscheidung**: Nein. Der Einsatzleiter vom Dienst ist ein Sonderdienst nach Kalender. Die Termine werden aus einer iCal-Datei übernommen (Importprofil `duty-officer.roster`) oder von Hand gepflegt und je vollem Tag entschädigt (Musterstadt: 10 € je Tag). Im Bericht gibt es keine Einsatzleiter-Pauschale; Zuschläge bleiben für andere Fälle konfigurierbar.
+- **Entscheidung**: Nein. Der Einsatzleiter vom Dienst ist ein EvD-Dienst nach Kalender. Die Termine werden aus einer iCal-Datei übernommen (Importprofil `duty-officer.roster`) oder von Hand gepflegt und je vollem Tag entschädigt (Musterstadt: 10 € je Tag). Im Bericht gibt es keine Einsatzleiter-Pauschale; Zuschläge bleiben für andere Fälle konfigurierbar.
 - **Konsequenz**: umgesetzt als EvD-Dienstplan im Modul [Einsatzleiter vom Dienst](../implementiert/architektur.md#modul-einsatzleiter-vom-dienst-duty-officer), enthalten im Abrechnungsexport. Das Modul [Entschädigungen](../implementiert/architektur.md#modul-entschädigungen-compensation) übernimmt den Dienstplan. Der EvD schreibt zusätzlich zu jedem Einsatz einen eigenen EvD-Bericht; dessen Einsatzstunden werden standardmäßig neben der Pauschale vergütet (`dutyOfficerReportPaid`).
 - **Status**: entschieden
 

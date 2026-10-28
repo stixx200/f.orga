@@ -721,10 +721,10 @@ Die Freigabe ist zweistufig: erst zur Entschädigungsauszahlung, dann zur Abrech
 | `incidents.hours-per-person` | Einsätze, Stunden, Bereitschaften, Atemschutzminuten je Person |
 
 **Abrechnungsexport** (`GET /api/incidents/compensation/export?from&to&includeUnreleased&lang`, Recht `incidents.compensation.export`): Excel im Stil von `Stil.md`, ersetzt `auswertung.py`. Standardmäßig nur freigegebene Berichte. Blätter:
-- Betrag pro Person (nach Stammabteilung): Einsätze, Stunden, Sonderdienste, Betrag, Gesamtzeile
+- Betrag pro Person (nach Stammabteilung): Einsätze, Stunden, EvD-Dienste, Betrag, Gesamtzeile
 - Summe je Abteilung (Abteilung des Berichts)
 - Einsätze (eine Zeile je Person und Bericht)
-- Sonderdienste (EvD-Dienstplan im Zeitraum über `DUTY_ROSTER`, nur mit aktivem Modul `duty-officer`)
+- EvD-Dienste (EvD-Dienstplan im Zeitraum über `DUTY_ROSTER`, nur mit aktivem Modul `duty-officer`)
 - Hinweise: Ergebnis der Prüfung vor der Auszahlung (siehe unten)
 - Überschneidungen derselben Person zwischen Einsätzen
 
@@ -901,7 +901,7 @@ Benötigt `masterdata`, nutzt optional `incidents`, `training` und `duty-officer
 - `incidents.report.unlocked` (Bericht zur Korrektur entsperrt oder gelöscht): Die Posten des Berichts werden auf „keine Posten“ gebracht (`apply('incident', reportId, [])`): offene verschwinden, schon ausgezahlte werden mit Korrekturposten zurückgebucht, bis der Bericht wieder freigegeben ist.
 - `masterdata.course.passed`: Nennt die Satzung für den Lehrgang eine Pauschale (`courseAllowances`, gültig am Lehrgangsende), entsteht ein Pauschalposten „Lehrgangspauschale …“ (Quelle `course`). Der Antrag gilt mit dem Eintrag des bestandenen Lehrgangs als gestellt.
 - `masterdata.course.revoked` (Teilnahme gelöscht): Die Pauschale wird wie bei anderen Quellen auf „keine Posten“ gebracht (`apply('course', attendanceId, [])`): ein offener Posten verschwindet, ein schon ausgezahlter wird mit einem Korrekturposten zurückgebucht.
-- `duty-officer.duty.changed` (Modul Einsatzleiter vom Dienst): je Sonderdienst ein Pauschalposten (Quelle `duty`, z. B. „Einsatzleiter vom Dienst (EvD) (3 Tage)“) mit dem Betrag des Dienstplans, zur Stammabteilung der Person; ein gelöschter Dienst entfernt ihn bzw. bucht ihn zurück, wenn er schon ausgezahlt ist.
+- `duty-officer.duty.changed` (Modul Einsatzleiter vom Dienst): je EvD-Dienst ein Pauschalposten (Quelle `duty`, z. B. „Einsatzleiter vom Dienst (EvD) (3 Tage)“) mit dem Betrag des Dienstplans, zur Stammabteilung der Person; ein gelöschter Dienst entfernt ihn bzw. bucht ihn zurück, wenn er schon ausgezahlt ist.
 - `training.session.closed`: je anwesender Person mit einem Status aus `paidStatuses` (Einstellung, Standard aktiv und Probezeit; Jugendfeuerwehr nur, wenn die Satzung es vorsieht) Stunden (Rundung der Einstellung, wie beim Übungsdienst auch für Sonderdienste) × Satz für Übungsdienst, Sonderdienst bzw. Brandsicherheitswache (nach der Entschädigungsart der Art), gültig am Tag des Dienstes, höchstens `maxPerService`. Posten von Sonderdiensten heißen „Sonderdienst · <Titel>“, die übrigen wie der Dienst. Arten ohne Entschädigung ergeben keine Posten. Fehlt der Satz für den Tag, bleibt der Betrag offen (Hinweis „Betrag fehlt“, verhindert den Abschluss) und wird im Lauf eingetragen.
 - `training.session.reopened`: offene Posten des Dienstes verschwinden, ausgezahlte werden zurückgebucht.
 - Jede erneute Freigabe bzw. jeder erneute Abschluss bringt die Posten der Quelle auf den neuen Stand (`ItemsService.apply`): Offene Posten werden je Person und Art an Ort und Stelle aktualisiert, bleiben also im Entwurf eines Laufs bzw. „verschoben“; ein von Hand eingetragener Betrag (Verdienstausfall, Posten ohne Satz) bleibt mit Begründung, solange die Quelle keinen Betrag liefert. Nicht mehr gewünschte offene Posten verschwinden. Ist ein Betrag schon in einem abgeschlossenen Lauf, entsteht ein **Korrekturposten** mit der Differenz für den nächsten Lauf; fällt eine Person weg, wird ihr Betrag zurückgebucht. Abgeschlossene Läufe bleiben unverändert.
@@ -1095,14 +1095,14 @@ Der Einsatzleiter vom Dienst (EvD) hat nach Dienstplan für die ganze Feuerwehr 
 
 | Entität | Tabelle | Inhalt |
 | --- | --- | --- |
-| `DutyAssignmentEntity` | `duty_assignment` | Sonderdienst aus dem Dienstplan: Person, Art, von–bis, Bemerkung, Termin-UID des Kalenders (`externalUid`, eindeutig); historisiert (Historie mit `duty-officer.roster.manage`) |
+| `DutyAssignmentEntity` | `duty_assignment` | EvD-Dienst aus dem Dienstplan: Person, Art, von–bis, Bemerkung, Termin-UID des Kalenders (`externalUid`, eindeutig); historisiert (Historie mit `duty-officer.roster.manage`) |
 | `ExpectedReportEntity` | `expected_report` | Einsatz, der einen EvD-Bericht bekommt (angelegt, während Modul und Einstellung aktiv waren); nur diese Einsätze können „EvD-Bericht fehlt“ melden |
 | `IncidentExemptionEntity` | `incident_exemption` | „Kein EvD bei diesem Einsatz“: Einsatz (eindeutig), Grund, wer, wann; historisiert (Historie mit `duty-officer.read`) |
 
 **Einstellung** `duty-officer.general`: `reportRequired` („EvD-Bericht für jeden Einsatz anlegen“, Standard an) und `dutyKinds` (Dienstarten mit Name, Satz je Tag mit Gültig-ab und `unit`: nur volle Tage von 24 Stunden oder jeder angefangene Tag). Die Dienstarten sind anfangs leer; „Vorlage übernehmen“ setzt `DUTY_KIND_TEMPLATE` (`duty-officer` „Einsatzleiter vom Dienst (EvD)“, 10 € je vollem Tag ab 01.01.2026). Satzungswerte sind Vorlagen, keine Standardwerte.
 
 **Dienstplan** (`roster/roster.ts`)
-- Sonderdienste stehen nicht in Berichten; sie werden je Tag entschädigt (`dutyCompensation` in den Verträgen): volle oder angefangene Tage × Satz am Tag des Beginns.
+- EvD-Dienste stehen nicht in Berichten; sie werden je Tag entschädigt (`dutyCompensation` in den Verträgen): volle oder angefangene Tage × Satz am Tag des Beginns.
 - Pflege von Hand (`/api/duty-officer/roster`, Recht `duty-officer.roster.manage`; unbekannte Art `duty-officer.unknownKind`, unbekannte Person `duty-officer.unknownPerson`) oder per **iCal-Import** über das Importprofil `duty-officer.roster`:
   - Felder `uid`, `title`, `from`, `to` (Pflicht), `notes`; Vorschläge über `UID`, `SUMMARY`, `DTSTART`, `DTEND`, `DESCRIPTION`.
   - Die Person wird am Namen im Titel erkannt („EvD Max Test“, „Test, Max“) unter den Mitgliedern am ersten Tag. Kein oder mehrere Treffer: `duty-officer.unknownPerson` bzw. `duty-officer.ambiguousPerson`; ohne Dienstart `duty-officer.noKind`.
@@ -1110,7 +1110,7 @@ Der Einsatzleiter vom Dienst (EvD) hat nach Dienstplan für die ganze Feuerwehr 
   - Idempotent über die Termin-UID: ein erneuter Import aktualisiert geänderte Termine.
   - Importierte Dienste bekommen die erste Dienstart.
 - Jede Änderung (anlegen, ändern, löschen, Import) sendet `duty-officer.duty.changed` (`DUTY_OFFICER_EVENTS`) mit Tagen, Satz und Betrag; `POST /api/duty-officer/roster/republish` sendet die Dienste eines Zeitraums erneut.
-- Andere Module lesen den Dienstplan über `DUTY_ROSTER` (`startingIn(from, to)`), z. B. das Blatt „Sonderdienste“ des Abrechnungsexports der Einsatzberichte.
+- Andere Module lesen den Dienstplan über `DUTY_ROSTER` (`startingIn(from, to)`), z. B. das Blatt „EvD-Dienste“ des Abrechnungsexports der Einsatzberichte.
 
 **EvD-Bericht** (`reports/evd-reports.ts`)
 - Das Modul meldet beim Start die Einheit `duty-officer` bei `INCIDENT_UNITS` an: Name „Einsatzleiter vom Dienst“, Kurzname „EvD“, Nummern `EvD-JJJJ-nnn`, Lesen `duty-officer.read`, Schreiben `duty-officer.reports.write`, Vorprüfen `duty-officer.reports.manage`, ohne Fahrzeugpflicht (der EvD kommt mit Kommandowagen oder eigenem Fahrzeug).
@@ -1241,7 +1241,7 @@ Personen und Abteilungen für die Benutzerverwaltung kommen aus der Stammdaten-A
 
 | Pfad | Seite |
 | --- | --- |
-| `/duty-officer/roster` | EvD-Dienst (Recht `duty-officer.read`): Dienste des Einsatzleiters vom Dienst und weitere Sonderdienste je Jahr; anlegen, bearbeiten, löschen mit `duty-officer.roster.manage`; Kalender-Import über den Import-Assistenten. Ohne Dienstarten ein Hinweis auf die Einstellungen |
+| `/duty-officer/roster` | EvD-Dienst (Recht `duty-officer.read`): Dienste des Einsatzleiters vom Dienst und weitere EvD-Dienste je Jahr; anlegen, bearbeiten, löschen mit `duty-officer.roster.manage`; Kalender-Import über den Import-Assistenten. Ohne Dienstarten ein Hinweis auf die Einstellungen |
 | `/duty-officer/settings` | Einstellungen (im Menü unter „Verwaltung → Einsatzleiter vom Dienst“, Recht `duty-officer.settings.manage`): „EvD-Bericht für jeden Einsatz anlegen“, Dienstarten mit Satz je Tag und „Vorlage übernehmen“ |
 
 Karte „Einsatzleiter vom Dienst“ auf der Einsatzseite (Erweiterungspunkt `incidents.incident.sections`, sichtbar mit einem der Rechte `duty-officer.read`, `.reports.write`, `.reports.manage`): Stand des EvD-Berichts mit Link, wer laut Dienstplan Dienst hatte, Ausnahme mit Grund oder Hinweis „EvD-Bericht fehlt“; mit `duty-officer.reports.manage` „Kein EvD bei diesem Einsatz“ (mit Grund) und „EvD-Bericht anlegen“.

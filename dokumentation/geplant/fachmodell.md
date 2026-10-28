@@ -186,7 +186,7 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Satz Sonderdienst (Satzung) | `TrainingRate` mit `kind: 'special-service'` |
 | Dienstbeteiligung | participation, zählt nur Arten mit `countsForParticipation` |
 
-Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es keine Abteilung vom Typ Sonderdienst; die Teilnehmer gehören zu den Abteilungen des Dienstes. Davon getrennt bleiben die tageweise entschädigten Dienste des EvD-Dienstplans (Modul Einsatzleiter vom Dienst).
+Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es keine Abteilung vom Typ Sonderdienst; die Teilnehmer gehören zu den Abteilungen des Dienstes. Davon getrennt bleiben die tageweise entschädigten EvD-Dienste des EvD-Dienstplans (Modul Einsatzleiter vom Dienst).
 
 ### Kostenersatz
 

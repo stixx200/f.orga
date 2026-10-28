@@ -237,8 +237,8 @@ Alle Rechte gelten für die Gesamtwehr.
 
 | Methode | Pfad | Recht | Zweck |
 | --- | --- | --- | --- |
-| `GET` | `/duty-officer/roster?from&to` | `duty-officer.read` oder `duty-officer.roster.manage` | Sonderdienste mit Tagen, Satz und Betrag (`DutyAssignment[]`) |
-| `POST`, `PUT`, `DELETE` | `/duty-officer/roster`, `/duty-officer/roster/:id` | `duty-officer.roster.manage` | Sonderdienst pflegen (`DutyAssignmentInput`). Fehler: `duty-officer.unknownKind`, `duty-officer.unknownPerson` |
+| `GET` | `/duty-officer/roster?from&to` | `duty-officer.read` oder `duty-officer.roster.manage` | EvD-Dienste mit Tagen, Satz und Betrag (`DutyAssignment[]`) |
+| `POST`, `PUT`, `DELETE` | `/duty-officer/roster`, `/duty-officer/roster/:id` | `duty-officer.roster.manage` | EvD-Dienst pflegen (`DutyAssignmentInput`). Fehler: `duty-officer.unknownKind`, `duty-officer.unknownPerson` |
 | `POST` | `/duty-officer/roster/republish` | `duty-officer.roster.manage` | `duty-officer.duty.changed` für die Dienste eines Zeitraums erneut senden (`{ from, to }`), Antwort `{ duties }` |
 | `GET` | `/duty-officer/incidents/:incidentId` | `duty-officer.read`, `.reports.write` oder `.reports.manage` | EvD-Stand eines Einsatzes (`IncidentDutyOfficer`: `reportRequired`, `expected`, `report`, `exemption`, `onDuty`, `missing`) |
 | `POST` | `/duty-officer/incidents/:incidentId/exemption` | `duty-officer.reports.manage` | „Kein EvD bei diesem Einsatz“ (`ExemptionInput`: `reason`); löscht den Entwurf des EvD-Berichts. Fehler: `incidents.unitReportNotDraft` (`409`) |

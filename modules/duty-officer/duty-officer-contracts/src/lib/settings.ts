@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { LocalizedText } from '@forga/core-contracts';
 
-/** Kind of special service from the duty roster with its rate per day. */
+/** Kind of duty officer service from the duty roster with its rate per day. */
 export const DutyKind = z.object({
   key: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
   name: LocalizedText,
