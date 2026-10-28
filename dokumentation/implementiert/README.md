@@ -3,11 +3,12 @@
 Was hier steht, existiert im Code. Umgesetzt sind:
 
 - das technische Grundgerüst, das die [Zielarchitektur](../geplant/architektur.md) trägt
-- das Backend der Shell: Einrichtung, Anmeldung, Benutzer, Rollen mit Rollenvorlagen, API-Tokens, Einstellungen, Modulverwaltung, Audit, Listen, Fristen mit Sammel-E-Mail, Import (Excel, CSV, iCal)
+- das Backend der Shell: Einrichtung, Anmeldung, Benutzer, Rollen mit Rollenvorlagen, API-Tokens, Einstellungen, Modulverwaltung, Audit, Listen, Fristen mit Sammel-E-Mail, Import (Excel, CSV, iCal) mit gemerkten Zuordnungen
 - das Backend der Stammdaten
 - das Backend der Einsatzberichte mit Prüfregeln, Entschädigung, Freigabe, externer API, Abrechnungsexport, Jahresstatistik und Berichten gesamtwehrweiter Einheiten
 - das Modul Einsatzleiter vom Dienst mit EvD-Dienstplan und EvD-Bericht zu jedem Einsatz
 - das Modul Infoterminal: Selbsteintragung an der Wache in Einsatzberichte und Dienste (Kiosk-Seite `/terminal`)
+- das Modul MP-Feuer: Datenübernahme aus MP-Feuer-Transferdateien im Hintergrund, mit eigener Zuordnungsliste und Verlauf
 - die Module Übungsdienst, Atemschutz, Entschädigungen, Geräte, Kostenersatz, Beförderungen und Kleiderkammer
 - Plugins (signierte Zusatzmodule)
 - die Mehrsprachigkeit (Deutsch/Englisch)

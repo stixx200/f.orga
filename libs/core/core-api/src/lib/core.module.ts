@@ -8,7 +8,7 @@ import { CORE_HISTORIZED, HistoryAccessRegistry } from './history/history-access
 import { HistoryController } from './history/history.controller.js';
 import { ImportRegistry } from './imports/import-registry.js';
 import { ImportService, ImportsController, ImportUploadEntity, ImportUrlEntity } from './imports/imports.js';
-import { ImportTransferEntity, TransferService, TransfersController } from './imports/transfers.js';
+import { ImportMappingEntity, ImportMappings } from './imports/import-mappings.js';
 import { ListRegistry } from './lists/list-registry.js';
 import { ListsController } from './lists/lists.controller.js';
 import { DeadlineRegistry } from './tasks/deadline-registry.js';
@@ -55,7 +55,7 @@ export const CORE_ENTITIES: EntityDefinition[] = [
   ApiToken,
   ImportUploadEntity,
   ImportUrlEntity,
-  ImportTransferEntity,
+  ImportMappingEntity,
   PasswordReset,
   BrigadeAsset,
   AttachmentEntity,
@@ -96,6 +96,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
     private readonly exports: ExportRegistry,
     private readonly coreExport: CoreExport,
     private readonly personData: PersonDataRegistry,
+    private readonly imports: ImportRegistry,
   ) {}
 
   onModuleInit(): void {
@@ -103,6 +104,8 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
     this.personData.register('core', { anonymize: (ids) => this.coreExport.anonymize(ids) });
     this.historyAccess.registerPermission('core.user', 'core.users.manage');
     this.historyAccess.registerPermission('core.role', 'core.roles.manage');
+    // Remembered mappings of the table import: for users of any import profile.
+    this.historyAccess.register('core.import_mapping', async (user) => ({ allowed: this.imports.available(user).length > 0 }));
     // Settings of a module: also for the managers of that module's settings.
     this.historyAccess.register('core.setting', async (user, section) => {
       const module = section.includes('.') ? section.slice(0, section.indexOf('.')) : null;
@@ -127,7 +130,6 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         AuditController,
         ListsController,
         TasksController,
-        TransfersController,
         ImportsController,
         PasswordResetController,
         EmailConfirmationController,
@@ -160,7 +162,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         DigestService,
         ImportRegistry,
         ImportService,
-        TransferService,
+        ImportMappings,
         PasswordResetService,
         SearchRegistry,
         CodeRegistry,
@@ -186,6 +188,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         Attachments,
         DigestService,
         ImportRegistry,
+        ImportService,
         SearchRegistry,
         CodeRegistry,
         ExportRegistry,

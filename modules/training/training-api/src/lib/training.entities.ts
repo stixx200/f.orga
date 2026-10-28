@@ -17,8 +17,6 @@ export const SessionTypeSchema = defineEntity({
     record: p.string().$type<RecordKind>().nullable(),
     active: p.boolean().default(true),
     sortOrder: p.integer().default(0),
-    /** Other names imports match the type by; unique among the types. */
-    aliases: p.json<string[]>(),
     version: p.integer().version(),
   },
 });

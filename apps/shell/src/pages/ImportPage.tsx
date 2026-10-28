@@ -1,19 +1,21 @@
-import { Button, Checkbox, Divider, FileInput, Group, Radio, SegmentedControl, Select, Stack, Stepper, Table, Text, TextInput } from '@mantine/core';
+import { Button, Checkbox, Divider, FileInput, Group, Radio, Select, Stack, Stepper, Table, Tabs, Text, TextInput } from '@mantine/core';
 import { IconCalendar, IconUpload } from '@tabler/icons-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { ImportMapping, ImportProfileInfo, ImportRememberedUrl, ImportResult, ImportUnmatched, ImportUpload, ImportUrlRequest, ImportValueMappings } from '@forga/core-contracts';
-import { api, send, upload, useLocalized, useTranslation } from '@forga/web-sdk';
-import { EmptyState, Notice, PageHeader, Panel, useAction } from '@forga/web-ui';
+import { api, can, extensionsOf, send, upload, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
+import { EmptyState, mergeUnmatched, Notice, PageHeader, Panel, RememberedMappings, UnmatchedValues, useAction } from '@forga/web-ui';
 import { ResultView } from './ImportResult';
-import { mergeUnmatched, UnmatchedValues } from './ImportUnmatched';
-import { TransferImport } from './TransferImport';
 
 /** Share of the profile's fields the file covers; the best fitting profile is suggested first. */
 const fit = (profile: ImportProfileInfo, file: ImportUpload) =>
   Object.values(file.suggestions[profile.id] ?? {}).filter(Boolean).length / Math.max(1, profile.fields.length);
 
-/** Wizard: upload a file, choose what it contains, map the columns, check the preview, import. */
+/**
+ * Table import: upload a file (or load a calendar address), choose what it contains, map the columns, check the preview,
+ * import. A second tab lists the mappings the table import remembered. Active modules may add a notice (extension point
+ * `core.imports.notice`), e.g. MP-Feuer for its transfer files.
+ */
 export function ImportPage() {
   const { t } = useTranslation('shell');
   const { t: common } = useTranslation('common');
@@ -32,8 +34,8 @@ export function ImportPage() {
   const [unmatched, setUnmatched] = useState<Record<string, ImportUnmatched[]>>({});
   const [stale, setStale] = useState(false);
   const profile = profiles.find((p) => p.id === profileId);
-  const [mode, setMode] = useState<'file' | 'transfer'>('file');
-  const transferable = profiles.some((p) => p.transfer);
+  const session = useSession().data;
+  const notices = extensionsOf('core.imports.notice').filter((e) => !e.permission || can(session, e.permission));
   const queryClient = useQueryClient();
   const rememberedKey = ['core', 'imports', 'url'];
   // The full address is never sent back (it may contain a secret token), only scheme and host.
@@ -104,18 +106,22 @@ export function ImportPage() {
   return (
     <Stack gap="lg">
       <PageHeader title={t('nav.import')} subtitle={t('imports.subtitle')} />
-      {transferable && (
-        <SegmentedControl
-          w="fit-content"
-          value={mode}
-          onChange={(value) => setMode(value as 'file' | 'transfer')}
-          data={[
-            { value: 'file', label: t('imports.modes.file') },
-            { value: 'transfer', label: t('imports.modes.transfer') },
-          ]}
-        />
-      )}
-      {mode === 'transfer' ? <TransferImport profiles={profiles} /> : <Stepper active={step} onStepClick={(s) => s < step && step < 4 && setStep(s)} size="sm">
+      {notices.map(({ module, component: ImportNotice }) => (
+        <ImportNotice key={module} />
+      ))}
+      <Tabs defaultValue="file" keepMounted={false}>
+        <Tabs.List mb="md">
+          <Tabs.Tab value="file">{t('imports.tabs.file')}</Tabs.Tab>
+          <Tabs.Tab value="mappings">{t('imports.tabs.mappings')}</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="mappings">
+          <Stack gap="md">
+            <Text size="sm">{t('imports.mappingsIntro')}</Text>
+            <RememberedMappings path="core/imports/mappings" deletable showProfile />
+          </Stack>
+        </Tabs.Panel>
+        <Tabs.Panel value="file">
+      <Stepper active={step} onStepClick={(s) => s < step && step < 4 && setStep(s)} size="sm">
         <Stepper.Step label={t('imports.steps.file')}>
           <Panel maw={720}>
             <Stack gap="md">
@@ -279,7 +285,9 @@ export function ImportPage() {
             </Stack>
           )}
         </Stepper.Completed>
-      </Stepper>}
+      </Stepper>
+        </Tabs.Panel>
+      </Tabs>
     </Stack>
   );
 }

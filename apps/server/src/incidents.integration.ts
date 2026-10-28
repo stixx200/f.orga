@@ -401,25 +401,34 @@ describe('deleting organization objects', () => {
   });
 });
 
-describe('MP-Feuer import', () => {
-  const header = 'Pers.-Nr.;Name;von;bis;BE;AS;V-A;Fzg.-Nr.;Bezeichnung;Einsatz-Nr.;Beginn;Ende;Alarmstichwort;Leitstellen-Nr.;Lage;Verlauf;Bericht;bei Ges. Stat. anzeigen;Zusatzfeld 2;Bezeichnung;Aufgabe;Statistik;Eins.-Art;Pers.-Rettung';
+describe('Import of incident personnel (table)', () => {
+  const header = 'Personalnummer;Name;Person von;Person bis;Bereitschaft;Atemschutz;Verdienstausfall;Fahrzeug;Einsatznummer;Beginn;Ende;Alarmstichwort;Leitstellennummer;Lage;Verlauf;Bericht;Hauptbericht;Freigabestatus;Abteilung;Funktion;Statistik: Einsatzhauptart;Statistik: Brandgröße;Statistik: gerettete Personen';
   const rows = [
-    ';Test Jonas;21.10.2025 13:05;21.10.2025 15:50;Nein;Ja;Nein;1;LF 20/16;17;21.10.2025 13:05;21.10.2025 15:50;B3-MP;2025-555;Rauch aus Dach;Löschmaßnahmen;Brand im Dachstuhl gelöscht;Ja;zur Abrechnung freigegeben;Abt. Musterstadt;Fahrer;#L Mittelbrände;Gebäudebrand;1',
-    '9001;Test Max;21.10.2025 13:05;21.10.2025 15:50;Nein;Nein;Ja;1;LF 20/16;17;21.10.2025 13:05;21.10.2025 15:50;B3-MP;2025-555;Rauch aus Dach;Löschmaßnahmen;Brand im Dachstuhl gelöscht;Ja;zur Abrechnung freigegeben;Abt. Musterstadt;Maschinist;#L Mittelbrände;Gebäudebrand;1',
-    ';Test Lena;21.10.2025 13:30;21.10.2025 15:00;Ja;Nein;Nein;;;4;21.10.2025 13:30;21.10.2025 15:00;B3-MP;2025-555;;;Nachgefordert;Nein;;Abt. Ahornfeld;;;;',
-    ';Person Unbekannt;21.10.2025 13:30;21.10.2025 15:00;Nein;Nein;Nein;;;4;21.10.2025 13:30;21.10.2025 15:00;B3-MP;2025-555;;;Nachgefordert;Nein;;Abt. Ahornfeld;;;;',
+    ';Test Jonas;21.10.2025 13:05;21.10.2025 15:50;Nein;Ja;Nein;LF 20/16;17;21.10.2025 13:05;21.10.2025 15:50;B3-MP;2025-555;Rauch aus Dach;Löschmaßnahmen;Brand im Dachstuhl gelöscht;Ja;released-billing;Abt. Musterstadt;Fahrer;Brand;Mittelbrand;1',
+    '9001;Test Max;21.10.2025 13:05;21.10.2025 15:50;Nein;Nein;Ja;LF 20/16;17;21.10.2025 13:05;21.10.2025 15:50;B3-MP;2025-555;Rauch aus Dach;Löschmaßnahmen;Brand im Dachstuhl gelöscht;Ja;released-billing;Abt. Musterstadt;Maschinist;Brand;Mittelbrand;1',
+    ';Test Lena;21.10.2025 13:30;21.10.2025 15:00;Ja;Nein;Nein;;4;21.10.2025 13:30;21.10.2025 15:00;B3-MP;2025-555;;;Nachgefordert;Nein;Entwurf;Abt. Ahornfeld;;;;',
+    ';Person Unbekannt;21.10.2025 13:30;21.10.2025 15:00;Nein;Nein;Nein;;4;21.10.2025 13:30;21.10.2025 15:00;B3-MP;2025-555;;;Nachgefordert;Nein;Entwurf;Abt. Ahornfeld;;;;',
   ];
   const csv = [header, ...rows].join('\r\n');
 
   const run = async (apply: boolean) => {
-    const upload = await test.http.post('/api/core/imports').set('Cookie', admin).set(UI).attach('file', Buffer.from(csv), 'MP-EXCEL.csv').expect(201);
-    const mapping = upload.body.suggestions['incidents.mp-feuer'];
-    return post(`/core/imports/${upload.body.id}/${apply ? 'apply' : 'preview'}`, { profile: 'incidents.mp-feuer', mapping }).expect(200);
+    const upload = await test.http.post('/api/core/imports').set('Cookie', admin).set(UI).attach('file', Buffer.from(csv), 'Einsatzpersonal.csv').expect(201);
+    const mapping = upload.body.suggestions['incidents.personnel'];
+    return post(`/core/imports/${upload.body.id}/${apply ? 'apply' : 'preview'}`, { profile: 'incidents.personnel', mapping }).expect(200);
   };
 
-  it('maps the duplicate "Bezeichnung" columns to vehicle and department', async () => {
-    const upload = await test.http.post('/api/core/imports').set('Cookie', admin).set(UI).attach('file', Buffer.from(csv), 'MP-EXCEL.csv').expect(201);
-    expect(upload.body.suggestions['incidents.mp-feuer']).toMatchObject({ vehicle: 'Bezeichnung', department: 'Bezeichnung (2)', personName: 'Name', status: 'Zusatzfeld 2' });
+  it('suggests the columns by their names, statistics included', async () => {
+    const upload = await test.http.post('/api/core/imports').set('Cookie', admin).set(UI).attach('file', Buffer.from(csv), 'Einsatzpersonal.csv').expect(201);
+    expect(upload.body.suggestions['incidents.personnel']).toMatchObject({
+      vehicle: 'Fahrzeug',
+      department: 'Abteilung',
+      personName: 'Name',
+      status: 'Freigabestatus',
+      primary: 'Hauptbericht',
+      mainType: 'Statistik: Einsatzhauptart',
+      fireSize: 'Statistik: Brandgröße',
+      rescued: 'Statistik: gerettete Personen',
+    });
   });
 
   it('creates incident, reports and personnel and is repeatable', async () => {
@@ -448,11 +457,13 @@ describe('MP-Feuer import', () => {
     const musterstadt = incident.reports.find((r) => r.departmentId === ids.musterstadt)!;
     const ahornfeld = incident.reports.find((r) => r.departmentId === ids.ahornfeld)!;
     expect(musterstadt).toMatchObject({ primary: true, status: 'released-billing', locked: true });
+    // A table import keeps its reports replaceable, but they are not read-only like those of MP-Feuer.
+    expect((await get(`/incidents/reports/${musterstadt.id}`)).body).toMatchObject({ managedBy: 'import', lockedBy: 'Import' });
     expect(ahornfeld).toMatchObject({ primary: false, status: 'draft', locked: false });
 
     const report = (await get(`/incidents/reports/${musterstadt.id}`)).body;
     expect(report.times).toMatchObject({ alarmedAt: '2025-10-21T11:05:00.000Z', returnedAt: '2025-10-21T13:50:00.000Z' });
-    // Picklist "Verlauf" and free text "Bericht" together; statistics key and counts of MP-Feuer.
+    // "Verlauf" and "Bericht" together; the statistics from their columns (names of the state template).
     expect(report).toMatchObject({ situation: 'Rauch aus Dach', actions: 'Löschmaßnahmen\n\nBrand im Dachstuhl gelöscht' });
     expect((await get(`/incidents/incidents/${incident.id}`)).body.statistics).toMatchObject({ mainType: 'fire', fireSize: 'medium', rescued: 1, ownMunicipality: true });
     expect(report.personnel.map((p: { function: string | null }) => p.function)).toEqual([null, 'machinist']);

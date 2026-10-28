@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import {
-  findByAlias,
   type ImportContext,
   type ImportProfile,
   type ImportRow,
@@ -16,7 +15,6 @@ import { CatalogEntry } from '../catalog/catalog.js';
 import { Department, Membership, Person } from '../masterdata.entities.js';
 import { activeMemberships, PersonsService, SENSITIVE, WRITE } from '../persons/persons.service.js';
 import { today } from '../shared/access.js';
-import { readPersons } from './persons.transfer.js';
 
 const field = (key: string, de: string, en: string, aliases: string[], required = false) => ({
   key,
@@ -108,7 +106,6 @@ export class PersonsImport {
         { key: 'updateExisting', label: { de: 'Vorhandene Personen aktualisieren', en: 'Update existing persons' }, default: true },
       ],
       run: (rows, context) => this.run(rows, context),
-      transfer: { order: 10, read: readPersons },
     };
   }
 
@@ -204,7 +201,7 @@ export class PersonsImport {
         ? null
         : exitReasons.has(exitText)
           ? exitText
-          : (findByAlias(exitReasonEntries, values['exitReason'])?.key ?? EXIT_REASONS.find(([pattern, key]) => pattern.test(values['exitReason']) && exitReasons.has(key))?.[1] ?? context.mapped('exit-reason', values['exitReason']) ?? null);
+          : (EXIT_REASONS.find(([pattern, key]) => pattern.test(values['exitReason']) && exitReasons.has(key))?.[1] ?? context.mapped('exit-reason', values['exitReason']) ?? null);
       const gender =
         GENDERS[normalizeHeading(values['gender'] ?? '')] ?? SALUTATION_GENDER[normalizeHeading(values['salutation'] ?? '')];
       if (gender) fields['gender'] = gender;

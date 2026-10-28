@@ -79,8 +79,6 @@ export const VehicleSchema = defineEntity({
     statisticsCategory: p.string(),
     status: p.string().$type<VehicleStatus>().default('in-service'),
     notes: p.text().default(''),
-    /** Other names imports match the vehicle by; unique among the vehicles. */
-    aliases: p.json<string[]>(),
     version: p.integer().version(),
   },
 });

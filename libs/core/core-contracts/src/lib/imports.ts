@@ -5,7 +5,7 @@ export const ImportField = z.object({
   key: z.string(),
   label: LocalizedText,
   required: z.boolean(),
-  /** Column headings that are mapped to this field automatically (e.g. MP-Feuer exports). */
+  /** Further column headings that are mapped to this field automatically. */
   aliases: z.array(z.string()),
 });
 export type ImportField = z.infer<typeof ImportField>;
@@ -14,8 +14,6 @@ export const ImportOption = z.object({
   key: z.string(),
   label: LocalizedText,
   default: z.boolean(),
-  /** `false`: not offered in data transfers, e.g. because choosing entries for unknown values replaces it. */
-  transfer: z.boolean().optional(),
 });
 export type ImportOption = z.infer<typeof ImportOption>;
 
@@ -26,8 +24,6 @@ export const ImportProfileInfo = z.object({
   description: LocalizedText.optional(),
   fields: z.array(ImportField),
   options: z.array(ImportOption),
-  /** The profile also reads data transfers (MP-Feuer transfer archives). */
-  transfer: z.boolean(),
 });
 export type ImportProfileInfo = z.infer<typeof ImportProfileInfo>;
 
@@ -119,73 +115,6 @@ export const ImportResult = z.object({
 });
 export type ImportResult = z.infer<typeof ImportResult>;
 
-/** One archive of a data transfer, e.g. an MP-Feuer transfer file of a department. */
-export const TransferArchiveInfo = z.object({
-  key: z.string(),
-  fileName: z.string(),
-  /** Unit named in the archive, e.g. "Abt. Musterstadt". */
-  label: z.string(),
-});
-export type TransferArchiveInfo = z.infer<typeof TransferArchiveInfo>;
-
-/**
- * Brigade-wide units the rows of an archive can be assigned to instead of its department, e.g. the incident reports of
- * the archive "Gesamtfeuerwehr" as reports of the duty officer.
- */
-export const TransferUnits = z.object({
-  /** E.g. "Einsatzberichte als". */
-  label: LocalizedText,
-  /** The choice without a unit, e.g. "Abteilungsbericht". */
-  none: LocalizedText,
-  entries: z.array(z.object({ key: z.string(), name: LocalizedText })),
-});
-export type TransferUnits = z.infer<typeof TransferUnits>;
-
-/** Rows an import profile reads from the archives. */
-export const TransferDataset = z.object({
-  profile: z.string(),
-  rowCount: z.number(),
-  /** Only for profiles whose rows can belong to a unit instead of the department of the archive. */
-  units: TransferUnits.optional(),
-});
-export type TransferDataset = z.infer<typeof TransferDataset>;
-
-/**
- * The assignment of the last data transfer (settings section `transfer`), saved with each import and offered again with
- * the next upload, so a routine transfer needs no new choices.
- */
-export const TransferSettings = z.object({
-  /** Archive key → name of the department (as in `TransferRequest.departments`). */
-  departments: z.record(z.string(), z.string().nullable()).default({}),
-  /** Profile → archive key → key of the unit. */
-  units: z.record(z.string(), z.record(z.string(), z.string().min(1))).default({}),
-  /** Profile → options. */
-  options: z.record(z.string(), z.record(z.string(), z.boolean())).default({}),
-});
-export type TransferSettings = z.infer<typeof TransferSettings>;
-
-export const TransferUpload = z.object({
-  id: z.string(),
-  archives: z.array(TransferArchiveInfo),
-  /** In the order they must be imported (persons before their incidents). */
-  datasets: z.array(TransferDataset),
-  /** Choices of earlier transfers (departments of known archive keys, units, options). */
-  remembered: TransferSettings,
-});
-export type TransferUpload = z.infer<typeof TransferUpload>;
-
-export const TransferRequest = z.object({
-  profile: z.string(),
-  /** Archive key → name of the department the archive belongs to (`null` = use the label of the archive). */
-  departments: z.record(z.string(), z.string().nullable()).default({}),
-  /** Archive key → key of the unit its rows belong to (only profiles offering `units`; others ignore it). */
-  units: z.record(z.string(), z.string().min(1)).default({}),
-  options: z.record(z.string(), z.boolean()).default({}),
-  /** Apply to all archives of the transfer. */
-  mappings: ImportValueMappings.default({}),
-});
-export type TransferRequest = z.input<typeof TransferRequest>;
-
 /** Entries an unknown value can be mapped to, e.g. the qualifications of the catalog or the alarm keywords. */
 export const ImportLookupInfo = z.object({
   kind: z.string(),
@@ -207,9 +136,38 @@ export const ImportLookupEntryInput = z.object({
 export type ImportLookupEntryInput = z.input<typeof ImportLookupEntryInput>;
 
 /**
- * Other names of a record that imports match, e.g. "TLF 16/25" for the vehicle "TLF 3000". Imports remember the
- * entry a user chose for an unknown value as alias of that entry. Compared like headings (case, umlauts, punctuation).
- * In inputs optional: omitted, a new record has none and a changed record keeps its aliases.
+ * Who runs an import: the table import of the core (`core`) or a module feeding rows into the profiles, e.g. a run of
+ * the module `mp-feuer`. Profiles may depend on it, e.g. imported incident reports are managed by `mp-feuer`.
  */
-export const Aliases = z.array(z.string().trim().min(1).max(200)).max(100).optional();
-export type Aliases = z.input<typeof Aliases>;
+export const ImportSource = z.object({ module: z.string(), runId: z.string().optional() });
+export type ImportSource = z.infer<typeof ImportSource>;
+
+/** State of the entry a remembered mapping points to; only `active` targets are applied. */
+export const ImportMappingTargetState = z.enum(['active', 'inactive', 'deleted']);
+export type ImportMappingTargetState = z.infer<typeof ImportMappingTargetState>;
+
+/**
+ * A remembered mapping: an import value (e.g. "TM 1") and the entry chosen for it in an earlier import (e.g. the
+ * qualification `tm1`). Unique per kind and normalized value (case, umlauts and punctuation do not matter).
+ */
+export const RememberedMapping = z.object({
+  id: z.string(),
+  /** Lookup kind, e.g. `qualification`, `function`, `vehicle`, `alarm-keyword`, `session-type`. */
+  kind: z.string(),
+  /** Name of the lookup; `null` if no active module offers it any more. */
+  kindName: LocalizedText.nullable(),
+  /** The value as in the first import. */
+  value: z.string(),
+  /** Key of the chosen entry or of an extra target (e.g. `incidents:loss-of-earnings`). */
+  key: z.string(),
+  /** Name of the target; `null` if it was deleted. */
+  targetName: LocalizedText.nullable(),
+  targetState: ImportMappingTargetState,
+  /** Import profile of the first apply (shown only; the mapping applies to all profiles of the kind). */
+  profile: z.string(),
+  profileName: LocalizedText.nullable(),
+  createdBy: z.string().nullable(),
+  createdAt: z.string(),
+  lastUsedAt: z.string(),
+});
+export type RememberedMapping = z.infer<typeof RememberedMapping>;

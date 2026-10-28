@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Aliases, LocalizedText } from '@forga/core-contracts';
+import { LocalizedText } from '@forga/core-contracts';
 
 /**
  * Evidence a session type produces for every person present,
@@ -33,8 +33,6 @@ export const SessionTypeInput = z.object({
   record: RecordKind.nullable().default(null),
   active: z.boolean().default(true),
   sortOrder: z.number().int().default(0),
-  /** Other names imports match the type by, e.g. "Übungsdienst" for "Übung". */
-  aliases: Aliases,
 });
 export type SessionTypeInput = z.input<typeof SessionTypeInput>;
 

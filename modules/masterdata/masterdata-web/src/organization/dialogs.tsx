@@ -15,7 +15,7 @@ import {
   VehicleStatus,
 } from '@forga/masterdata-contracts';
 import { send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { AliasesInput, ConfirmDialog, ResponsiveDialog, useAction } from '@forga/web-ui';
+import { ConfirmDialog, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { keys, MANAGE, personName, useCatalog, useDepartments, usePersons, useStations } from '../api';
 
 function Actions({ onClose, form, loading, onDelete }: { onClose: () => void; form: string; loading: boolean; onDelete?: () => void }) {
@@ -233,7 +233,6 @@ export function VehicleDialog({ vehicle, departmentId, onClose }: { vehicle?: Ve
     statisticsCategory: vehicle?.statisticsCategory ?? null,
     status: vehicle?.status ?? 'in-service',
     notes: vehicle?.notes ?? '',
-    aliases: vehicle?.aliases ?? [],
   }));
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
   const type = types.find((x) => x.key === form.vehicleType);
@@ -290,7 +289,6 @@ export function VehicleDialog({ vehicle, departmentId, onClose }: { vehicle?: Ve
           <DateInput label={t('vehicle.decommissionedOn')} value={form.decommissionedOn} onChange={(v) => set('decommissionedOn', v)} valueFormat="DD.MM.YYYY" clearable />
         </SimpleGrid>
         <Textarea label={t('vehicle.notes')} value={form.notes} onChange={(e) => set('notes', e.currentTarget.value)} autosize minRows={2} mt="sm" />
-        <AliasesInput value={form.aliases} onChange={(aliases) => set('aliases', aliases)} mt="sm" />
       </form>
     </ResponsiveDialog>
   );

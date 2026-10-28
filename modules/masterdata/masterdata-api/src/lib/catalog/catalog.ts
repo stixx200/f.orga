@@ -16,7 +16,7 @@ import {
 import { defineEntity, EntityManager, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
 import type { LocalizedText } from '@forga/core-contracts';
-import { assertAliasesFree, cleanAliases, RequirePermissions, withAlias, ZodPipe } from '@forga/core-api';
+import { RequirePermissions, ZodPipe } from '@forga/core-api';
 import {
   type ApplyTemplateResult,
   BW_CATALOG_TEMPLATE,
@@ -41,8 +41,6 @@ export const CatalogEntrySchema = defineEntity({
     sortOrder: p.integer().default(0),
     active: p.boolean().default(true),
     attributes: p.json<Record<string, unknown>>(),
-    /** Other names imports match the entry by; unique within the kind. */
-    aliases: p.json<string[]>(),
     version: p.integer().version(),
   },
 });
@@ -50,11 +48,6 @@ export class CatalogEntry extends CatalogEntrySchema.class {}
 CatalogEntrySchema.setClass(CatalogEntry);
 
 type ParsedEntry = ReturnType<typeof CatalogEntryInput.parse>;
-
-/** What imports match a catalog entry by besides its aliases: key, names and abbreviation. */
-export function catalogNames(entry: Pick<CatalogEntry, 'key' | 'name' | 'attributes'>): string[] {
-  return [entry.key, entry.name.de, entry.name.en, String(entry.attributes['abbreviation'] ?? '')].filter(Boolean);
-}
 
 export function toCatalogDto(entry: CatalogEntry): CatalogEntryDto {
   return {
@@ -65,7 +58,6 @@ export function toCatalogDto(entry: CatalogEntry): CatalogEntryDto {
     sortOrder: entry.sortOrder,
     active: entry.active,
     attributes: entry.attributes,
-    aliases: entry.aliases,
     version: entry.version,
   };
 }
@@ -100,7 +92,7 @@ export class CatalogService {
     const added: Record<string, number> = {};
     for (const entry of entries) {
       if (known.has(`${entry.kind}/${entry.key}`)) continue;
-      em.create(CatalogEntry, { ...entry, aliases: entry.aliases ?? [] });
+      em.create(CatalogEntry, entry);
       added[entry.kind] = (added[entry.kind] ?? 0) + 1;
     }
     await em.flush();
@@ -113,39 +105,11 @@ export class CatalogService {
     if (await em.count(CatalogEntry, { kind: input.kind, key: input.key })) {
       throw new ConflictException({ code: 'catalog.keyTaken', key: input.key });
     }
-    const parsed = parseEntry(input);
-    const entry = em.create(CatalogEntry, { ...parsed, aliases: await this.checkAliases(em, parsed, null) });
+    const entry = em.create(CatalogEntry, parseEntry(input));
     await em.flush();
     return entry;
   }
 
-  /**
-   * The aliases of an entry without duplicates and own names. Throws `409 masterdata.aliasTaken` if one is a name or
-   * alias of another entry of the kind.
-   */
-  async checkAliases(em: EntityManager, input: ParsedEntry, own: CatalogEntry | null): Promise<string[]> {
-    const aliases = cleanAliases(input.aliases ?? own?.aliases ?? [], catalogNames(input));
-    if (!aliases.length) return aliases;
-    const others = (await em.find(CatalogEntry, { kind: input.kind })).filter((e) => e.id !== own?.id);
-    assertAliasesFree('masterdata.aliasTaken', aliases, others.map((e) => ({ names: catalogNames(e), aliases: e.aliases })));
-    return aliases;
-  }
-
-  /** Remembers a value of an import as alias of the entry (`ImportLookup.remember`). */
-  async remember(kind: CatalogKind, key: string, value: string): Promise<void> {
-    const em = this.em.fork();
-    const entries = await em.find(CatalogEntry, { kind });
-    const entry = entries.find((e) => e.key === key);
-    if (!entry) return;
-    const aliases = withAlias(
-      { names: catalogNames(entry), aliases: entry.aliases },
-      value,
-      entries.filter((e) => e !== entry).map((e) => ({ names: catalogNames(e), aliases: e.aliases })),
-    );
-    if (!aliases) return;
-    entry.aliases = aliases;
-    await em.flush();
-  }
 }
 
 function parseEntry(input: ParsedEntry): ParsedEntry {
@@ -193,7 +157,7 @@ export class CatalogController {
     }
     const parsed = parseEntry(input);
     const { name, sortOrder, active, attributes } = parsed;
-    em.assign(entry, { name, sortOrder, active, attributes, aliases: await this.catalogs.checkAliases(em, parsed, entry) });
+    em.assign(entry, { name, sortOrder, active, attributes });
     await em.flush();
     return toCatalogDto(entry);
   }

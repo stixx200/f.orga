@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { findByAlias, type ImportContext, type ImportProfile, type ImportRow, type ImportRunResult, parseDate } from '@forga/core-api';
+import { type ImportContext, type ImportProfile, type ImportRow, type ImportRunResult, parseDate } from '@forga/core-api';
 import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
 import { type CatalogKind, requiresDescription } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
@@ -8,7 +8,6 @@ import { HonorAward, Person, PersonQualification, RankAssignment } from '../mast
 import { PersonsService, WRITE } from '../persons/persons.service.js';
 import { addMonths } from '../shared/dates.js';
 import { matchCatalog } from './catalog-match.js';
-import { readCareer } from './career.transfer.js';
 
 const field = (key: string, de: string, en: string, aliases: string[], required = false) => ({ key, label: { de, en }, required, aliases });
 
@@ -58,10 +57,8 @@ export class CareerImport {
       },
       permission: WRITE,
       fields: FIELDS,
-      // Data transfers offer choosing or creating an entry per unknown name instead.
-      options: [{ key: 'createCatalogEntries', label: { de: 'Unbekannte Bezeichnungen im Katalog anlegen', en: 'Add unknown names to the catalog' }, default: false, transfer: false }],
+      options: [{ key: 'createCatalogEntries', label: { de: 'Unbekannte Bezeichnungen im Katalog anlegen', en: 'Add unknown names to the catalog' }, default: false }],
       run: (rows, context) => this.run(rows, context),
-      transfer: { order: 20, read: readCareer },
     };
   }
 
@@ -93,8 +90,8 @@ export class CareerImport {
 
       const name = (values['name'] ?? '').trim();
       const active = catalog.filter((e) => e.kind === kind && e.active);
-      // Aliases (earlier choices of the user) first, then the names; the user is asked only if neither matches.
-      let entry = findByAlias(active, name) ?? matchCatalog(active, name) ?? (name ? active.find((e) => e.key === mapped(kind, name)) : undefined);
+      // Names first, then the chosen or remembered mappings; the user is asked only if neither matches.
+      let entry = matchCatalog(active, name) ?? (name ? active.find((e) => e.key === mapped(kind, name)) : undefined);
       if (!entry && createEntries && name) {
         entry = em.create(CatalogEntry, {
           kind,
@@ -103,7 +100,6 @@ export class CareerImport {
           sortOrder: 1000,
           active: true,
           attributes: kind === 'rank' ? { abbreviation: '', level: 0 } : kind === 'qualification' ? { validityMonths: null, describe: false } : {},
-          aliases: [],
         });
         catalog.push(entry);
         messages.push({ code: 'masterdata.import.catalogEntryCreated', params: { name } });

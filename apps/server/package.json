@@ -107,7 +107,9 @@
     "@forga/promotions-api": "*",
     "@forga/clothing-api": "*",
     "@forga/duty-officer-api": "*",
-    "@forga/info-terminal-api": "*"
+    "@forga/info-terminal-api": "*",
+    "@forga/mp-feuer-api": "*",
+    "@forga/mp-feuer-contracts": "*"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.0",

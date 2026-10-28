@@ -30,6 +30,7 @@ export const MODULE_PORTS: Record<string, number> = {
   clothing: 4209,
   'duty-officer': 4210,
   'info-terminal': 4211,
+  'mp-feuer': 4212,
 };
 
 export const SERVER_PORT = 3000;

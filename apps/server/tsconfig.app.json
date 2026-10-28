@@ -41,6 +41,12 @@
       "path": "../../modules/compensation/compensation-contracts/tsconfig.lib.json"
     },
     {
+      "path": "../../modules/mp-feuer/mp-feuer-contracts/tsconfig.lib.json"
+    },
+    {
+      "path": "../../modules/mp-feuer/mp-feuer-api/tsconfig.lib.json"
+    },
+    {
       "path": "../../modules/info-terminal/info-terminal-api/tsconfig.lib.json"
     },
     {

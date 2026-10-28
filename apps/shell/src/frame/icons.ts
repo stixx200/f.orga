@@ -10,6 +10,7 @@ import {
   IconCheck,
   IconCoins,
   IconDeviceTablet,
+  IconTransfer,
   IconFileImport,
   IconFiretruck,
   IconHistory,
@@ -60,6 +61,7 @@ export const NAV_ICONS: Record<string, Icon> = {
   award: IconAward,
   edit: IconPencil,
   terminal: IconDeviceTablet,
+  transfer: IconTransfer,
   shirt: IconShirt,
   wash: IconWash,
 };

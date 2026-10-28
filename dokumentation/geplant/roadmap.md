@@ -71,7 +71,7 @@ Umgesetzt (Backend), siehe [implementiert/architektur.md](../implementiert/archi
 - Ablauf mit Sperre, Sperre aufheben, Zurückgeben; Fristen für Verfasser und Freigeber
 - Entschädigung je Person, Abrechnungsexport (Excel wie `auswertung.py`)
 - Statistikmerkmale nach der Landesvorlage (ohne Rettungsdienst/Krankentransport, [E12](entscheidungen.md#e12-rettungsdienst-und-krankentransport-nicht-erfassen)) mit Vorbefüllung
-- API für externe Systeme, MP-Feuer-Import der Einsätze, Listen
+- API für externe Systeme, Import des Einsatzpersonals, Listen
 - Dienstplan für EvD-Dienste mit iCal-Import, heute im Modul Einsatzleiter vom Dienst mit EvD-Bericht zu jedem Einsatz ([E13](entscheidungen.md#e13-einsatzleiter-pauschale-über-dienstplan))
 
 Offen:
@@ -108,6 +108,10 @@ Umgesetzt, mit Oberflächen ohne eigene Mockups; die Geräteseite (QR-Code) funk
 ## Release 4 – Beförderungen und Erweiterbarkeit
 
 Umgesetzt, mit Oberflächen ohne eigene Mockups: Beförderungen, Urkunden (Beförderung, Ehrung), Anmeldung per OIDC, Mitglieder-Self-Service („Mein Bereich“) und signierte Plugin-Pakete. Release 4 ist vollständig umgesetzt.
+
+## MP-Feuer
+
+Umgesetzt, siehe [Modul MP-Feuer](../implementiert/architektur.md#modul-mp-feuer-mp-feuer) nach den freigegebenen Mockups (`mockups/mp-feuer/`): Datenübernahme im Hintergrund in Teilen, Zuordnungslisten statt Aliassen, Verlauf, Einstellungen, Export-Platzhalter. Offen sind nur die Punkte in [module/mp-feuer.md](module/mp-feuer.md).
 
 ## Infoterminal
 

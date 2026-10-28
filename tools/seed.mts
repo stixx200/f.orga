@@ -2,7 +2,7 @@
  * Fills a running f.orga instance with demo data through the public API:
  * organization, one user per standard role (department roles linked to fitting persons of Musterstadt), groups, course
  * planning (runs, nominations, targets), bank accounts with made-up IBANs, persons and incidents, protective equipment of the clothing store (imported from generated files in the
- * format of the MP-Feuer exports `Personal.xlsx` and `MP-EXCEL.xlsx`), a duty roster calendar and new incidents with the
+ * format of the MP-Feuer export `Personal.xlsx` and of the profile `incidents.personnel`), a duty roster calendar and new incidents with the
  * EvD report of the duty officer module.
  *
  * All persons and incidents are made up; a fixed random seed keeps them identical between runs, so running
@@ -219,21 +219,21 @@ async function personsWorkbook(persons: PlannedPerson[]): Promise<Buffer> {
 
 // --- incidents ----------------------------------------------------------------------------------
 
-/** `statistics`: statistics key of MP-Feuer; the import makes it the statistics of the incident. */
-const KEYWORDS: { key: string; weight: number; minutes: [number, number]; situation: string; actions: string; cause: string; statistics: string }[] = [
-  { key: 'B1', weight: 8, minutes: [40, 90], situation: 'Brennender Müllcontainer', actions: 'Ablöschen mit 1 C-Rohr unter PA', cause: 'Unbekannt', statistics: '#L Kleinbrände B' },
-  { key: 'B2', weight: 4, minutes: [90, 180], situation: 'Rauch aus Kellerfenster eines Wohnhauses', actions: 'Innenangriff mit 1 C-Rohr, Belüftung, Kontrolle mit Wärmebildkamera', cause: 'Technischer Defekt', statistics: '#L Kleinbrände B' },
-  { key: 'B3', weight: 1, minutes: [180, 360], situation: 'Scheune in Vollbrand', actions: 'Riegelstellung zum Wohnhaus, Brandbekämpfung mit 3 C-Rohren und DLK, Nachlöscharbeiten', cause: 'Unbekannt', statistics: '#L Mittelbrände' },
-  { key: 'B-BMA', weight: 9, minutes: [30, 60], situation: 'Auslösung Brandmeldeanlage', actions: 'Erkundung, Melder zurückgestellt, Übergabe an Betreiber', cause: 'Täuschungsalarm durch Wasserdampf', statistics: '#L Fehlalarm.BMA' },
-  { key: 'B-PKW', weight: 3, minutes: [45, 90], situation: 'PKW-Brand im Motorraum', actions: 'Ablöschen mit Schaum, Batterie abgeklemmt, Fahrbahn gereinigt', cause: 'Technischer Defekt', statistics: '#L Kleinbrände B' },
-  { key: 'TH1', weight: 6, minutes: [30, 90], situation: 'Baum auf Fahrbahn', actions: 'Baum mit Motorsäge zerkleinert und Fahrbahn geräumt', cause: 'Sturm', statistics: '#L TH7-Sturm' },
-  { key: 'TH-VU', weight: 3, minutes: [60, 150], situation: 'Verkehrsunfall, eine Person eingeklemmt', actions: 'Sicherung, Patientenbetreuung, Seitenöffnung mit hydraulischem Rettungsgerät', cause: 'Verkehrsunfall', statistics: '#L TH1-Menschenrettung' },
-  { key: 'TH-Öl', weight: 5, minutes: [30, 90], situation: 'Ölspur über ca. 500 m', actions: 'Abstreuen mit Bindemittel, Absicherung', cause: 'Defektes Fahrzeug', statistics: '#L TH3-Ölspur' },
-  { key: 'TH-Person', weight: 3, minutes: [30, 60], situation: 'Hilflose Person hinter verschlossener Tür', actions: 'Türöffnung, Übergabe an Rettungsdienst', cause: 'Medizinischer Notfall', statistics: '#L TH1-Menschenrettung' },
-  { key: 'TH-Wasser', weight: 3, minutes: [90, 240], situation: 'Wasser im Keller nach Starkregen', actions: 'Auspumpen mit Tauchpumpe und Wassersauger', cause: 'Unwetter', statistics: '#L TH6-Hochwasser/Unwetter' },
-  { key: 'TH-Insekten', weight: 2, minutes: [30, 60], situation: 'Wespennest am Kindergarten', actions: 'Nest entfernt', cause: 'Natürlich', statistics: '#L TH5-Insekten' },
-  { key: 'TH-Tier', weight: 1, minutes: [30, 90], situation: 'Katze auf Baum', actions: 'Rettung mit Steckleiter', cause: 'Natürlich', statistics: '#L TH4-Tierrettung' },
-  { key: 'BSW', weight: 3, minutes: [180, 300], situation: 'Brandsicherheitswache Veranstaltung Stadthalle', actions: 'Brandsicherheitswache ohne Vorkommnisse', cause: '', statistics: '' },
+/** `statistics`: main type, fire size, technical category and false alarm type for the statistics columns of the import. */
+const KEYWORDS: { key: string; weight: number; minutes: [number, number]; situation: string; actions: string; cause: string; statistics: [string, string, string, string] | null }[] = [
+  { key: 'B1', weight: 8, minutes: [40, 90], situation: 'Brennender Müllcontainer', actions: 'Ablöschen mit 1 C-Rohr unter PA', cause: 'Unbekannt', statistics: ['fire', 'small-b', '', ''] },
+  { key: 'B2', weight: 4, minutes: [90, 180], situation: 'Rauch aus Kellerfenster eines Wohnhauses', actions: 'Innenangriff mit 1 C-Rohr, Belüftung, Kontrolle mit Wärmebildkamera', cause: 'Technischer Defekt', statistics: ['fire', 'small-b', '', ''] },
+  { key: 'B3', weight: 1, minutes: [180, 360], situation: 'Scheune in Vollbrand', actions: 'Riegelstellung zum Wohnhaus, Brandbekämpfung mit 3 C-Rohren und DLK, Nachlöscharbeiten', cause: 'Unbekannt', statistics: ['fire', 'medium', '', ''] },
+  { key: 'B-BMA', weight: 9, minutes: [30, 60], situation: 'Auslösung Brandmeldeanlage', actions: 'Erkundung, Melder zurückgestellt, Übergabe an Betreiber', cause: 'Täuschungsalarm durch Wasserdampf', statistics: ['false-alarm', '', '', 'fire-alarm-system'] },
+  { key: 'B-PKW', weight: 3, minutes: [45, 90], situation: 'PKW-Brand im Motorraum', actions: 'Ablöschen mit Schaum, Batterie abgeklemmt, Fahrbahn gereinigt', cause: 'Technischer Defekt', statistics: ['fire', 'small-b', '', ''] },
+  { key: 'TH1', weight: 6, minutes: [30, 90], situation: 'Baum auf Fahrbahn', actions: 'Baum mit Motorsäge zerkleinert und Fahrbahn geräumt', cause: 'Sturm', statistics: ['technical-assistance', '', 'storm', ''] },
+  { key: 'TH-VU', weight: 3, minutes: [60, 150], situation: 'Verkehrsunfall, eine Person eingeklemmt', actions: 'Sicherung, Patientenbetreuung, Seitenöffnung mit hydraulischem Rettungsgerät', cause: 'Verkehrsunfall', statistics: ['technical-assistance', '', 'rescue-persons', ''] },
+  { key: 'TH-Öl', weight: 5, minutes: [30, 90], situation: 'Ölspur über ca. 500 m', actions: 'Abstreuen mit Bindemittel, Absicherung', cause: 'Defektes Fahrzeug', statistics: ['technical-assistance', '', 'oil-trace', ''] },
+  { key: 'TH-Person', weight: 3, minutes: [30, 60], situation: 'Hilflose Person hinter verschlossener Tür', actions: 'Türöffnung, Übergabe an Rettungsdienst', cause: 'Medizinischer Notfall', statistics: ['technical-assistance', '', 'rescue-persons', ''] },
+  { key: 'TH-Wasser', weight: 3, minutes: [90, 240], situation: 'Wasser im Keller nach Starkregen', actions: 'Auspumpen mit Tauchpumpe und Wassersauger', cause: 'Unwetter', statistics: ['technical-assistance', '', 'flood-weather', ''] },
+  { key: 'TH-Insekten', weight: 2, minutes: [30, 60], situation: 'Wespennest am Kindergarten', actions: 'Nest entfernt', cause: 'Natürlich', statistics: ['technical-assistance', '', 'insects', ''] },
+  { key: 'TH-Tier', weight: 1, minutes: [30, 90], situation: 'Katze auf Baum', actions: 'Rettung mit Steckleiter', cause: 'Natürlich', statistics: ['technical-assistance', '', 'animal-rescue', ''] },
+  { key: 'BSW', weight: 3, minutes: [180, 300], situation: 'Brandsicherheitswache Veranstaltung Stadthalle', actions: 'Brandsicherheitswache ohne Vorkommnisse', cause: '', statistics: null },
 ];
 const PLACES: Record<string, string[]> = {
   Musterstadt: ['Hauptstraße', 'Bahnhofstraße', 'Industriestraße', 'Ehinger Straße', 'Schloßberg'],
@@ -262,13 +262,14 @@ function weighted<T extends { weight: number }>(items: readonly T[]): T {
   return items[items.length - 1];
 }
 
-/** Rows of the MP-Feuer personnel export: one per person and report. */
+/** Rows for the import profile `incidents.personnel` (Einsatzpersonal): one per person and report. */
 async function incidentsWorkbook(members: Map<string, PersonRef[]>): Promise<{ file: Buffer; incidents: number }> {
   const headers = [
-    'Pers.-Nr.', 'Name', 'von', 'bis', 'BE', 'AS', 'V-A', 'Fzg.-Nr.', 'Bezeichnung', 'Funkrufname',
-    'Einsatz-Nr.', 'Beginn', 'Ende', 'Einsatz-Ort', 'Ortsteil (Obj.)', 'Straße (Obj.)', 'PLZ (Obj.)', 'Ort (Obj.)',
-    'Alarmstichwort', 'Leitstellen-Nr.', 'Erläuterung', 'Lage', 'Verlauf', 'Ursache', 'Leitung',
-    'bei Ges. Stat. anzeigen', 'Zusatzfeld 2', 'Bezeichnung', 'Statistik',
+    'Personalnummer', 'Name', 'Person von', 'Person bis', 'Bereitschaft', 'Atemschutz', 'Verdienstausfall', 'Fahrzeug',
+    'Einsatznummer', 'Beginn', 'Ende', 'Ortsteil', 'Straße', 'PLZ', 'Ort',
+    'Alarmstichwort', 'Leitstellennummer', 'Meldebild', 'Lage', 'Verlauf', 'Ursache', 'Einsatzleiter',
+    'Hauptbericht', 'Freigabestatus', 'Abteilung',
+    'Statistik: Einsatzhauptart', 'Statistik: Brandgröße', 'Statistik: Art der Technischen Hilfe', 'Statistik: Fehlalarm',
   ];
   reseed(4711);
   const operational = DEPARTMENTS.filter((d) => d.type === 'operational');
@@ -299,7 +300,7 @@ async function incidentsWorkbook(members: Map<string, PersonRef[]>): Promise<{ f
       numbers.set(yearKey, number);
       const primary = department === home;
       // Older reports are released for billing, recent ones are still in the workflow.
-      const status = ageDays > 45 ? 'zur Abrechnung freigegeben' : ageDays > 14 ? (chance(0.6) ? 'zur Entschädigungsauszahlung freigegeben' : '') : '';
+      const status = ageDays > 45 ? 'released-billing' : ageDays > 14 ? (chance(0.6) ? 'released-compensation' : 'draft') : 'draft';
       const arrival = primary ? begin : addMinutes(begin, between(5, 20));
       const pool = (members.get(department.name) ?? []).filter((p) => p.status === 'active');
       const crew = pool.toSorted(() => random() - 0.5).slice(0, Math.min(pool.length, primary ? between(6, 16) : between(4, 9)));
@@ -316,13 +317,10 @@ async function incidentsWorkbook(members: Map<string, PersonRef[]>): Promise<{ f
           standby ? 'Ja' : 'Nein',
           breathing ? 'Ja' : 'Nein',
           chance(0.12) ? 'Ja' : 'Nein',
-          vehicle ? String(department.vehicles.indexOf(vehicle) + 1) : '',
-          vehicle?.designation ?? '',
-          vehicle?.radioCallSign ?? '',
+          vehicle?.radioCallSign || vehicle?.designation || '',
           String(number),
           localText(arrival),
           localText(end),
-          home.shortName,
           home.shortName,
           street,
           home.postalCode,
@@ -338,7 +336,7 @@ async function incidentsWorkbook(members: Map<string, PersonRef[]>): Promise<{ f
           status,
           exportName(department),
           // The incidents of the last week still lack their statistics (incident page, view "without statistics").
-          primary && ageDays > 7 ? keyword.statistics : '',
+          ...(primary && ageDays > 7 && keyword.statistics ? keyword.statistics : ['', '', '', '']),
         ]);
       });
     }
@@ -1171,7 +1169,7 @@ async function main(): Promise<void> {
   await bankAccounts(persons);
   persons = await call<PersonRef[]>('GET', 'masterdata/persons');
 
-  console.log('Einsätze (MP-EXCEL.xlsx) …');
+  console.log('Einsätze (Einsatzpersonal.xlsx) …');
   const byNumber = new Map(persons.map((p) => [p.personnelNumber, p]));
   const members = new Map<string, PersonRef[]>();
   for (const plan of planned) {
@@ -1180,7 +1178,7 @@ async function main(): Promise<void> {
   }
   const { file, incidents } = await incidentsWorkbook(members);
   console.log(`  ${incidents} Einsätze erzeugt`);
-  await importFile('MP-EXCEL.xlsx', file, 'incidents.mp-feuer', { createKeywords: true });
+  await importFile('Einsatzpersonal.xlsx', file, 'incidents.personnel', { createKeywords: true });
 
   console.log('Einsatzleiter vom Dienst (evd.ics, EvD-Berichte) …');
   await dutyOfficer(persons, accounts, departments);

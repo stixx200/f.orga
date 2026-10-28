@@ -196,12 +196,7 @@ Umgesetzt: Stichwort-Katalog mit Zuordnung zu Einsatzhauptart und Unterkategorie
 
 ## Import
 
-Umgesetzt als Importprofil `incidents.mp-feuer`, siehe [implementiert/architektur.md](../../implementiert/architektur.md#modul-einsatzberichte-incidents). Offen ist nur die Ergänzung aus `Einsatzberichte_Zusatz.xlsx` (Berichte ohne Personal, Wetter, Sachschaden). Zuordnungsprofil MP-Feuer `MP-EXCEL.xlsx` / `Einsaetze_Personal.xlsx` (eine Zeile je Person und Bericht) und `Einsatzberichte_Zusatz.xlsx`. Dabei gilt:
-
-- Einsatz = Leitstellennummer.
-- Bericht = Abteilung + Einsatznummer + Beginn.
-- Hauptbericht = „bei Ges. Stat. anzeigen“.
-- Der Status wird aus Zusatzfeld 2 übernommen.
+Umgesetzt als allgemeines Importprofil `incidents.personnel` (Einsatzpersonal) und für die Transferdateien im Modul MP-Feuer, siehe [implementiert/architektur.md](../../implementiert/architektur.md#modul-einsatzberichte-incidents). Offen ist die Ergänzung aus `Einsatzberichte_Zusatz.xlsx` (Berichte ohne Personal, Wetter, Sachschaden). Excel-Exporte von MP-Feuer (`MP-EXCEL.xlsx`, `Einsaetze_Personal.xlsx`, `Einsatzberichte_Zusatz.xlsx`) soll dann das Modul MP-Feuer selbst lesen und in die Spalten des Profils übersetzen, wie bei den Transferdateien.
 
 ## Leistung
 

@@ -72,7 +72,7 @@ Im Frontend kommt eine vierte Stelle hinzu: die **Erweiterungspunkte**. Ein Modu
 | Modul | Hängt ab von | Entitäten (Schema) | Einstellungen | Listen | Importprofile |
 | --- | --- | --- | --- | --- | --- |
 | Stammdaten `masterdata` | – | Katalogeinträge, Abteilungen, Gruppen, Standorte, Fahrzeuge, Personen mit Mitgliedschaften, Qualifikationen, Dienstgraden, Ehrungen, Ämtern, Ruhezeiten, Lehrgänge mit Terminen, Teilnahmen und Meldungen | `masterdata.*` | 16 (Mitglieder, Geburtstage, Jubiläen, Qualifikationsmatrix …) | Personen, Werdegang |
-| Einsatzberichte `incidents` | masterdata; optional equipment, respiratory-protection, compensation, cost-recovery, duty-officer | Alarmstichworte, Einsätze, Berichte mit Personal, Fahrzeugen, Beteiligten, anderen Kräften, Revisionen, Statistikjahre | `incidents.*` | 5 | MP-Feuer |
+| Einsatzberichte `incidents` | masterdata; optional equipment, respiratory-protection, compensation, cost-recovery, duty-officer | Alarmstichworte, Einsätze, Berichte mit Personal, Fahrzeugen, Beteiligten, anderen Kräften, Revisionen, Statistikjahre | `incidents.*` | 5 | Einsatzpersonal |
 | Dienste `training` | masterdata; optional respiratory-protection, compensation | Dienstarten (Übungsdienst, Sonderdienst, Sonstiges), Dienste, Teilnahmen | `training.general` | 7 | Dienste |
 | Atemschutz `respiratory-protection` | masterdata; optional incidents, training | Nachweise, Status | `respiratory-protection.rule` | 8 | Untersuchungen, Belastungsübungen |
 | Entschädigungen `compensation` | masterdata; optional incidents, training, duty-officer | Auszahlungsläufe, Positionen, Funktionsträger | `compensation.general` | 2 | – |
@@ -82,6 +82,7 @@ Im Frontend kommt eine vierte Stelle hinzu: die **Erweiterungspunkte**. Ein Modu
 | Kleiderkammer `clothing` | masterdata | Artikel, Kleidungsstücke, Ausgaben, Pflege, Prüfungen, Größenprofile, Verbrauchsmaterial | `clothing.settings` | 2 | – |
 | Einsatzleiter vom Dienst `duty-officer` | masterdata, incidents; optional compensation | Dienstplan, erwartete EvD-Berichte, Ausnahmen | `duty-officer.general` | 1 | Dienstplan (iCal) |
 | Infoterminal `info-terminal` | masterdata, incidents; optional training | Terminals (Geräte an Wachen) | `info-terminal.general` | – | – |
+| MP-Feuer `mp-feuer` | masterdata; optional incidents, training, respiratory-protection | Läufe, gelesene Zeilen je Profil, gemerkte Zuordnungen | `mp-feuer.remembered` | – | – (liest Transferdateien und gibt die Zeilen über `ImportService.runRows` an die Profile der anderen Module) |
 
 Jedes Modul liefert außerdem ein Manifest mit Rechten, Rollenvorlagen und Navigation. Es meldet seine historisierten Entitäten, eine Migration `initial` und ein Frontend mit eigenen Übersetzungen.
 
@@ -89,21 +90,21 @@ Jedes Modul liefert außerdem ein Manifest mit Rechten, Rollenvorlagen und Navig
 
 Die Module melden ihre Beiträge beim Start an die Registries des Core. Die Shell und die Endpunkte des Core fassen sie zusammen.
 
-| Registry (Core) | Zusammengeführt in | masterdata | incidents | training | respiratory-protection | compensation | equipment | cost-recovery | promotions | clothing | duty-officer | info-terminal |
-| --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| `PermissionRegistry` (Manifest) | Rollen, Rechteprüfung | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| Einstellungen (`settings`) | Verwaltung → Einstellungen, Einrichtungsliste | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| `HistoryAccessRegistry` | Historie je Datensatz | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| `ExportRegistry` | Vollexport | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | |
-| `ListRegistry` | Listen (PDF, Excel, CSV) | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | |
-| `DeadlineRegistry` | Aufgaben, Glocke, Sammel-E-Mail | ● | ● | ● | ● | ● | ● | ● | | ● | ● | |
-| `ImportRegistry` | Import-Assistent, MP-Feuer-Übernahme | ● | ● | ● | ● | | ● | ● | | | ● | |
-| `SearchRegistry` | Globale Suche | ● | ● | ● | | | ● | ● | | ● | | |
-| `CodeRegistry` | Code-Scan (Etiketten) | | | | | | ● | | | ● | | |
-| `PersonDataRegistry` | Anonymisieren von Personen | ruft auf | | ● | ● | | | | ● | ● | | |
-| `RetentionRegistry` | Täglicher Aufbewahrungslauf | ● | | | | | | | | | | |
-| `Notifications` | Sofortige E-Mails | | ● | | ● | | ● | | | | | |
-| `OrganizationDirectory` | Rechte je Abteilung, Einrichtungsliste | stellt bereit | nutzt | | | | | | | | | |
+| Registry (Core) | Zusammengeführt in | masterdata | incidents | training | respiratory-protection | compensation | equipment | cost-recovery | promotions | clothing | duty-officer | info-terminal | mp-feuer |
+| --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| `PermissionRegistry` (Manifest) | Rollen, Rechteprüfung | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| Einstellungen (`settings`) | Verwaltung → Einstellungen, Einrichtungsliste | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| `HistoryAccessRegistry` | Historie je Datensatz | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| `ExportRegistry` | Vollexport | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | | |
+| `ListRegistry` | Listen (PDF, Excel, CSV) | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | | |
+| `DeadlineRegistry` | Aufgaben, Glocke, Sammel-E-Mail | ● | ● | ● | ● | ● | ● | ● | | ● | ● | | |
+| `ImportRegistry` | Import-Assistent, Läufe des Moduls MP-Feuer | ● | ● | ● | ● | | ● | ● | | | ● | | nutzt |
+| `SearchRegistry` | Globale Suche | ● | ● | ● | | | ● | ● | | ● | | | |
+| `CodeRegistry` | Code-Scan (Etiketten) | | | | | | ● | | | ● | | | |
+| `PersonDataRegistry` | Anonymisieren von Personen | ruft auf | | ● | ● | | | | ● | ● | | | |
+| `RetentionRegistry` | Täglicher Aufbewahrungslauf | ● | | | | | | | | | | | ● |
+| `Notifications` | Sofortige E-Mails | | ● | | ● | | ● | | | | | | |
+| `OrganizationDirectory` | Rechte je Abteilung, Einrichtungsliste | stellt bereit | nutzt | | | | | | | | | | |
 
 ## Zusammenlauf zwischen Modulen
 
@@ -128,6 +129,7 @@ flowchart LR
   CR["Kostenersatz<br/>cost-recovery"]
   DO["EvD<br/>duty-officer"]
   IT["Infoterminal<br/>info-terminal"]
+  MPF["MP-Feuer<br/>mp-feuer"]
 
   INC -- "COMPENSATION_STATUTE<br/>Sätze der Satzung" --> COMP
   INC -- "RESPIRATORY_PROTECTION_FITNESS<br/>Ampel der Träger" --> RP
@@ -137,6 +139,7 @@ flowchart LR
   EQ -- "TRAINING_SESSIONS" --> TRN
   IT -- "INCIDENTS_TERMINAL_BOOKING<br/>Eintragungen, Neuer Einsatz" --> INC
   IT -- "TRAINING_TERMINAL_CHECK_IN<br/>Anwesenheit" --> TRN
+  MPF -- "INCIDENT_UNITS<br/>Einheiten (EvD)" --> INC
   CR -- "EQUIPMENT_USAGE<br/>Verbrauchsmaterial" --> EQ
   COMP & CR & EQ & RP -- "INCIDENTS_LOOKUP" --> INC
 
@@ -170,6 +173,7 @@ flowchart LR
     SR["incidents.settings.rates<br/>Einstellungen Einsatzberichte"]
     SS["training.session.sections<br/>Dienst"]
     WS["masterdata.station.sections<br/>Wache"]
+    IN["core.imports.notice<br/>Import (Shell)"]
   end
 
   MD[masterdata] --> ME
@@ -183,6 +187,7 @@ flowchart LR
   CR[cost-recovery] --> IS
   DO[duty-officer] --> IS
   IT[info-terminal] --> WS
+  MPF[mp-feuer] --> IN
 ```
 
 Daneben gibt es Punkte innerhalb eines Moduls, z. B. `masterdata.import.ambiguous` und `cost-recovery.import.*` für Rückfragen im Import-Assistenten.

@@ -3,7 +3,6 @@ import type { Translations } from '@forga/web-sdk';
 export const translations: Translations = {
   de: {
     errors: {
-      'masterdata.aliasTaken': 'Die Bezeichnung „{{alias}}“ gehört schon zu einem anderen Eintrag (Name, Kürzel oder Alias).',
       'masterdata.coursePassedAlready': 'Die Person hat diesen Lehrgang bereits bestanden.',
       'masterdata.courseNotFinished': 'Ein Lehrgang kann erst nach seinem Ende als bestanden eingetragen werden.',
       'masterdata.courseRunHasResults': 'Für diesen Termin sind schon Ergebnisse eingetragen; er bleibt erhalten.',
@@ -533,7 +532,6 @@ export const translations: Translations = {
   },
   en: {
     errors: {
-      'masterdata.aliasTaken': 'The name "{{alias}}" already belongs to another entry (name, abbreviation or alias).',
       'masterdata.coursePassedAlready': 'The person has already passed this course.',
       'masterdata.courseNotFinished': 'A course can only be recorded as passed after it has ended.',
       'masterdata.courseRunHasResults': 'Results have been recorded for this run; it is kept.',
