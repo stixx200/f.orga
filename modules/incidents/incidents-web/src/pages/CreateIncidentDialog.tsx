@@ -1,14 +1,15 @@
-import { Button, Group, MultiSelect, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Checkbox, Group, MultiSelect, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import type { Incident, IncidentMatch, Report } from '@forga/incidents-contracts';
+import type { Incident, IncidentMatch, IncidentUnit, Report } from '@forga/incidents-contracts';
 import { api, can, formatDateTime, fromLocalInput, send, toLocalInput, useLocalized, useSession, useTranslation, withQuery } from '@forga/web-sdk';
 import { Notice, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { keys, RELEASE, useDepartments, useKeywords, useNames, WRITE } from '../api';
 
 /**
- * New incident with a draft report for each chosen department; opens the report of the first department.
+ * New incident with a draft report for each chosen department and brigade-wide unit (e.g. only the EvD report);
+ * opens the report of the first department, otherwise the first report.
  * Existing incidents with the same dispatch number, or within two hours the same keyword or location, are offered
  * first, so a department joins a joint incident with its own report (or opens the report it already has) instead of
  * creating a duplicate.
@@ -21,7 +22,10 @@ export function CreateIncidentDialog({ opened, onClose }: { opened: boolean; onC
   const session = useSession().data;
   const { data: keywords = [] } = useKeywords();
   const { data: departments = [] } = useDepartments();
-  const writable = departments.filter((d) => d.type === 'operational' && (can(session, WRITE, d.id) || session?.permissions[RELEASE] === 'brigade'));
+  const releaser = session?.permissions[RELEASE] === 'brigade';
+  const writable = departments.filter((d) => d.type === 'operational' && (can(session, WRITE, d.id) || releaser));
+  const { data: activeUnits = [] } = useQuery({ queryKey: ['incidents', 'units', 'active'], queryFn: () => api<IncidentUnit[]>('incidents/units?active=true') });
+  const writableUnits = activeUnits.filter((u) => releaser || can(session, u.writePermission));
   const [form, setForm] = useState(() => ({
     alarmKeyword: null as string | null,
     alarmedAt: toLocalInput(new Date().toISOString()),
@@ -32,9 +36,11 @@ export function CreateIncidentDialog({ opened, onClose }: { opened: boolean; onC
     city: '',
     district: '',
     departmentIds: [] as string[],
+    units: [] as string[],
   }));
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
-  const departmentIds = form.departmentIds.length ? form.departmentIds : writable.length === 1 ? [writable[0].id] : [];
+  // The only department of the user is preselected, unless the incident gets only unit reports.
+  const departmentIds = form.departmentIds.length ? form.departmentIds : !form.units.length && writable.length === 1 ? [writable[0].id] : [];
   const names = useNames();
   const alarmedAt = form.alarmedAt ? fromLocalInput(form.alarmedAt) : null;
   const dispatchNumber = form.dispatchNumber.trim();
@@ -78,6 +84,7 @@ export function CreateIncidentDialog({ opened, onClose }: { opened: boolean; onC
         alarmedAt: fromLocalInput(form.alarmedAt),
         location: { street: form.street, houseNumber: form.houseNumber, city: form.city, district: form.district },
         departmentIds,
+        units: form.units,
       }),
     {
       invalidate: [keys.incidents],
@@ -98,7 +105,7 @@ export function CreateIncidentDialog({ opened, onClose }: { opened: boolean; onC
       actions={
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button>
-          <Button type="submit" form="create-incident" loading={create.isPending} disabled={!form.alarmKeyword || !departmentIds.length}>
+          <Button type="submit" form="create-incident" loading={create.isPending} disabled={!form.alarmKeyword || (!departmentIds.length && !form.units.length)}>
             {t('create.submit')}
           </Button>
         </Group>
@@ -168,8 +175,16 @@ export function CreateIncidentDialog({ opened, onClose }: { opened: boolean; onC
             data={writable.map((d) => ({ value: d.id, label: d.name }))}
             value={departmentIds}
             onChange={(value) => set('departmentIds', value)}
-            required
           />
+          {writableUnits.length > 0 && (
+            <Checkbox.Group label={t('create.units')} description={t('create.unitsHint')} value={form.units} onChange={(value) => set('units', value)}>
+              <Stack gap={4} mt={4}>
+                {writableUnits.map((u) => (
+                  <Checkbox key={u.key} value={u.key} label={t('create.unitReport', { short: localized(u.shortLabel), unit: localized(u.label) })} />
+                ))}
+              </Stack>
+            </Checkbox.Group>
+          )}
         </Stack>
       </form>
     </ResponsiveDialog>

@@ -68,23 +68,31 @@ export class EvdReports implements OnModuleInit, DeadlineProvider {
     return (await this.config.get()).reportRequired;
   }
 
-  /** New incidents in the UI or through the API get their EvD report; imported (historic) incidents do not. */
+  /**
+   * New incidents in the UI or through the API get their EvD report; imported (historic) incidents do not. An EvD
+   * report the creator asked for (e.g. an incident with only the EvD report) comes regardless of the setting.
+   */
   async onIncidentCreated(e: IncidentCreatedEvent): Promise<void> {
-    if (e.createdVia === 'import' || !(await this.reportRequired())) return;
+    if (e.createdVia === 'import') return;
+    const requested = Boolean(e.units?.includes(DUTY_OFFICER_UNIT));
+    if (!requested && !(await this.reportRequired())) return;
     const em = this.em.fork();
     // Exempted ("Kein EvD bei diesem Einsatz"): only "EvD-Bericht anlegen" brings the report back.
-    if (await em.count(IncidentExemptionEntity, { incidentId: e.incidentId })) return;
+    if (!requested && (await em.count(IncidentExemptionEntity, { incidentId: e.incidentId }))) return;
     await em.upsert(ExpectedReportEntity, { incidentId: e.incidentId, createdAt: new Date() });
-    await this.create(e.incidentId, new Date(e.alarmedAt));
+    await this.create(e.incidentId, new Date(e.alarmedAt), e.requestedByPersonId ?? null);
   }
 
-  /** Creates the EvD report: the duty officer on duty at the alarm writes it and is its first person. */
-  private async create(incidentId: string, alarmedAt: Date): Promise<void> {
+  /**
+   * Creates the EvD report: the duty officer on duty at the alarm writes it and is its first person; with nobody on
+   * duty the person who asked for the report writes it.
+   */
+  private async create(incidentId: string, alarmedAt: Date, fallbackAuthor: string | null = null): Promise<void> {
     const [officer] = await this.roster.onDutyAt(alarmedAt);
     const functions = await this.organization.catalog('function');
     const role = functions.some((f) => f.key === DUTY_OFFICER_FUNCTION) ? DUTY_OFFICER_FUNCTION : null;
     await this.reports.createUnitReport(incidentId, DUTY_OFFICER_UNIT, {
-      authorPersonId: officer ?? null,
+      authorPersonId: officer ?? fallbackAuthor,
       personnel: officer ? [{ personId: officer, function: role }] : [],
     });
   }

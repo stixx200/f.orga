@@ -13,6 +13,10 @@ export interface IncidentCreatedEvent {
   alarmedAt: string;
   /** `import`: data taken over from another system (e.g. MP-Feuer), usually historic. */
   createdVia: 'ui' | 'api' | 'import';
+  /** Units whose report the creator asked for; the module owning the unit creates it, whatever its settings say. */
+  units?: string[];
+  /** Person of the creator; writes a requested unit report when nobody else is on duty. */
+  requestedByPersonId?: string | null;
 }
 
 export interface ReportReleasedEvent {
