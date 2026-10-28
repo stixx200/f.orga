@@ -100,11 +100,14 @@ export const translations: Translations = {
     },
     fields: { stationId: 'Wache', name: 'Gerät', departmentIds: 'Abteilungen' },
     errors: {
-      noPublicUrl: 'Ohne Adresse von f.orga lässt sich kein Infoterminal anlegen. Bitte unter „Einstellungen“ die Adresse eintragen.',
-      noSecretKey: 'Auf dem Server fehlt der Schlüssel FORGA_SECRET_KEY. Ohne ihn lässt sich kein Infoterminal anlegen.',
-      linkUnavailable: 'Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel wurde geändert). Bitte einen neuen Link erzeugen.',
-      revoked: 'Das Infoterminal ist widerrufen.',
-      unknownStation: 'Diese Wache gibt es nicht.',
+      'info-terminal': {
+        noPublicUrl: 'Ohne „Adresse von f.orga“ lässt sich kein Infoterminal anlegen. Bitte unter Verwaltung → Einstellungen → Feuerwehr die Adresse eintragen, unter der die Tablets f.orga erreichen.',
+        noSecretKey: 'Auf dem Server fehlt der Schlüssel FORGA_SECRET_KEY. Ohne ihn lässt sich kein Infoterminal anlegen.',
+        linkUnavailable: 'Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel wurde geändert). Bitte einen neuen Link erzeugen.',
+        revoked: 'Das Infoterminal ist widerrufen.',
+        unknownStation: 'Diese Wache gibt es nicht.',
+        departmentNotAllowed: 'Diese Abteilung lässt sich diesem Terminal nicht zuordnen.',
+      },
     },
   },
   en: {
@@ -205,11 +208,14 @@ export const translations: Translations = {
     },
     fields: { stationId: 'Station', name: 'Device', departmentIds: 'Departments' },
     errors: {
-      noPublicUrl: 'Without the address of f.orga no info terminal can be created. Please enter the address under "Settings".',
-      noSecretKey: 'The key FORGA_SECRET_KEY is missing on the server. Without it no info terminal can be created.',
-      linkUnavailable: 'The link can no longer be shown (the server key was changed). Please create a new link.',
-      revoked: 'The info terminal is revoked.',
-      unknownStation: 'This station does not exist.',
+      'info-terminal': {
+        noPublicUrl: 'Without "Address of f.orga" no info terminal can be created. Please enter the address the tablets reach f.orga at under Administration → Settings → Brigade.',
+        noSecretKey: 'The key FORGA_SECRET_KEY is missing on the server. Without it no info terminal can be created.',
+        linkUnavailable: 'The link can no longer be shown (the server key was changed). Please create a new link.',
+        revoked: 'The info terminal is revoked.',
+        unknownStation: 'This station does not exist.',
+        departmentNotAllowed: 'This department cannot be assigned to this terminal.',
+      },
     },
   },
 };
