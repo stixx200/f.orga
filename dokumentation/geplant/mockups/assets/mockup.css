@@ -693,3 +693,23 @@ a.tk-ereignis:hover { box-shadow: var(--e4); border-color: var(--dienst); }
   .tk-leiste .knopf { flex: 1 1 auto; }
   .tk-leiste .status { flex-basis: 100%; }
 }
+
+/* ---------- Modul MP-Feuer ---------- */
+/* Reiter als Links zwischen den Seiten eines Moduls (gleiche Optik wie .reiter button). */
+.reiter a {
+  position: relative; display: inline-flex; align-items: center; padding: 12px 16px; font-size: .875rem; font-weight: bold; text-decoration: none;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--neben); white-space: nowrap; min-height: 48px;
+}
+.reiter a:hover { color: var(--dienst); background: rgba(140, 29, 24, .04); }
+.reiter a.aktiv { color: var(--dienst); }
+.reiter a.aktiv::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--dienst); }
+tbody tr.grau td { color: var(--meta); background: var(--grau); }
+.ablage { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 16px; border: 2px dashed var(--feldrand); border-radius: var(--radius); text-align: center; background: var(--wechsel); }
+.ablage > .sym { width: 36px; height: 36px; color: var(--dienst); }
+.balken { height: 8px; background: var(--grau); border-radius: 2px; overflow: hidden; margin: 6px 0; }
+.balken > span { display: block; height: 100%; background: var(--dienst); }
+.liste > li.fortschritt { display: block; }
+.fortschritt-kopf { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 860px) {
+  .reiter a { padding: 12px 10px; min-height: 44px; }
+}

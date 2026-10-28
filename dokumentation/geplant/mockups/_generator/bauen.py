@@ -9,7 +9,7 @@ import sys
 from html.parser import HTMLParser
 
 sys.path.insert(0, os.path.dirname(__file__))
-import shell, stammdaten, einsatzberichte, infoterminal  # noqa: F401,E401  (erzeugen Seiten beim Import)
+import shell, stammdaten, einsatzberichte, infoterminal, mpfeuer  # noqa: F401,E401  (erzeugen Seiten beim Import)
 from rahmen import ZIEL, FUSS, SPRACHE, mockup_hinweis, schreiben, kopf_html
 from uebersetzung import EN, MUSTER, GLEICH
 
@@ -30,6 +30,12 @@ GRUPPEN = [
                       ('infoterminal/neuer-einsatz.html', 'Neuer Einsatz mit passenden Einsätzen'), ('infoterminal/dienst.html', 'Dienst eintragen'),
                       ('infoterminal/leer.html', 'Nichts offen'), ('infoterminal/gesperrt.html', 'Nicht freigeschaltet'),
                       ('infoterminal/verwaltung.html', 'Verwaltung der Infoterminals'), ('stammdaten/organisation.html#wache', 'Wache mit Infoterminal')]),
+    ('Modul MP-Feuer', [('mp-feuer/start.html', 'Übersicht'), ('mp-feuer/uebernahme.html', 'Dateien und Archive zuordnen'),
+                        ('mp-feuer/probelauf.html', 'Datensätze und Probelauf'), ('mp-feuer/zuordnung.html', 'Nicht zugeordnete Bezeichnungen'),
+                        ('mp-feuer/lauf.html', 'Übernahme mit Fortschritt'), ('mp-feuer/ergebnis.html', 'Ergebnisbericht'),
+                        ('mp-feuer/verlauf.html', 'Verlauf der Läufe'), ('mp-feuer/zuordnungen.html', 'Zuordnungsliste des Moduls'),
+                        ('mp-feuer/einstellungen.html', 'Einstellungen: gemerkte Auswahl'), ('mp-feuer/export.html', 'Export nach MP-Feuer (in Vorbereitung)'),
+                        ('mp-feuer/tabellen-import.html', 'Tabellen-Import mit gemerkten Zuordnungen')]),
 ]
 
 karten = ''.join(

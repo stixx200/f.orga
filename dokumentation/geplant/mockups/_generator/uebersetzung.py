@@ -34,6 +34,23 @@ MUSTER = [
     (r'(Gerätehaus \w+|Feuerwehrhaus Musterstadt) · pauschal 1 h', '$1 · flat 1 h'),
     (r'(.+) Tobias Rief · 2 Berichte', '$1 Tobias Rief · 2 reports'),
     (r'Infoterminal (\d\d:\d\d)', 'Info terminal $1'),
+    # MP-Feuer-Brücke
+    (r'([\d ]+) neu', '$1 new'),
+    (r'([\d ]+) geändert', '$1 changed'),
+    (r'([\d ]+) unverändert', '$1 unchanged'),
+    (r'(\d+) Fehler', '$1 errors'),
+    (r'(\d+) offene Bezeichnungen', '$1 open names'),
+    (r'(\d+) Archive', '$1 archives'),
+    (r'([\d ]+) neu · ([\d ]+) geändert · (\d+) Fehler', '$1 new · $2 changed · $3 errors'),
+    (r'(\d+) Personen · (\d+) Einsätze · (\d+) Dienste', '$1 people · $2 incidents · $3 services'),
+    (r'(\d+) Personen · (\d+) Dienste', '$1 people · $2 services'),
+    (r'Eintrag für (.+)', 'Entry for $1'),
+    (r'([\d ]+) Zeilen in 1 Teil · (\d+) s', '$1 rows in 1 part · $2 s'),
+    (r'Teil (\d) von (\d) · ([\d ]+) von ([\d ]+) Zeilen · noch etwa (\d+) s', 'Part $1 of $2 · $3 of $4 rows · about $5 s left'),
+    (r'(\d) (Personen|Lehrgänge, Dienstgrade, Ehrungen|G26-Untersuchungen|Belastungsübungen|Dienste|Einsatzpersonal)', '$1 %2'),
+    (r'Archiv (\d+), Zeilen? ([\d ,]+?)( ·)?', 'Archive $1, row(s) $2$3'),
+    (r'Schritt (\d) von 5: (.+)', 'Step $1 of 5: %2'),
+    (r'Verbindung zu (.+)', 'Connection to %1'),
 ]
 
 TEXTE = r'''
@@ -1504,6 +1521,240 @@ Abt. Musterstadt · zuletzt gesehen 21.10.2026 19:02 => Dept. Musterstadt · las
 Abt. Musterstadt, Jugendfeuerwehr, Altersabteilung · zuletzt gesehen heute 14:31 => Dept. Musterstadt, youth fire brigade, veterans · last seen today 14:31
 Link anzeigen => Show link
 Mitglieder tragen sich dort nach Einsätzen und Diensten ein. „Öffnen“ startet das Infoterminal in diesem Browser, z. B. auf dem Tablet der Wache (nur mit dem Recht, Infoterminals zu verwalten). => Members sign in there after incidents and services. “Open” starts the info terminal in this browser, e.g. on the station tablet (only with the right to manage info terminals).
+Dateien und Archive zuordnen => Assign files and archives
+Datensätze und Probelauf => Datasets and dry run
+Ergebnisbericht => Result report
+Export nach MP-Feuer (in Vorbereitung) => Export to MP-Feuer (in preparation)
+Nicht zugeordnete Bezeichnungen => Unmatched names
+Verlauf der Läufe => History of runs
+Übernahme mit Fortschritt => Import with progress
+Konto => Account
+API-Token => API token
+Abt. Ahornfeld => Dept. Ahornfeld
+Abteilungsbericht => Department report
+Archivnummer => Archive number
+Datensätze und Optionen => Datasets and options
+Eingangsordner => Inbox folder
+Eingangsordner und Zeitplan => Inbox folder and schedule
+Einheit im Dateinamen => Unit in the file name
+Einsatzberichte als => Incident reports as
+Einsatzleiter vom Dienst (EvD) => Duty officer (EvD)
+Export nach MP-Feuer => Export to MP-Feuer
+Gemerkte Auswahl zurücksetzen … => Reset remembered choices …
+Gemerkte Auswahl zurücksetzen? => Reset remembered choices?
+Gemerkte Zuordnungen => Remembered assignments
+Gesamtfeuerwehr
+Gewählt => Selected
+Neue Übernahme => New import
+Personen, Lehrgänge, G26, Belastungsübungen, Einsatzpersonal => Persons, courses, G26, stress exercises, incident personnel
+Probelauf => Dry run
+Test => Test
+Token => Token
+Unbekannte Stichworte anlegen => Create unknown keywords
+Verlauf => History
+Vorhandene Personen aktualisieren => Update existing persons
+Zeitplan => Schedule
+Ziel => Target
+Zuletzt => Last
+Zurücksetzen => Reset
+an => on
+Übernahme => Import
+übersprungen => skipped
+Als CSV herunterladen => Download as CSV
+Anzahl => Count
+Austritt nicht übernommen (vorhandene Person). => Exit not taken over (existing person).
+Beispiele => Examples
+Belastungsübungen => Stress exercises
+Bericht in f.orga bearbeitet, nicht ersetzt. => Report edited in f.orga, not replaced.
+Bezeichnungen zuordnen => Map names
+Dateien & Archive => Files & archives
+Datensatz => Dataset
+Datensätze & Probelauf => Datasets & dry run
+Die CSV enthält alle Zeilen mit Meldungen: Datensatz, Archiv, Zeile, Bezeichnung, Code und Text. => The CSV contains all rows with messages: dataset, archive, row, label, code and text.
+Einsatzpersonal => Incident personnel
+Ergebnis je Datensatz => Result per dataset
+G26-Untersuchungen => G26 examinations
+Geändert => Changed
+Lehrgänge, Dienstgrade, Ehrungen => Courses, ranks, honours
+Meldung => Message
+Meldungen nach Art => Messages by type
+Person nicht gefunden. Person in f.orga anlegen oder Datensatz „Personen“ übernehmen. => Person not found. Create the person in f.orga or import the dataset “Persons”.
+Person steht zweimal im selben Bericht. => Person is listed twice in the same report.
+Stichwort angelegt. => Keyword created.
+Unverändert => Unchanged
+Wert => Value
+Zum Verlauf => To the history
+am 26.10.2026 19:07 in 52 s. 4 Zeilen mit Fehlern wurden übersprungen. => on 26.10.2026 19:07 in 52 s. 4 rows with errors were skipped.
+Übernommen => Imported
+Adapter mit Parametern (z. B. Abteilung, Zeitraum) und Test gegen die Beispieldatei. => Adapter with parameters (e.g. department, period) and a test against the sample file.
+Daten aus f.orga => Data from f.orga
+Einsatzberichte mit Personal => Incident reports with personnel
+Export => Export
+Hier erscheinen dann Parameter und „Datei erzeugen“; die Datei wird in MP-Feuer importiert. => Parameters and “Create file” then appear here; the file is imported into MP-Feuer.
+In Vorbereitung. => In preparation.
+Laufbahn der Personen => Career of the persons
+Lehrgänge und Qualifikationen => Courses and qualifications
+So kommt ein Export dazu => How an export is added
+Stammdaten, Mitgliedschaften => Master data, memberships
+Stand => State
+Vorlage fehlt => Template missing
+Vorlage und Beispieldatei aus MP-Feuer bereitstellen. => Provide the template and a sample file from MP-Feuer.
+Datei wählen => Choose file
+Eine Zeile je => One row per
+Eintrag der Laufbahn => Career entry
+EvD-Dienstplan => Duty officer roster
+Excel (.xlsx), CSV (.csv, .txt) oder Kalender (.ics), höchstens 10 MB => Excel (.xlsx), CSV (.csv, .txt) or calendar (.ics), at most 10 MB
+Importprofile => Import profiles
+MP-Feuer-Transferdateien ( => MP-Feuer transfer files (
+Person und Bericht (Einsatz, Bericht, Status, Statistik in eigenen Spalten) => Person and report (incident, report, status, statistics in own columns)
+Profil => Profile
+Tabelle hierher ziehen => Drag a table here
+Teilnahme an einem Dienst => Attendance at a service
+Termin (.ics) => Appointment (.ics)
+Untersuchung => Examination
+Übung einer Person => Exercise of a person
+Abbrechen … => Cancel …
+Die Seite darf geschlossen werden; der Lauf geht weiter. => You may close the page; the run continues.
+Nach diesem Teil anhalten => Stop after this part
+Weiter übernehmen => Continue importing
+Zum Ergebnis => To the result
+fertig => done
+läuft => running
+Übernahme abbrechen? => Cancel import?
+(26.10.2026 19:04, 41 s). Nichts wurde geändert. 9 Bezeichnungen sind offen, 4 Zeilen haben Fehler. => (26.10.2026 19:04, 41 s). Nothing was changed. 9 names are open, 4 rows have errors.
+Datensätze => Datasets
+Erneut prüfen => Check again
+Optionen => Options
+Probelauf fertig => Dry run finished
+Weiter zur Zuordnung (9) => Continue to mapping (9)
+Zeilen => Rows
+Einsatzberichte führt => Incident reports led by
+In MP-Feuer die Transferdateien aller Abteilungen exportieren. => Export the transfer files of all departments in MP-Feuer.
+Läufe => Runs
+MP-Feuer
+Probelauf, offene Bezeichnungen zuordnen, übernehmen. => Dry run, map open names, import.
+Version => Version
+Wöchentliche Routine => Weekly routine
+fehlt => missing
+seit 01.09.2026 => since 01.09.2026
+vorhanden => present
+Fehler der letzten Übernahme => Errors of the last import
+Übernommen 19.10.2026 19:12 · 7 Archive · 1 412 neu, 2 830 geändert, 4 Fehler => Imported 19.10.2026 19:12 · 7 archives · 1 412 new, 2 830 changed, 4 errors
+Abteilung in f.orga => Department in f.orga
+Datei und Inhalt => File and content
+Dateien wählen => Choose files
+Erkannte Archive (7) => Detected archives (7)
+MPTRA-Dateien hierher ziehen => Drag MPTRA files here
+Neues Archiv: Abteilung über den Namen vorgeschlagen. => New archive: department suggested by name.
+Nr. => No.
+Transferdateien von MP-Feuer, je Abteilung eine. Höchstens 40 Dateien, je 200 MB. => Transfer files of MP-Feuer, one per department. At most 40 files, 200 MB each.
+Weiter zu den Datensätzen => Continue to the datasets
+gemerkt => remembered
+lag ebenfalls vor. Es gilt die neuere Datei vom 26.10.2026. => was present as well. The newer file of 26.10.2026 is used.
+neu, Vorschlag => new, suggested
+oder => or
+Überspringen => Skip
+Bericht => Report
+Dateien => Files
+abgebrochen => cancelled
+nach Teil 2 von 3, Einsatzpersonal => after part 2 of 3, incident personnel
+übernommen => imported
+6 von 9 zugeordnet => 6 of 9 mapped
+Alarmstichwort => Alarm keyword
+Alarmstichworte (1) => Alarm keywords (1)
+Alle (9) => All (9)
+Anderer Lehrgang
+Anlegen und zuordnen => Create and map
+Art filtern => Filter type
+B2 BMA
+B2 Brand Gebäude
+Diensttyp => Session type
+Diensttypen (1) => Session types (1)
+Ehrennadel des Kreisfeuerwehrverbands
+Ehrenzeichen Silber
+Ehrungen (1) => Honours (1)
+Eintrag in f.orga => Entry in f.orga
+Fahrzeuge (1) => Vehicles (1)
+Funktionen (1) => Functions (1)
+Keine Funktion (ignorieren) => No function (ignore)
+Keine Funktion – Einsatz während der Arbeitszeit beim Dienstherrn => No function – incident during working hours for the employer
+Keine Funktion – Verdienstausfall => No function – loss of earnings
+Lehrgänge (4) => Courses (4)
+Neuen Eintrag anlegen => Create new entry
+Sanitätsausbildung
+Schlüssel => Key
+Truppmann Teil 2
+Vorkommen => Occurrences
+Wartung => Maintenance
+Wert in MP-Feuer => Value in MP-Feuer
+Zuordnungen geändert. Bitte erneut prüfen, bevor übernommen wird. => Mappings changed. Please check again before importing.
+Übernehmen … => Import …
+Übung => Exercise
+Einstellungen: gemerkte Auswahl => Settings: remembered choices
+Modul MP-Feuer => Module MP-Feuer
+Tabellen-Import mit gemerkten Zuordnungen => Table import with remembered mappings
+Zuordnungsliste des Moduls => Mapping list of the module
+Abteilungen, Einheiten, übersprungene Archive und Optionen werden vergessen. Bei der nächsten Übernahme wird wieder über die Namen vorgeschlagen. Die Zuordnungen von Bezeichnungen bleiben. => Departments, units, skipped archives and options are forgotten. The next import suggests by name again. The mappings of names stay.
+Gemerkt wird mit jeder Übernahme. Zuordnungen von Bezeichnungen stehen unter => Remembered with every import. Mappings of names are under
+Geplant: Transferdateien aus einem Ordner des Servers übernehmen und wöchentlich einen Probelauf mit der gemerkten Auswahl starten. Übernommen wird nur nach Bestätigung. => Planned: take transfer files from a folder of the server and start a weekly dry run with the remembered choices. Import only after confirmation.
+Seiten des Moduls MP-Feuer => Pages of the module MP-Feuer
+Zuordnungen => Mappings
+am 26.10.2026 19:07 in 52 s. 4 Zeilen mit Fehlern wurden übersprungen. 6 neue Zuordnungen gemerkt. => on 26.10.2026 19:07 in 52 s. 4 rows with errors were skipped. 6 new mappings remembered.
+Braucht das Recht => Needs the permission
+MP-Feuer übernimmt Daten über seinen Tabellen-Import mit Vorlagen (CSV/Excel). Sobald Beispieldateien der Vorlagen vorliegen, bekommt jeder Export einen eigenen Adapter. Bis dahin erzeugt das Modul keine Dateien. => MP-Feuer takes data through its table import with templates (CSV/Excel). As soon as sample files of the templates are available, each export gets its own adapter. Until then the module creates no files.
+Der laufende Teil wird noch fertig übernommen, danach hält der Lauf an. Bereits übernommene Teile bleiben bestehen. => The running part is still imported completely, then the run stops. Parts already imported stay.
+Jeder Teil wird in einer eigenen Transaktion übernommen. Einsätze werden nie auf zwei Teile verteilt. Ein abgebrochener oder unterbrochener Lauf lässt die fertigen Teile stehen; ein neuer Lauf mit denselben Dateien ergänzt den Rest, ohne zu verdoppeln. => Each part is imported in its own transaction. Incidents are never split across two parts. A cancelled or interrupted run keeps the finished parts; a new run with the same files adds the rest without duplicating.
+gestartet 19:06 von Markus Vogt => started 19:06 by Markus Vogt
+Übernahme läuft im Hintergrund => Import is running in the background
+Auswahl und Optionen werden mit der Übernahme gemerkt. „Vorhandene Personen aktualisieren“ ist aus, damit f.orga für Personen führend bleibt. => Selection and options are remembered with the import. “Update existing persons” is off so that f.orga stays leading for persons.
+Datensätze mit mehr als 2 000 Zeilen laufen in Teilen => Datasets with more than 2 000 rows run in parts
+Reihenfolge: erst Personen, dann was auf sie verweist => Order: persons first, then what refers to them
+) in f.orga. Es läuft im Hintergrund und in Teilen; die Seite darf während einer Übernahme geschlossen werden. Nach der Umstellung auf f.orga wird das Modul in der Modulverwaltung abgeschaltet. => ) into f.orga. It runs in the background and in parts; the page may be closed during an import. After the switch to f.orga the module is deactivated in the module administration.
+19.10.2026 19:12 von Markus Vogt · => 19.10.2026 19:12 by Markus Vogt ·
+Das Modul übernimmt MP-Feuer-Transferdateien ( => The module imports MP-Feuer transfer files (
+Ein Datensatz ist gesperrt, wenn sein Modul nicht aktiv ist oder Ihnen das Recht seines Importprofils fehlt. => A dataset is locked if its module is not active or you lack the permission of its import profile.
+Einsatzberichte führt: MP-Feuer => Incident reports led by: MP-Feuer
+Freigaben melden ab => Report releases from
+Hier hochladen, Probelauf, offene Bezeichnungen zuordnen, übernehmen. => Upload here, dry run, map open names, import.
+Kostenbescheide und Auszahlungslauf in f.orga. => Cost notices and payout run in f.orga.
+Laufender Lauf => Running run
+Letzte Übernahme => Last import
+Personen, Lehrgänge, G26, Belastungsübungen, Dienste, Einsatzpersonal => Persons, courses, G26, stress exercises, services, incident personnel
+davon 1 mit gelöschtem Ziel => 1 of them with deleted target
+keiner => none
+verfügbar => available
+) übernimmt das => ) are imported by the
+Alle Arten => All types
+Bezeichnung oder Eintrag => Name or entry
+Die Zuordnung wird vergessen. Beim nächsten Import erscheint die Bezeichnung wieder unter „Nicht zugeordnete Bezeichnungen“. Bereits übernommene Daten bleiben unverändert. => The mapping is forgotten. On the next import the name appears again under “Unmatched names”. Data already imported stays unchanged.
+Löschen … => Delete …
+Nur Profile, für die Sie das Recht haben. Unbekannte Bezeichnungen lassen sich nach der Prüfung zuordnen; die Zuordnung wird unter „Gemerkte Zuordnungen“ gespeichert. => Only profiles you have the permission for. Unknown names can be mapped after the check; the mapping is stored under “Remembered mappings”.
+Nur Ziel gelöscht oder inaktiv (2) => Only deleted or inactive target (2)
+Tabelle importieren => Import table
+Ziel gelöscht => Target deleted
+Zuletzt benutzt => Last used
+Zum Modul MP-Feuer => To the module MP-Feuer
+Zuordnung löschen? => Delete mapping?
+Zuordnungen, die im Tabellen-Import gewählt wurden. Der nächste Import erkennt diese Bezeichnungen von selbst. Das Modul MP-Feuer hat eine eigene Liste. => Mappings chosen in the table import. The next import recognises these names by itself. The module MP-Feuer has its own list.
+Zuordnung je Archivnummer gemerkt => Assignment remembered per archive number
+Läufe und Berichte bleiben gespeichert; die gelesenen Zeilen werden nach der Übernahme, spätestens nach 7 Tagen gelöscht. Jede Übernahme steht im Audit-Log. => Runs and reports are kept; the rows read are deleted after the import, at the latest after 7 days. Every import is recorded in the audit log.
+Neustart des Servers nach Teil 2 von 3, Einsatzpersonal => Server restart after part 2 of 3, incident personnel
+Sabine Keller
+nach Teil 1 von 3, Einsatzpersonal => after part 1 of 3, incident personnel
+unterbrochen => interrupted
+. Name auf Englisch und weitere Angaben lassen sich danach im Katalog ergänzen. => . The English name and further details can be added in the catalog afterwards.
+; die Einträge selbst bleiben unverändert. => ; the entries themselves stay unchanged.
+Diese Werte aus MP-Feuer passen zu keinem Eintrag und stehen nicht in den Zuordnungen des Moduls. Wählen Sie einen Eintrag oder legen Sie einen an; leer heißt ignorieren. Die Zuordnung gilt für alle Datensätze dieses Laufs. Mit der Übernahme kommt sie in die => These values from MP-Feuer match no entry and are not in the mappings of the module. Choose an entry or create one; empty means ignore. The mapping applies to all datasets of this run. On import it is added to the
+Fahrzeuge werden in der Organisation angelegt, hier nur gewählt. => Vehicles are created under organisation and only chosen here.
+Legt einen Lehrgang an und ordnet „Drohnenpilot“ ihm zu. => Creates a course and maps “Drohnenpilot” to it.
+Zuordnungen des Moduls => mappings of the module
+2 Zuordnungen zeigen auf ein gelöschtes oder inaktives Ziel. Sie werden beim Import nicht angewandt; die Bezeichnung erscheint wieder als offen. => 2 mappings point to a deleted or inactive target. They are not applied on import; the name appears as open again.
+Angelegt von => Created by
+LF 8/6 · Florian Musterstadt 1/42 (Musterstadt)
+Leistungsabzeichen Stufe I
+Ziel inaktiv => Target inactive
+Zuordnungen, die bei Übernahmen aus MP-Feuer gewählt wurden. Sie gelten nur für dieses Modul; der Tabellen-Import hat eine eigene Liste. Die Einträge in Katalogen, Fahrzeugen, Stichworten und Diensttypen bleiben unverändert. => Mappings chosen during imports from MP-Feuer. They apply only to this module; the table import has its own list. The entries in catalogs, vehicles, keywords and session types stay unchanged.
+„LF 8“ → LF 8/6 wird vergessen. Beim nächsten Lauf erscheint „LF 8“ wieder unter „Nicht zugeordnete Bezeichnungen“. Bereits übernommene Daten bleiben unverändert. => “LF 8” → LF 8/6 is forgotten. On the next run “LF 8” appears again under “Unmatched names”. Data already imported stays unchanged.
 '''
 
 EN = {}
