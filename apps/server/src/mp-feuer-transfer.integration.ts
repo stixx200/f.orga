@@ -626,3 +626,89 @@ describe('MP-Feuer data transfer with courses assigned to the collective entry "
     expect(await otherCourses()).toHaveLength(2);
   });
 });
+
+/** A person of the report E1 (2025-09-01) with the text of the column "Aufgabe". */
+const taskRow = (id: string, personIndex: string, name: string, task: string) => ({
+  EIN_ID: id, EIN_INDEX: 'E1', EIN_PER_INDEX: personIndex, EIN_PER_NR: '', EIN_PER_NAME: name, EIN_PER_ZEIT_V: '2025-09-01 10:00:00.000', EIN_PER_ZEIT_B: '2025-09-01 11:00:00.000',
+  EIN_PER_MERKMAL_BE: 0, EIN_PER_MERKMAL_AS: 0, EIN_PER_MERKMAL_VA: 0, EIN_PER_AUFGABE: task, EIN_FZG_RUFNAME: '', EIN_FZG_BEZEICHNUNG: '',
+});
+const functionMessages = (body: { rows: { messages: { code: string }[] }[] }) => body.rows.flatMap((r) => r.messages).filter((m) => m.code === 'incidents.import.unknownFunction');
+
+describe('MP-Feuer data transfer with function texts that are no function', () => {
+  let transfer: string;
+  const departments = { '04': 'Abteilung Musterstadt' };
+  const run = (profile: string, apply: boolean, mappings: Record<string, Record<string, string>> = {}, status = 200) =>
+    post(`/core/imports/transfers/${transfer}/${apply ? 'apply' : 'preview'}`, { profile, departments, mappings }).expect(status);
+  const archive = transferZip({
+    PER_STAMM: [person('P-WORK', '0001', 'Wolf', 'Arbeit'), person('P-LOSS', '0002', 'Vera', 'Ausfall'), person('P-NONE', '0003', 'Ingo', 'Nix'), person('P-FUNC', '0004', 'Fritz', 'Funk')],
+    EIN_STAMM: [incidentRow('E1', '1250000888', '2025-09-01 10:00:00.000', '2025-09-01 11:00:00.000', { EIN_ZUSATZ_2: '' })],
+    EIN_PERS: [
+      taskRow('EP1', 'P-WORK', 'Arbeit Wolf', 'Arbeitszeit Stadt Erbach'),
+      taskRow('EP2', 'P-LOSS', 'Ausfall Vera', 'Verdienstausfall Firma'),
+      taskRow('EP3', 'P-NONE', 'Nix Ingo', 'Bauhof'),
+      taskRow('EP4', 'P-FUNC', 'Funk Fritz', 'Wassertruppmann'),
+    ],
+  });
+  const targets = { work: 'incidents:during-working-hours', loss: 'incidents:loss-of-earnings', ignore: 'incidents:ignore' };
+  type Personnel = { personId: string; function: string | null; duringWorkingHours: boolean; lossOfEarnings: boolean };
+  /** Function and flags of the personnel by last name. */
+  const personnel = async () => {
+    const [incident] = (await get('/incidents/incidents?from=2025-09-01&to=2025-09-01')).body as { reports: { id: string }[] }[];
+    const report = (await get(`/incidents/reports/${incident.reports[0].id}`).expect(200)).body as { personnel: Personnel[] };
+    const names = new Map<string | undefined, string>();
+    for (const name of ['Arbeit', 'Ausfall', 'Nix', 'Funk']) names.set(await personId(name), name);
+    return Object.fromEntries(report.personnel.map((p) => [names.get(p.personId), { function: p.function, duringWorkingHours: p.duringWorkingHours, lossOfEarnings: p.lossOfEarnings }]));
+  };
+
+  it('reads the archive and the persons', async () => {
+    const response = await test.http.post('/api/core/imports/transfers').set('Cookie', admin).set(UI).attach('files', archive, 'MPTRA_04_2026-10-28-074935_Abt._Musterstadt.zip').expect(201);
+    transfer = response.body.id;
+    expect((await run('masterdata.persons', true)).body.counts).toMatchObject({ create: 4, error: 0 });
+  });
+
+  it('offers the targets after the functions of the catalog', async () => {
+    const entries = (await get('/core/imports/lookups/function').expect(200)).body as { key: string }[];
+    expect(entries.map((e) => e.key)).toContain('hose-team');
+    expect(entries.slice(-3)).toEqual([
+      { key: targets.work, name: { de: 'Keine Funktion – Einsatz während der Arbeitszeit beim Dienstherrn', en: expect.any(String) } },
+      { key: targets.loss, name: { de: 'Keine Funktion – Verdienstausfall', en: expect.any(String) } },
+      { key: targets.ignore, name: { de: 'Keine Funktion (ignorieren)', en: expect.any(String) } },
+    ]);
+    expect((await run('incidents.mp-feuer', false, { function: { Bauhof: 'incidents:nothing' } }, 400)).body).toMatchObject({ code: 'imports.unknownMappingTarget', key: 'incidents:nothing' });
+  });
+
+  it('sets the flags of the chosen targets without a function and remembers them', async () => {
+    const preview = await run('incidents.mp-feuer', false);
+    expect(preview.body.unmatched).toHaveLength(4);
+    expect(preview.body.unmatched).toEqual(
+      expect.arrayContaining(['Arbeitszeit Stadt Erbach', 'Verdienstausfall Firma', 'Bauhof', 'Wassertruppmann'].map((value) => ({ kind: 'function', value, count: 1 }))),
+    );
+
+    const mappings = { function: { 'Arbeitszeit Stadt Erbach': targets.work, 'Verdienstausfall Firma': targets.loss, Bauhof: targets.ignore, Wassertruppmann: 'water-team' } };
+    const applied = await run('incidents.mp-feuer', true, mappings);
+    expect(applied.body).toMatchObject({ counts: { error: 0 }, unmatched: [] });
+    expect(functionMessages(applied.body)).toEqual([]);
+    expect(await personnel()).toEqual({
+      Arbeit: { function: null, duringWorkingHours: true, lossOfEarnings: false },
+      Ausfall: { function: null, duringWorkingHours: false, lossOfEarnings: true },
+      Nix: { function: null, duringWorkingHours: false, lossOfEarnings: false },
+      Funk: { function: 'water-team', duringWorkingHours: false, lossOfEarnings: false },
+    });
+    // The targets are remembered by the incidents module, functions still as aliases of the catalog entry.
+    expect((await get('/core/settings/incidents.importFunctionRules').expect(200)).body.rules).toEqual(
+      expect.arrayContaining([
+        { value: 'Arbeitszeit Stadt Erbach', target: 'during-working-hours' },
+        { value: 'Verdienstausfall Firma', target: 'loss-of-earnings' },
+        { value: 'Bauhof', target: 'ignore' },
+      ]),
+    );
+    expect((await catalogEntry('function', 'water-team')).aliases).toEqual(['Wassertruppmann']);
+  });
+
+  it('applies the remembered targets in the next import without asking', async () => {
+    const again = await run('incidents.mp-feuer', true);
+    expect(again.body).toMatchObject({ counts: { error: 0 }, unmatched: [] });
+    expect(functionMessages(again.body)).toEqual([]);
+    expect(await personnel()).toMatchObject({ Arbeit: { function: null, duringWorkingHours: true }, Ausfall: { lossOfEarnings: true }, Nix: { function: null }, Funk: { function: 'water-team' } });
+  });
+});

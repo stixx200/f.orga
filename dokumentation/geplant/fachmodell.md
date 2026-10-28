@@ -227,6 +227,8 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Nicht zugeordnete Bezeichnung (Import) | `ImportUnmatched`, Zuordnung `mappings` |
 | Nachschlageliste (Import) | `ImportLookup` |
 | Alias (weitere Bezeichnung für Importe, gemerkte Zuordnung) | `aliases`, `ImportLookup.remember` |
+| Zusatzziel einer Nachschlageliste (z. B. „Keine Funktion – Verdienstausfall“) | `ImportLookupExtras`, `registerLookupExtras` |
+| Gemerkte Regel für Funktionstexte ohne Funktion (MP-Feuer-Import) | `ImportFunctionRules`, `ImportFunctionTarget`, Einstellungsabschnitt `incidents.importFunctionRules` |
 
 ### Kleiderkammer
 
