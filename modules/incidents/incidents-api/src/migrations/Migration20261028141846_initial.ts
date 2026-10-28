@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261028140318_initial extends Migration {
+export class Migration20261028141846_initial extends Migration {
 
-  override name = 'Migration20261028140318_initial';
+  override name = 'Migration20261028141846_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"incidents\";");
@@ -19,7 +19,7 @@ export class Migration20261028140318_initial extends Migration {
     this.addSql("alter table \"incidents\".\"report\" add constraint \"report_unit_number_unique\" unique (\"unit\", \"number\");");
     this.addSql("create table \"incidents\".\"other_agency\" (\"id\" uuid not null, \"report_id\" uuid not null, \"organization\" varchar(255) not null, \"forces\" int null, \"vehicles\" int null, \"notes\" text not null default '', primary key (\"id\"));");
     this.addSql("create table \"incidents\".\"involved_party\" (\"id\" uuid not null, \"report_id\" uuid not null, \"role\" varchar(255) not null, \"name\" varchar(255) not null, \"street\" varchar(255) not null default '', \"postal_code\" varchar(255) not null default '', \"city\" varchar(255) not null default '', \"phone\" varchar(255) not null default '', \"license_plate\" varchar(255) not null default '', \"notes\" text not null default '', primary key (\"id\"));");
-    this.addSql("create table \"incidents\".\"report_personnel\" (\"id\" uuid not null, \"report_id\" uuid not null, \"person_id\" varchar(255) null, \"guest_name\" varchar(255) not null default '', \"vehicle_id\" varchar(255) null, \"standby_station_id\" varchar(255) null, \"function\" varchar(255) null, \"breathing_apparatus\" boolean not null default false, \"breathing_minutes\" int null, \"chemical_suit\" boolean not null default false, \"breathing_device\" varchar(255) null, \"from\" timestamptz null, \"to\" timestamptz null, \"loss_of_earnings\" boolean not null default false, \"during_working_hours\" boolean not null default false, \"allowances\" jsonb not null, \"compensation_override\" jsonb null, \"injured\" boolean not null default false, \"killed\" boolean not null default false, primary key (\"id\"));");
+    this.addSql("create table \"incidents\".\"report_personnel\" (\"id\" uuid not null, \"report_id\" uuid not null, \"person_id\" varchar(255) null, \"guest_name\" varchar(255) not null default '', \"vehicle_id\" varchar(255) null, \"standby_station_id\" varchar(255) null, \"function\" varchar(255) null, \"breathing_apparatus\" boolean not null default false, \"breathing_minutes\" int null, \"chemical_suit\" boolean not null default false, \"breathing_device\" varchar(255) null, \"from\" timestamptz null, \"to\" timestamptz null, \"loss_of_earnings\" boolean not null default false, \"during_working_hours\" boolean not null default false, \"allowances\" jsonb not null, \"compensation_override\" jsonb null, \"injured\" boolean not null default false, \"killed\" boolean not null default false, \"booked_via\" varchar(255) null, \"booked_at\" timestamptz null, \"terminal_id\" varchar(255) null, \"terminal_editable\" boolean not null default false, primary key (\"id\"));");
     this.addSql("create index \"report_personnel_person_id_index\" on \"incidents\".\"report_personnel\" (\"person_id\");");
     this.addSql("create table \"incidents\".\"report_revision\" (\"id\" uuid not null, \"report_id\" uuid not null, \"content\" jsonb not null, \"user_id\" varchar(255) null, \"user_name\" varchar(255) not null default '', \"saved_at\" timestamptz not null, primary key (\"id\"));");
     this.addSql("create index \"report_revision_report_id_index\" on \"incidents\".\"report_revision\" (\"report_id\");");

@@ -25,6 +25,8 @@ const kiosk = {
   del: (path: string, cookie: string) => test.http.delete(`/api/info-terminal/kiosk${path}`).set('Cookie', cookie).set(UI),
 };
 const at = (offsetMinutes: number) => new Date(Date.now() + offsetMinutes * 60_000).toISOString();
+/** SQL against the test database, e.g. to mark a report as imported from MP-Feuer. */
+const sql = (statement: string, params: unknown[]) => test.app.get(EntityManager).getConnection().execute(statement, params);
 const keyOf = (url: string) => url.slice(url.indexOf('#k=') + 3);
 
 /** Exchanges the key of a link for the device cookie. */
@@ -328,6 +330,31 @@ describe('booking into the department report', () => {
     expect(new Date(stored.from).getTime()).toBe(new Date(vehicleAlarm).getTime());
     const own = new Date(new Date(vehicleAlarm).getTime() + 10 * 60_000).toISOString();
     expect((await kiosk.put(`/reports/${later.reportId}/entries/${ids.tim}`, booking(ids.tim, { from: own }), cookies.musterstadt).expect(200)).body.from).toBe(own);
+  });
+
+  it('refuses reports kept in MP-Feuer while it leads; otherwise a booking ends the management by other systems', async () => {
+    const imported = await incident('2026-TERM-H', -20);
+    await sql(`update incidents.report set managed_by = 'mp-feuer' where id = ?`, [imported.reportId]);
+    // f.orga leads: the booking is the work of a person, the import leaves the report alone from now on.
+    const before = await report(imported.reportId);
+    await kiosk.put(`/reports/${imported.reportId}/entries/${ids.max}`, booking(ids.max), cookies.musterstadt).expect(200);
+    const after = (await report(imported.reportId)) as ReportDto & { managedBy: string | null };
+    expect(after).toMatchObject({ managedBy: null, version: before.version });
+
+    const led = await incident('2026-TERM-I', -20);
+    await sql(`update incidents.report set managed_by = 'mp-feuer' where id = ?`, [led.reportId]);
+    await put('/core/settings/incidents.general', { externalLeading: 'mp-feuer', externalEventsFrom: '2026-01-01' }).expect(200);
+    try {
+      const overview = (await kiosk.get(`/overview?departmentId=${ids.musterstadt}`, cookies.musterstadt).expect(200)).body as { incidents: { reportId: string; bookable: boolean }[] };
+      expect(overview.incidents.find((i) => i.reportId === led.reportId)?.bookable).toBe(false);
+      expect((await kiosk.get(`/reports/${led.reportId}?departmentId=${ids.musterstadt}`, cookies.musterstadt).expect(200)).body.bookable).toBe(false);
+      expect((await kiosk.put(`/reports/${led.reportId}/entries/${ids.max}`, booking(ids.max), cookies.musterstadt).expect(409)).body.code).toBe('incidents.ledByMpFeuer');
+      // "Neuer Einsatz": joining the incident opens the report of the department, which MP-Feuer keeps.
+      const join = await kiosk.post('/incidents', form({ joinIncidentId: led.incidentId }), cookies.musterstadt).expect(409);
+      expect(join.body.code).toBe('incidents.ledByMpFeuer');
+    } finally {
+      await put('/core/settings/incidents.general', { externalLeading: null, externalEventsFrom: null }).expect(200);
+    }
   });
 });
 

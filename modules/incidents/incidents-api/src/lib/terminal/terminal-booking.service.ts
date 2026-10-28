@@ -43,7 +43,8 @@ function toEntry(p: ReportPersonnelEntity): TerminalEntry {
 /**
  * Bookings of an info terminal into the personnel of department reports. They change only the own personnel entry
  * (not the version of the report, so the author's editor does not get a conflict), record a version of the report
- * with the technical user of the terminal and end the management by other systems (`externallyManaged`).
+ * with the technical user of the terminal and end the management by other systems (`managedBy`). While MP-Feuer
+ * leads, its reports (`managedBy: 'mp-feuer'`) take no bookings (`incidents.ledByMpFeuer`).
  */
 @Injectable()
 export class TerminalBookingService implements IncidentsTerminalBooking {
@@ -54,7 +55,7 @@ export class TerminalBookingService implements IncidentsTerminalBooking {
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
   ) {}
 
-  private summary(report: ReportEntity, settings: BookingWindowSettings): TerminalReport {
+  private summary(report: ReportEntity, settings: BookingWindowSettings, ledExternally = false): TerminalReport {
     const window = bookingWindow(
       { alarmedAt: report.alarmedAt.toISOString(), returnedAt: report.returnedAt.toISOString(), endConfirmed: report.endConfirmed },
       settings,
@@ -70,7 +71,7 @@ export class TerminalBookingService implements IncidentsTerminalBooking {
       endedAt: report.endConfirmed ? report.returnedAt.toISOString() : null,
       returnedAt: report.returnedAt.toISOString(),
       ...window,
-      bookable: report.status === 'draft' && !report.locked,
+      bookable: report.status === 'draft' && !report.locked && !ledExternally,
       booked: report.personnel.getItems().length,
     };
   }
@@ -88,7 +89,8 @@ export class TerminalBookingService implements IncidentsTerminalBooking {
       },
       { populate: ['incident', 'personnel'], orderBy: { alarmedAt: 'desc' } },
     );
-    return reports.map((r) => this.summary(r, settings)).filter((r) => windowOpen(r, now));
+    const { leading } = await this.reports.externalOperation();
+    return reports.map((r) => this.summary(r, settings, leading && r.managedBy === 'mp-feuer')).filter((r) => windowOpen(r, now));
   }
 
   /** The department report (not of a unit) while its window is open; otherwise `404`. */
@@ -102,8 +104,9 @@ export class TerminalBookingService implements IncidentsTerminalBooking {
     return report;
   }
 
-  /** The same checks as saving in the editor: only unlocked drafts. */
-  private assertDraft(report: ReportEntity): void {
+  /** The same checks as saving in the editor: only unlocked drafts, not led by MP-Feuer. */
+  private async assertDraft(report: ReportEntity): Promise<void> {
+    await this.reports.assertNotLedExternally(report);
     if (report.status.startsWith('released')) throw new ForbiddenException({ code: 'incidents.reportReleased' });
     if (report.locked) throw new ForbiddenException({ code: 'incidents.reportLocked', lockedBy: report.lockedBy ?? '' });
     if (report.status !== 'draft') throw new ForbiddenException({ code: 'incidents.notDraft', status: report.status });
@@ -120,7 +123,7 @@ export class TerminalBookingService implements IncidentsTerminalBooking {
       }
     }
     return {
-      ...this.summary(report, settings),
+      ...this.summary(report, settings, await this.reports.ledExternally(report)),
       departmentId,
       entries: report.personnel.getItems().filter((p) => p.personId).map(toEntry),
       elsewhere,
@@ -152,7 +155,7 @@ export class TerminalBookingService implements IncidentsTerminalBooking {
     const entry = await this.em.fork().transactional(async (em) => {
       // One booking of a report at a time: the lock serializes terminals, and `bookedAt` grows with every booking.
       const report = await this.open(em, reportId, departmentId, settings, now, true);
-      this.assertDraft(report);
+      await this.assertDraft(report);
       const other = await em.findOne(
         ReportPersonnelEntity,
         { personId: input.personId, report: { incident: report.incident, id: { $ne: report.id } } },
@@ -191,7 +194,9 @@ export class TerminalBookingService implements IncidentsTerminalBooking {
       if (!row.breathingApparatus) Object.assign(row, { breathingMinutes: null, chemicalSuit: false, breathingDevice: null });
       addCrewVehicles(em, report);
       this.revision(em, report, actor, before);
-      await em.nativeUpdate(ReportEntity, { id: report.id, externallyManaged: true }, { externallyManaged: false });
+      // A booking is the work of a person: the external API and the MP-Feuer import leave the report alone from now on.
+      // In SQL, so the version of the report stays (the author's editor must not get a conflict).
+      if (report.managedBy) await em.getConnection().execute('update incidents.report set managed_by = null where id = ?', [report.id], 'run', em.getTransactionContext());
       return row;
     });
     await this.prune(entry.report.id);
@@ -201,7 +206,7 @@ export class TerminalBookingService implements IncidentsTerminalBooking {
   async cancel(reportId: string, departmentId: string, personId: string, actor: TerminalActor, settings: BookingWindowSettings, now = new Date()): Promise<void> {
     const reportIdDone = await this.em.fork().transactional(async (em) => {
       const report = await this.open(em, reportId, departmentId, settings, now, true);
-      this.assertDraft(report);
+      await this.assertDraft(report);
       const existing = report.personnel.getItems().find((p) => p.personId === personId);
       if (!existing) throw new NotFoundException({ code: 'info-terminal.entryNotFound' });
       if (!(existing.bookedVia === BOOKED_VIA_TERMINAL && existing.terminalEditable)) throw new ConflictException({ code: 'info-terminal.entryLocked' });
@@ -262,7 +267,11 @@ export class TerminalBookingService implements IncidentsTerminalBooking {
       const incident = /^[0-9a-f-]{36}$/i.test(joinIncidentId) ? await em.findOne(IncidentEntity, joinIncidentId, { populate: ['reports'] }) : null;
       if (!incident) throw new NotFoundException({ code: 'info-terminal.incidentNotFound' });
       const existing = incident.reports.getItems().find((r) => r.departmentId === departmentId);
-      if (existing) return { incidentId: incident.id, reportId: existing.id, created: 'existing' };
+      if (existing) {
+        // The report of the department kept in MP-Feuer takes no bookings at the terminal.
+        await this.reports.assertNotLedExternally(existing);
+        return { incidentId: incident.id, reportId: existing.id, created: 'existing' };
+      }
       // The new report has no author: the deadline "assign an author" goes to the writers of the department.
       const report = await this.reports.createReport(em, incident, departmentId, null);
       await em.flush();
