@@ -12,10 +12,10 @@ import {
   ProcessingRestrictionReason,
   type ProcessingRestrictionInput,
 } from '@forga/core-contracts';
-import { send, useTranslation } from '@forga/web-sdk';
+import { send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { notifySuccess, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { personLabel, usePersons } from '../admin/data';
-import { berlinToday, privacyKeys } from './api';
+import { berlinToday, privacyKeys, useActivityOptions } from './api';
 
 /** After a change of a request or a restriction: requests, person file and lists of the privacy page are reloaded. */
 export function useRefreshPrivacy() {
@@ -38,9 +38,12 @@ export function RequestDialog({ personId, onClose, onCreated }: { personId?: str
     identityNote: '',
     content: '',
     language: 'de',
+    activityKey: null,
     activity: '',
     restrict: false,
   });
+  const { data: activities = [] } = useActivityOptions();
+  const localized = useLocalized();
   const set = <K extends keyof typeof value>(key: K, v: (typeof value)[K]) => setValue((current) => ({ ...current, [key]: v }));
   const create = useAction((input: typeof value) => send<PrivacyRequest>('POST', 'core/privacy/requests', input), {
     success: t('privacy.create.created'),
@@ -104,7 +107,17 @@ export function RequestDialog({ personId, onClose, onCreated }: { personId?: str
         />
       </SimpleGrid>
       {value.kind === 'objection' && (
-        <TextInput label={t('privacy.create.activity')} description={t('privacy.create.activityHint')} value={value.activity} onChange={(e) => set('activity', e.currentTarget.value)} />
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <Select
+            label={t('privacy.create.activity')}
+            description={t('privacy.create.activityHint')}
+            clearable
+            data={activities.map((a) => ({ value: a.key, label: localized(a.name) }))}
+            value={value.activityKey}
+            onChange={(key) => set('activityKey', key)}
+          />
+          <TextInput label={t('privacy.create.activityNote')} description={t('privacy.create.activityNoteHint')} value={value.activity} onChange={(e) => set('activity', e.currentTarget.value)} />
+        </SimpleGrid>
       )}
       <Textarea label={t('privacy.create.content')} autosize minRows={3} value={value.content} onChange={(e) => set('content', e.currentTarget.value)} />
       <Checkbox label={t('privacy.create.identityChecked')} checked={value.identityChecked} onChange={(e) => set('identityChecked', e.currentTarget.checked)} />

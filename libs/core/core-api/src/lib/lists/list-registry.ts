@@ -10,6 +10,11 @@ export interface ListContent {
   rows: Record<string, ListCell>[];
   /** Shown below the title, e.g. the chosen period or department. */
   subtitle?: string;
+  /**
+   * Persons the list names (lists about persons): recorded with the export in the audit log, so the persons affected by
+   * a lost printout can be determined later (data breach, Art. 33/34).
+   */
+  personIds?: string[];
 }
 
 /**

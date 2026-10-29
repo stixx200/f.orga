@@ -142,6 +142,7 @@ export class MasterdataLists {
         const { departments, entry } = await this.labels(language);
         const persons = await this.filtered(user, READ, params);
         return {
+          personIds: persons.map((p) => p.id),
           rows: persons.map((p) => ({
             name: name(p),
             department: departments.get(primaryDepartment(p) ?? '') ?? '',
@@ -176,6 +177,7 @@ export class MasterdataLists {
         const dateText = params.date ? params.date.split('-').toReversed().join('.') : '';
         return {
           subtitle: [params.title, dateText].filter(Boolean).join(' – ') || undefined,
+          personIds: persons.map((p) => p.id),
           rows: persons.map((p, i) => ({
             number: i + 1,
             name: name(p),
@@ -198,6 +200,7 @@ export class MasterdataLists {
         const { departments } = await this.labels(language);
         const persons = await this.filtered(user, READ, params);
         return {
+          personIds: persons.map((p) => p.id),
           rows: persons.map((p) => ({
             name: name(p),
             department: departments.get(primaryDepartment(p) ?? '') ?? '',
@@ -235,6 +238,7 @@ export class MasterdataLists {
         const { departments, entry } = await this.labels(language);
         const persons = await this.filtered(user, SENSITIVE, params);
         return {
+          personIds: persons.map((p) => p.id),
           rows: persons.map((p) => ({
             personnelNumber: p.personnelNumber ?? '',
             name: name(p),
@@ -271,6 +275,7 @@ export class MasterdataLists {
         const { departments } = await this.labels(language);
         const persons = await this.filtered(user, SENSITIVE, { departmentId: params.departmentId });
         const rows: Record<string, ListCell>[] = [];
+        const ids = new Set<string>();
         const { youthEndAge, minimumAgeIncidents } = await this.rules();
         const milestones = new Set([youthEndAge, minimumAgeIncidents]);
         for (const p of persons) {
@@ -279,6 +284,7 @@ export class MasterdataLists {
             const birthday = `${year}${p.birthDate.slice(4)}`;
             if (birthday < from || birthday > to) continue;
             const age = ageOn(p.birthDate, birthday);
+            ids.add(p.id);
             rows.push({
               birthday,
               name: name(p),
@@ -288,7 +294,7 @@ export class MasterdataLists {
             });
           }
         }
-        return { subtitle: `${from} – ${to}`, rows: rows.toSorted((a, b) => String(a['birthday']).localeCompare(String(b['birthday']))) };
+        return { subtitle: `${from} – ${to}`, personIds: [...ids], rows: rows.toSorted((a, b) => String(a['birthday']).localeCompare(String(b['birthday']))) };
       },
     };
   }
@@ -305,11 +311,11 @@ export class MasterdataLists {
         const year = params.year ?? Number(today().slice(0, 4));
         const { departments } = await this.labels(language);
         const { jubileeYears } = await this.rules();
-        const persons = await this.filtered(user, READ, { departmentId: params.departmentId });
+        const persons = (await this.filtered(user, READ, { departmentId: params.departmentId })).filter((p) => p.joinedOn && jubileeYears.includes(year - Number(p.joinedOn.slice(0, 4))));
         return {
           subtitle: String(year),
+          personIds: persons.map((p) => p.id),
           rows: persons
-            .filter((p) => p.joinedOn && jubileeYears.includes(year - Number(p.joinedOn.slice(0, 4))))
             .map((p) => ({
               name: name(p),
               joinedOn: p.joinedOn ?? null,
@@ -339,6 +345,7 @@ export class MasterdataLists {
         const persons = await this.filtered(user, READ, params);
         return {
           columns: [NAME, ...qualifications.map((q) => ({ key: q.key, label: q.name, width: 0.8, align: 'center' as const }))],
+          personIds: persons.map((p) => p.id),
           rows: persons.map((p) => {
             const held = new Set(validQualifications(p));
             return { name: name(p), ...Object.fromEntries(qualifications.map((q) => [q.key, held.has(q.key) ? 'x' : ''])) };
@@ -364,6 +371,7 @@ export class MasterdataLists {
         const { departments } = await this.labels(language);
         const persons = (await this.filtered(user, READ, params)).filter((p) => validQualifications(p).includes('breathing-apparatus'));
         return {
+          personIds: persons.map((p) => p.id),
           rows: persons.map((p) => {
             const entry = p.qualifications
               .getItems()
@@ -394,6 +402,7 @@ export class MasterdataLists {
         const persons = await this.filtered(user, READ, { ...params, status: 'probation' });
         const required = (await this.rules()).probationQualifications;
         return {
+          personIds: persons.map((p) => p.id),
           rows: persons
             .map((p) => ({
               name: name(p),
@@ -430,11 +439,13 @@ export class MasterdataLists {
           { age: rules.ageLimitOperational, label: { de: 'Altersgrenze Einsatzabteilung', en: 'Age limit operational department' } },
         ];
         const rows: Record<string, ListCell>[] = [];
+        const ids = new Set<string>();
         for (const p of persons) {
           if (!p.birthDate) continue;
           const age = year - Number(p.birthDate.slice(0, 4));
           const meanings = limits.filter((l) => l.age === age).map((l) => l.label[language]);
           if (!meanings.length) continue;
+          ids.add(p.id);
           rows.push({
             name: name(p),
             birthDate: p.birthDate,
@@ -443,7 +454,7 @@ export class MasterdataLists {
             department: departments.get(primaryDepartment(p) ?? '') ?? '',
           });
         }
-        return { subtitle: String(year), rows: rows.toSorted((a, b) => String(a['birthDate']).localeCompare(String(b['birthDate']))) };
+        return { subtitle: String(year), personIds: [...ids], rows: rows.toSorted((a, b) => String(a['birthDate']).localeCompare(String(b['birthDate']))) };
       },
     };
   }

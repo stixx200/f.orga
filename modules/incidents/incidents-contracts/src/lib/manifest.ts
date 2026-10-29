@@ -95,6 +95,15 @@ export const INCIDENTS_MANIFEST = {
     activities: [
       {
         key: 'incidents.reports',
+        subjects: [{ de: 'Einsatzkräfte', en: 'Fire fighters on duty' }, { de: 'Beteiligte (Geschädigte, Verursacher, Zeugen, Anrufer)', en: 'Persons involved (injured parties, causers, witnesses, callers)' }],
+        categories: [
+          { de: 'Einsatzzeiten, Funktion, Fahrzeug, Atemschutz', en: 'Times of the operation, function, vehicle, breathing apparatus' },
+          { de: 'Name, Anschrift, Telefon und Kennzeichen von Beteiligten', en: 'Name, address, phone and licence plate of persons involved' },
+          { de: 'Lage, Maßnahmen, Fotos', en: 'Situation, measures, photos' },
+        ],
+        health: true,
+        healthNote: { de: 'Verletzungen von Einsatzkräften und Beteiligten', en: 'Injuries of fire fighters and persons involved' },
+        legalBasisHint: { de: 'Feuerwehrgesetz Baden-Württemberg (FwG), Dokumentation der Einsätze; mit dem DSB festlegen', en: 'Fire Brigade Act of Baden-Württemberg (FwG), documentation of operations; decide with the DPO' },
         name: { de: 'Einsatzdokumentation', en: 'Incident documentation' },
         purpose: { de: 'Dokumentation der Einsätze, Grundlage für Entschädigung, Kostenersatz und Jahresstatistik', en: 'Documentation of incidents, basis for compensation, cost recovery and annual statistics' },
         recipients: [{ de: 'Kreisbrandmeister und Statistikportal (Jahresstatistik, nur Zahlen ohne Namen)', en: 'District fire officer and statistics portal (annual statistics, figures only, no names)' }],

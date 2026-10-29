@@ -25,6 +25,9 @@ export const MP_FEUER_MANIFEST = {
     activities: [
       {
         key: 'mp-feuer.transfer',
+        subjects: [{ de: 'Angehörige der Feuerwehr (Daten aus MP-Feuer)', en: 'Members of the fire brigade (data from MP-Feuer)' }],
+        categories: [{ de: 'Zeilen der Transferdateien bis zur Übernahme, Laufberichte', en: 'Rows of the transfer files until the transfer, run reports' }],
+        legalBasisHint: { de: 'wie die übernommenen Daten (Personalverwaltung, Einsätze, Dienste)', en: 'as the transferred data (personnel administration, incidents, sessions)' },
         name: { de: 'Datenübernahme aus MP-Feuer', en: 'Data transfer from MP-Feuer' },
         purpose: { de: 'Übernahme der Daten aus der bisherigen Anwendung MP-Feuer und Nachweis der Übernahme', en: 'Transfer of the data from the previous application MP-Feuer and evidence of the transfer' },
       },

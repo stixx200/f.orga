@@ -24,4 +24,21 @@ export const COST_RECOVERY_MANIFEST = {
     { key: 'administration', permissions: ['cost-recovery.*'] },
   ],
   frontend: { remote: 'cost_recovery_web', exposed: './Module' },
+  // Debtors are no persons of the master data (no access report or anonymisation per member); the activity names them
+  // for the register of processing activities.
+  privacy: {
+    personData: false,
+    activities: [
+      {
+        key: 'cost-recovery.notices',
+        name: { de: 'Kostenersatz', en: 'Cost recovery' },
+        purpose: { de: 'Erhebung des Kostenersatzes für Einsätze nach der Kostenersatzsatzung', en: 'Recovering the costs of operations under the cost recovery statute' },
+        recipients: [{ de: 'Gemeindeverwaltung/Kämmerei (Sollstellung, Zahlungseingang)', en: 'Municipal administration/treasury (debit entry, payments)' }],
+        retention: ['cost-recovery.notices'],
+        subjects: [{ de: 'Kostenschuldner (Verursacher, Eigentümer, Halter)', en: 'Debtors (causers, owners, keepers)' }],
+        categories: [{ de: 'Name, Anschrift, Einsatz, Personal- und Fahrzeugansätze, Zahlungen und Mahnungen', en: 'Name, address, incident, personnel and vehicle rates, payments and reminders' }],
+        legalBasisHint: { de: 'Kostenersatz nach dem FwG und der Kostenersatzsatzung; mit dem DSB festlegen', en: 'Cost recovery under the FwG and the cost recovery statute; decide with the DPO' },
+      },
+    ],
+  },
 } satisfies ModuleManifest;

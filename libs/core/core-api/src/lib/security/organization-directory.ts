@@ -22,6 +22,8 @@ export interface PersonSummary {
   street?: string;
   postalCode?: string;
   city?: string;
+  /** Mobile or private phone, e.g. for the contact list of a data breach notification. */
+  phone?: string;
 }
 
 /** Postal address of a person, e.g. for the cover letter of the access report. */
@@ -57,6 +59,10 @@ export interface OrganizationProvider {
    * Persons whose processing is restricted (Art. 18): they disappear from deadlines, search and e-mails of the core.
    */
   restrictedPersonIds?(): Promise<string[]>;
+  /** Persons the user may read (master data), e.g. to reconstruct who is affected by a data breach of the account. */
+  readablePersonIds?(user: AuthenticatedUser): Promise<string[]>;
+  /** All persons, also those who left (e.g. a full export). */
+  allPersonIds?(): Promise<string[]>;
   /** Restricts the processing of a person (a request with `restrict`); `false` if the person is unknown. */
   restrictProcessing?(personId: string, restriction: { reason: ProcessingRestrictionReason; until: string | null; requestId: string | null }): Promise<boolean>;
 }
@@ -137,6 +143,16 @@ export class OrganizationDirectory {
   /** Restricts the processing of a person; `false` without a provider or for an unknown person. */
   async restrictProcessing(personId: string, restriction: { reason: ProcessingRestrictionReason; until: string | null; requestId: string | null }): Promise<boolean> {
     return this.provider?.restrictProcessing ? this.provider.restrictProcessing(personId, restriction) : false;
+  }
+
+  /** Persons the user may read; empty without a provider. */
+  async readablePersonIds(user: AuthenticatedUser): Promise<string[]> {
+    return this.provider?.readablePersonIds ? this.provider.readablePersonIds(user) : [];
+  }
+
+  /** All persons; empty without a provider. */
+  async allPersonIds(): Promise<string[]> {
+    return this.provider?.allPersonIds ? this.provider.allPersonIds() : [];
   }
 
   async searchPersons(user: AuthenticatedUser, query: string, limit = 20): Promise<{ id: string; label: string }[]> {

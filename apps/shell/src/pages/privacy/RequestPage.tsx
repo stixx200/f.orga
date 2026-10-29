@@ -3,9 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { type Language, OPEN_REQUEST_STATUSES, PRIVACY_TEXT_KEYS, type PrivacyRequest, type PrivacyTextKey, type ProcessingRestriction, REPLY_TEXT_OF_KIND } from '@forga/core-contracts';
-import { api, apiUrl, formatDate, formatDateTime, send, useTranslation } from '@forga/web-sdk';
+import { api, apiUrl, formatDate, formatDateTime, send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
-import { berlinToday, useAssignees, useRecipients, useRequest } from './api';
+import { berlinToday, useActivityOptions, useAssignees, useRecipientOptions, useRequest } from './api';
 import { LiftDialog, RestrictDialog, useRefreshPrivacy } from './dialogs';
 import { DeadlineBadge, Field, STATUS_TONES } from './PrivacyPage';
 import { RequestAccessReports } from '../../privacy/AccessReports';
@@ -24,6 +24,7 @@ export function RequestPage() {
 
 function RequestView({ request }: { request: PrivacyRequest }) {
   const { t, i18n } = useTranslation('shell');
+  const localized = useLocalized();
   const open = OPEN_REQUEST_STATUSES.includes(request.status);
   const title = `${t(`privacy.kinds.${request.kind}`)} · ${request.personName ?? t('privacy.requests.unknownPerson')}`;
   return (
@@ -52,7 +53,7 @@ function RequestView({ request }: { request: PrivacyRequest }) {
                 : t('privacy.detail.identityNotChecked')}
           </Field>
           {request.content && <Field label={t('privacy.detail.content')}>{request.content}</Field>}
-          {request.kind === 'objection' && <Field label={t('privacy.detail.activity')}>{request.activity || '–'}</Field>}
+          {request.kind === 'objection' && <Field label={t('privacy.detail.activity')}>{[request.activityName && localized(request.activityName), request.activity].filter(Boolean).join(': ') || '–'}</Field>}
           <Field label={t('privacy.detail.language')}>{t(`privacy.languages.${request.language}`)}</Field>
           <Field label={t('privacy.create.deadline')}>
             {formatDate(request.dueOn, i18n.language)}
@@ -110,8 +111,11 @@ function WorkPanel({ request }: { request: PrivacyRequest }) {
     content: request.content,
     notes: request.notes,
     language: request.language,
+    activityKey: request.activityKey,
     activity: request.activity,
   });
+  const { data: activities = [] } = useActivityOptions();
+  const localized = useLocalized();
   const [dialog, setDialog] = useState<'extend' | 'close' | null>(null);
   const save = useAction(() => send('PUT', `core/privacy/requests/${request.id}`, { ...value, version: request.version, status: request.status === 'extended' ? undefined : value.status }), {
     success: t('privacy.detail.saved'),
@@ -147,7 +151,17 @@ function WorkPanel({ request }: { request: PrivacyRequest }) {
             value={value.language}
             onChange={(l) => l && setValue({ ...value, language: l as Language })}
           />
-          {request.kind === 'objection' && <TextInput label={t('privacy.create.activity')} disabled={!open} value={value.activity} onChange={(e) => setValue({ ...value, activity: e.currentTarget.value })} />}
+          {request.kind === 'objection' && (
+            <Select
+              label={t('privacy.create.activity')}
+              disabled={!open}
+              clearable
+              data={activities.map((a) => ({ value: a.key, label: localized(a.name) }))}
+              value={value.activityKey}
+              onChange={(key) => setValue({ ...value, activityKey: key })}
+            />
+          )}
+          {request.kind === 'objection' && <TextInput label={t('privacy.create.activityNote')} disabled={!open} value={value.activity} onChange={(e) => setValue({ ...value, activity: e.currentTarget.value })} />}
         </SimpleGrid>
         {request.channel !== 'my-area' && (
           <Group align="flex-end">
@@ -248,14 +262,15 @@ function CloseDialog({ request, onClose }: { request: PrivacyRequest; onClose: (
   );
 }
 
-/** Checklist of the configured recipients to inform about the change (Art. 19). */
+/** Checklist of the recipients of the register to inform about the change (Art. 19). */
 function RecipientsPanel({ request }: { request: PrivacyRequest }) {
   const { t, i18n } = useTranslation('shell');
+  const localized = useLocalized();
   const refresh = useRefreshPrivacy();
-  const { data: configured } = useRecipients();
+  const { data: options = [] } = useRecipientOptions();
   const save = useAction((recipients: PrivacyRequest['recipients']) => send('PUT', `core/privacy/requests/${request.id}/recipients`, { version: request.version, recipients }), { onSuccess: () => void refresh() });
   const notified = new Map(request.recipients.map((r) => [r.id, r]));
-  const recipients = configured?.recipients ?? [];
+  const recipients = options.map((o) => ({ id: o.id, name: localized(o.name), activities: o.activities.map(localized).join(', ') }));
   const toggle = (recipient: { id: string; name: string }, on: boolean) => {
     const rest = request.recipients.filter((r) => r.id !== recipient.id);
     save.mutate(on ? [...rest, { id: recipient.id, name: recipient.name, notifiedOn: berlinToday() }] : rest);
@@ -273,6 +288,7 @@ function RecipientsPanel({ request }: { request: PrivacyRequest }) {
               checked={Boolean(done)}
               onChange={(e) => toggle(r, e.currentTarget.checked)}
               label={done ? `${r.name} – ${t('privacy.detail.recipientNotified', { date: formatDate(done.notifiedOn, i18n.language) })}` : r.name}
+              description={'activities' in r && r.activities ? r.activities : undefined}
             />
           );
         })}

@@ -23,16 +23,13 @@ import {
   type MyAccessReport,
   PrivacyRequestInput,
   type ProcessingActivity,
-  RetentionRule,
-  retentionRuleKey,
 } from '@forga/core-contracts';
 import { Audit, AuditEntry } from '../audit/audit.js';
 import { ExportRegistry, PersonDataRegistry } from '../data/data.js';
 import { HistoryEntry } from '../history/history.entity.js';
 import { berlinDate } from '../imports/parse.js';
 import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
-import { RetentionRegistry } from '../retention/retention-registry.js';
-import { RetentionService } from '../retention/retention.service.js';
+import { RetentionTexts } from '../privacy/retention-texts.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { OrganizationDirectory } from '../security/organization-directory.js';
 import { ApiToken, User } from '../security/security.entities.js';
@@ -82,8 +79,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     private readonly personData: PersonDataRegistry,
     @Inject(FORGA_CORE_OPTIONS) private readonly options: ForgaCoreOptions,
     private readonly organization: OrganizationDirectory,
-    private readonly retentionRegistry: RetentionRegistry,
-    private readonly retention: RetentionService,
+    private readonly retentionText: RetentionTexts,
     private readonly settings: SettingsService,
     private readonly audit: Audit,
     private readonly mail: MailService,
@@ -276,28 +272,8 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
 
   /** „Personalakte: 30 Jahre nach Austritt“ per retention category of an activity, or „bis zur Festlegung einer Frist“. */
   private async retentionTexts(ctx: DescribeContext): Promise<(activity: ProcessingActivity) => string> {
-    const rules = await this.retention.storedRules();
-    const parts = new Map<string, string[]>();
-    for (const definition of this.retentionRegistry.categories.values()) {
-      const subtypes = (await definition.subtypes?.()) ?? [];
-      const rows = [{ key: definition.key, name: definition.otherName && subtypes.length ? definition.otherName : definition.name }, ...subtypes.map((s) => ({ key: retentionRuleKey(definition.key, s.key), name: s.name }))];
-      const texts: string[] = [];
-      for (const row of rows) {
-        const stored = rules[row.key];
-        if (row.key !== definition.key && !stored) continue;
-        const rule = stored ?? RetentionRule.parse(definition.defaultRule ?? {});
-        const period =
-          rule.years && rule.action !== 'none'
-            ? ctx.t(`${rule.years} Jahre nach ${ctx.text(definition.event)}`, `${rule.years} years after ${ctx.text(definition.event)}`)
-            : ctx.t('bis zur Festlegung einer Frist', 'until a period is set');
-        texts.push(`${ctx.text(row.name)}: ${period}`);
-      }
-      parts.set(definition.key, texts);
-    }
-    return (activity) => {
-      const texts = activity.retention.flatMap((key) => parts.get(key) ?? []);
-      return texts.length ? texts.join('; ') : ctx.t('bis zur Festlegung einer Frist', 'until a period is set');
-    };
+    const text = await this.retentionText.load();
+    return (activity) => text(activity.retention, ctx.language);
   }
 
   // ----- Documents -----

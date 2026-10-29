@@ -1,8 +1,11 @@
 import { privacyDe } from './privacy';
+import { breachesDe, registerDe, registerAuditDe } from './register';
 
 /** German texts of the shell. Keep the keys in sync with `en.ts`. */
 export const de = {
   privacy: privacyDe,
+  register: registerDe,
+  breaches: breachesDe,
   appName: 'f.orga',
   loading: 'Wird geladen …',
   skipToContent: 'Zum Inhalt springen',
@@ -551,6 +554,7 @@ export const de = {
     no: 'nein',
     rawId: 'ID: {{id}}',
     keys: {
+      ...registerAuditDe.keys,
       factor: 'Faktor',
       recoveryCodesLeft: 'Verbleibende Wiederherstellungscodes',
       during: 'Bei',
@@ -640,6 +644,7 @@ export const de = {
       channel: 'Weg',
     },
     actions: {
+      ...registerAuditDe.actions,
       'retention.offered': 'Dem Archiv angeboten',
       'retention.exported': 'Export für das Archiv heruntergeladen',
       'retention.decided': 'Entscheidung des Archivs erfasst',

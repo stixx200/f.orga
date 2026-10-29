@@ -18,6 +18,7 @@ Was hier steht, existiert im Code. Umgesetzt sind:
 - der Aufbewahrungsplan mit Fristen je Datenkategorie und Aussonderung (Anbietung an das Archiv)
 - der zweite Faktor (TOTP) als Step-up beim Öffnen sensibler Daten und der Verwaltung
 - Datenschutz Phase 1: HTTPS mit Caddy und Sicherheitsheadern, Echt-/Testsystem (`FORGA_STAGE`), Verletzte nur mit Recht, Entschuldigungsgrund als Auswahl, E-Mails ohne Gesundheitsbezug
+- Datenschutz Phase 3, Teil 1: Verzeichnis der Verarbeitungstätigkeiten mit technischen Maßnahmen (PDF, Excel), Datenpannen mit 72-Stunden-Frist und Hilfen
 - Demodaten für die Entwicklung (`npm run seed`)
 
 Der Code ist durchgehend englisch, die Dokumentation deutsch. Die Zuordnung der Begriffe steht im [Glossar](../geplant/fachmodell.md#glossar-fachbegriff--code).
@@ -29,6 +30,6 @@ Der Code ist durchgehend englisch, die Dokumentation deutsch. Die Zuordnung der 
 | [schnittstellen.md](schnittstellen.md) | Vorhandene HTTP-Endpunkte mit Rechten |
 | [entwicklung.md](entwicklung.md) | Entwicklungsumgebung, Befehle, Tests, Migrationen, CI |
 | [betrieb.md](betrieb.md) | Docker-Image und Compose-Stack |
-| [datenschutz.md](datenschutz.md) | Datenschutz: zweiter Faktor (TOTP) als Step-up bei sensiblen Daten und Verwaltung; HTTPS und Sicherheitsheader, Echt-, Test- und Entwicklungssystem, Gesundheitsdaten in Berichten und Entschuldigungen, E-Mails ohne Namen |
+| [datenschutz.md](datenschutz.md) | Datenschutz: zweiter Faktor (TOTP) als Step-up bei sensiblen Daten und Verwaltung; HTTPS und Sicherheitsheader, Echt-, Test- und Entwicklungssystem, Gesundheitsdaten in Berichten und Entschuldigungen, E-Mails ohne Namen; Verzeichnis der Verarbeitungstätigkeiten, Datenpannen |
 | [aufbewahrung.md](aufbewahrung.md) | Aufbewahrungsplan: Kategorien, Regeln, Vorlage „Kommunaler Aktenplan (Beispiel)“, täglicher Lauf, Aussonderung mit Export für das Archiv, Wirkung, Personendaten der Module |
 | [parallelbetrieb-mp-feuer.md](parallelbetrieb-mp-feuer.md) | Arbeitsweise während der Umstellung: Einsätze in MP-Feuer, Bescheide und Entschädigungen in f.orga; Verhalten beim erneuten Import |

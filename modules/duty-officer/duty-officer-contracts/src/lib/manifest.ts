@@ -50,6 +50,9 @@ export const DUTY_OFFICER_MANIFEST = {
     activities: [
       {
         key: 'duty-officer.roster',
+        subjects: [{ de: 'Einsatzleiter vom Dienst', en: 'Duty officers' }],
+        categories: [{ de: 'Dienste mit Zeitraum, Entschädigung, Notizen', en: 'Duties with period, compensation, notes' }],
+        legalBasisHint: { de: 'Feuerwehrgesetz Baden-Württemberg (FwG), Entschädigungssatzung; mit dem DSB festlegen', en: 'Fire Brigade Act of Baden-Württemberg (FwG), compensation statute; decide with the DPO' },
         name: { de: 'Einsatzleiter vom Dienst', en: 'Duty officer' },
         purpose: { de: 'Dienstplan der Sonderdienste (z. B. Einsatzleiter vom Dienst) und ihre Entschädigung', en: 'Roster of special duties (e.g. duty officer) and their compensation' },
         recipients: [{ de: 'Gemeindeverwaltung/Kämmerei (Entschädigung)', en: 'Municipal administration/treasury (compensation)' }],

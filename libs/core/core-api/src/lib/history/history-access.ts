@@ -7,7 +7,7 @@ import { ImportMappingEntity } from '../imports/import-mappings.js';
 import { RetentionCaseEntity } from '../retention/retention-case.entity.js';
 import { Role, RoleAssignment, User } from '../security/security.entities.js';
 import { Setting } from '../settings/settings.js';
-import { PrivacyNoticeEntity, PrivacyRequestEntity } from '../privacy/privacy.entities.js';
+import { PrivacyBreachEntity, PrivacyNoticeEntity, PrivacyRequestEntity } from '../privacy/privacy.entities.js';
 import { historyName } from './history.subscriber.js';
 
 export interface HistoryAccess {
@@ -22,7 +22,7 @@ export interface HistoryAccess {
 export type HistoryAccessCheck = (user: AuthenticatedUser, entityId: string) => Promise<HistoryAccess>;
 
 /** Top-level historized entities of the core; their children appear in the parent's history. */
-export const CORE_HISTORIZED: HistorizedEntity[] = [User, Role, { entity: RoleAssignment, parent: 'user' }, Setting, ImportMappingEntity, RetentionCaseEntity, PrivacyRequestEntity, PrivacyNoticeEntity];
+export const CORE_HISTORIZED: HistorizedEntity[] = [User, Role, { entity: RoleAssignment, parent: 'user' }, Setting, ImportMappingEntity, RetentionCaseEntity, PrivacyRequestEntity, PrivacyNoticeEntity, PrivacyBreachEntity];
 
 const className = (entity: EntityDefinition) => ('meta' in entity ? entity.meta.className : entity.name);
 

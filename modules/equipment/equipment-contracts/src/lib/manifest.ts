@@ -49,6 +49,9 @@ export const EQUIPMENT_MANIFEST = {
     activities: [
       {
         key: 'equipment.inspections',
+        subjects: [{ de: 'Prüfer und Meldende von Mängeln', en: 'Inspectors and persons reporting defects' }],
+        categories: [{ de: 'Name des Prüfers, Prüfungen mit Ergebnis, gemeldete Mängel', en: 'Name of the inspector, inspections with result, reported defects' }],
+        legalBasisHint: { de: 'Prüfpflichten (DGUV, Herstellerangaben); mit dem DSB festlegen', en: 'Duties to inspect (DGUV, manufacturer); decide with the DPO' },
         name: { de: 'Geräteprüfung', en: 'Equipment inspection' },
         purpose: { de: 'Prüfung und Instandhaltung der Geräte, Nachweis der Prüfungen und gemeldeten Mängel', en: 'Inspection and maintenance of equipment, evidence of inspections and reported defects' },
         retention: ['equipment.retired'],

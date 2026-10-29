@@ -122,6 +122,7 @@ function KeyLabel({ name, label }: { name: string; label: string | null }) {
 }
 
 function Details({ entry }: { entry: AuditEntry }) {
+  const { t } = useTranslation('shell');
   const texts = useAuditTexts();
   const details = Object.entries(entry.details ?? {});
   if (!details.length) return null;
@@ -132,7 +133,8 @@ function Details({ entry }: { entry: AuditEntry }) {
           <Text span inherit c="dimmed">
             <KeyLabel name={key} label={texts.key(key, entry.action)} />:
           </Text>{' '}
-          <DetailValue value={value} entry={entry} />
+          {/* Persons named by an export (data breaches): only their number, the IDs stay in the entry. */}
+          {key === 'personIds' && Array.isArray(value) ? t('breaches.personCount', { count: value.length }) : <DetailValue value={value} entry={entry} />}
         </Text>
       ))}
     </Stack>

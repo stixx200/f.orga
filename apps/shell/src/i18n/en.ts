@@ -1,9 +1,12 @@
 import type { de } from './de';
 import { privacyEn } from './privacy';
+import { breachesEn, registerEn, registerAuditEn } from './register';
 
 /** English texts of the shell; the type keeps the keys in sync with `de.ts`. */
 export const en: typeof de = {
   privacy: privacyEn,
+  register: registerEn,
+  breaches: breachesEn,
   appName: 'f.orga',
   loading: 'Loading …',
   skipToContent: 'Skip to content',
@@ -552,6 +555,7 @@ export const en: typeof de = {
     no: 'no',
     rawId: 'ID: {{id}}',
     keys: {
+      ...registerAuditEn.keys,
       factor: 'Factor',
       recoveryCodesLeft: 'Recovery codes left',
       during: 'During',
@@ -641,6 +645,7 @@ export const en: typeof de = {
       channel: 'Channel',
     },
     actions: {
+      ...registerAuditEn.actions,
       'retention.offered': 'Offered to the archive',
       'retention.exported': 'Export for the archive downloaded',
       'retention.decided': 'Decision of the archive recorded',

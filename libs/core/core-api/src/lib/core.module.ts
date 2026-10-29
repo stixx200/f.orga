@@ -12,7 +12,12 @@ import { Audit, AuditController, AuditEntry } from './audit/audit.js';
 import { AuditReferenceRegistry } from './audit/audit-references.js';
 import { CoreAuditReferences } from './audit/core-references.js';
 import { DomainEvents } from './events/domain-events.js';
-import { PrivacyNoticeEntity, PrivacyRequestEntity } from './privacy/privacy.entities.js';
+import { PrivacyBreachEntity, PrivacyNoticeEntity, PrivacyRequestEntity } from './privacy/privacy.entities.js';
+import { BreachTools, BreachToolsController, ProtocolRegistry } from './privacy/breach-tools.js';
+import { PrivacyBreaches, PrivacyBreachesController } from './privacy/breaches.js';
+import { PrivacyRegister, PrivacyRegisterController } from './privacy/register.js';
+import { RetentionTexts } from './privacy/retention-texts.js';
+import { CoreMeasures, TechnicalMeasureRegistry } from './privacy/technical-measures.js';
 import { PrivacyNoticeController, PrivacyNoticeService } from './privacy/privacy-notice.js';
 import { PrivacyAssignees, PrivacyRequests, PrivacyRequestsController } from './privacy/privacy-requests.js';
 import { PrivacyTextsController } from './privacy/privacy-texts.js';
@@ -87,6 +92,7 @@ export const CORE_ENTITIES: EntityDefinition[] = [
   PrivacyDocument,
   PrivacyRequestEntity,
   PrivacyNoticeEntity,
+  PrivacyBreachEntity,
 ];
 
 function className(entity: EntityDefinition): string {
@@ -156,6 +162,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
     });
     this.historyAccess.registerPermission('core.privacy_request', PRIVACY_PERMISSION);
     this.historyAccess.registerPermission('core.privacy_notice', PRIVACY_PERMISSION);
+    this.historyAccess.registerPermission('core.privacy_breach', PRIVACY_PERMISSION);
   }
 
   static forRoot(options: ForgaCoreOptions): DynamicModule {
@@ -192,6 +199,9 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         PrivacyNoticeController,
         PrivacyTextsController,
         PrivacyRequestsController,
+        PrivacyRegisterController,
+        PrivacyBreachesController,
+        BreachToolsController,
       ],
       providers: [
         { provide: FORGA_CORE_OPTIONS, useValue: { ...options, modules } },
@@ -237,8 +247,18 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         PrivacyNoticeService,
         PrivacyRequests,
         PrivacyAssignees,
+        RetentionTexts,
+        TechnicalMeasureRegistry,
+        CoreMeasures,
+        PrivacyRegister,
+        PrivacyBreaches,
+        ProtocolRegistry,
+        BreachTools,
       ],
       exports: [
+        TechnicalMeasureRegistry,
+        ProtocolRegistry,
+        PrivacyRegister,
         PrivacyNoticeService,
         PrivacyRequests,
         FORGA_CORE_OPTIONS,
