@@ -93,7 +93,8 @@ Ziel ist eine Software für jede Feuerwehr: Was eine örtliche Satzung regelt, g
 - Personendaten sind sensibel (Gesundheit: Eignungsuntersuchung). Untersuchungsergebnisse werden nur als „geeignet bis“ gespeichert, keine Befunde.
 - Leserechte auf Personen sind abteilungsbezogen. Felder mit Gesundheitsbezug brauchen ein eigenes Recht.
 - Ausgeschiedene Mitglieder werden nach einer konfigurierbaren Frist anonymisiert (Standard: nie, bis ein Administrator eine Frist wählt). Einsatzberichte behalten dann den neutralen Namen „N. N.“, die Statistik bleibt korrekt.
-- Auskunft nach Art. 15 DSGVO: Export aller Daten zu einer Person als PDF/JSON.
+- Auskunft nach Art. 15 DSGVO: lesbares PDF mit den Angaben nach Art. 15 Abs. 1 aus allen Modulen, JSON als optionaler Anhang.
+- Konzept mit Betroffenenanfragen, Einwilligungen, Verzeichnis der Verarbeitungstätigkeiten und Lückenanalyse: [datenschutz.md](datenschutz.md).
 
 ## Rollen
 
@@ -242,6 +243,27 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Archiv (Transferdatei), Archivnummer | archive (`RunArchive`, `key`) |
 | Gemerkte Auswahl (MP-Feuer) | `MpFeuerRemembered`, Einstellungsabschnitt `mp-feuer.remembered` |
 | Export nach MP-Feuer | `MpFeuerExportAdapter` |
+
+### Datenschutz
+
+| Fachbegriff | Code |
+| --- | --- |
+| Auskunft (Art. 15), lesbare Fassung | access report, `describePerson` an `ExportSource`, `PersonDataSection`; Ablage `core.privacy_document` |
+| Betroffenenanfrage (Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch, Widerruf) | data subject request (`core.privacy_request`, `kind`: `access`, `rectification`, `erasure`, `restriction`, `objection`, `withdrawal`) |
+| Löschprüfung | erasure check (`PersonDataHandler.erasure`) |
+| Einschränkung der Verarbeitung | restriction (`restrictedAt` an der Person, `PERSON_DIRECTORY.isRestricted`) |
+| Einwilligung, Fassung, Widerruf | consent (`core.consent`, `CONSENTS`, Einstellungsabschnitt `privacy.consents`), `version`, `withdrawnAt` |
+| Textbaustein (Vorlage / geprüft) | text block (`privacy.texts`, `reviewedAt`) |
+| Datenschutzhinweis | privacy notice (Seite `/privacy`) |
+| Verzeichnis der Verarbeitungstätigkeiten, Verarbeitungstätigkeit | record of processing activities, processing activity (`privacy.activities` im Manifest und in den Einstellungen) |
+| Verantwortlicher, Datenschutzbeauftragter, Aufsichtsbehörde | controller, data protection officer, supervisory authority (`privacy.contacts`, `privacy.authority`) |
+| Gesundheitsdaten (besondere Kategorie) | `health: true` an Feldern, Fristarten und Tätigkeiten |
+| Leseprotokoll | access log (`core.access_log`) |
+| Zweiter Faktor, Wiederherstellungscode | MFA, TOTP, recovery code (`core.user_mfa`) |
+| Bestätigung mit dem zweiten Faktor beim Öffnen sensibler Daten (30 Minuten je Sitzung) | step-up (`POST /api/core/step-up`, `core.session.elevated_until`, Kennzeichen `stepUp` an Berechtigungen, `@StepUp()`, Fehlercode `auth.stepUpRequired`) |
+| Datenschutz verwalten | Recht `core.privacy.manage` |
+| Datenpanne | data breach |
+| Stufe der Installation (Echt-, Test-, Entwicklungssystem) | `FORGA_STAGE` |
 
 ### Kleiderkammer
 
