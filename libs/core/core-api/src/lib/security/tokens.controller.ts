@@ -29,7 +29,7 @@ import { berlinDayEnd } from '../imports/parse.js';
 
 type ParsedTokenInput = ReturnType<typeof ApiTokenInput.parse>;
 
-function toTokenDto(token: ApiToken): ApiTokenDto {
+function toTokenDto(token: ApiToken, registry: PermissionRegistry): ApiTokenDto {
   return {
     id: token.id,
     name: token.name,
@@ -39,6 +39,7 @@ function toTokenDto(token: ApiToken): ApiTokenDto {
     expiresAt: token.expiresAt?.toISOString() ?? null,
     lastUsedAt: token.lastUsedAt?.toISOString() ?? null,
     revokedAt: token.revokedAt?.toISOString() ?? null,
+    inactiveScopes: token.scopes.filter((s) => registry.all.some((p) => p.id === s && registry.tokenForbidden(p))),
   };
 }
 
@@ -55,7 +56,7 @@ export class TokensController {
   @Get()
   async list(): Promise<ApiTokenDto[]> {
     const tokens = await this.em.fork().find(ApiToken, {}, { orderBy: { createdAt: 'desc' } });
-    return tokens.map(toTokenDto);
+    return tokens.map((t) => toTokenDto(t, this.registry));
   }
 
   /**
@@ -72,6 +73,9 @@ export class TokensController {
     // Privileged permissions (e.g. backups: the whole data) never run through a token either.
     const privileged = input.scopes.filter((s) => this.registry.all.some((p) => p.id === s && p.privileged));
     if (privileged.length) throw new BadRequestException({ code: 'tokens.privilegedScopes', scopes: privileged });
+    // Sensitive data need the second factor (step-up), which a token cannot show.
+    const stepUp = input.scopes.filter((s) => this.registry.all.some((p) => p.id === s && this.registry.tokenForbidden(p)));
+    if (stepUp.length) throw new BadRequestException({ code: 'tokens.stepUpScope', scopes: stepUp });
     // A token can do at most what its creator can (brigade-wide), so it cannot be used to widen one's permissions.
     const wider = await this.auth.widerThanActor(current, [{ role: { permissions: input.scopes, permissionsAllDepartments: [] }, departmentId: null }]);
     if (wider.length) throw new ForbiddenException({ code: 'tokens.scopesWider', scopes: wider });
@@ -94,7 +98,7 @@ export class TokensController {
     });
     await em.flush();
     await this.audit.log('tokens.created', { tokenId: token.id, scopes: token.scopes });
-    return { ...toTokenDto(token), token: plain };
+    return { ...toTokenDto(token, this.registry), token: plain };
   }
 
   @Delete(':id')

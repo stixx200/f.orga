@@ -51,7 +51,8 @@ export class ListsController {
   @Get(':id/parameters/:key/options')
   async options(@Param('id') id: string, @Param('key') key: string, @Query('q') query: string | undefined, @CurrentUser() user: AuthenticatedUser): Promise<ListOption[]> {
     const entry = this.registry.get(id);
-    if (!entry || !user.can(entry.definition.permission)) throw new NotFoundException();
+    if (!entry || !user.holds(entry.definition.permission)) throw new NotFoundException();
+    if (!user.can(entry.definition.permission)) throw user.stepUpRequired();
     const parameter = entry.definition.parameters?.find((p) => p.key === key);
     if (!parameter || (parameter.type !== 'person' && parameter.type !== 'choice')) throw new NotFoundException();
     const q = (query ?? '').trim().slice(0, 100);
@@ -97,7 +98,8 @@ export class ListsController {
 
   private async build(id: string, query: Query, user: AuthenticatedUser) {
     const entry = this.registry.get(id);
-    if (!entry || !user.can(entry.definition.permission)) throw new NotFoundException();
+    if (!entry || !user.holds(entry.definition.permission)) throw new NotFoundException();
+    if (!user.can(entry.definition.permission)) throw user.stepUpRequired();
     const { definition } = entry;
     const { lang, ...params } = query;
     const language: Language = LANGUAGES.includes(lang as Language) ? (lang as Language) : user.language;

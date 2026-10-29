@@ -2,6 +2,8 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { MikroORM } from '@mikro-orm/core';
 import request from 'supertest';
+import { EntityManager } from '@mikro-orm/core';
+import { hashSecret, Session } from '@forga/core-api';
 import { resetTestDatabase, TEST_DATABASE_URL } from './test-database';
 
 /** Header that marks requests from the UI (CSRF protection). */
@@ -13,8 +15,19 @@ export const SETUP_TOKEN = 'test-setup-token';
 export interface TestApp {
   app: INestApplication;
   http: ReturnType<typeof request>;
-  /** Logs in and returns the session cookie. */
-  login(credentials?: { username: string; password: string }): Promise<string>;
+  /**
+   * Logs in and returns the session cookie. The session counts as confirmed with the second factor (step-up), as tests
+   * of other features do not go through it; `{ elevated: false }` for a session as after a real login.
+   */
+  login(credentials?: { username: string; password: string }, options?: { elevated?: boolean }): Promise<string>;
+  /** Marks a session as confirmed with the second factor (test shortcut instead of entering a code). */
+  elevate(cookie: string): Promise<void>;
+}
+
+/** Test shortcut: confirms the session of a cookie for an hour without a code. */
+async function elevateSession(app: INestApplication, cookie: string): Promise<void> {
+  const token = decodeURIComponent(cookie.replace(/^forga_session=/, ''));
+  await app.get(EntityManager).fork().nativeUpdate(Session, { id: hashSecret(token) }, { elevatedUntil: new Date(Date.now() + 60 * 60_000) });
 }
 
 /**
@@ -42,10 +55,13 @@ export async function startTestApp(options: Parameters<typeof import('../app/app
   return {
     app,
     http,
-    async login(credentials = ADMIN) {
+    async login(credentials = ADMIN, loginOptions = {}) {
       const response = await http.post('/api/core/login').send(credentials).expect(200);
-      return String(response.headers['set-cookie']).split(';')[0];
+      const cookie = String(response.headers['set-cookie']).split(';')[0];
+      if (loginOptions.elevated !== false) await elevateSession(app, cookie);
+      return cookie;
     },
+    elevate: (cookie) => elevateSession(app, cookie),
   };
 }
 
@@ -55,5 +71,7 @@ export async function setUp(test: TestApp): Promise<string> {
     .post('/api/core/setup')
     .send({ setupToken: SETUP_TOKEN, brigadeName: 'Feuerwehr Musterstadt', displayName: 'Admin', ...ADMIN })
     .expect(201);
-  return String(response.headers['set-cookie']).split(';')[0];
+  const cookie = String(response.headers['set-cookie']).split(';')[0];
+  await test.elevate(cookie);
+  return cookie;
 }

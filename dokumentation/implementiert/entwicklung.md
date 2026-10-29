@@ -52,6 +52,8 @@ npm run dev
 
 `npm run seed` (`tools/seed.mts`) füllt eine laufende Instanz über die API mit erfundenen Daten. Echte Personen kommen nicht vor. Für die Ersteinrichtung einer leeren Datenbank nimmt es den Einrichtungsschlüssel aus `FORGA_SETUP_TOKEN` oder aus `apps/server/.env` (Entwicklung: `dev-setup-token`).
 
+Verwaltung und sensible Daten verlangen den zweiten Faktor ([Step-up](datenschutz.md#zweiter-faktor-bei-sensiblen-daten-step-up)). Beim ersten Lauf richtet das Skript den Faktor des Administrators ein, gibt das Geheimnis aus (zum Eintragen in eine Authenticator-App) und legt es in `tmp/seed-totp.json` ab; spätere Läufe nehmen es von dort oder aus `FORGA_ADMIN_TOTP_SECRET`. Nach dem Neuanlegen der Datenbank die Datei löschen. Demobenutzer mit sensiblen Rechten (z. B. `commander`, `administration`) richten ihren Faktor beim ersten Öffnen sensibler Daten im Browser ein; im Testsystem setzt ihn der Administrator in der Benutzerverwaltung zurück.
+
 - Ersteinrichtung, falls nötig: „Freiwillige Feuerwehr Musterstadt“, Administrator aus `FORGA_ADMIN_USER` / `FORGA_ADMIN_PASSWORD` (Vorgabe `admin` / `sehr-geheim-123`). Server-Adresse aus `FORGA_URL` (Vorgabe `http://localhost:3000`). Die Ersteinrichtung braucht den Einrichtungsschlüssel in `FORGA_SETUP_TOKEN` (aus dem Protokoll des Servers oder derselbe Wert, mit dem der Server gestartet wurde).
 - Einstellungen der Feuerwehr, BW-Vorlagen (Kataloge, Lehrgänge, Alarmstichworte, Vorlagewerte der Feuerwehrsatzung) und die Standardrollen.
 - Vier Einsatzabteilungen, Altersabteilung und Jugendfeuerwehr, je ein Feuerwehrhaus und zehn Fahrzeuge.

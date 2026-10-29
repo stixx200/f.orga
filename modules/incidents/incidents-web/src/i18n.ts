@@ -220,6 +220,7 @@ const texts: Translations = {
       total: 'Summe Entschädigung',
       totalHint: 'Angefangene Stunden × Satz; Bereitschaft pauschal. Ausgezahlt wird nach Freigabe.',
       injuriesCount: 'Eigene Kräfte: {{injured}} verletzt, {{killed}} getötet (Namen nur für Verfasser, Freigeber und mit Recht).',
+      showInjuries: 'Verletzte anzeigen …',
     },
     person: {
       place: 'Fahrzeug oder Bereitschaft',
@@ -838,6 +839,7 @@ const texts: Translations = {
       total: 'Total compensation',
       totalHint: 'Started hours × rate; standby as a flat rate. Paid after release.',
       injuriesCount: 'Own forces: {{injured}} injured, {{killed}} killed (names only for the author, releasers and with the permission).',
+      showInjuries: 'Show injured …',
     },
     person: {
       place: 'Vehicle or standby',

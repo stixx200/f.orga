@@ -51,9 +51,7 @@ export class RolesController {
   /** All permissions of core and installed modules, for the role editor and the scopes of API tokens. */
   @Get('permissions')
   permissions(@CurrentUser() user: AuthenticatedUser): readonly Permission[] {
-    if (!user.can('core.roles.manage') && !user.can('core.tokens.manage')) {
-      throw new ForbiddenException({ code: 'auth.forbidden', permissions: ['core.roles.manage', 'core.tokens.manage'] });
-    }
+    if (!user.can('core.roles.manage') && !user.can('core.tokens.manage')) throw user.denied(['core.roles.manage', 'core.tokens.manage']);
     return this.registry.all;
   }
 

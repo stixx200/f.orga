@@ -38,7 +38,10 @@ import { assertEmailFree, sameEmail } from './emails.js';
 import { hashPassword, hashSecret, verifyPassword } from './password.js';
 import { PasswordResetService } from './password-reset.js';
 import { RoleTemplates } from './role-templates.js';
+import { MfaService } from './mfa.js';
+import { PermissionRegistry } from './permission-registry.js';
 import { Role, RoleAssignment, Session, User } from './security.entities.js';
+import { serverKey } from './server-key.js';
 
 @Controller('core')
 export class AuthController {
@@ -50,6 +53,8 @@ export class AuthController {
     private readonly roleTemplates: RoleTemplates,
     private readonly resets: PasswordResetService,
     private readonly cookies: CookiePolicy,
+    private readonly mfa: MfaService,
+    private readonly registry: PermissionRegistry,
   ) {}
 
   /** Login page data: is a setup needed, the brigade name if known, and the stage of the installation. */
@@ -127,7 +132,13 @@ export class AuthController {
 
   @Get('session')
   async session(@CurrentUser() user: AuthenticatedUser): Promise<SessionDto> {
-    const stored = await this.em.fork().findOneOrFail(User, user.id);
+    const em = this.em.fork();
+    const stored = await em.findOneOrFail(User, user.id);
+    // During an impersonation the administrator's factor confirms, and only his password matters for setting it up.
+    const factorOwner = user.impersonator ? await em.findOneOrFail(User, user.impersonator.id, { populate: ['passwordHash'] }) : await em.findOneOrFail(User, user.id, { populate: ['passwordHash'] });
+    const mfa = await this.mfa.status(factorOwner.id);
+    const held = new Map([...user.locked, ...user.grants]);
+    const oidc = await this.settings.get<OidcSettings>('oidc');
     return {
       user: {
         id: user.id,
@@ -140,8 +151,16 @@ export class AuthController {
         receiveDigest: stored.receiveDigest,
         hiddenTasks: stored.hiddenTasks ?? [],
       },
-      permissions: Object.fromEntries(user.grants),
+      permissions: Object.fromEntries(held),
       impersonator: user.impersonator && { id: user.impersonator.id, displayName: user.impersonator.displayName, endsAt: user.impersonator.endsAt.toISOString() },
+      stepUpPermissions: [...held.keys()].filter((p) => this.registry.stepUp.has(p)),
+      elevatedUntil: user.elevatedUntil?.toISOString() ?? null,
+      mfa: {
+        ...mfa,
+        available: serverKey() !== null,
+        passwordRequired: Boolean(factorOwner.passwordHash),
+        viaProvider: Boolean(!user.impersonator && stored.oidcSubject && oidc?.enabled && oidc.stepUpViaProvider),
+      },
     };
   }
 
@@ -207,7 +226,7 @@ export class AuthController {
     return { ok: true, confirmationSent: Boolean(emailChange) };
   }
 
-  /** Changes the own password and ends all other sessions of the user. */
+  /** Changes the own password, ends all other sessions of the user and the step-up of the own one. */
   @Put('password')
   async changePassword(
     @Body(new ZodPipe(ChangePassword)) input: ChangePassword,
@@ -223,6 +242,8 @@ export class AuthController {
     user.passwordHash = await hashPassword(input.new);
     const own = (req.cookies as Record<string, string> | undefined)?.[SESSION_COOKIE] ?? '';
     await em.nativeDelete(Session, { user, id: { $ne: hashSecret(own) } });
+    // The confirmation with the second factor ends with the password change as well.
+    await em.nativeUpdate(Session, { id: hashSecret(own) }, { elevatedUntil: null });
     await em.flush();
     // Open reset links would set another password behind the user's back.
     await this.resets.invalidateLinks(em, user.id);

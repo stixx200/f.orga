@@ -173,11 +173,16 @@ describe('injured persons in reports (L5)', () => {
     const view = async (cookie: string) => (await get(`/incidents/reports/${ids.report}`, cookie).expect(200)).body as { personnel: { personId: string; injured: boolean }[]; injuries: object };
     for (const cookie of [admin, writer, medic]) {
       const report = await view(cookie);
-      expect(report.injuries).toEqual({ hidden: false, injured: 1, killed: 0 });
+      expect(report.injuries).toEqual({ hidden: false, injured: 1, killed: 0, stepUpAvailable: false });
       expect(report.personnel.find((p) => p.personId === ids.jonas)?.injured).toBe(true);
     }
     const hidden = await view(reader);
-    expect(hidden.injuries).toEqual({ hidden: true, injured: 1, killed: 0 });
+    expect(hidden.injuries).toEqual({ hidden: true, injured: 1, killed: 0, stepUpAvailable: false });
+    // The permission carries the step-up: without the second factor only the counts, with the offer to confirm.
+    const unconfirmed = await test.login({ username: 'verletzte', password: 'auch-sehr-geheim' }, { elevated: false });
+    const pending = await view(unconfirmed);
+    expect(pending.injuries).toEqual({ hidden: true, injured: 1, killed: 0, stepUpAvailable: true });
+    expect(pending.personnel.every((p) => !p.injured)).toBe(true);
     expect(hidden.personnel.every((p) => !p.injured)).toBe(true);
 
     // The history masks the values for the reader.

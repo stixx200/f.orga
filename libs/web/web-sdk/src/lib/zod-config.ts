@@ -6,3 +6,6 @@ import { config } from 'zod';
  * violation for every frontend. Without JIT nothing is probed; the parsers work the same.
  */
 config({ jitless: true });
+
+/** Zod runs without JIT in the frontends (set when the SDK is loaded). */
+export const ZOD_JITLESS = true;

@@ -9,7 +9,7 @@ let admin: string;
 let provider: Server;
 let issuer = '';
 /** What the fake provider puts into the next ID token. */
-const next = { nonce: '', sub: 'abc-123', email: 'jonas@example.org', emailVerified: true as boolean | undefined };
+const next = { nonce: '', sub: 'abc-123', email: 'jonas@example.org', emailVerified: true as boolean | undefined, amr: undefined as string[] | undefined, authTime: undefined as number | undefined };
 
 const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const base64url = (value: string | Buffer) => Buffer.from(value).toString('base64url');
@@ -46,7 +46,7 @@ function startProvider(): Promise<void> {
         access_token: 'access',
         token_type: 'Bearer',
         expires_in: 300,
-        id_token: idToken({ iss: issuer, sub: next.sub, aud: 'forga', iat: now, exp: now + 300, nonce: next.nonce, email: next.email, email_verified: next.emailVerified }),
+        id_token: idToken({ iss: issuer, sub: next.sub, aud: 'forga', iat: now, exp: now + 300, nonce: next.nonce, email: next.email, email_verified: next.emailVerified, amr: next.amr, auth_time: next.authTime }),
       });
     }
     res.statusCode = 404;
@@ -74,6 +74,9 @@ async function signIn(options: { state?: string; link?: string } = {}) {
   const state = options.state ?? location.searchParams.get('state');
   return test.http.get(`/api/core/oidc/callback?code=xyz&state=${state}`).set('Cookie', pending).expect(302);
 }
+
+const sessionOf = (callback: { headers: Record<string, unknown> }) => (callback.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('forga_session='))!.split(';')[0];
+const elevatedUntil = async (cookie: string) => (await test.http.get('/api/core/session').set('Cookie', cookie).expect(200)).body.elevatedUntil as string | null;
 
 beforeAll(async () => {
   await startProvider();
@@ -168,6 +171,48 @@ describe('OIDC sign-in', () => {
     expect((await test.http.get('/api/core/setup').expect(200)).body.oidc).toBeNull();
     expect((await test.http.put('/api/core/settings/brigade').set('Cookie', admin).set(UI).send({ name: 'FF Test', publicUrl: 'http://forga.example.org' }).expect(400)).body.issues[0].path).toBe('publicUrl');
     await test.http.put('/api/core/settings/brigade').set('Cookie', admin).set(UI).send({ name: 'FF Test', publicUrl: 'http://localhost:4200' }).expect(200);
+  });
+
+  it('confirms the session when the provider reports a second factor (amr, auth_time)', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    // A password at the provider is no second factor.
+    Object.assign(next, { amr: ['pwd'], authTime: now });
+    expect(await elevatedUntil(sessionOf(await signIn()))).toBeNull();
+    // A second factor at the provider confirms until auth_time + 30 minutes.
+    Object.assign(next, { amr: ['pwd', 'mfa'], authTime: now - 600 });
+    expect(Date.parse((await elevatedUntil(sessionOf(await signIn())))!)).toBe((now - 600 + 30 * 60) * 1000);
+    // Older than 30 minutes: not confirmed.
+    Object.assign(next, { amr: ['otp'], authTime: now - 31 * 60 });
+    expect(await elevatedUntil(sessionOf(await signIn()))).toBeNull();
+    Object.assign(next, { amr: undefined, authTime: undefined });
+  });
+
+  it('confirms a session by a new sign-in at the provider when switched on', async () => {
+    const own = await test.login(undefined, { elevated: false });
+    const stepUp = () => test.http.post('/api/core/oidc/step-up').set('Cookie', own).set(UI).send({ returnTo: '/admin/users' });
+    expect((await stepUp().expect(400)).body.code).toBe('auth.oidcStepUpDisabled');
+    const settings = (await test.http.get('/api/core/settings/oidc').set('Cookie', admin).expect(200)).body;
+    await test.http.put('/api/core/settings/oidc').set('Cookie', admin).set(UI).send({ ...settings, stepUpViaProvider: true }).expect(200);
+    expect((await test.http.get('/api/core/session').set('Cookie', own).expect(200)).body.mfa.viaProvider).toBe(true);
+
+    const confirm = async (amr: string[]) => {
+      const start = await stepUp().expect(200);
+      const location = new URL(start.body.url);
+      expect(location.searchParams.get('prompt')).toBe('login');
+      expect(location.searchParams.get('max_age')).toBe('0');
+      next.nonce = location.searchParams.get('nonce') ?? '';
+      Object.assign(next, { amr, authTime: Math.floor(Date.now() / 1000) });
+      const pending = (start.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('forga_oidc='))!.split(';')[0];
+      return test.http.get(`/api/core/oidc/callback?code=xyz&state=${location.searchParams.get('state')}`).set('Cookie', pending).expect(302);
+    };
+    // The administrator's account at the provider is linked (see above); without a second factor there it does not count.
+    const sub = next.sub;
+    next.sub = 'admin-at-provider';
+    expect((await confirm(['pwd'])).headers['location']).toBe('/?oidcError=auth.oidcNoSecondFactor');
+    expect((await confirm(['hwk'])).headers['location']).toBe('/admin/users');
+    expect((await test.http.get('/api/core/session').set('Cookie', own).expect(200)).body.elevatedUntil).not.toBeNull();
+    next.sub = sub;
+    Object.assign(next, { amr: undefined, authTime: undefined });
   });
 
   it('lets administrators remove the link', async () => {

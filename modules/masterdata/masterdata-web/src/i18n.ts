@@ -385,6 +385,9 @@ const texts: Translations = {
       notesHint: 'Begründungen zur Probezeit werden hier automatisch ergänzt.',
       sensitive: 'sensibel',
       sensitiveHidden: 'Ausgeblendet. Für diese Angaben fehlt Ihnen das Recht „Sensible Personendaten“.',
+      sensitiveStepUp: 'Ausgeblendet, bis Sie mit Ihrem zweiten Faktor bestätigen.',
+      stepUpHidden: 'Sensible Daten (Geburtsdatum, Bankverbindung, Bemerkungen, Ruhezeiten) sind ausgeblendet, bis Sie mit Ihrem zweiten Faktor bestätigen.',
+      showSensitive: 'Sensible Daten anzeigen …',
     },
     settings: {
       range: 'Erlaubt sind {{min}} bis {{max}}.',
@@ -1121,6 +1124,9 @@ const texts: Translations = {
       notesHint: 'Reasons for probation changes are added here automatically.',
       sensitive: 'sensitive',
       sensitiveHidden: 'Hidden. You lack the permission "Sensitive person data" for these details.',
+      sensitiveStepUp: 'Hidden until you confirm with your second factor.',
+      stepUpHidden: 'Sensitive data (birth date, bank account, notes, rest periods) are hidden until you confirm with your second factor.',
+      showSensitive: 'Show sensitive data …',
     },
     settings: {
       range: 'Allowed are {{min}} to {{max}}.',

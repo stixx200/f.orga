@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261029084221_initial extends Migration {
+export class Migration20261029105336_initial extends Migration {
 
-  override name = 'Migration20261029084221_initial';
+  override name = 'Migration20261029105336_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"compensation\";");

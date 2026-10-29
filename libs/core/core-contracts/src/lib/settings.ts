@@ -80,6 +80,11 @@ export const OidcSettings = z.object({
    */
   matchBy: z.enum(['email', 'username']).default('email'),
   buttonLabel: LocalizedText.default({ de: 'Mit Konto der Gemeinde anmelden', en: 'Sign in with the municipal account' }),
+  /**
+   * Step-up "confirm at the provider": a new sign-in at the provider (`prompt=login`, `max_age=0`) confirms the session
+   * when the provider reports a second factor (`amr`).
+   */
+  stepUpViaProvider: z.boolean().default(false),
 });
 export type OidcSettings = z.infer<typeof OidcSettings>;
 

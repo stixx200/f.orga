@@ -30,7 +30,7 @@ Umgesetzt ist (siehe [implementiert/architektur.md](../implementiert/architektur
 - **Protokolle:** Audit-Log (Anmeldungen, Rechte, Exporte, Importe, Impersonation mit Grund), Historie aller Änderungen.
 - **Auskunft** `GET /api/core/export/person/:personId`: JSON mit internen IDs aus allen Modulen außer Kostenersatz und Infoterminal, im Audit-Log (`data.person-exported`). Keine Angaben nach Art. 15 Abs. 1, keine lesbare Fassung.
 - **Aufbewahrung** ([Aufbewahrungsplan](../implementiert/aufbewahrung.md), Einstellung `privacy.retention`): Frist und Aktion je Datenkategorie (Grunddaten und Personalakte Ausgeschiedener, Einsätze, Dienste, ausgesonderte Geräte und Fahrzeuge, Kostenbescheide, Auszahlungsläufe, Audit-Log, Historie) mit Aussonderung und Anbietung an das Archiv; Standard nichts außer Audit-Log 2 Jahre. Import-Uploads 24 Stunden, Zeilen von MP-Feuer-Läufen 7 Tage. `PersonDataRegistry` mit Beiträgen von Core, Atemschutz, Kleiderkammer, Beförderungen, Diensten, Entschädigungen, Geräten und Einsatzleiter vom Dienst.
-- **Sicherheit:** scrypt, Sitzung 14 Tage als `HttpOnly`-Cookie, CSRF-Header, Anmeldesperre, API-Tokens als Hash mit Bereichen, OIDC, verschlüsselte Geräteschlüssel.
+- **Sicherheit:** scrypt, Sitzung 14 Tage als `HttpOnly`-Cookie, CSRF-Header, Anmeldesperre, API-Tokens als Hash mit Bereichen, OIDC, verschlüsselte Geräteschlüssel, zweiter Faktor (TOTP) als Step-up bei sensiblen Daten und Verwaltung ([Datenschutz, umgesetzt](../implementiert/datenschutz.md)).
 - **Phase 1** ([implementiert/datenschutz.md](../implementiert/datenschutz.md)): HTTPS mit Caddy, `Secure`-Cookies bei `https://`-Adresse, Sicherheitsheader, `/api/docs` nur angemeldet (L1); `FORGA_STAGE` mit Band und Sperren im Testsystem (L6); Verletzte im Bericht nur mit `incidents.injuries.read`, Hinweise an Freitexten, Entschuldigungsgrund als Auswahl (L5, Teil); E-Mails mit Gesundheitsbezug ohne Namen (L18, Teil).
 - **Mein Bereich:** Kontakt und Bankverbindung selbst ändern, eigene Dienste, Einsätze, Entschädigung, Atemschutz, Schutzausrüstung.
 
@@ -153,10 +153,9 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L2 Zweiter Faktor beim Öffnen sensibler Daten (kritisch)
 
-- **Heute:** Nur Passwort oder OIDC. Ein erbeutetes Passwort eines Administrators öffnet alle Daten, auch Vollexport und Impersonation.
-- **Soll:** Ein zweiter Faktor für den Zugriff auf Gesundheitsdaten, sensible Personendaten und die Verwaltung (Stand der Technik nach Art. 32).
-- **Festgelegt: „Nur bei sensiblen Daten“ (Step-up).** Die Anmeldung bleibt wie heute (Passwort oder OIDC). Der zweite Faktor wird erst abgefragt, wenn der Benutzer sensible Daten oder Verwaltungsfunktionen öffnet, und gilt danach **30 Minuten für diese Sitzung**. Wer nie sensible Daten öffnet (die meisten Mitglieder, Mein Bereich), braucht keinen zweiten Faktor. Einzelheiten unter [Step-up](#step-up-zweiter-faktor-bei-sensiblen-daten).
-- **Organisatorisch:** Ablauf bei verlorenem Telefon (Wiederherstellungscodes, Zurücksetzen durch einen Administrator); Benutzer mit sensiblen Rechten richten den Faktor bei der Übergabe ihrer Rolle ein.
+- **Heute:** Umgesetzt als Step-up ([implementiert/datenschutz.md](../implementiert/datenschutz.md#zweiter-faktor-bei-sensiblen-daten-step-up)): TOTP mit Wiederherstellungscodes, 30 Minuten je Sitzung, für Gesundheitsdaten, sensible Personendaten und die Verwaltung; Anmeldung weiter mit Passwort oder OIDC.
+- **Offen:** Bereiche, die es noch nicht gibt, bekommen `stepUp` mit ihrer Einführung (`incidents.injuries.read`, `core.privacy.manage`), siehe [Step-up](#step-up-zweiter-faktor-bei-sensiblen-daten).
+- **Organisatorisch:** Ablauf bei verlorenem Telefon (Wiederherstellungscodes, Zurücksetzen durch einen Administrator); Benutzer mit sensiblen Rechten richten den Faktor bei der Übergabe ihrer Rolle ein; `FORGA_SECRET_KEY` setzen und sichern.
 
 ### L3 Verständliche Auskunft (kritisch)
 
@@ -351,53 +350,11 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ## Step-up: zweiter Faktor bei sensiblen Daten
 
-Mockup: `datenschutz/zwei-faktor.html` (Einrichten und Dialog `#d-stepup`), Dialog auch in `datenschutz/person.html#d-stepup`.
+Umgesetzt (Faktor, Auslöser, Durchsetzung, Oberfläche): siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#zweiter-faktor-bei-sensiblen-daten-step-up). Offen ist:
 
-### Faktor
-
-- **TOTP** (Authenticator-App, RFC 6238, 6 Ziffern, 30 Sekunden, ±1 Zeitschritt), Geheimnis mit `FORGA_SECRET_KEY` verschlüsselt (`core.user_mfa`, `hidden`, nie in Historie, Vollexport oder Antworten). Ein Code gilt nur einmal (letzter Zeitschritt gespeichert).
-- **Zehn Wiederherstellungscodes**, je einmal gültig, nur als Hash gespeichert, nur bei der Einrichtung sichtbar; neu erzeugen im Profil (mit Step-up).
-- **Einrichten** im Profil oder beim ersten Step-up, wenn noch kein Faktor besteht: aktuelles Passwort (bei OIDC-Benutzern entfällt es), QR-Code, Bestätigung mit einem Code. Die Einrichtung zählt als Step-up. Ohne `FORGA_SECRET_KEY` lässt sich kein Faktor einrichten (`auth.mfaNoSecretKey`); dann sind die Step-up-Bereiche gesperrt und die Einrichtungsliste der Startseite meldet das.
-- **Zurücksetzen durch einen Administrator** (`DELETE /api/core/users/:id/mfa`, Recht `core.users.manage`, selbst mit Step-up, Grund Pflicht, nur für Benutzer ohne weitere Rechte als der eigene, `users.targetWider`): Faktor und Codes werden gelöscht, alle Sitzungen des Benutzers enden, er bekommt eine E-Mail. Audit `auth.mfa-reset`. Den eigenen Faktor setzt niemand über die Benutzerverwaltung zurück.
-- Später zusätzlich WebAuthn (Passkeys) als zweiter Faktor.
-
-### Was den Step-up auslöst
-
-Berechtigungen bekommen im Manifest bzw. in `CORE_PERMISSIONS` das Kennzeichen `stepUp: true`. Jeder Endpunkt, der eine solche Berechtigung prüft, verlangt eine bestätigte Sitzung. Wo eine Seite auch ohne die sensiblen Teile nützlich ist, liefert der Server sie ohne diese Teile und kennzeichnet das (`sensitiveHidden`, `stepUpAvailable`); die Oberfläche zeigt „Sensible Daten anzeigen“.
-
-| Bereich | Berechtigung mit `stepUp` | Verhalten ohne Bestätigung |
-| --- | --- | --- |
-| Atemschutz: Eignungsuntersuchungen (Ergebnis, Einschränkungen, Arzt), Liste „fällige Eignungsuntersuchungen“, Untersuchungen erfassen und importieren | `respiratory-protection.examinations` | Ampel und Fälligkeiten wie ohne das Recht (`redact`); Knopf „Untersuchungen anzeigen“ |
-| Sensible Felder der Person (Geburtsdatum, Geburtsort, Arbeitgeber, Bank, Bemerkung, Austrittsgrund, Ruhezeiten), Listen „Komplettdaten“, „Geburtstage“, „Altersgrenzen“, Benutzer mit Person verknüpfen | `masterdata.persons.sensitive` | Personalakte wie ohne das Recht (`sensitiveHidden`); Knopf „Sensible Daten anzeigen“ |
-| „Verletzt“/„getötet“ im Personal eines Berichts | `incidents.injuries.read` | Zahl ohne Namen („1 eigene Verletzte“) |
-| Überweisungs- und SEPA-Datei, Abrechnungen mit Bankverbindung | `compensation.runs` (nur diese Ausgaben, Endpunkt-Kennzeichen `@StepUp()`) | Lauf und Posten lesbar, Download fragt nach |
-| Datenschutz: Auskunft, Anfragen, Löschung, Einschränkung, Verzeichnis, Einstellungen Datenschutz | `core.privacy.manage` | ganze Seite |
-| Benutzer, Rollen, API-Tokens, Einstellungen des Core, Module und Plugins | `core.users.manage`, `core.roles.manage`, `core.tokens.manage`, `core.settings.manage`, `core.modules.manage` | ganze Seite |
-| Audit-Log und Leseprotokoll | `core.audit.read` | ganze Seite |
-| Vollexport | `core.data.export` | Knopf fragt nach |
-| Anmelden als (Impersonation) | `core.users.impersonate` | Start fragt nach |
-| Datensicherung und Wiederherstellung | `backup.manage` | ganze Seite; die Wiederherstellung verlangt zusätzlich Passphrase und Namen wie im [Konzept](module/backup.md) |
-| Aussonderung | `core.retention.manage` | ganze Seite |
-
-Keinen Step-up brauchen: Einstellungen der Module (`<modul>.settings.manage`, z. B. Entschädigungssätze), Personalakte ohne sensible Felder, Einsatzberichte ohne Verletzte, Listen ohne sensible Daten, Einwilligungen erfassen (`core.privacy.consents`), **Mein Bereich** (eigene Daten einschließlich eigener Untersuchungen und Bankverbindung; die Anmeldung genügt, sonst bräuchte jedes Mitglied einen Faktor) und das **Infoterminal** (nie: es hat keine Sitzung eines Benutzers und liest keine sensiblen Daten).
-
-Die Rollenseite zeigt an jeder Berechtigung mit `stepUp` das Kennzeichen „zweiter Faktor“, die Benutzerliste je Benutzer „Faktor eingerichtet“ bzw. „nötig, nicht eingerichtet“.
-
-### Durchsetzung auf dem Server
-
-- **Sitzung:** `core.session.elevated_until` (Zeitpunkt). `POST /api/core/step-up` (`{ code }` oder `{ recoveryCode }`, Sitzung mit CSRF-Header) setzt es auf jetzt + 30 Minuten. Die Frist verlängert sich nicht durch Aktivität; nach Ablauf fragt der nächste Zugriff erneut. Abmelden, Passwortwechsel, Zurücksetzen des Faktors und Ende der Sitzung beenden die Bestätigung. `POST /api/core/step-up/end` beendet sie vorzeitig („Bestätigung beenden“). `GET /api/core/session` liefert `elevatedUntil` und `mfa: { enrolled }`.
-- **Guard:** `@RequirePermissions` prüft wie heute das Recht; trägt die Berechtigung `stepUp` (oder der Endpunkt `@StepUp()`) und ist `elevatedUntil` nicht in der Zukunft, antwortet der Server `403 auth.stepUpRequired` mit `{ enrolled: boolean }`. Felder mit `stepUp` (sensible Personenfelder, Untersuchungen, Verletzte) behandelt der Lesepfad wie fehlende Rechte, solange die Sitzung nicht bestätigt ist; der Schreibpfad lehnt mit `auth.stepUpRequired` ab, statt Felder still zu ignorieren.
-- **Begrenzung:** 5 falsche Codes je Benutzer in 15 Minuten, danach 15 Minuten gesperrt (`429 auth.stepUpLocked`), Zähler in der Datenbank. Audit `auth.step-up` (Erfolg, Faktor oder Wiederherstellungscode), `auth.step-up-failed`, `auth.mfa-enrolled`, `auth.recovery-codes-renewed`, `auth.mfa-reset`.
-- **Impersonation:** Die Impersonation-Sitzung ist nie bestätigt; Step-up während einer Impersonation prüft den Faktor des **Administrators** und gilt nur für diese Impersonation-Sitzung. Der Start der Impersonation selbst verlangt Step-up.
-- **OIDC:** Die Anmeldung über den Anbieter bleibt ohne zweiten Faktor in f.orga. Meldet der Anbieter im ID-Token `amr` mit `mfa`, `otp` oder `hwk` und ist `auth_time` jünger als 30 Minuten, ist die Sitzung bis `auth_time` + 30 Minuten bestätigt. Danach gilt der Faktor in f.orga; alternativ „Beim Anbieter bestätigen“ (erneute Anmeldung mit `prompt=login` und `max_age=0`), wenn die Einstellung `oidc.stepUpViaProvider` an ist.
-- **API-Tokens:** Ein Token kann keinen zweiten Faktor zeigen. Berechtigungen mit `stepUp` lassen sich keinem Token geben (`tokens.stepUpScope`), wie heute die `core.*`-Rechte. Ausnahme nur, wenn das Manifest die Berechtigung ausdrücklich mit `tokenAllowed: true` freigibt (heute keine). Vorhandene Tokens mit solchen Bereichen wirken nach dem Update für diese Bereiche nicht mehr; die Token-Seite zeigt den Bereich durchgestrichen mit Hinweis. Endpunkte mit Feldern unter `stepUp` liefern Tokens diese Felder nie.
-- **Infoterminal:** Der `TerminalGuard` kennt keinen Step-up; Kiosk-Endpunkte dürfen keine Berechtigung mit `stepUp` prüfen (Startprüfung: Fehler beim Start, wenn ein Kiosk-Endpunkt ein solches Recht verlangt).
-
-### Oberfläche
-
-- Der API-Client im `web-sdk` fängt `auth.stepUpRequired` ab, zeigt den Dialog „Bitte bestätigen Sie mit Ihrem Code“ (Code-Feld mit `autocomplete="one-time-code"`, Link „Wiederherstellungscode verwenden“) und wiederholt danach die Anfrage. Ohne eingerichteten Faktor führt der Dialog zur Einrichtung. Abbrechen lässt die Seite ohne die sensiblen Teile.
-- Solange die Sitzung bestätigt ist, zeigt die Kopfzeile eine Plakette „Bestätigt bis 10:42“ mit „Beenden“.
-- Einstellung `security.stepUpMinutes` gibt es nicht: 30 Minuten sind fest. Die Seite „Sicherheit“ zeigt den Stand (Benutzer mit sensiblen Rechten und eingerichtetem Faktor).
+- **Weitere Bereiche mit `stepUp`**, sobald es sie gibt: `incidents.injuries.read` („Verletzt“/„getötet“ im Personal eines Berichts; ohne Bestätigung die Zahl ohne Namen, „1 eigene Verletzte“), `core.privacy.manage` (Auskunft, Anfragen, Löschung, Einschränkung, Verzeichnis, Einstellungen Datenschutz: ganze Seite) und das Leseprotokoll unter `core.audit.read`. Der Mechanismus ist allgemein: Die Berechtigung bekommt im Manifest `stepUp: true`, Lesepfade mit solchen Feldern prüfen `user.can` (bzw. `needsStepUp` für `stepUpAvailable`), Schreibpfade antworten mit `user.denied(...)`.
+- **Seite „Sicherheit“** in „Einstellungen → Datenschutz“: Stand des Step-up (nur Anzeige: Benutzer mit sensiblen Rechten und eingerichtetem Faktor).
+- Später zusätzlich **WebAuthn** (Passkeys) als zweiter Faktor.
 
 ## Einstellungen „Datenschutz“
 
@@ -443,7 +400,7 @@ Alle Entscheidungen sind festgelegt (wie empfohlen, Nr. 2 abweichend).
 
 | Phase | Inhalt | Lücken |
 | --- | --- | --- |
-| 1 – vor dem Echtbetrieb | Zweiter Faktor als Step-up bei sensiblen Daten. Umgesetzt: HTTPS mit Caddy und Sicherheitsheader, `FORGA_STAGE`, E-Mails ohne Gesundheitsbezug, Verletzte nur mit Recht ([implementiert](../implementiert/datenschutz.md)) | L2 (L1, L5 Teil, L6, L18 Teil umgesetzt) |
+| 1 – vor dem Echtbetrieb | umgesetzt: zweiter Faktor als Step-up, HTTPS mit Caddy und Sicherheitsheader, `FORGA_STAGE` mit Band und Sperren im Testsystem, E-Mails ohne Gesundheitsbezug, Verletzte nur mit Recht (mit `stepUp`) ([implementiert](../implementiert/datenschutz.md)) | L1, L2, L5 (Teil), L6, L18 (Teil) |
 | 2 – Rechte der Betroffenen | Datenschutzhinweis und erste Anmeldung; Anfragen mit Frist; Auskunft als PDF mit `describePerson` in allen Modulen; Einschränkung | L3, L4, L7 (Anfragen, Einschränkung), L19 |
 | 3 – Nachweise | Verzeichnis aus den Manifesten mit technischen Maßnahmen; Einwilligungen; Berichtigung in Mein Bereich; Leseprotokoll; Impersonation sichtbar | L8, L9, L12, L15, L20 |
 | 4 – Löschen und Minimieren | Löschprüfung je Modul; vollständige Anonymisierung mit Startprüfung; Daten Dritter; abschaltbare Felder; Zweck der Listen; Aufbewahrungsplan | L7 (Löschung), L10, L11, L13, L14, L29 |

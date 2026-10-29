@@ -5,13 +5,12 @@ import {
   ForbiddenException,
   HttpException,
   HttpStatus,
-  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import type { Request, Response } from 'express';
-import { Audit, CSRF_HEADER, FORGA_CORE_OPTIONS, type ForgaCoreOptions, UserContext } from '@forga/core-api';
+import { Audit, CookiePolicy, CSRF_HEADER, UserContext } from '@forga/core-api';
 import { KIOSK_API_PATH, TERMINAL_COOKIE } from '@forga/info-terminal-contracts';
 import { TerminalEntity } from '../info-terminal.entities.js';
 import { hashDeviceKey, sameHash } from '../security/device-keys.js';
@@ -41,11 +40,12 @@ export class TerminalAuth {
   constructor(
     private readonly em: EntityManager,
     private readonly audit: Audit,
-    @Inject(FORGA_CORE_OPTIONS) private readonly options: ForgaCoreOptions,
+    private readonly cookies: CookiePolicy,
   ) {}
 
-  cookieOptions() {
-    return { httpOnly: true, sameSite: 'strict' as const, secure: this.options.secureCookies, path: KIOSK_API_PATH, maxAge: COOKIE_MAX_AGE_MS };
+  /** `Secure` like the session cookie (`CookiePolicy`). */
+  async cookieOptions(req: Request) {
+    return { httpOnly: true, sameSite: 'strict' as const, secure: await this.cookies.secure(req), path: KIOSK_API_PATH, maxAge: COOKIE_MAX_AGE_MS };
   }
 
   /**
@@ -72,7 +72,7 @@ export class TerminalAuth {
     const now = Date.now();
     if (terminal.lastSeenAt && now - terminal.lastSeenAt.getTime() < SEEN_INTERVAL_MS) return;
     await this.em.fork().nativeUpdate(TerminalEntity, { id: terminal.id }, { lastSeenAt: new Date(now) });
-    res.cookie(TERMINAL_COOKIE, key, this.cookieOptions());
+    res.cookie(TERMINAL_COOKIE, key, await this.cookieOptions(res.req));
   }
 }
 

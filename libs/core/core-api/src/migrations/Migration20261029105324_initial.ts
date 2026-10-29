@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261029084210_initial extends Migration {
+export class Migration20261029105324_initial extends Migration {
 
-  override name = 'Migration20261029084210_initial';
+  override name = 'Migration20261029105324_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"core\";");
@@ -30,19 +30,22 @@ export class Migration20261029084210_initial extends Migration {
     this.addSql("alter table \"core\".\"user\" add constraint \"user_username_unique\" unique (\"username\");");
     this.addSql("alter table \"core\".\"user\" add constraint \"user_person_id_unique\" unique (\"person_id\");");
     this.addSql("alter table \"core\".\"user\" add constraint \"user_oidc_subject_unique\" unique (\"oidc_subject\");");
-    this.addSql("create table \"core\".\"session\" (\"id\" varchar(255) not null, \"user_id\" uuid not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz not null, \"impersonator_id\" uuid null, \"impersonation_reason\" text null, primary key (\"id\"));");
+    this.addSql("create table \"core\".\"session\" (\"id\" varchar(255) not null, \"user_id\" uuid not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz not null, \"impersonator_id\" uuid null, \"impersonation_reason\" text null, \"elevated_until\" timestamptz null, primary key (\"id\"));");
     this.addSql("create index \"session_expires_at_index\" on \"core\".\"session\" (\"expires_at\");");
     this.addSql("create table \"core\".\"role_assignment\" (\"id\" uuid not null, \"user_id\" uuid not null, \"role_id\" uuid not null, \"department_id\" varchar(255) null, primary key (\"id\"));");
     this.addSql("create table \"core\".\"password_reset\" (\"id\" uuid not null, \"user_id\" uuid not null, \"purpose\" varchar(255) not null default 'reset', \"email\" varchar(255) null, \"hash\" varchar(255) not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz not null, \"used_at\" timestamptz null, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"password_reset\" add constraint \"password_reset_hash_unique\" unique (\"hash\");");
     this.addSql("create table \"core\".\"api_token\" (\"id\" uuid not null, \"name\" varchar(255) not null, \"user_id\" uuid not null, \"scopes\" jsonb not null, \"prefix\" varchar(255) not null, \"hash\" varchar(255) not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz null, \"last_used_at\" timestamptz null, \"revoked_at\" timestamptz null, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"api_token\" add constraint \"api_token_hash_unique\" unique (\"hash\");");
+    this.addSql("create table \"core\".\"user_mfa\" (\"id\" uuid not null, \"user_id\" uuid not null, \"secret\" text not null, \"confirmed_at\" timestamptz null, \"last_step\" int null, \"recovery_codes\" jsonb not null default '[]', \"failures\" int not null default 0, \"failure_window_start\" timestamptz null, \"locked_until\" timestamptz null, primary key (\"id\"));");
+    this.addSql("alter table \"core\".\"user_mfa\" add constraint \"user_mfa_user_id_unique\" unique (\"user_id\");");
     this.addSql("alter table \"core\".\"session\" add constraint \"session_user_id_foreign\" foreign key (\"user_id\") references \"core\".\"user\" (\"id\") on delete cascade;");
     this.addSql("alter table \"core\".\"session\" add constraint \"session_impersonator_id_foreign\" foreign key (\"impersonator_id\") references \"core\".\"user\" (\"id\") on delete cascade;");
     this.addSql("alter table \"core\".\"role_assignment\" add constraint \"role_assignment_user_id_foreign\" foreign key (\"user_id\") references \"core\".\"user\" (\"id\") on delete cascade;");
     this.addSql("alter table \"core\".\"role_assignment\" add constraint \"role_assignment_role_id_foreign\" foreign key (\"role_id\") references \"core\".\"role\" (\"id\") on delete cascade;");
     this.addSql("alter table \"core\".\"password_reset\" add constraint \"password_reset_user_id_foreign\" foreign key (\"user_id\") references \"core\".\"user\" (\"id\") on delete cascade;");
     this.addSql("alter table \"core\".\"api_token\" add constraint \"api_token_user_id_foreign\" foreign key (\"user_id\") references \"core\".\"user\" (\"id\") on delete cascade;");
+    this.addSql("alter table \"core\".\"user_mfa\" add constraint \"user_mfa_user_id_foreign\" foreign key (\"user_id\") references \"core\".\"user\" (\"id\") on delete cascade;");
   }
 
   override down(): void {
@@ -52,6 +55,7 @@ export class Migration20261029084210_initial extends Migration {
     this.addSql("alter table \"core\".\"role_assignment\" drop constraint \"role_assignment_user_id_foreign\";");
     this.addSql("alter table \"core\".\"password_reset\" drop constraint \"password_reset_user_id_foreign\";");
     this.addSql("alter table \"core\".\"api_token\" drop constraint \"api_token_user_id_foreign\";");
+    this.addSql("alter table \"core\".\"user_mfa\" drop constraint \"user_mfa_user_id_foreign\";");
     this.addSql("drop table if exists \"core\".\"attachment\" cascade;");
     this.addSql("drop table if exists \"core\".\"audit\" cascade;");
     this.addSql("drop table if exists \"core\".\"brigade_asset\" cascade;");
@@ -68,6 +72,7 @@ export class Migration20261029084210_initial extends Migration {
     this.addSql("drop table if exists \"core\".\"role_assignment\" cascade;");
     this.addSql("drop table if exists \"core\".\"password_reset\" cascade;");
     this.addSql("drop table if exists \"core\".\"api_token\" cascade;");
+    this.addSql("drop table if exists \"core\".\"user_mfa\" cascade;");
   }
 
 }

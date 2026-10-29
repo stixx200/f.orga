@@ -10,6 +10,7 @@ import { MaintenancePage } from './auth/MaintenancePage';
 import { ConfirmEmailPage } from './auth/ConfirmEmailPage';
 import { ResetPasswordPage } from './auth/ResetPasswordPage';
 import { SetupPage } from './auth/SetupPage';
+import { StepUpHost } from './auth/StepUp';
 import { AppFrame } from './frame/AppFrame';
 import { StageBand } from './frame/StageBand';
 import { moduleSettings } from './frame/Sidebar';
@@ -84,7 +85,12 @@ function LoggedIn({ session }: { session: Session }) {
 
   if (error) return <Alert color="brand" title={t('serverUnavailable')}>{error.message}</Alert>;
   if (!modules) return <Loader m="xl" />;
-  return <Router modules={modules} session={session} />;
+  return (
+    <>
+      <Router modules={modules} session={session} />
+      <StepUpHost session={session} />
+    </>
+  );
 }
 
 /** A page of a module without shell frame and login, e.g. the info terminal at `/terminal`. */

@@ -255,7 +255,8 @@ export class ReportsService {
   async toDtoFor(user: AuthenticatedUser, em: EntityManager, report: ReportEntity, context?: ReportContext): Promise<Report> {
     const dto = await this.toDto(em, report, context);
     if (this.canSeeInjuries(user, report)) return dto;
-    return { ...dto, personnel: dto.personnel.map((p) => ({ ...p, injured: false, killed: false })), injuries: { ...dto.injuries, hidden: true } };
+    const stepUpAvailable = report.departmentId ? user.needsStepUp(INJURIES, report.departmentId) : user.needsStepUp(INJURIES);
+    return { ...dto, personnel: dto.personnel.map((p) => ({ ...p, injured: false, killed: false })), injuries: { ...dto.injuries, hidden: true, stepUpAvailable } };
   }
 
   /**
@@ -858,7 +859,7 @@ export class ReportsService {
       })),
       findings: await this.findings(em, report, ctx),
       compensationTotal: Math.round(personnel.reduce((sum, p) => sum + p.compensation.amount, 0) * 100) / 100,
-      injuries: { hidden: false, injured: personnel.filter((p) => p.injured && !p.killed).length, killed: personnel.filter((p) => p.killed).length },
+      injuries: { hidden: false, injured: personnel.filter((p) => p.injured && !p.killed).length, killed: personnel.filter((p) => p.killed).length, stepUpAvailable: false },
       version: report.version,
       latestBookingAt: latestBookingAt(report),
     };

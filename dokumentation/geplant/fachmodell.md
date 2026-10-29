@@ -261,8 +261,13 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Verantwortlicher, Datenschutzbeauftragter, Aufsichtsbehörde | controller, data protection officer, supervisory authority (`privacy.contacts`, `privacy.authority`) |
 | Gesundheitsdaten (besondere Kategorie) | `health: true` an Feldern, Fristarten und Tätigkeiten |
 | Leseprotokoll | access log (`core.access_log`) |
-| Zweiter Faktor, Wiederherstellungscode | MFA, TOTP, recovery code (`core.user_mfa`) |
-| Bestätigung mit dem zweiten Faktor beim Öffnen sensibler Daten (30 Minuten je Sitzung) | step-up (`POST /api/core/step-up`, `core.session.elevated_until`, Kennzeichen `stepUp` an Berechtigungen, `@StepUp()`, Fehlercode `auth.stepUpRequired`) |
+| Zweiter Faktor, Einrichten, Wiederherstellungscode | MFA, TOTP, enrolment, recovery code (`core.user_mfa`, `MfaService`, `/api/core/mfa/…`) |
+| Bestätigung mit dem zweiten Faktor beim Öffnen sensibler Daten (30 Minuten je Sitzung) | step-up (`POST /api/core/step-up`, `core.session.elevated_until`, `elevatedUntil`, Kennzeichen `stepUp` an Berechtigungen, `@StepUp()`, Fehlercode `auth.stepUpRequired`) |
+| Recht, das auf die Bestätigung wartet | `locked` an `AuthenticatedUser` (`holds`, `needsStepUp`, `denied`), `stepUpPermissions` der Sitzung |
+| Sensible Teile ausgeblendet bis zur Bestätigung | `sensitiveHidden` mit `stepUpAvailable` |
+| „Bestätigt bis …“ (Plakette in der Kopfzeile) | `ElevationBadge` |
+| Beim Anbieter bestätigen | Einstellung `oidc.stepUpViaProvider`, `POST /api/core/oidc/step-up` |
+| Zweiten Faktor zurücksetzen | `DELETE /api/core/users/:id/mfa`, Audit `auth.mfa-reset` |
 | Datenschutz verwalten | Recht `core.privacy.manage` |
 | Datenpanne | data breach |
 | Stufe der Installation (Echt-, Test-, Entwicklungssystem) | stage (`FORGA_STAGE`: `production`, `test`, `development`; `ForgaStage`, `forgaStage()`, `isTestStage()`, `useStage()`) |

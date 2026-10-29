@@ -136,7 +136,8 @@ export class ImportService {
   async runRows(input: RunRowsInput): Promise<ImportRunOutcome> {
     const { user, dryRun, source } = input;
     const profile = this.registry.get(input.profile);
-    if (!profile || !user.can(profile.permission)) throw new NotFoundException({ code: 'imports.unknownProfile' });
+    if (!profile || !user.holds(profile.permission)) throw new NotFoundException({ code: 'imports.unknownProfile' });
+    if (!user.can(profile.permission)) throw user.stepUpRequired();
     // Real personal data stay out of the test system; only the made-up data of `npm run seed` may come in.
     if (profile.personData && isTestStage() && !input.demoData) throw new ForbiddenException({ code: 'imports.lockedInTestStage' });
     const options = Object.fromEntries((profile.options ?? []).map((o) => [o.key, input.options?.[o.key] ?? o.default]));
@@ -238,7 +239,8 @@ export class ImportService {
     const upload = await em.findOne(ImportUploadEntity, { id: uploadId, userId: user.id });
     if (!upload) throw new NotFoundException({ code: 'imports.uploadNotFound' });
     const profile = this.registry.get(request.profile);
-    if (!profile || !user.can(profile.permission)) throw new NotFoundException({ code: 'imports.unknownProfile' });
+    if (!profile || !user.holds(profile.permission)) throw new NotFoundException({ code: 'imports.unknownProfile' });
+    if (!user.can(profile.permission)) throw user.stepUpRequired();
 
     for (const field of profile.fields) {
       const column = request.mapping[field.key];
@@ -331,7 +333,7 @@ export class ImportsController {
     const lookup = this.registry.lookup(kind);
     if (!lookup || !this.registry.available(user).length) throw new NotFoundException({ code: 'imports.unknownLookup', kind });
     if (!lookup.create || !user.can(lookup.create.permission)) {
-      throw new ForbiddenException({ code: 'auth.forbidden', permissions: lookup.create ? [lookup.create.permission] : [] });
+      throw user.denied(lookup.create ? [lookup.create.permission] : []);
     }
     const entry = await lookup.create.run(input);
     await this.audit.log('imports.lookupEntryCreated', { kind, key: entry.key });

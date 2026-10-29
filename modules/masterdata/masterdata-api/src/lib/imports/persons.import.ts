@@ -133,6 +133,8 @@ export class PersonsImport {
     const byKey = new Map(departments.map((d) => [departmentKey(d), d]));
     const existing = await em.find(Person, {}, { populate: ['memberships.department', 'qualifications', 'ranks', 'honors', 'offices', 'restPeriods'] });
     const sensitive = user.grant(SENSITIVE) !== null;
+    // Sensitive values (birth dates) wait for the second factor instead of being ignored.
+    if (!sensitive && user.heldGrant(SENSITIVE) !== null && rows.some(({ values }) => values['birthDate'])) throw user.stepUpRequired();
     const results: ImportRowResult[] = [];
 
     for (const { row, values } of rows) {

@@ -24,7 +24,7 @@ export function MasterDataTab({ person, form, setForm, disabled }: { person: Per
     <TextInput label={t(`person.${key}`)} type={type} value={form[key]} onChange={(e) => set(key, e.currentTarget.value)} disabled={disabled} required={required} />
   );
   const sensitiveBadge = <StatusBadge>{t('person.sensitive')}</StatusBadge>;
-  const hidden = <Notice kind="info">{t('person.sensitiveHidden')}</Notice>;
+  const hidden = <Notice kind="info">{t(person.stepUpAvailable ? 'person.sensitiveStepUp' : 'person.sensitiveHidden')}</Notice>;
   const employer = { name: '', street: '', postalCode: '', city: '', phone: '', contact: '', iban: '', lossOfEarningsAssignedFrom: null, ...form.employer };
   const bank = form.bank ?? { iban: '', accountHolder: '' };
 

@@ -28,6 +28,20 @@ export function can(session: Session | null | undefined, permission: string, dep
   return grant.includes(departmentId);
 }
 
+/** Is the session confirmed with the second factor (step-up) right now? */
+export function isElevated(session: Session | null | undefined, now = Date.now()): boolean {
+  return Boolean(session?.elevatedUntil && Date.parse(session.elevatedUntil) > now);
+}
+
+/**
+ * Like `can`, but a permission with step-up counts only while the session is confirmed: for showing sensitive fields
+ * the server leaves out until then. Pages and buttons use `can`; the server asks for the second factor when needed.
+ */
+export function unlocked(session: Session | null | undefined, permission: string, departmentId?: string): boolean {
+  if (!can(session, permission, departmentId)) return false;
+  return !session?.stepUpPermissions.includes(permission) || isElevated(session);
+}
+
 /** Does the logged-in user have the permission (optionally for a department)? */
 export function useCan(permission: string, departmentId?: string): boolean {
   const { data } = useSession();

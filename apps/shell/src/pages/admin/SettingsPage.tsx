@@ -65,7 +65,7 @@ function OidcChecks({ matchBy }: { matchBy: OidcSettings['matchBy'] }) {
 }
 const SMTP_DEFAULTS: SmtpSettings = { host: '', port: 587, starttls: true, username: '', password: '', sender: '' };
 const REMINDER_DEFAULTS: ReminderSettings = { enabled: true, weekday: 1, hour: 7 };
-const OIDC_DEFAULTS: OidcSettings = { enabled: false, issuer: '', clientId: '', clientSecret: '', scopes: 'openid email profile', matchBy: 'email', buttonLabel: { de: 'Mit Konto der Gemeinde anmelden', en: 'Sign in with the municipal account' } };
+const OIDC_DEFAULTS: OidcSettings = { enabled: false, issuer: '', clientId: '', clientSecret: '', scopes: 'openid email profile', matchBy: 'email', buttonLabel: { de: 'Mit Konto der Gemeinde anmelden', en: 'Sign in with the municipal account' }, stepUpViaProvider: false };
 
 export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
   const { t } = useTranslation('shell');
@@ -177,6 +177,7 @@ export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
                     <TextInput label={t('settings.oidc.labelDe')} value={v.buttonLabel.de} onChange={(e) => set('buttonLabel', { ...v.buttonLabel, de: e.currentTarget.value })} />
                     <TextInput label={t('settings.oidc.labelEn')} value={v.buttonLabel.en} onChange={(e) => set('buttonLabel', { ...v.buttonLabel, en: e.currentTarget.value })} />
                   </SimpleGrid>
+                  <Switch label={t('settings.oidc.stepUpViaProvider')} description={t('settings.oidc.stepUpViaProviderHint')} checked={v.stepUpViaProvider} onChange={(e) => set('stepUpViaProvider', e.currentTarget.checked)} />
                   <Text size="xs" c="dimmed">{t('settings.oidc.redirect')}</Text>
                   <OidcChecks matchBy={v.matchBy} />
                 </>

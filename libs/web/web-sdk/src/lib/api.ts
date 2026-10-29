@@ -1,5 +1,6 @@
 import { i18n } from './i18n';
 import { reportMaintenance } from './maintenance';
+import { isStepUpPath, requestStepUp } from './step-up';
 
 /** An API error with the machine-readable `code` from the server, e.g. `auth.invalidCredentials`. */
 export class ApiError extends Error {
@@ -62,18 +63,59 @@ function failure(response: Response, body: unknown): ApiError {
 }
 
 /**
+ * Runs a request; on `403 auth.stepUpRequired` asks for the second factor (dialog of the shell) and repeats it once
+ * after the confirmation. Cancelling keeps the error, so the page shows what it can without the sensitive parts.
+ */
+async function withStepUp(path: string, method: string, run: () => Promise<Response>): Promise<{ response: Response; body: unknown }> {
+  const attempt = async () => {
+    const response = await run();
+    const body = response.status === 204 ? undefined : await response.json().catch(() => undefined);
+    return { response, body };
+  };
+  const first = await attempt();
+  const code = (first.body as { code?: unknown } | undefined)?.code;
+  if (first.response.status !== 403 || code !== 'auth.stepUpRequired' || (isStepUpPath(path) && method !== 'GET')) return first;
+  const enrolled = (first.body as { enrolled?: unknown }).enrolled !== false;
+  return (await requestStepUp({ enrolled })) ? attempt() : first;
+}
+
+/**
  * Calls the f.orga API with the session cookie. Paths without the `/api` prefix.
  * The `x-forga` header marks requests from the UI (CSRF protection).
  */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`/api/${path.replace(/^\//, '')}`, {
-    credentials: 'include',
-    ...init,
-    headers: { 'Content-Type': 'application/json', 'x-forga': '1', ...init.headers },
-  });
-  const body = response.status === 204 ? undefined : await response.json().catch(() => undefined);
+  const { response, body } = await withStepUp(path, init.method ?? 'GET', () =>
+    fetch(`/api/${path.replace(/^\//, '')}`, {
+      credentials: 'include',
+      ...init,
+      headers: { 'Content-Type': 'application/json', 'x-forga': '1', ...init.headers },
+    }),
+  );
   if (!response.ok) throw failure(response, body);
   return body as T;
+}
+
+/**
+ * Makes sure the session is confirmed with the second factor, e.g. before opening a download link with sensitive data
+ * (SEPA file, data access). Resolves `false` if the user cancels.
+ */
+export async function ensureStepUp(): Promise<boolean> {
+  try {
+    await api<void>('core/step-up');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Opens a download or PDF with sensitive data after making sure the session is confirmed (a plain link would show the
+ * server's error instead of the dialog). `newTab` for PDFs shown in the browser.
+ */
+export async function openAfterStepUp(url: string, newTab = false): Promise<void> {
+  if (!(await ensureStepUp())) return;
+  if (newTab) window.open(url, '_blank', 'noopener');
+  else window.location.assign(url);
 }
 
 export const send = <T>(method: 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown) =>
@@ -83,8 +125,7 @@ export const send = <T>(method: 'POST' | 'PUT' | 'DELETE', path: string, body?: 
 export async function upload<T>(path: string, file: File, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
   const form = new FormData();
   form.append('file', file);
-  const response = await fetch(`/api/${path.replace(/^\//, '')}`, { method, credentials: 'include', headers: { 'x-forga': '1' }, body: form });
-  const body = await response.json().catch(() => undefined);
+  const { response, body } = await withStepUp(path, method, () => fetch(`/api/${path.replace(/^\//, '')}`, { method, credentials: 'include', headers: { 'x-forga': '1' }, body: form }));
   if (!response.ok) throw failure(response, body);
   return body as T;
 }
@@ -93,8 +134,7 @@ export async function upload<T>(path: string, file: File, method: 'POST' | 'PUT'
 export async function uploadFiles<T>(path: string, files: readonly File[]): Promise<T> {
   const form = new FormData();
   for (const file of files) form.append('files', file);
-  const response = await fetch(`/api/${path.replace(/^\//, '')}`, { method: 'POST', credentials: 'include', headers: { 'x-forga': '1' }, body: form });
-  const body = await response.json().catch(() => undefined);
+  const { response, body } = await withStepUp(path, 'POST', () => fetch(`/api/${path.replace(/^\//, '')}`, { method: 'POST', credentials: 'include', headers: { 'x-forga': '1' }, body: form }));
   if (!response.ok) throw failure(response, body);
   return body as T;
 }

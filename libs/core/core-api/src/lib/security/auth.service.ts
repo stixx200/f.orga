@@ -8,7 +8,7 @@ import { generateSecret, hashSecret, verifyPassword } from './password.js';
 import { ModuleStateService } from '../module/modules.js';
 import { OrganizationDirectory } from './organization-directory.js';
 import { PermissionRegistry } from './permission-registry.js';
-import { ApiToken, type Role, Session, User } from './security.entities.js';
+import { ApiToken, type Role, Session, User, UserMfa } from './security.entities.js';
 
 export const SESSION_COOKIE = 'forga_session';
 /** Keeps the administrator's own session while an impersonation session is active. */
@@ -105,7 +105,8 @@ export class AuthService implements OnApplicationBootstrap {
     return { token, user };
   }
 
-  async openSession(em: EntityManager, user: User): Promise<string> {
+  /** Opens a session; `elevatedUntil` e.g. after an OIDC sign-in with a second factor at the provider. */
+  async openSession(em: EntityManager, user: User, elevatedUntil: Date | null = null): Promise<string> {
     const token = generateSecret();
     const now = new Date();
     em.create(Session, {
@@ -113,6 +114,7 @@ export class AuthService implements OnApplicationBootstrap {
       user,
       createdAt: now,
       expiresAt: new Date(now.getTime() + SESSION_DURATION_MS),
+      elevatedUntil,
     });
     user.lastLogin = now;
     await em.flush();
@@ -131,7 +133,13 @@ export class AuthService implements OnApplicationBootstrap {
       await em.nativeDelete(Session, { id: session.id });
       return null;
     }
-    const user = await this.load(em, session.user, 'session');
+    const elevatedUntil = session.elevatedUntil && session.elevatedUntil > new Date() ? session.elevatedUntil : null;
+    const user = await this.load(em, session.user, 'session', elevatedUntil !== null);
+    user.sessionId = session.id;
+    user.elevatedUntil = elevatedUntil;
+    // During an impersonation the administrator confirms with his own factor.
+    const factorOwner = session.impersonator ?? session.user;
+    user.mfaEnrolled = (await em.count(UserMfa, { user: factorOwner, confirmedAt: { $ne: null } })) > 0;
     if (session.impersonator) {
       user.impersonator = { id: session.impersonator.id, displayName: session.impersonator.displayName, endsAt: session.expiresAt };
     }
@@ -186,8 +194,9 @@ export class AuthService implements OnApplicationBootstrap {
     apiToken.lastUsedAt = now;
     await em.flush();
     // A token can do exactly what its scopes say, brigade-wide; like sessions, not in deactivated modules,
-    // and never privileged permissions (e.g. downloading and replacing the data with a backup).
-    const permissions = (await this.activePermissions()).filter((p) => !p.privileged);
+    // never privileged permissions (e.g. downloading and replacing the data with a backup) and never permissions that
+    // need the second factor: a token cannot show one (`tokenForbidden`).
+    const permissions = (await this.activePermissions()).filter((p) => !this.registry.tokenForbidden(p));
     const grants = computeGrants(permissions, [{ patterns: apiToken.scopes, departmentId: null }]);
     const user = apiToken.user;
     return new AuthenticatedUser(user.id, user.username, user.displayName, null, user.language, grants, 'token');
@@ -261,17 +270,18 @@ export class AuthService implements OnApplicationBootstrap {
     if (wider.length) throw new ForbiddenException({ code: 'users.targetWider', permissions: wider });
   }
 
-  async load(em: EntityManager, user: User, via: 'session' | 'token'): Promise<AuthenticatedUser> {
+  /**
+   * The user with the grants of his roles. Permissions with `stepUp` take effect only in a confirmed session
+   * (`elevated`); otherwise they are kept apart as `locked`, so the guard can ask for the second factor.
+   */
+  async load(em: EntityManager, user: User, via: 'session' | 'token', elevated = false): Promise<AuthenticatedUser> {
     await em.populate(user, ['roles.role']);
-    const grants = await this.grantsFor(user.roles.getItems().map((a) => ({ role: a.role, departmentId: a.departmentId ?? null })));
-    return new AuthenticatedUser(
-      user.id,
-      user.username,
-      user.displayName,
-      user.personId ?? null,
-      user.language,
-      grants,
-      via,
-    );
+    const held = await this.grantsFor(user.roles.getItems().map((a) => ({ role: a.role, departmentId: a.departmentId ?? null })));
+    const grants = new Map<string, Grant>();
+    const locked = new Map<string, Grant>();
+    for (const [permission, grant] of held) {
+      (elevated || !this.registry.stepUp.has(permission) ? grants : locked).set(permission, grant);
+    }
+    return new AuthenticatedUser(user.id, user.username, user.displayName, user.personId ?? null, user.language, grants, via, locked);
   }
 }

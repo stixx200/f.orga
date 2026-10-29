@@ -249,7 +249,8 @@ export class ImportRegistry {
 
   available(user: AuthenticatedUser): ImportProfileInfo[] {
     return [...this.profiles.values()]
-      .filter(({ profile }) => user.can(profile.permission))
+      // Profiles with sensitive data are offered without step-up; reading and applying a file asks for it.
+      .filter(({ profile }) => user.holds(profile.permission))
       .map(({ module, profile }) => ({
         id: profile.id,
         module,

@@ -9,6 +9,7 @@ import { CurrentUser } from '../security/decorators.js';
 import { OrganizationDirectory } from '../security/organization-directory.js';
 import { User } from '../security/security.entities.js';
 import { forgaStage } from '../stage.js';
+import { serverKey } from '../security/server-key.js';
 import { Setting, SettingsService } from './settings.js';
 
 /**
@@ -27,7 +28,8 @@ export class OnboardingController {
 
   @Get()
   async items(@CurrentUser() user: AuthenticatedUser, @Req() req: Request): Promise<OnboardingItem[]> {
-    if (!user.can('core.settings.manage') && !user.can('core.users.manage')) {
+    // Only whether setup steps are done, no sensitive data: holding the permission suffices, without step-up.
+    if (!user.holds('core.settings.manage') && !user.holds('core.users.manage')) {
       throw new ForbiddenException({ code: 'auth.forbidden', permissions: ['core.settings.manage', 'core.users.manage'] });
     }
     const em = this.em.fork();
@@ -36,6 +38,8 @@ export class OnboardingController {
     const items: OnboardingItem[] = [
       { key: 'publicUrl', done: Boolean(brigade?.publicUrl || process.env.FORGA_PUBLIC_URL), to: '/admin/settings' },
       { key: 'smtp', done: process.env.FORGA_MAIL_TRANSPORT === 'memory' || Boolean(smtp?.host && smtp.sender), to: '/admin/settings?tab=smtp' },
+      // Without the server key no second factor can be set up, and the areas with step-up stay locked.
+      { key: 'secretKey', done: serverKey() !== null, to: '/profile' },
     ];
     // Passwords, sessions and health data only encrypted: warns while f.orga is opened over plain HTTP (not on the
     // developer's machine). Behind a TLS proxy this needs `FORGA_TRUST_PROXY`, so the request counts as HTTPS.

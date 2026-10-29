@@ -3,7 +3,7 @@ import { IconSearch } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { type Item, ItemKind, type ManualPayout, type PersonTotal, type Problem, type RunDetail, statuteMissing } from '@forga/compensation-contracts';
-import { ApiError, apiUrl, can, formatDate, formatDateTime, formatMoney, send, useSession, useTranslation } from '@forga/web-sdk';
+import { ApiError, apiUrl, can, ensureStepUp, formatDate, formatDateTime, formatMoney, isElevated, openAfterStepUp, send, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, EmptyState, matchesSearch, Notice, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { keys, RUNS, useCompensationSettings, useDepartments, usePersonName, useRun } from '../api';
 import { Amount, ItemLabel, RunStatusBadge } from '../parts';
@@ -148,6 +148,8 @@ export function RunPage() {
   const refresh = useAction(() => send('POST', `compensation/runs/${id}/refresh`), { invalidate: [keys.all], success: t('run.refreshed') });
   // Downloaded with fetch, so a missing payer account or IBAN shows as a message instead of an error page.
   const download = useAction(async (file: 'transfer.xml' | 'transfer.csv') => {
+    // Transfer files name bank accounts: only in a session confirmed with the second factor.
+    if (!(await ensureStepUp())) return;
     const response = await fetch(apiUrl(`compensation/runs/${id}/${file}`), { credentials: 'include' });
     if (!response.ok) throw new ApiError(response.status, await response.json().catch(() => undefined));
     const link = document.createElement('a');
@@ -156,6 +158,12 @@ export function RunPage() {
     link.click();
     URL.revokeObjectURL(link.href);
   });
+  // Statements name the bank account: ask for the second factor first instead of opening the server's error.
+  const statements = (event: { preventDefault: () => void }, url: string) => {
+    if (isElevated(session)) return;
+    event.preventDefault();
+    void openAfterStepUp(url, true);
+  };
   // Closing with persons without valid IBAN asks for an explicit confirmation listing them.
   const close = useAction((acceptMissingIban: boolean) => send('POST', `compensation/runs/${id}/close`, { acceptMissingIban }), {
     invalidate: [keys.all],
@@ -208,9 +216,9 @@ export function RunPage() {
             <Menu position="bottom-end">
               <Menu.Target><Button variant="default">{t('run.statements')}</Button></Menu.Target>
               <Menu.Dropdown>
-                <Menu.Item component="a" href={apiUrl(`compensation/runs/${id}/statements.pdf`)} target="_blank">{t('run.statementsAll')}</Menu.Item>
+                <Menu.Item component="a" href={apiUrl(`compensation/runs/${id}/statements.pdf`)} target="_blank" onClick={(e) => statements(e, apiUrl(`compensation/runs/${id}/statements.pdf`))}>{t('run.statementsAll')}</Menu.Item>
                 {run.departments.filter((d) => d.departmentId).map((d) => (
-                  <Menu.Item key={d.departmentId} component="a" href={apiUrl(`compensation/runs/${id}/statements.pdf`, { departmentId: d.departmentId })} target="_blank">{department(d.departmentId)}</Menu.Item>
+                  <Menu.Item key={d.departmentId} component="a" href={apiUrl(`compensation/runs/${id}/statements.pdf`, { departmentId: d.departmentId })} target="_blank" onClick={(e) => statements(e, apiUrl(`compensation/runs/${id}/statements.pdf`, { departmentId: d.departmentId }))}>{department(d.departmentId)}</Menu.Item>
                 ))}
                 {prepares && <Menu.Divider />}
                 {prepares && <Menu.Item component="a" href={apiUrl('core/lists/compensation.statement/export/pdf', { runId: id, lang: i18n.language })} target="_blank">{t('run.overview')}</Menu.Item>}

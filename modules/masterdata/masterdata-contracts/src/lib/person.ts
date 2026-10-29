@@ -278,6 +278,8 @@ export const Person = z.object({
   restPeriods: z.array(RestPeriod),
   /** `true` if sensitive fields were left out because the permission is missing. */
   sensitiveHidden: z.boolean(),
+  /** The fields are hidden only until the session is confirmed with the second factor (step-up). */
+  stepUpAvailable: z.boolean(),
   /** Set when the person was anonymised after leaving. */
   anonymizedAt: z.string().nullable(),
   birthDate: z.string().nullable().optional(),

@@ -24,7 +24,8 @@
     "@tabler/icons-react": "^3.49.0",
     "@mantine/dates": "^9.7.3",
     "@mantine/notifications": "^9.7.3",
-    "dayjs": "^1.11.23"
+    "dayjs": "^1.11.23",
+    "qrcode.react": "^4.2.0"
   },
   "devDependencies": {
     "@module-federation/vite": "^1.15.5",

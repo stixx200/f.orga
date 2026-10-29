@@ -29,13 +29,21 @@ import { CurrentUser, RequirePermissions } from './decorators.js';
 import { OrganizationDirectory, type PersonSummary } from './organization-directory.js';
 import { assertEmailFree, sameEmail, usersWithEmail } from './emails.js';
 import { hashPassword } from './password.js';
+import { MfaService } from './mfa.js';
 import { PasswordResetService } from './password-reset.js';
+import { PermissionRegistry } from './permission-registry.js';
 import { Role, RoleAssignment, Session, User } from './security.entities.js';
 
 type ParsedUserInput = ReturnType<typeof UserInput.parse>;
 type Assignments = ParsedUserInput['roles'];
 
-export function toUserDto(user: User): UserDto {
+/** Factor status of a user for the list: set up, and whether his permissions need one (step-up). */
+export interface MfaInfo {
+  mfaEnrolled: boolean;
+  mfaNeeded: boolean;
+}
+
+export function toUserDto(user: User, mfa: MfaInfo = { mfaEnrolled: false, mfaNeeded: false }): UserDto {
   return {
     id: user.id,
     username: user.username,
@@ -49,6 +57,7 @@ export function toUserDto(user: User): UserDto {
     lastLogin: user.lastLogin?.toISOString() ?? null,
     oidcLinked: Boolean(user.oidcSubject),
     passwordSet: Boolean(user.passwordHash),
+    ...mfa,
     roles: user.roles.getItems().map((a) => ({ roleId: a.role.id, departmentId: a.departmentId ?? null })),
     version: user.version,
   };
@@ -86,6 +95,8 @@ export class UsersController {
     private readonly auth: AuthService,
     private readonly organization: OrganizationDirectory,
     private readonly resets: PasswordResetService,
+    private readonly mfa: MfaService,
+    private readonly registry: PermissionRegistry,
   ) {}
 
   @Get()
@@ -93,14 +104,24 @@ export class UsersController {
     const users = await this.em
       .fork()
       .find(User, { technical: false }, { populate: ['roles.role', 'passwordHash'], orderBy: { displayName: 'asc' } });
-    return users.map(toUserDto);
+    const enrolled = await this.mfa.enrolledUserIds();
+    return Promise.all(users.map(async (user) => toUserDto(user, await this.mfaInfo(user, enrolled))));
   }
 
   @Get(':id')
   async get(@Param('id') id: string): Promise<UserDto> {
     const user = await this.em.fork().findOne(User, { id, technical: false }, { populate: ['roles.role', 'passwordHash'] });
     if (!user) throw new NotFoundException();
-    return toUserDto(user);
+    return this.toDto(user);
+  }
+
+  private async mfaInfo(user: User, enrolled: ReadonlySet<string>): Promise<MfaInfo> {
+    const grants = await this.auth.grantsFor(user.roles.getItems().map((a) => ({ role: a.role, departmentId: a.departmentId ?? null })));
+    return { mfaEnrolled: enrolled.has(user.id), mfaNeeded: [...grants.keys()].some((p) => this.registry.stepUp.has(p)) };
+  }
+
+  private async toDto(user: User): Promise<UserDto> {
+    return toUserDto(user, await this.mfaInfo(user, await this.mfa.enrolledUserIds()));
   }
 
   @Post()
@@ -128,7 +149,7 @@ export class UsersController {
     await em.flush();
     await this.audit.log('users.created', { userId: user.id, roles: input.roles });
     if (input.personId) await this.audit.log('users.person-linked', { userId: user.id, previousPersonId: null, personId: input.personId });
-    return toUserDto(await em.findOneOrFail(User, user.id, { populate: ['roles.role', 'passwordHash'], refresh: true }));
+    return this.toDto(await em.findOneOrFail(User, user.id, { populate: ['roles.role', 'passwordHash'], refresh: true }));
   }
 
   @Put(':id')
@@ -181,7 +202,7 @@ export class UsersController {
     if (updated.previousPersonId !== (input.personId ?? null)) {
       await this.audit.log('users.person-linked', { userId: updated.user.id, previousPersonId: updated.previousPersonId, personId: input.personId ?? null });
     }
-    return toUserDto(await this.em.fork().findOneOrFail(User, updated.user.id, { populate: ['roles.role', 'passwordHash'] }));
+    return this.toDto(await this.em.fork().findOneOrFail(User, updated.user.id, { populate: ['roles.role', 'passwordHash'] }));
   }
 
   /**
@@ -206,7 +227,7 @@ export class UsersController {
     });
     await this.audit.log('users.invited', { userId: user.id, personId: input.personId, roles: input.roles });
     await this.audit.log('users.person-linked', { userId: user.id, previousPersonId: null, personId: input.personId });
-    return toUserDto(await this.em.fork().findOneOrFail(User, user.id, { populate: ['roles.role', 'passwordHash'] }));
+    return this.toDto(await this.em.fork().findOneOrFail(User, user.id, { populate: ['roles.role', 'passwordHash'] }));
   }
 
   /**

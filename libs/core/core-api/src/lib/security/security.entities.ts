@@ -80,6 +80,8 @@ export const SessionSchema = defineEntity({
     /** Impersonation: the administrator acting as `user`, and why. */
     impersonator: () => p.manyToOne(User).nullable().deleteRule('cascade'),
     impersonationReason: p.text().nullable(),
+    /** Confirmed with the second factor until then (step-up); fixed, not extended by activity. */
+    elevatedUntil: p.datetime().nullable(),
   },
 });
 export class Session extends SessionSchema.class {}
@@ -105,3 +107,31 @@ export const ApiTokenSchema = defineEntity({
 });
 export class ApiToken extends ApiTokenSchema.class {}
 ApiTokenSchema.setClass(ApiToken);
+
+/**
+ * Second factor of a user (TOTP). Never in the history, exports or API responses: the secret is encrypted with
+ * `FORGA_SECRET_KEY`, recovery codes are stored as hashes only. Also holds the counter of wrong codes (rate limit).
+ */
+export const UserMfaSchema = defineEntity({
+  name: 'UserMfa',
+  schema: 'core',
+  tableName: 'user_mfa',
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv7()),
+    user: () => p.manyToOne(User).unique().deleteRule('cascade'),
+    /** TOTP secret, encrypted (`encryptSecret`). */
+    secret: p.text().hidden(),
+    /** `null` while being set up (not confirmed with a code yet). */
+    confirmedAt: p.datetime().nullable(),
+    /** Time step of the last accepted code: a code counts only once. */
+    lastStep: p.integer().nullable(),
+    /** SHA-256 of the unused recovery codes. */
+    recoveryCodes: p.json<string[]>().hidden().defaultRaw("'[]'::jsonb").onCreate(() => []),
+    /** Wrong codes since `failureWindowStart`; after too many, locked until `lockedUntil`. */
+    failures: p.integer().default(0),
+    failureWindowStart: p.datetime().nullable(),
+    lockedUntil: p.datetime().nullable(),
+  },
+});
+export class UserMfa extends UserMfaSchema.class {}
+UserMfaSchema.setClass(UserMfa);

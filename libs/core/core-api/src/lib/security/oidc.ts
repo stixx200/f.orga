@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   BadRequestException,
+  Body,
   Controller,
   Delete,
   ForbiddenException,
@@ -24,8 +25,9 @@ import { AuthService, SESSION_COOKIE, sessionCookieOptions } from './auth.servic
 import type { AuthenticatedUser } from './authenticated-user.js';
 import { CookiePolicy } from './cookie-policy.js';
 import { CurrentUser, Public, RequirePermissions } from './decorators.js';
+import { STEP_UP_MS } from './mfa.js';
 import { generateSecret } from './password.js';
-import { User } from './security.entities.js';
+import { Session, User } from './security.entities.js';
 
 const PENDING_COOKIE = 'forga_oidc';
 const PENDING_MS = 10 * 60_000;
@@ -38,6 +40,22 @@ interface Pending {
   expiresAt: number;
   /** Set when a logged-in user links his own account (manual linking). */
   linkUserId?: string;
+  /** Step-up at the provider: the user and session to confirm, and the page to return to. */
+  stepUp?: { userId: string; sessionId: string; returnTo: string };
+}
+
+/** `amr` values of the ID token that stand for a second factor at the provider. */
+const MFA_METHODS = new Set(['mfa', 'otp', 'hwk']);
+
+/**
+ * Until when a sign-in at the provider confirms the session (step-up): `auth_time` + 30 minutes if the provider reports
+ * a second factor (`amr` with `mfa`, `otp` or `hwk`) and that time lies in the future; otherwise `null`.
+ */
+export function providerElevation(claims: { amr?: unknown; auth_time?: unknown }, now = Date.now()): Date | null {
+  const amr = Array.isArray(claims.amr) ? claims.amr.filter((v): v is string => typeof v === 'string') : [];
+  if (!amr.some((m) => MFA_METHODS.has(m)) || typeof claims.auth_time !== 'number') return null;
+  const until = claims.auth_time * 1000 + STEP_UP_MS;
+  return until > now ? new Date(until) : null;
 }
 
 /** The provider's discovery document could not be loaded (wrong issuer, provider unreachable). */
@@ -115,14 +133,18 @@ export class OidcService {
     }
   }
 
-  /** Starts a sign-in (or, with `linkUserId`, the linking of a logged-in user): returns the provider URL and the value of the pending cookie. */
-  async start(linkUserId?: string): Promise<{ url: string; id: string } | null> {
+  /**
+   * Starts a sign-in (or, with `linkUserId`, the linking of a logged-in user, with `stepUp` a new sign-in that confirms
+   * the session): returns the provider URL and the value of the pending cookie.
+   */
+  async start(linkUserId?: string, stepUp?: Pending['stepUp']): Promise<{ url: string; id: string } | null> {
     const setup = await this.config();
     if (!setup) return null;
+    if (stepUp && !setup.settings.stepUpViaProvider) return null;
     const now = Date.now();
     for (const [id, p] of this.pending) if (p.expiresAt < now) this.pending.delete(id);
     if (this.pending.size >= MAX_PENDING) this.pending.delete(this.pending.keys().next().value!);
-    const pending: Pending = { state: client.randomState(), nonce: client.randomNonce(), verifier: client.randomPKCECodeVerifier(), expiresAt: now + PENDING_MS, linkUserId };
+    const pending: Pending = { state: client.randomState(), nonce: client.randomNonce(), verifier: client.randomPKCECodeVerifier(), expiresAt: now + PENDING_MS, linkUserId, stepUp };
     const id = generateSecret();
     this.pending.set(id, pending);
     const url = client.buildAuthorizationUrl(setup.config, {
@@ -132,12 +154,14 @@ export class OidcService {
       nonce: pending.nonce,
       code_challenge: await client.calculatePKCECodeChallenge(pending.verifier),
       code_challenge_method: 'S256',
+      // Step-up: the provider must ask again instead of reusing its own session.
+      ...(stepUp ? { prompt: 'login', max_age: '0' } : {}),
     });
     return { url: url.href, id };
   }
 
   /** Completes a sign-in; returns the user or an error code. */
-  async complete(id: string | undefined, query: string): Promise<{ user: User; linked: boolean } | { error: string }> {
+  async complete(id: string | undefined, query: string): Promise<{ user: User; linked: boolean; elevatedUntil: Date | null; stepUp?: Pending['stepUp'] } | { error: string }> {
     const pending = id ? this.pending.get(id) : undefined;
     if (id) this.pending.delete(id);
     if (!pending || pending.expiresAt < Date.now()) return { error: 'auth.oidcExpired' };
@@ -151,6 +175,7 @@ export class OidcService {
         expectedState: pending.state,
         expectedNonce: pending.nonce,
         idTokenExpected: true,
+        ...(pending.stepUp ? { maxAge: 0 } : {}),
       });
       claims = tokens.claims();
     } catch (error) {
@@ -159,8 +184,15 @@ export class OidcService {
     }
     if (!claims) return { error: 'auth.oidcFailed' };
     const subject = `${claims.iss}|${claims.sub}`;
+    const elevatedUntil = providerElevation(claims);
     const em = this.em.fork();
     let user = await em.findOne(User, { oidcSubject: subject });
+    if (pending.stepUp) {
+      // The provider account must be the one linked to the user whose session is confirmed.
+      if (!user || user.id !== pending.stepUp.userId || !user.active) return { error: 'auth.oidcStepUpOtherAccount' };
+      if (!elevatedUntil) return { error: 'auth.oidcNoSecondFactor' };
+      return { user, linked: false, elevatedUntil, stepUp: pending.stepUp };
+    }
     if (pending.linkUserId) {
       // Manual linking by the logged-in user: the provider account must not belong to someone else.
       if (user && user.id !== pending.linkUserId) return { error: 'auth.oidcLinkedElsewhere' };
@@ -168,7 +200,7 @@ export class OidcService {
       if (!own) return { error: 'auth.oidcUnknownUser' };
       own.oidcSubject = subject;
       await em.flush();
-      return { user: own, linked: true };
+      return { user: own, linked: true, elevatedUntil: null };
     }
     if (!user) {
       // The username at the provider (`preferred_username`) is neither unique nor verified: with `matchBy: username`
@@ -189,7 +221,7 @@ export class OidcService {
       await em.flush();
     }
     if (!user.active || user.technical) return { error: 'auth.oidcUnknownUser' };
-    return { user, linked: false };
+    return { user, linked: false, elevatedUntil };
   }
 }
 
@@ -230,6 +262,23 @@ export class OidcController {
     return { url: started.url };
   }
 
+  /**
+   * Step-up "confirm at the provider" (setting `oidc.stepUpViaProvider`): a new sign-in at the provider with a second
+   * factor confirms the current session. The UI opens the returned URL; the provider returns to `returnTo`.
+   */
+  @Post('oidc/step-up')
+  @HttpCode(200)
+  async stepUp(@CurrentUser() user: AuthenticatedUser, @Body() body: { returnTo?: unknown }, @Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<{ url: string }> {
+    if (user.via !== 'session' || !user.sessionId || user.impersonator) throw new ForbiddenException({ code: 'auth.impersonationNotAllowed' });
+    const returnTo = typeof body?.returnTo === 'string' && /^\/(?!\/)/.test(body.returnTo) ? body.returnTo : '/';
+    const started = await this.oidc.start(undefined, { userId: user.id, sessionId: user.sessionId, returnTo }).catch((error: unknown) => {
+      throw error instanceof OidcDiscoveryError ? new BadGatewayException({ code: 'auth.oidcDiscoveryFailed' }) : error;
+    });
+    if (!started) throw new BadRequestException({ code: 'auth.oidcStepUpDisabled' });
+    await this.setPending(req, res, started.id);
+    return { url: started.url };
+  }
+
   /** Checks the stored settings against the provider (discovery), for the settings page. */
   @Post('settings/oidc/test')
   @HttpCode(200)
@@ -254,14 +303,21 @@ export class OidcController {
       await this.audit.log('auth.oidc-failed', { code: result.error }, null);
       return res.redirect(302, `/?oidcError=${encodeURIComponent(result.error)}`);
     }
+    if (result.stepUp) {
+      const confirmed = await this.em.fork().nativeUpdate(Session, { id: result.stepUp.sessionId, user: result.user.id, impersonator: null }, { elevatedUntil: result.elevatedUntil });
+      if (!confirmed) return res.redirect(302, '/?oidcError=auth.oidcExpired');
+      await this.audit.log('auth.step-up', { factor: 'oidc' }, result.user.id);
+      return res.redirect(302, result.stepUp.returnTo);
+    }
     if (result.linked) {
       await this.audit.log('users.oidc-linked', { userId: result.user.id }, result.user.id);
       return res.redirect(302, '/profile?oidcLinked=1');
     }
     const em = this.em.fork();
     const user = await em.findOneOrFail(User, result.user.id);
-    res.cookie(SESSION_COOKIE, await this.auth.openSession(em, user), sessionCookieOptions(await this.cookies.secure(req)));
-    await this.audit.log('auth.login', { via: 'oidc' }, user.id);
+    // A second factor at the provider (`amr`) confirms the session until `auth_time` + 30 minutes.
+    res.cookie(SESSION_COOKIE, await this.auth.openSession(em, user, result.elevatedUntil), sessionCookieOptions(await this.cookies.secure(req)));
+    await this.audit.log('auth.login', { via: 'oidc', ...(result.elevatedUntil ? { stepUp: 'provider' } : {}) }, user.id);
     res.redirect(302, '/');
   }
 

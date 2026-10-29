@@ -186,6 +186,8 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
 
 **Auth-Guard.** Der Guard ist global. Ohne `@Public()` braucht jeder Endpunkt eine Anmeldung, über das Sitzungs-Cookie oder `Authorization: Bearer <token>`.
 
+**Zweiter Faktor (Step-up).** Berechtigungen mit `stepUp` (Verwaltung, sensible Personendaten, Eignungsuntersuchungen, Datensicherung) und Endpunkte mit `@StepUp()` wirken nur in einer Sitzung, die in den letzten 30 Minuten mit dem zweiten Faktor (TOTP) bestätigt wurde; sonst `403` `auth.stepUpRequired`. Einzelheiten in [datenschutz.md](datenschutz.md#zweiter-faktor-bei-sensiblen-daten-step-up).
+
 **CSRF.** Anfragen mit Sitzungs-Cookie und einer ändernden Methode (`POST`, `PUT`, `DELETE`) müssen den Header `x-forga: 1` tragen, sonst kommt `403`. Der API-Client im `web-sdk` setzt ihn immer.
 
 **Rechte**
@@ -230,11 +232,13 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
 - Ein Token hat genau die Berechtigungen seiner `scopes`, immer für die Gesamtwehr. Ein Ablaufdatum ist optional.
 - Verwaltungsrechte (`core.*`) gibt es für Tokens nicht (`tokens.coreScopes`), und ein Token bekommt nur Rechte, die sein Ersteller selbst für die Gesamtwehr hat (`tokens.scopesWider`).
 - Rechte, die im Manifest als `privileged` markiert sind (z. B. `backup.manage`: ganzen Datenbestand herunterladen und ersetzen), gibt es für Tokens ebenfalls nicht (`tokens.privilegedScopes`); auch ein Muster im Token gewährt sie nicht.
+- Ebenso Rechte mit `stepUp` (`tokens.stepUpScope`), außer mit `tokenAllowed: true` im Manifest; ältere Tokens mit solchen Bereichen wirken dafür nicht mehr (`inactiveScopes`).
 - Die Liste der Berechtigungen (`GET /api/core/permissions`) lesen Rollen- und Token-Verwalter (`core.roles.manage` oder `core.tokens.manage`).
 - Beim Widerruf werden das Token und sein Benutzer gesperrt. Die letzte Nutzung wird mitgeschrieben.
 
 **Audit.** `core.audit` protokolliert:
 - Einrichtung, Anmeldungen und fehlgeschlagene Anmeldungen, Passwortänderungen
+- zweiter Faktor: Step-up, falsche Codes, Einrichten, neue Wiederherstellungscodes, Zurücksetzen durch einen Administrator
 - Anlegen, Einladen und Ändern von Benutzern und Rollen
 - Tokens
 - Aktivieren und Deaktivieren von Modulen

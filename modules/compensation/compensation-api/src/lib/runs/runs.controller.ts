@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Param, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import type { z } from 'zod';
-import { type AuthenticatedUser, berlinDate, CurrentUser, RequirePermissions, SettingsService, ZodPipe } from '@forga/core-api';
+import { type AuthenticatedUser, berlinDate, CurrentUser, RequirePermissions, SettingsService, StepUp, ZodPipe } from '@forga/core-api';
 import type { BrigadeSettings } from '@forga/core-contracts';
 import { CloseInput, DeferInput, type Run, type RunDetail, RunInput } from '@forga/compensation-contracts';
 import { ItemsService, RUNS } from '../items/items.service.js';
@@ -119,8 +119,12 @@ export class RunsController {
     res.send(buffer);
   }
 
-  /** Statements, one page per person; `?departmentId=` only the persons of that primary department. */
+  /**
+   * Statements, one page per person; `?departmentId=` only the persons of that primary department. They name the bank
+   * account: only in a session confirmed with the second factor.
+   */
   @Get(':id/statements.pdf')
+  @StepUp()
   async statements(@Param('id') id: string, @Query('departmentId') departmentId: string | undefined, @CurrentUser() user: AuthenticatedUser, @Res() res: Response): Promise<void> {
     assertCanRead(user);
     const { number, pdf } = await this.runs.statementsPdf(id, departmentId || null);
@@ -132,6 +136,7 @@ export class RunsController {
   /** SEPA credit transfer file for online banking (`?executionDate=`, default today); only for closed runs, after the factual approval when required. */
   @Get(':id/transfer.xml')
   @RequirePermissions(RUNS)
+  @StepUp()
   async transferXml(@Param('id') id: string, @Query('executionDate') executionDate: string | undefined, @Res() res: Response): Promise<void> {
     const date = executionDate && /^\d{4}-\d{2}-\d{2}$/.test(executionDate) ? executionDate : berlinDate();
     const { number, xml } = await this.runs.transferXml(id, await this.items.config(), date);
@@ -143,6 +148,7 @@ export class RunsController {
   /** Transfer file (CSV); only for closed runs (after the factual approval when required), like the SEPA file. */
   @Get(':id/transfer.csv')
   @RequirePermissions(RUNS)
+  @StepUp()
   async transfer(@Param('id') id: string, @Res() res: Response): Promise<void> {
     const { number, csv } = await this.runs.transferCsv(id, (await this.items.config()).transferPurpose);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');

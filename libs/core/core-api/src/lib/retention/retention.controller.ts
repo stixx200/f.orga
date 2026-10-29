@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, HttpCode, Param, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import {
   LANGUAGES,
@@ -32,7 +32,7 @@ export class RetentionController {
   ) {}
 
   private requireAny(user: AuthenticatedUser, ...permissions: string[]): void {
-    if (!permissions.some((p) => user.can(p))) throw new ForbiddenException({ code: 'auth.forbidden', permissions });
+    if (!permissions.some((p) => user.can(p))) throw user.denied(permissions);
   }
 
   /** Categories with their subtypes, for the settings page and the list „Aussonderung“. */

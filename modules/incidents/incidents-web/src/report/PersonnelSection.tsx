@@ -3,7 +3,7 @@ import { IconClock, IconPlus, IconUsersGroup } from '@tabler/icons-react';
 import { useState } from 'react';
 import type { Finding, PreviousCrew, Report } from '@forga/incidents-contracts';
 import { api, formatDate, formatMoney, formatTime, useLocalized, useTranslation } from '@forga/web-sdk';
-import { Notice, notifyError, notifySuccess, Panel, StatusBadge } from '@forga/web-ui';
+import { Notice, notifyError, notifySuccess, Panel, StatusBadge, StepUpButton } from '@forga/web-ui';
 import { personName, useFunctions, useNames, usePersons, useStations, useVehicles } from '../api';
 import type { Content, Personnel } from './editor';
 import { mergeFindings, useFindingText } from './findings';
@@ -268,6 +268,11 @@ export function PersonnelSection({ content, report, update, disabled, findings }
         {/* Without the permission only the number of injured own forces, no names (health data). */}
         {report.injuries.hidden && report.injuries.injured + report.injuries.killed > 0 && (
           <Text size="sm" mt="xs">{t('personnel.injuriesCount', { injured: report.injuries.injured, killed: report.injuries.killed })}</Text>
+        )}
+        {report.injuries.hidden && report.injuries.stepUpAvailable && (
+          <Group mt="xs">
+            <StepUpButton>{t('personnel.showInjuries')}</StepUpButton>
+          </Group>
         )}
       </Panel>
       {editingEntry && editing !== null && (

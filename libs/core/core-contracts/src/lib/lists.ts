@@ -43,6 +43,8 @@ export const ListInfo = z.object({
   orientation: z.enum(['portrait', 'landscape']),
   /** Where the user may run the list: brigade-wide or the listed departments (offered for department parameters). */
   departments: z.union([z.literal('brigade'), z.array(z.string())]),
+  /** The list needs a session confirmed with the second factor (its permission has `stepUp`). */
+  stepUp: z.boolean().default(false),
 });
 export type ListInfo = z.infer<typeof ListInfo>;
 
