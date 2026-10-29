@@ -2,7 +2,7 @@ import { Alert, Button, Center, Paper, PasswordInput, Stack, Text, TextInput, Ti
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ApiError, currentLanguage, send, useTranslation } from '@forga/web-sdk';
-import { LanguageSwitch } from '../frame/LanguageSwitch';
+import { LanguageSwitch } from '@forga/web-ui';
 
 export function SetupPage() {
   const { t } = useTranslation('shell');

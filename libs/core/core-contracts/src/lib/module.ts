@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ModulePrivacy } from './access-report.js';
+import { ModulePrivacy } from './processing.js';
 import { LocalizedText } from './i18n.js';
 
 /** Where a permission applies: the whole brigade or individual departments. */

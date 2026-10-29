@@ -1,6 +1,6 @@
 # Aufbewahrungsplan
 
-Je Datenkategorie eine Aufbewahrungsfrist ab einem Ereignis und eine Aktion nach Ablauf, darunter „dem Archiv anbieten“ (Landesarchivgesetz Baden-Württemberg). Code: `libs/core/core-api/src/lib/retention/`, Verträge in `libs/core/core-contracts/src/lib/retention.ts`, Kategorien in den Modulen (`*.retention.ts`). Oberfläche: „Verwaltung → Einstellungen → Datenschutz“ (`RetentionSettings`) und „Verwaltung → Aussonderung“ (`/admin/retention`, `RetentionPage`), nach den freigegebenen Mockups `shell/aufbewahrung.html` und `shell/aussonderung.html`. Offene Punkte: [geplant/aufbewahrung.md](../geplant/aufbewahrung.md).
+Je Datenkategorie eine Aufbewahrungsfrist ab einem Ereignis und eine Aktion nach Ablauf, darunter „dem Archiv anbieten“ (Landesarchivgesetz Baden-Württemberg). Code: `libs/core/core-api/src/lib/retention/`, Verträge in `libs/core/core-contracts/src/lib/retention.ts`, Kategorien in den Modulen (`*.retention.ts`). Oberfläche: „Verwaltung → Einstellungen → Aufbewahrung“ (`RetentionSettings`, `/admin/settings?tab=retention`) und „Verwaltung → Aussonderung“ (`/admin/retention`, `RetentionPage`), nach den freigegebenen Mockups `shell/aufbewahrung.html` und `shell/aussonderung.html`. Offene Punkte: [geplant/aufbewahrung.md](../geplant/aufbewahrung.md).
 
 ## Grundsatz
 
@@ -26,10 +26,10 @@ Module melden ihre Kategorien beim `RetentionRegistry` an (`registerCategory`): 
 | `compensation.runs` | ausgezahlte Auszahlungsläufe mit Posten | Auszahlung | anbieten, löschen, nichts | – | `compensation` |
 | `core.audit` | Audit-Log (Datenerfassungsprotokoll) | Eintrag | löschen | – | Core |
 | `core.history` | Historie und Versionen; der aktuelle Stand bleibt | Eintrag | löschen, nichts | – | Core |
-| `core.access-log` | Leseprotokoll: Zugriffe auf besonders geschützte Daten je Benutzer, Person, Bereich und Tag ([Datenschutz](datenschutz.md#leseprotokoll)) | Tag des Zugriffs | löschen | – | Core |
+| `privacy.access-log` | Leseprotokoll: Zugriffe auf besonders geschützte Daten je Benutzer, Person, Bereich und Tag ([Datenschutz](datenschutz.md#leseprotokoll)) | Tag des Zugriffs | löschen | – | `privacy` |
 | `core.locked-accounts` | gesperrte Benutzer ohne verknüpfte Person (z. B. externer Administrator, Kämmerei); Konten mit Person folgen der Person ([Datenschutz](datenschutz.md#gesperrte-benutzer-ohne-person-l21)) | Sperre | anonymisieren, nichts | – | Core |
-| `core.access-reports` | Nachweise der Auskünfte nach Art. 15 (Erstellung, Übergabe; die Datei selbst geht nach 30 Tagen) | Erstellung | löschen, nichts | – | Core |
-| `core.privacy-breaches` | abgeschlossene Datenpannen mit Historie | Abschluss | anbieten, löschen, nichts | – | Core |
+| `privacy.access-reports` | Nachweise der Auskünfte nach Art. 15 (Erstellung, Übergabe; die Datei selbst geht nach 30 Tagen) | Erstellung | löschen, nichts | – | `privacy` |
+| `privacy.breaches` | abgeschlossene Datenpannen mit Historie | Abschluss | anbieten, löschen, nichts | – | `privacy` |
 | `mp-feuer.run-reports` | Laufberichte der Datenübernahme mit den Zeilen mit Meldungen | Ende des Laufs | löschen, nichts | – | `mp-feuer` |
 | `backup.run-log` | Einträge gelöschter und fehlgeschlagener Sicherungen und abgeschlossener Wiederherstellungen | Löschung bzw. Ende | löschen | – | `backup` |
 
@@ -40,7 +40,7 @@ Module melden ihre Kategorien beim `RetentionRegistry` an (`registerCategory`): 
 
 ## Regel je Kategorie
 
-Einstellung `privacy.retention`: ein Eintrag je Kategorie und je Unterart (Schlüssel `<kategorie>:<unterart>`, z. B. `incidents.incidents:special`, `training.sessions:meeting`).
+Einstellung `retention` des Core (`RetentionSettings`, Verwalter `core.settings.manage`): ein Eintrag je Kategorie und je Unterart (Schlüssel `<kategorie>:<unterart>`, z. B. `incidents.incidents:special`, `training.sessions:meeting`).
 
 | Feld | Inhalt |
 | --- | --- |
@@ -50,8 +50,8 @@ Einstellung `privacy.retention`: ein Eintrag je Kategorie und je Unterart (Schl�
 | `specialCase` | „Sonderfall prüfen“: jeder fällige Datensatz kommt in die Liste und wird erst nach Bestätigung bearbeitet, auch bei `anonymize` und `delete` |
 | `note` | Herkunft, z. B. „Aktenplan 13.20“ |
 
-- **Prüfung der Regeln** (Probelauf, `warnings`): Die Grunddaten bleiben mindestens so lange wie die Personalakte (`atLeastAs`); ist ihre Frist kürzer, gilt die längere (`effectiveYears`, Warnung `privacy.personCoreShorter`). Würden Einsätze vor Kostenbescheiden oder Auszahlungsläufen gelöscht, die auf sie verweisen (`referencedBy`), warnt `privacy.deletedBeforeReferences`. Eine Aktion, die die Kategorie nicht erlaubt, wird nicht ausgeführt (`privacy.actionNotAllowed`).
-- **Einstellungsseite:** Tabelle mit Kategorie (Beschreibung, „Frist ab …“, Herkunft), Jahre, „Nach Ablauf“ (nichts, anbieten dann anonymisieren, anbieten dann löschen, anonymisieren, löschen; nur die erlaubten), „Sonderfall prüfen“ und „Jetzt betroffen“ (Probelauf mit den Werten des Formulars, kurz nach jeder Änderung; abweichende Frist als „wirksam n Jahre“). Unterarten der Dienste über „Weitere Art mit eigener Frist“. „Jetzt anwenden“ (mit Bestätigung) startet einen echten Lauf mit den gespeicherten Regeln.
+- **Prüfung der Regeln** (Probelauf, `warnings`): Die Grunddaten bleiben mindestens so lange wie die Personalakte (`atLeastAs`); ist ihre Frist kürzer, gilt die längere (`effectiveYears`, Warnung `retention.personCoreShorter`). Würden Einsätze vor Kostenbescheiden oder Auszahlungsläufen gelöscht, die auf sie verweisen (`referencedBy`), warnt `retention.deletedBeforeReferences`. Eine Aktion, die die Kategorie nicht erlaubt, wird nicht ausgeführt (`retention.actionNotAllowed`).
+- **Einstellungsseite** („Verwaltung → Einstellungen → Aufbewahrung“, `/admin/settings?tab=retention`): Tabelle mit Kategorie (Beschreibung, „Frist ab …“, Herkunft), Jahre, „Nach Ablauf“ (nichts, anbieten dann anonymisieren, anbieten dann löschen, anonymisieren, löschen; nur die erlaubten), „Sonderfall prüfen“ und „Jetzt betroffen“ (Probelauf mit den Werten des Formulars, kurz nach jeder Änderung; abweichende Frist als „wirksam n Jahre“). Unterarten der Dienste über „Weitere Art mit eigener Frist“. „Jetzt anwenden“ (mit Bestätigung) startet einen echten Lauf mit den gespeicherten Regeln.
 - **Vorlage „Kommunaler Aktenplan (Beispiel)“** (`RETENTION_TEMPLATE_MUNICIPAL`): Ein Knopf zeigt die Positionen des Aktenplans und setzt nach Klick die Werte in das Formular, gekennzeichnet als „Vorlage eingesetzt, noch nicht gespeichert“; gespeichert wird erst mit „Speichern“. Kategorien ohne Wert im Beispiel stehen danach auf „nichts“.
 
 | Kategorie | Frist | Aktion | Sonderfall prüfen | Aktenplan |
@@ -72,7 +72,7 @@ Die Vorlage der Diensttypen enthält dafür die Art `staff-meeting` „Dienstbes
 
 `RetentionService.run` läuft eine Minute nach dem Start und dann täglich (abschaltbar mit `FORGA_RETENTION_SCHEDULER=off`) und auf Knopfdruck (`POST /api/core/retention/run`). Je Zeile mit Frist und Aktion:
 
-- **Direkt** (Aktion `anonymize` oder `delete` ohne „Sonderfall prüfen“): Die fälligen Datensätze werden sofort bearbeitet, gezählt in `counts` und im Audit-Eintrag `privacy.retention-applied`. Audit-Log und Historie werden dabei in einem Zug gelöscht (`bulk`).
+- **Direkt** (Aktion `anonymize` oder `delete` ohne „Sonderfall prüfen“): Die fälligen Datensätze werden sofort bearbeitet, gezählt in `counts` und im Audit-Eintrag `retention.retention-applied`. Audit-Log und Historie werden dabei in einem Zug gelöscht (`bulk`).
 - **Liste** (Aktion `offer-archive` oder „Sonderfall prüfen“): Für jeden fälligen Datensatz ohne offenen Fall entsteht ein **Aussonderungsfall** (`core.retention_case`, historisiert): Kategorie, Regel, Datensatz, Anzeigename, Grund, Ereignisdatum, fällig seit (Ereignis plus wirksame Frist), Zahl der Anhänge, Aktion und `afterDecision` der Regel zum Zeitpunkt der Entstehung. Bei „Sonderfall prüfen“ für Audit-Log und Historie ist ein Fall ein Jahr.
 - **Blockiert:** Darf ein Datensatz nicht gelöscht werden, entsteht ein fälliger Fall mit Grund (`blockedBy`); der nächste Lauf prüft erneut und bearbeitet ihn, sobald nichts mehr blockiert. Gründe: `retention.costNoticeOpen` (Einsatz mit offenem Kostenbescheid), `retention.payoutKept` (Einsatz oder Dienst mit Entschädigungsposten eines noch aufbewahrten Laufs), `retention.referenced` (Fahrzeug, auf das noch Einsätze, Geräte oder andere Module verweisen).
 - Zurückgestellte Fälle werden an ihrem Tag wieder fällig. Fällige Fälle, deren Datensatz nicht mehr fällig ist (Regel geändert, Datensatz anders gelöscht), verschwinden; Fälle mit Schritten bleiben.
@@ -111,7 +111,8 @@ Die Anonymisierung der Personalakte ruft `PersonDataRegistry.anonymize(personIds
 
 | Modul | Wirkung |
 | --- | --- |
-| Core | verknüpfte Benutzer gesperrt, „N. N.“, ohne E-Mail, Passwort, OIDC, zweiten Faktor, Sitzungen, Links, Tokens und Historie; Datenschutzanfragen ohne Texte, erstellte Auskünfte gelöscht, gemerkte Zuordnungen des Tabellen-Imports zur Person gelöscht |
+| Core | verknüpfte Benutzer gesperrt, „N. N.“, ohne E-Mail, Passwort, OIDC, zweiten Faktor, Sitzungen, Links, Tokens und Historie; gemerkte Zuordnungen des Tabellen-Imports zur Person gelöscht |
+| Datenschutz | Datenschutzanfragen ohne Texte, erstellte Auskünfte gelöscht, Einschränkung, Information und Kenntnisnahmen des Datenschutzhinweises gelöscht; Einwilligungen und Leseprotokoll bleiben bis zu ihrer Frist (auch bei abgeschaltetem Modul) |
 | Atemschutz | Eignungsuntersuchungen gelöscht, übrige Nachweise ohne Untersucher, Einrichtung, Einschränkungen und Notizen, Historie und gespeicherte Ampel |
 | Kleiderkammer | Größen gelöscht, Notizen und Stornogründe der Ausgaben geleert |
 | Beförderungen | Gründe der Ausschlüsse geleert, Namen und Kommentare in Beförderungslisten ersetzt, auch in der Historie der Listen |

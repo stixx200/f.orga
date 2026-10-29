@@ -183,7 +183,7 @@ describe('settings', () => {
     const general = (await get('/core/settings/training.general')).body;
     await put('/core/settings/training.general', { ...general, feedToken: 'geheimer-feed-token-123' }).expect(200);
     const commander = await login('kommandant');
-    for (const section of ['smtp', 'oidc', 'privacy', 'reminders']) await get(`/core/settings/${section}`, commander).expect(403);
+    for (const section of ['smtp', 'oidc', 'retention', 'reminders']) await get(`/core/settings/${section}`, commander).expect(403);
     expect((await get('/core/settings/brigade', commander).expect(200)).body.name).toBe('Feuerwehr Musterstadt');
     expect((await get('/core/settings/incidents.general', commander).expect(200)).body).not.toBeNull();
     const training = (await get('/core/settings/training.general', commander).expect(200)).body;
@@ -425,7 +425,7 @@ describe('data access request and full export', () => {
     await user('datenschutz', [{ roleId: role }]);
     const cookie = await login('datenschutz');
     const full = JSON.parse((await get('/core/export/core', cookie).expect(200)).text) as { data: { settings: Record<string, Record<string, unknown>> } };
-    for (const section of ['smtp', 'oidc', 'privacy', 'reminders']) expect(full.data.settings).not.toHaveProperty(section);
+    for (const section of ['smtp', 'oidc', 'retention', 'reminders']) expect(full.data.settings).not.toHaveProperty(section);
     expect(full.data.settings['training.general']).toBeDefined();
     expect(full.data.settings['training.general']).not.toHaveProperty('feedToken');
     expect(full.data.settings.brigade).toMatchObject({ name: 'Feuerwehr Musterstadt' });

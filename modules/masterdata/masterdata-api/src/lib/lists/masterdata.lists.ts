@@ -647,7 +647,7 @@ export class MasterdataLists {
       orientation: 'landscape',
       rows: async (user, params, language) => {
         const { departments } = await this.labels(language);
-        const visible = this.persons.visibleWhere(user, PLAN) ?? { id: null };
+        const visible = (await this.persons.visibleWhere(user, PLAN)) ?? { id: null };
         const nominations = await this.em.fork().find(
           CourseNomination,
           { person: visible, status: { $in: [...OPEN_NOMINATION] } },
@@ -698,7 +698,7 @@ export class MasterdataLists {
       rows: async (user, params, language) => {
         const year = params.year ?? Number(today().slice(0, 4));
         const { departments } = await this.labels(language);
-        const visible = this.persons.visibleWhere(user, PLAN) ?? { id: null };
+        const visible = (await this.persons.visibleWhere(user, PLAN)) ?? { id: null };
         const attendances = await this.em.fork().find(
           CourseAttendance,
           { person: visible, startsOn: { $lte: `${year}-12-31` }, $or: [{ endsOn: { $gte: `${year}-01-01` } }, { endsOn: null, startsOn: { $gte: `${year}-01-01` } }] },

@@ -1,8 +1,6 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import {
-  ACCESS_LOG_RETENTION,
-  ACCESS_REPORT_DAYS,
   type LocalizedText,
   OidcSettings,
   SecuritySettings,
@@ -23,7 +21,7 @@ export type MeasureContext = SecurityStatus;
 
 /**
  * A source of technical measures for the register of processing activities (Art. 30(1) g, Art. 32), e.g. the backup
- * module („Sicherung verschlüsselt: ja“) or the read log. Providers of inactive modules are left out.
+ * module („Sicherung verschlüsselt: ja“) or the read log of the module `privacy`. Providers of inactive modules are left out.
  */
 export interface TechnicalMeasureProvider {
   module: string;
@@ -148,15 +146,6 @@ export class CoreMeasures implements OnModuleInit {
         tone: 'info',
       },
       {
-        key: 'core.access-log',
-        title: { de: 'Leseprotokoll', en: 'Read log' },
-        value: {
-          de: `Lesezugriffe auf Gesundheits- und andere besonders geschützte Daten je Benutzer, Person und Tag, ohne Inhalt; ${retention([ACCESS_LOG_RETENTION]).de}; betroffene Benutzer sehen „Anmeldungen als Sie“`,
-          en: `Read accesses to health and other especially protected data per user, person and day, without content; ${retention([ACCESS_LOG_RETENTION]).en}; users see "logins as you"`,
-        },
-        tone: 'ok',
-      },
-      {
         key: 'core.encryption',
         title: { de: 'Verschlüsselung', en: 'Encryption' },
         value: !key
@@ -164,8 +153,8 @@ export class CoreMeasures implements OnModuleInit {
           : unreadableSecrets
             ? { de: 'Zugangsdaten für E-Mail oder Anmeldedienst mit einem anderen FORGA_SECRET_KEY verschlüsselt – neu eingeben', en: 'Credentials for e-mail or sign-in service encrypted with another FORGA_SECRET_KEY – enter them again' }
             : {
-                de: `Auskünfte, Geheimnisse des zweiten Faktors, Schlüssel und Zugangsdaten für E-Mail und Anmeldedienst verschlüsselt (AES-256-GCM, FORGA_SECRET_KEY); Auskünfte ${ACCESS_REPORT_DAYS} Tage; Datenbank und Anhänge nur mit verschlüsseltem Datenträger des Servers`,
-                en: `Access reports, second-factor secrets, keys and credentials for e-mail and sign-in service encrypted (AES-256-GCM, FORGA_SECRET_KEY); access reports ${ACCESS_REPORT_DAYS} days; database and attachments only with an encrypted disk of the server`,
+                de: 'Geheimnisse des zweiten Faktors, Schlüssel und Zugangsdaten für E-Mail und Anmeldedienst verschlüsselt (AES-256-GCM, FORGA_SECRET_KEY); Datenbank und Anhänge nur mit verschlüsseltem Datenträger des Servers',
+                en: 'Second-factor secrets, keys and credentials for e-mail and sign-in service encrypted (AES-256-GCM, FORGA_SECRET_KEY); database and attachments only with an encrypted disk of the server',
               },
         tone: key && !unreadableSecrets ? 'ok' : 'warning',
       },

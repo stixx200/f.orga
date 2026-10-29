@@ -84,6 +84,7 @@ Im Frontend kommt eine vierte Stelle hinzu: die **Erweiterungspunkte**. Ein Modu
 | Infoterminal `info-terminal` | masterdata, incidents; optional training | Terminals (Geräte an Wachen) | `info-terminal.general` | – | – |
 | MP-Feuer `mp-feuer` | masterdata; optional incidents, training, respiratory-protection | Läufe, gelesene Zeilen je Profil, gemerkte Zuordnungen | `mp-feuer.remembered` | – | – (liest Transferdateien und gibt die Zeilen über `ImportService.runRows` an die Profile der anderen Module) |
 | Datensicherung `backup` | – | Sicherungen und Wiederherstellungen (Protokoll, nicht historisiert) | `backup.general` | – | – |
+| Datenschutz `privacy` (abschaltbar) | masterdata | Betroffenenanfragen, Fassungen des Datenschutzhinweises und Kenntnisnahmen, Einschränkungen, Information nach Art. 13/14, Einwilligungen, Leseprotokoll, Auskünfte, Datenpannen | `privacy.contacts`, `privacy.texts`, `privacy.selfServiceAccess`, `privacy.activities`, `privacy.consents` | – | – |
 
 Jedes Modul liefert außerdem ein Manifest mit Rechten, Rollenvorlagen und Navigation. Es meldet seine historisierten Entitäten, eine Migration `initial` und ein Frontend mit eigenen Übersetzungen.
 
@@ -91,21 +92,28 @@ Jedes Modul liefert außerdem ein Manifest mit Rechten, Rollenvorlagen und Navig
 
 Die Module melden ihre Beiträge beim Start an die Registries des Core. Die Shell und die Endpunkte des Core fassen sie zusammen.
 
-| Registry (Core) | Zusammengeführt in | masterdata | incidents | training | respiratory-protection | compensation | equipment | cost-recovery | promotions | clothing | duty-officer | info-terminal | mp-feuer | backup |
-| --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| `PermissionRegistry` (Manifest) | Rollen, Rechteprüfung | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| Einstellungen (`settings`) | Verwaltung → Einstellungen, Einrichtungsliste | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | |
-| `HistoryAccessRegistry` | Historie je Datensatz | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | |
-| `ExportRegistry` | Vollexport | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | | | |
-| `ListRegistry` | Listen (PDF, Excel, CSV) | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | | | |
-| `DeadlineRegistry` | Aufgaben, Glocke, Sammel-E-Mail | ● | ● | ● | ● | ● | ● | ● | | ● | ● | | | ● |
-| `ImportRegistry` | Import-Assistent, Läufe des Moduls MP-Feuer | ● | ● | ● | ● | | ● | ● | | | ● | | nutzt | |
-| `SearchRegistry` | Globale Suche | ● | ● | ● | | | ● | ● | | ● | | | | |
-| `CodeRegistry` | Code-Scan (Etiketten) | | | | | | ● | | | ● | | | | |
-| `PersonDataRegistry` | Löschprüfung, Anonymisieren von Personen | ● (ruft auf) | ● | ● | ● | ● | ● | | ● | ● | ● | | ● | |
-| `RetentionRegistry` | Aufbewahrungsplan, täglicher Lauf, Aussonderung | ● | ● | ● | | ● | ● | ● | | | ● | | ● | |
-| `Notifications` | Sofortige E-Mails | | ● | | ● | | ● | | | | | | | ● |
-| `OrganizationDirectory` | Rechte je Abteilung, Einrichtungsliste | stellt bereit | nutzt | | | | | | | | | | | |
+| Registry (Core) | Zusammengeführt in | masterdata | incidents | training | respiratory-protection | compensation | equipment | cost-recovery | promotions | clothing | duty-officer | info-terminal | mp-feuer | backup | privacy |
+| --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| `PermissionRegistry` (Manifest) | Rollen, Rechteprüfung | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| Einstellungen (`settings`) | Verwaltung → Einstellungen, Einrichtungsliste | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | | ● |
+| `HistoryAccessRegistry` | Historie je Datensatz | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | | ● |
+| `ExportRegistry` | Vollexport | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | | | | ● |
+| `ListRegistry` | Listen (PDF, Excel, CSV) | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | | | |  |
+| `DeadlineRegistry` | Aufgaben, Glocke, Sammel-E-Mail | ● | ● | ● | ● | ● | ● | ● | | ● | ● | | | ● | ● |
+| `ImportRegistry` | Import-Assistent, Läufe des Moduls MP-Feuer | ● | ● | ● | ● | | ● | ● | | | ● | | nutzt | |  |
+| `SearchRegistry` | Globale Suche | ● | ● | ● | | | ● | ● | | ● | | | | |  |
+| `CodeRegistry` | Code-Scan (Etiketten) | | | | | | ● | | | ● | | | | |  |
+| `PersonDataRegistry` | Löschprüfung, Anonymisieren von Personen | ● (ruft auf) | ● | ● | ● | ● | ● | | ● | ● | ● | | ● | | ● |
+| `RetentionRegistry` | Aufbewahrungsplan, täglicher Lauf, Aussonderung | ● | ● | ● | | ● | ● | ● | | | ● | | ● | | ● |
+| `Notifications` | Sofortige E-Mails | | ● | | ● | | ● | | | | | | | ● | ● |
+| `OrganizationDirectory` | Rechte je Abteilung, Einrichtungsliste | stellt bereit | nutzt | | | | | | | | | | | | nutzt |
+| `ProcessingRestrictions` | Einschränkung (Art. 18) in Listen, Suche, Fristen | nutzt |  |  |  |  |  |  |  |  |  |  |  |  | stellt bereit |
+| `AccessLog` | Leseprotokoll | ● |  |  | ● |  |  |  |  |  |  |  |  |  | stellt bereit |
+| `CONSENTS` (`Consents`) | Wirkung von Einwilligungen auf Listen | nutzt |  |  |  |  |  |  |  |  |  |  |  |  | stellt bereit |
+| `OnboardingRegistry` | Einrichtungsliste |  |  |  |  |  |  |  |  |  |  |  |  |  | ● |
+| `TechnicalMeasureRegistry`, `ProcessorRegistry` | Verzeichnis der Verarbeitungstätigkeiten |  |  |  |  |  |  |  |  |  |  |  |  | ● | ● (liest) |
+| `ThirdPartyRegistry` | Daten Dritter |  | ● |  |  |  |  | ● |  |  |  |  |  |  | liest |
+| `LockdownRegistry`, `ProtocolRegistry` | Hilfen bei Datenpannen |  |  |  |  |  |  |  |  |  |  | ● |  |  | ● (liest) |
 
 ## Zusammenlauf zwischen Modulen
 
@@ -175,6 +183,10 @@ flowchart LR
     SS["training.session.sections<br/>Dienst"]
     WS["masterdata.station.sections<br/>Wache"]
     IN["core.imports.notice<br/>Import (Shell)"]
+    MT["core.me.top · core.me.section-actions<br/>Mein Bereich (Shell)"]
+    SG["core.session.gate<br/>nach der Anmeldung (Shell)"]
+    AT["core.audit.tabs<br/>Audit-Log (Shell)"]
+    PA["masterdata.person.actions<br/>Person"]
   end
 
   MD[masterdata] --> ME
@@ -189,8 +201,9 @@ flowchart LR
   DO[duty-officer] --> IS
   IT[info-terminal] --> WS
   MPF[mp-feuer] --> IN
+  PRV[privacy] --> ME & PT & MT & SG & AT & PA
 ```
 
-Daneben gibt es Punkte innerhalb eines Moduls, z. B. `masterdata.import.ambiguous` und `cost-recovery.import.*` für Rückfragen im Import-Assistenten.
+Das Modul Datenschutz zeigt außerdem eine Seite ohne Anmeldung (`/privacy-notice`, Kiosk wie `/terminal` des Infoterminals). Daneben gibt es Punkte innerhalb eines Moduls, z. B. `masterdata.import.ambiguous` und `cost-recovery.import.*` für Rückfragen im Import-Assistenten.
 
 Ein Erweiterungspunkt erscheint nur, wenn das beitragende Modul aktiv ist und der Benutzer dessen Rechte hat. Deshalb zeigt z. B. die Personenseite je nach Installation andere Reiter.

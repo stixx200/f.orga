@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Fragment, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import {
-  type PrivacySettings,
+  type RetentionSettings as RetentionSettingsValue,
   RETENTION_TEMPLATE_MUNICIPAL,
   type RetentionCategory,
   type RetentionResult,
@@ -17,7 +17,7 @@ import { ConfirmDialog, Notice, Panel, ResponsiveDialog, StatusBadge, useAction 
 type Rules = Record<string, RetentionRule>;
 
 const NONE = RetentionRule.parse({});
-const SETTINGS_KEY = ['core', 'settings', 'privacy'] as const;
+const SETTINGS_KEY = ['core', 'settings', 'retention'] as const;
 
 /** Values of the select „Nach Ablauf“: an action, or offering to the archive and what happens after the decision. */
 type Choice = 'none' | 'offer-archive:anonymize' | 'offer-archive:delete' | 'anonymize' | 'delete';
@@ -74,7 +74,7 @@ function initialRules(categories: RetentionCategory[], stored: Rules): Rules {
  */
 export function RetentionSettings() {
   const { data: categories } = useQuery({ queryKey: ['core', 'retention', 'categories'], queryFn: () => api<RetentionCategory[]>('core/retention/categories') });
-  const { data: stored, isLoading } = useQuery({ queryKey: SETTINGS_KEY, queryFn: () => api<PrivacySettings | null>('core/settings/privacy') });
+  const { data: stored, isLoading } = useQuery({ queryKey: SETTINGS_KEY, queryFn: () => api<RetentionSettingsValue | null>('core/settings/retention') });
   if (!categories || isLoading) return null;
   return <RetentionForm categories={categories} initial={initialRules(categories, stored?.retention ?? {})} />;
 }
@@ -99,7 +99,7 @@ function RetentionForm({ categories, initial }: { categories: RetentionCategory[
     queryKey: ['core', 'retention', 'preview', debounced],
     queryFn: () => send<RetentionResult>('POST', 'core/retention/run', { dryRun: true, settings: { retention: debounced } }),
   });
-  const save = useAction(() => send('PUT', 'core/settings/privacy', { retention: rules }), {
+  const save = useAction(() => send('PUT', 'core/settings/retention', { retention: rules }), {
     success: t('settings.saved'),
     invalidate: [SETTINGS_KEY],
     onSuccess: () => setTemplateApplied(false),

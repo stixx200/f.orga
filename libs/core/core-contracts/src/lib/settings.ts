@@ -1,9 +1,6 @@
 import { z } from 'zod';
 import { LocalizedText } from './i18n.js';
 import { RetentionRule } from './retention.js';
-import { PRIVACY_PERMISSION, PrivacyContacts, PrivacySelfService, PrivacyTexts } from './privacy.js';
-import { PrivacyActivities } from './register.js';
-import { PrivacyConsents } from './consents.js';
 import { SecuritySettings } from './stage.js';
 import { ReminderSettings } from './tasks.js';
 
@@ -55,13 +52,14 @@ export const SmtpSettings = z.object({
 export type SmtpSettings = z.infer<typeof SmtpSettings>;
 
 /**
- * Data protection: retention period and action per data category (and subtype), keyed like `incidents.incidents:special`.
- * Categories without a stored rule use their default (nothing happens, except deleting the audit log after 2 years).
+ * Retention plan (setting `retention`): retention period and action per data category (and subtype), keyed like
+ * `incidents.incidents:special`. Categories without a stored rule use their default (nothing happens, except deleting
+ * the audit log after 2 years).
  */
-export const PrivacySettings = z.object({
+export const RetentionSettings = z.object({
   retention: z.record(z.string(), RetentionRule).default({}),
 });
-export type PrivacySettings = z.infer<typeof PrivacySettings>;
+export type RetentionSettings = z.infer<typeof RetentionSettings>;
 
 /** Settings sections of the core with their schema. Modules add their own sections. */
 /**
@@ -95,14 +93,9 @@ export const CORE_SETTINGS = {
   brigade: BrigadeSettings,
   smtp: SmtpSettings,
   reminders: ReminderSettings,
-  privacy: PrivacySettings,
+  retention: RetentionSettings,
   oidc: OidcSettings,
   security: SecuritySettings,
-  'privacy.contacts': PrivacyContacts,
-  'privacy.texts': PrivacyTexts,
-  'privacy.selfServiceAccess': PrivacySelfService,
-  'privacy.activities': PrivacyActivities,
-  'privacy.consents': PrivacyConsents,
 } as const;
 
 /** Fields that are write-only and never leave the server. */
@@ -124,7 +117,7 @@ export interface SettingsAccess {
   managerFields?: string[];
   /**
    * Permissions that manage the section instead of the default (`core.settings.manage`, `<module>.settings.manage`),
-   * e.g. `core.privacy.manage` for the data protection sections.
+   * e.g. `privacy.manage` for the data protection sections of the module `privacy`.
    */
   managers?: string[];
   /** Changed only through its own endpoint (e.g. versioned text blocks); `PUT /api/core/settings/:section` refuses it. */
@@ -147,12 +140,7 @@ export type OnboardingItem = z.infer<typeof OnboardingItem>;
 export const CORE_SETTINGS_ACCESS: Record<string, SettingsAccess> = {
   smtp: { managersOnly: true },
   oidc: { managersOnly: true },
-  privacy: { managersOnly: true, managers: ['core.settings.manage', PRIVACY_PERMISSION] },
+  retention: { managersOnly: true },
   reminders: { managersOnly: true },
-  security: { managersOnly: true, managers: ['core.settings.manage', PRIVACY_PERMISSION] },
-  'privacy.contacts': { managersOnly: true, managers: [PRIVACY_PERMISSION] },
-  'privacy.texts': { managersOnly: true, managers: [PRIVACY_PERMISSION], dedicatedEndpoint: true },
-  'privacy.selfServiceAccess': { managersOnly: true, managers: [PRIVACY_PERMISSION] },
-  'privacy.activities': { managersOnly: true, managers: [PRIVACY_PERMISSION], dedicatedEndpoint: true },
-  'privacy.consents': { managersOnly: true, managers: [PRIVACY_PERMISSION], dedicatedEndpoint: true },
+  security: { managersOnly: true },
 };

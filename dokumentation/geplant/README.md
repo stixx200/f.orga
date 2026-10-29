@@ -25,3 +25,4 @@ Alles in diesem Ordner ist noch nicht umgesetzt. Was fertig ist, steht in [`../i
 | MP-Feuer (`mp-feuer`) | umgesetzt (offene Punkte) | [mp-feuer.md](module/mp-feuer.md) |
 | Führerscheinkontrolle (Stammdaten) | umgesetzt (offene Punkte) | [fuehrerscheinkontrolle.md](module/fuehrerscheinkontrolle.md) |
 | Datensicherung | umgesetzt (offene Punkte) | [backup.md](module/backup.md) |
+| Datenschutz (`privacy`) | umgesetzt (offene Punkte) | [datenschutz.md](datenschutz.md) |

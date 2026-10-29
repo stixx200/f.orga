@@ -120,7 +120,7 @@ export function RetentionPage() {
         actions={
           <Group gap="sm">
             <Button variant="default" loading={refresh.isPending} onClick={() => refresh.mutate(undefined)}>{t('retention.list.refresh')}</Button>
-            {can(session, 'core.settings.manage') && <Button component={Link} to="/admin/settings?tab=privacy" variant="default">{t('retention.list.periods')}</Button>}
+            {can(session, 'core.settings.manage') && <Button component={Link} to="/admin/settings?tab=retention" variant="default">{t('retention.list.periods')}</Button>}
           </Group>
         }
       />

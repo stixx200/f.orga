@@ -1,35 +1,24 @@
-import { type DynamicModule, type MiddlewareConsumer, Module, type NestModule, type OnModuleInit } from '@nestjs/common';
+import { type DynamicModule, Inject, type MiddlewareConsumer, Module, type NestModule, type OnApplicationBootstrap, type OnModuleInit } from '@nestjs/common';
 import { APP_GUARD, DiscoveryModule } from '@nestjs/core';
 import { Migrator } from '@mikro-orm/migrations';
-import { CONSENTS, CONSENTS_PERMISSION, PRIVACY_PERMISSION, RETENTION_PERMISSION } from '@forga/core-contracts';
+import { CONSENTS, RETENTION_PERMISSION } from '@forga/core-contracts';
 import { CORE_MIGRATIONS } from '../migrations/index.js';
-import { AccessReportsController, MyAccessReportsController } from './access-report/access-report.controller.js';
-import { AccessReportService } from './access-report/access-report.service.js';
-import { AccessReportTexts } from './access-report/access-report.texts.js';
+import { assertPersonDataComplete } from './access-report/completeness.js';
 import { CoreDescription } from './access-report/core-description.js';
-import { PrivacyDocument } from './access-report/privacy-document.entity.js';
 import { Audit, AuditController, AuditEntry } from './audit/audit.js';
 import { AuditReferenceRegistry } from './audit/audit-references.js';
 import { CoreAuditReferences } from './audit/core-references.js';
 import { DomainEvents } from './events/domain-events.js';
-import { PrivacyBreachEntity, PrivacyNoticeEntity, PrivacyRequestEntity } from './privacy/privacy.entities.js';
-import { BreachTools, BreachToolsController, LockdownRegistry, ProtocolRegistry } from './privacy/breach-tools.js';
+import { CoreProtocols, LockdownRegistry, ProtocolRegistry } from './privacy/protocols.js';
 import { ProcessorRegistry } from './privacy/processors.js';
 import { RateLimitEntity, RateLimits } from './security/rate-limits.js';
 import { MySessionsController } from './security/sessions.controller.js';
-import { PrivacyBreaches, PrivacyBreachesController } from './privacy/breaches.js';
-import { PrivacyRegister, PrivacyRegisterController } from './privacy/register.js';
 import { RetentionTexts } from './privacy/retention-texts.js';
 import { CoreMeasures, TechnicalMeasureRegistry } from './privacy/technical-measures.js';
-import { PrivacyNoticeController, PrivacyNoticeService } from './privacy/privacy-notice.js';
-import { PrivacyAssignees, PrivacyRequests, PrivacyRequestsController } from './privacy/privacy-requests.js';
-import { PrivacyRetentionCategories } from './privacy/privacy-retention.js';
-import { ThirdPartiesController } from './privacy/third-parties.js';
 import { ThirdPartyRegistry } from './privacy/third-party-registry.js';
-import { PrivacyTextsController } from './privacy/privacy-texts.js';
-import { AccessLog, AccessLogController, AccessLogEntity } from './privacy/access-log.js';
-import { ConsentEntity, ConsentsController, ConsentService } from './privacy/consents.js';
-import { Rectifications, RectificationsController } from './privacy/rectifications.js';
+import { AccessLog } from './privacy/access-log.js';
+import { Consents } from './privacy/consents.js';
+import { ProcessingRestrictions } from './privacy/restriction.js';
 import { Impersonations, ImpersonationsController } from './security/impersonations.js';
 import { CORE_HISTORIZED, HistoryAccessRegistry } from './history/history-access.js';
 import { HistoryController } from './history/history.controller.js';
@@ -43,7 +32,6 @@ import { DigestService } from './tasks/digest.service.js';
 import { MailService } from './tasks/mail.service.js';
 import { Notifications } from './tasks/notifications.js';
 import { CoreExport } from './data/core-export.js';
-import { ErasureController, ErasureService } from './privacy/erasure.js';
 import { CodeRegistry, DataController, ExportRegistry, PersonDataRegistry, SearchRegistry } from './data/data.js';
 import { CoreRetentionCategories } from './retention/core-categories.js';
 import { RetentionCaseEntity } from './retention/retention-case.entity.js';
@@ -77,7 +65,7 @@ import { StepUpCheck } from './security/step-up-check.js';
 import { ApiToken, Role, RoleAssignment, Session, User, UserMfa } from './security/security.entities.js';
 import { TokenDeadlines, TokensController } from './security/tokens.controller.js';
 import { UsersController } from './security/users.controller.js';
-import { OnboardingController } from './settings/onboarding.js';
+import { OnboardingController, OnboardingRegistry } from './settings/onboarding.js';
 import { Setting, SettingsController, SettingsService } from './settings/settings.js';
 import { userContextMiddleware } from './user-context.js';
 
@@ -100,12 +88,6 @@ export const CORE_ENTITIES: EntityDefinition[] = [
   BrigadeAsset,
   AttachmentEntity,
   RetentionCaseEntity,
-  PrivacyDocument,
-  PrivacyRequestEntity,
-  PrivacyNoticeEntity,
-  PrivacyBreachEntity,
-  ConsentEntity,
-  AccessLogEntity,
   RateLimitEntity,
 ];
 
@@ -138,7 +120,7 @@ export function ormParts(modules: ForgaModule[]) {
 }
 
 @Module({})
-export class ForgaCoreModule implements NestModule, OnModuleInit {
+export class ForgaCoreModule implements NestModule, OnModuleInit, OnApplicationBootstrap {
   constructor(
     private readonly historyAccess: HistoryAccessRegistry,
     private readonly exports: ExportRegistry,
@@ -147,8 +129,16 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
     private readonly personData: PersonDataRegistry,
     private readonly imports: ImportRegistry,
     private readonly settings: SettingsService,
-    private readonly consents: ConsentService,
+    @Inject(FORGA_CORE_OPTIONS) private readonly options: ForgaCoreOptions,
   ) {}
+
+  /** Every module declaring personal data describes, erases and anonymises it (checked once all have registered). */
+  onApplicationBootstrap(): void {
+    assertPersonDataComplete(this.options.modules, {
+      describes: (id) => Boolean(this.exports.sources.get(id)?.describePerson),
+      anonymizes: (id) => this.personData.handlers.has(id),
+    });
+  }
 
   onModuleInit(): void {
     assertStage();
@@ -167,8 +157,8 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
     this.historyAccess.registerPermission('core.retention_case', RETENTION_PERMISSION);
     // Remembered mappings of the table import: for users of any import profile.
     this.historyAccess.register('core.import_mapping', async (user) => ({ allowed: this.imports.available(user).length > 0 }));
-    // Settings of a module: also for the managers of that module's settings; data protection sections for
-    // `core.privacy.manage`.
+    // Settings of a module: also for the managers of that module's settings (e.g. `privacy.manage` for the data
+    // protection sections).
     this.historyAccess.register('core.setting', async (user, section) => {
       const managers = (() => {
         try {
@@ -178,14 +168,6 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         }
       })();
       return { allowed: user.can('core.settings.manage') || managers.some((permission) => user.can(permission)) };
-    });
-    this.historyAccess.registerPermission('core.privacy_request', PRIVACY_PERMISSION);
-    this.historyAccess.registerPermission('core.privacy_notice', PRIVACY_PERMISSION);
-    this.historyAccess.registerPermission('core.privacy_breach', PRIVACY_PERMISSION);
-    // Consents: data protection, or recording consents for a department of the person.
-    this.historyAccess.register('core.consent', async (user, id) => {
-      const consent = await this.consents.find(id);
-      return { allowed: consent !== null && (user.can(PRIVACY_PERMISSION) || (user.grant(CONSENTS_PERMISSION) !== null && (await this.consents.mayRecord(user, consent.personId)))) };
     });
   }
 
@@ -218,21 +200,8 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         PluginsController,
         OnboardingController,
         SecurityStatusController,
-        AccessReportsController,
-        MyAccessReportsController,
-        PrivacyNoticeController,
-        PrivacyTextsController,
-        PrivacyRequestsController,
-        ErasureController,
-        PrivacyRegisterController,
-        PrivacyBreachesController,
-        BreachToolsController,
-        ConsentsController,
-        RectificationsController,
-        AccessLogController,
         ImpersonationsController,
         MySessionsController,
-        ThirdPartiesController,
       ],
       providers: [
         { provide: FORGA_CORE_OPTIONS, useValue: { ...options, modules } },
@@ -273,30 +242,22 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         CoreRetentionCategories,
         CoreExport,
         CoreDescription,
-        AccessReportTexts,
-        AccessReportService,
-        PrivacyNoticeService,
-        PrivacyRequests,
-        PrivacyAssignees,
-        ErasureService,
         RetentionTexts,
         TechnicalMeasureRegistry,
         CoreMeasures,
-        PrivacyRegister,
-        PrivacyBreaches,
         ProtocolRegistry,
-        BreachTools,
-        ConsentService,
-        { provide: CONSENTS, useExisting: ConsentService },
-        Rectifications,
+        CoreProtocols,
+        Consents,
+        { provide: CONSENTS, useExisting: Consents },
         AccessLog,
+        ProcessingRestrictions,
+        OnboardingRegistry,
         Impersonations,
         RateLimits,
         TokenDeadlines,
         LockdownRegistry,
         ProcessorRegistry,
         ThirdPartyRegistry,
-        PrivacyRetentionCategories,
       ],
       exports: [
         RateLimits,
@@ -305,12 +266,14 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         ThirdPartyRegistry,
         TechnicalMeasureRegistry,
         ProtocolRegistry,
-        PrivacyRegister,
+        RetentionTexts,
         AccessLog,
-        ConsentService,
+        Consents,
         CONSENTS,
-        PrivacyNoticeService,
-        PrivacyRequests,
+        ProcessingRestrictions,
+        OnboardingRegistry,
+        AuthService,
+        RetentionService,
         FORGA_CORE_OPTIONS,
         CookiePolicy,
         ModuleStateService,

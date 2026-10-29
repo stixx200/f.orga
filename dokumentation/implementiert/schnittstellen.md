@@ -6,7 +6,7 @@ Alle Pfade liegen unter `/api`.
 - per Sitzungs-Cookie `forga_session`, bei ändernden Methoden zusätzlich mit dem Header `x-forga: 1`,
 - oder per `Authorization: Bearer forga_…`.
 
-**Rechte.** Die Spalte „Recht“ nennt die Berechtigung, die der Aufrufer in mindestens einer Abteilung braucht. Berechtigungen mit `stepUp` (alle `core.*`-Verwaltungsrechte, `masterdata.persons.sensitive`, `respiratory-protection.examinations`, `backup.manage`) und die Überweisungsdateien und Abrechnungen der Entschädigung verlangen zusätzlich eine mit dem zweiten Faktor bestätigte Sitzung ([Step-up](datenschutz.md#zweiter-faktor-bei-sensiblen-daten-step-up)); API-Tokens bekommen solche Rechte nicht.
+**Rechte.** Die Spalte „Recht“ nennt die Berechtigung, die der Aufrufer in mindestens einer Abteilung braucht. Berechtigungen mit `stepUp` (alle `core.*`-Verwaltungsrechte, `masterdata.persons.sensitive`, `respiratory-protection.examinations`, `privacy.manage`, `backup.manage`) und die Überweisungsdateien und Abrechnungen der Entschädigung verlangen zusätzlich eine mit dem zweiten Faktor bestätigte Sitzung ([Step-up](datenschutz.md#zweiter-faktor-bei-sensiblen-daten-step-up)); API-Tokens bekommen solche Rechte nicht.
 
 **Fehler.** Fehlerantworten tragen einen `code`. Typische Codes:
 
@@ -67,11 +67,11 @@ Alle Pfade liegen unter `/api`.
 | `POST` | `/core/me/sessions/end-others` | angemeldet | Alle anderen Sitzungen beenden; Antwort `{ ended }` |
 | `POST` | `/core/tokens` | `core.tokens.manage` | Token anlegen (`ApiTokenInput` mit `name`, `recipient`, `purpose`, `scopes`, `expiresOn` (Pflicht, höchstens 2 Jahre), optional `allowedAddresses`). Die Antwort enthält den Klartext genau einmal. Fehler: `tokens.unknownScopes`, `tokens.coreScopes` (keine `core.*`-Bereiche), `tokens.scopesWider` (`403`, Bereich fehlt dem Ersteller), `tokens.expiryInPast`, `tokens.expiryTooLate`, `tokens.addressInvalid` |
 | `DELETE` | `/core/tokens/:id` | `core.tokens.manage` | Token widerrufen (`204`) |
-| `GET` | `/core/settings/:section` | angemeldet; `smtp`, `oidc`, `privacy`, `reminders`, `security` und `privacy.*` nur Verwalter (`privacy`, `security` auch `core.privacy.manage`, `privacy.*` nur `core.privacy.manage`) | Einstellungsabschnitt ohne geheime Felder und ohne Felder nur für Verwalter (z. B. `training.general.feedToken`), `null` wenn unvollständig |
-| `PUT` | `/core/settings/:section` | `core.settings.manage` bzw. `<modul>.settings.manage`; Abschnitte mit eigenen Verwaltern (`SettingsAccess.managers`) nur diese | Einstellungsabschnitt speichern. `privacy.texts` nur über `/core/privacy/texts/:key`, `privacy.activities` nur über `/core/privacy/register/…` (`settings.dedicatedEndpoint`) |
+| `GET` | `/core/settings/:section` | angemeldet; `smtp`, `oidc`, `retention`, `reminders`, `security` und die Abschnitte `privacy.*` des Moduls Datenschutz nur Verwalter (`privacy.*` nur `privacy.manage`) | Einstellungsabschnitt ohne geheime Felder und ohne Felder nur für Verwalter (z. B. `training.general.feedToken`), `null` wenn unvollständig |
+| `PUT` | `/core/settings/:section` | `core.settings.manage` bzw. `<modul>.settings.manage`; Abschnitte mit eigenen Verwaltern (`SettingsAccess.managers`) nur diese | Einstellungsabschnitt speichern. `privacy.texts` nur über `/privacy/texts/:key`, `privacy.activities` nur über `/privacy/register/…` (`settings.dedicatedEndpoint`) |
 | `POST` | `/core/settings/oidc/test` | `core.settings.manage` | Konfiguration des OIDC-Anbieters laden; Antwort `{ issuer, redirectUri }`. Fehler: `auth.oidcDiscoveryFailed` (`502`), `auth.oidcIncomplete`, `auth.oidcNoPublicUrl` |
-| `GET` | `/core/onboarding` | `core.settings.manage` oder `core.users.manage` | Einrichtungsliste (`OnboardingItem[]`: `key`, `done`, `to`, bei Modulen `label`); außer in der Entwicklung zuerst `https`, erledigt bei einem Aufruf über HTTPS |
-| `GET` | `/core/security/status` | `core.settings.manage` oder `core.privacy.manage` | `SecurityStatus`: `stage`, `https` (Anfrage über HTTPS), `publicUrlHttps`, `secureCookies` |
+| `GET` | `/core/onboarding` | `core.settings.manage` oder `core.users.manage` | Einrichtungsliste (`OnboardingItem[]`: `key`, `done`, `to`, bei Modulen `label`); außer in der Entwicklung zuerst `https`, erledigt bei einem Aufruf über HTTPS; dazu die Schritte aktiver Module aus `OnboardingRegistry` (z. B. `privacyContacts`, `privacyTexts`) |
+| `GET` | `/core/security/status` | `core.settings.manage` | `SecurityStatus`: `stage`, `https` (Anfrage über HTTPS), `publicUrlHttps`, `secureCookies` |
 | `GET` | `/core/modules` | angemeldet | Aktive Module mit Name, Navigation und `frontend.entry` (`/modules/<id>/remoteEntry.js`) |
 | `GET` | `/core/modules/status` | `core.modules.manage` | Alle installierten Module mit Name, Version, `active`, `requires` und `optional` |
 | `GET` | `/core/modules/kiosk/:path` | offen | Kiosk-Seite eines aktiven Moduls (`KioskFrontend`: `moduleId`, `remote`, `exposed`, `entry`), z. B. `terminal`. Inaktiv: `404 modules.inactive` |
@@ -81,20 +81,9 @@ Alle Pfade liegen unter `/api`.
 | `GET` | `/core/codes/modules` | angemeldet | Module, in denen der Benutzer Codes suchen kann (`string[]`) |
 | `GET` | `/core/audit?from=&to=&userId=&action=&q=&limit=` | `core.audit.read` | Audit-Einträge (`AuditEntry`), neueste zuerst (höchstens 1000), mit `userName`, `impersonatorName` und `references`: die IDs in `details`, nach ID aufgelöst zu `{ kind, label, to?, anonymized? }` (`label` Text oder `{ de, en }`, `null` = gelöscht; `to` nur, wenn der Leser die Seite öffnen darf). `action` mit `.` am Ende filtert nach Präfix |
 | `GET` | `/core/audit/filters` | `core.audit.read` | `{ actions, users }` für die Filter |
-| `GET`, `POST`, `PUT` | `/core/privacy/…` | `core.privacy.manage`; Datenschutzhinweis ohne Anmeldung, Mein Bereich angemeldet | Datenschutzhinweis, Textbausteine, Betroffenenanfragen, Mein Bereich; Tabelle in [Datenschutz](datenschutz.md#betroffenenanfragen-l7-l19) |
-| `GET`, `POST`, `PUT` | `/core/privacy/register…` | `core.privacy.manage` | Verzeichnis der Verarbeitungstätigkeiten, Ergänzungen je Tätigkeit, Empfänger nach Art. 19, Export als PDF und Excel (`?scope=dpia`: Angaben für die Folgenabschätzung); Tabelle in [Datenschutz](datenschutz.md#verzeichnis-der-verarbeitungstätigkeiten-l8) |
-| `GET`, `POST`, `PUT` | `/core/privacy/breaches…`, `/core/privacy/breach-tools/…` | `core.privacy.manage`; `breach-tools/lockdown` mit `@StepUp()` | Datenpannen, Kontaktliste, Protokolle, betroffene Personen, alle Sitzungen beenden; Tabellen in [Datenschutz](datenschutz.md#datenpannen-l20) |
 | `GET` | `/core/export` | `core.data.export` | Module mit Vollexport, einschließlich `core` |
 | `GET` | `/core/export/:module` | `core.data.export` | Vollexport eines Moduls (JSON-Datei); bei `core` Abschnitte und Felder nur für Verwalter nur für diese |
 | `GET` | `/core/export/person/:personId` | `core.data.export` | Auskunft zu einer Person über alle Module (JSON-Datei). Fehler: `data.invalidPersonId` (`400`), `data.unknownPerson` (`404`) |
-| `GET` | `/core/privacy/access-reports/preview?personId=&language=` | `core.privacy.manage` | Bereiche der Auskunft mit Zahl der Einträge (`AccessReportSectionSummary[]`). Fehler: `data.invalidPersonId`, `data.unknownPerson` |
-| `GET` | `/core/privacy/access-reports?personId=` | wie oben | Erstellte Auskünfte der Person (`AccessReport[]`) |
-| `POST` | `/core/privacy/access-reports` | wie oben | Auskunft erstellen (`AccessReportCreate`: `personId`, `language`, `includeJson`, `requestId`); `202` mit `status: pending`, das PDF entsteht im Hintergrund. Fehler: `privacy.noSecretKey` (`503`), `data.unknownPerson` (`404`), `privacy.requestMismatch` (`400`) |
-| `GET` | `/core/privacy/access-reports/:id` | wie oben | Eine Auskunft (`AccessReport`) |
-| `GET` | `/core/privacy/access-reports/:id/file?inline=1` | wie oben | PDF (entschlüsselt). Fehler: `privacy.documentExpired` (`410`), `privacy.documentNotReady`, `privacy.documentUnreadable` (`409`) |
-| `POST` | `/core/privacy/access-reports/:id/hand-over` | wie oben | Übergabe vermerken (`AccessReportHandOver`: `channel` `self-service`/`in-person`/`post`, `date`, `closeRequest`); `self-service` stellt in „Mein Bereich“ bereit und benachrichtigt die Person. Fehler: `privacy.noAccount` (`400`), `privacy.documentExpired`, `privacy.documentNotReady` |
-| `GET` | `/core/me/access-reports` | angemeldet | In „Mein Bereich“ bereitgestellte, nicht abgelaufene Auskünfte der eigenen Person (`MyAccessReport[]`) |
-| `GET` | `/core/me/access-reports/:id/file` | angemeldet, eigene Person | PDF herunterladen; andere Auskünfte `404` |
 | `GET` | `/core/retention/categories` | `core.settings.manage` oder `core.retention.manage` | Datenkategorien des Aufbewahrungsplans (`RetentionCategory[]`) |
 | `POST` | `/core/retention/run` | `core.settings.manage` oder `core.retention.manage`; Probelauf mit `settings` nur `core.settings.manage` | Aufbewahrungsregeln anwenden (`RetentionRun`: `dryRun`, nur im Probelauf `settings.retention` mit anderen Regeln). Antwort `RetentionResult` (`counts`, `cases`, `effectiveYears`, `warnings`) |
 | `GET` | `/core/retention/cases` | `core.retention.manage` | Aussonderungsfälle (`RetentionCase[]`) |
@@ -122,7 +111,7 @@ Alle Pfade liegen unter `/api`.
 | `GET` | `/core/imports/mappings?kind=&q=&problems=` | Recht eines Importprofils | Gemerkte Zuordnungen des Tabellen-Imports (`RememberedMapping`: `id`, `kind`, `kindName`, `value`, `key`, `targetName`, `targetState` `active`/`inactive`/`deleted`, `profile`, `profileName`, `createdBy`, `createdAt`, `lastUsedAt`); `problems=true`: nur mit inaktivem oder gelöschtem Ziel |
 | `DELETE` | `/core/imports/mappings/:id` | Recht eines Importprofils | Zuordnung vergessen (204); Audit `imports.mapping-deleted`. Fehler: `imports.mappingNotFound` (404) |
 
-**Einstellungsabschnitte des Core:** `brigade` (`publicUrl` nur `https://`, `http://` für `localhost`; `email` als E-Mail-Adresse), `smtp` (Passwort nur schreibbar), `reminders` (`enabled`, `weekday` 1–7 mit 1 = Montag, `hour` 0–23, Europe/Berlin), `privacy` (`retention`: Regel je Kategorie und Unterart mit `years`, `action`, `afterDecision`, `specialCase`, `note`; ohne Eintrag gilt die Standardregel der Kategorie, siehe [Aufbewahrungsplan](aufbewahrung.md#regel-je-kategorie)), `oidc` (Client-Secret nur schreibbar).
+**Einstellungsabschnitte des Core:** `brigade` (`publicUrl` nur `https://`, `http://` für `localhost`; `email` als E-Mail-Adresse), `smtp` (Passwort nur schreibbar), `reminders` (`enabled`, `weekday` 1–7 mit 1 = Montag, `hour` 0–23, Europe/Berlin), `retention` (`retention`: Regel je Kategorie und Unterart mit `years`, `action`, `afterDecision`, `specialCase`, `note`; ohne Eintrag gilt die Standardregel der Kategorie, siehe [Aufbewahrungsplan](aufbewahrung.md#regel-je-kategorie)), `oidc` (Client-Secret nur schreibbar).
 
 **Importprofil `masterdata.persons`**, Meldungscodes je Zeile: `imports.requiredValueMissing`, `imports.invalidDate`, `masterdata.import.unknownDepartment`, `masterdata.import.departmentRequired`, `masterdata.import.ambiguous`, `masterdata.import.departmentCreated`, `masterdata.import.departmentDiffers`, `masterdata.import.unknownStatus`, `masterdata.import.sensitiveIgnored`, `masterdata.import.unknownExitReason` (`kind` `exit-reason`, `value`), `masterdata.import.leftIgnored`, `auth.forbidden`.
 
@@ -170,10 +159,7 @@ Schemas aus `@forga/masterdata-contracts`. „Abteilungsbezogen“ heißt: Das R
 | Methode | Pfad | Zweck |
 | --- | --- | --- |
 | `GET` | `/masterdata/persons?q=&departmentId=&status=&qualification=&includeLeft=` | Sichtbare Personen als `PersonSummary`, Ausgeschiedene nur mit `includeLeft=true` oder `status=left`. Personen, die nur über `masterdata.persons.directory` sichtbar sind, kommen mit Name, Status und Abteilungen und `restricted: true` |
-| `GET` | `/masterdata/persons/:id` | Person mit Mitgliedschaften, Qualifikationen, Dienstgraden, Ehrungen, `processingRestriction` und `privacyInformation`. Sensible Felder nur mit `masterdata.persons.sensitive`, sonst `sensitiveHidden: true`, `notes` leer, `restPeriods` leer und `exitReason` `null`. Eingeschränkte Personen nur mit `core.privacy.manage` (`403 privacy.processingRestricted`); Personenliste und Suche lassen sie weg |
-| `PUT`, `DELETE` | `/masterdata/persons/:id/restriction` | `core.privacy.manage`: Verarbeitung einschränken (`ProcessingRestrictionInput`) bzw. aufheben; Audit `privacy.restricted`, `privacy.restriction-lifted` |
-| `GET` | `/masterdata/privacy/restricted`, `/masterdata/privacy/uninformed` | `core.privacy.manage`: eingeschränkte Personen (`RestrictedPerson[]`), Personen ohne vermerkte Information (`UninformedPerson[]`) |
-| `POST` | `/masterdata/privacy/information` | `core.privacy.manage`: „Information erteilt am“ für viele Personen (`PrivacyInformationInput`), Antwort `{ count }` |
+| `GET` | `/masterdata/persons/:id` | Person mit Mitgliedschaften, Qualifikationen, Dienstgraden, Ehrungen und `processingRestricted` (Verarbeitung eingeschränkt, Modul Datenschutz; Einzelheiten unter `/privacy/persons/:id`). Sensible Felder nur mit `masterdata.persons.sensitive`, sonst `sensitiveHidden: true`, `notes` leer, `restPeriods` leer und `exitReason` `null`. Eingeschränkte Personen nur mit `privacy.manage` (`403 privacy.processingRestricted`); Personenliste und Suche lassen sie weg |
 | `POST` | `/masterdata/persons` | Anlegen (`CreatePersonInput`, mindestens eine Mitgliedschaft). Status Standard `probation`, Probezeitende aus `masterdata.membership`. Fehler: `masterdata.personnelNumberTaken` (`409`), `masterdata.primaryMembershipRequired`, `masterdata.unknownDepartment`, `masterdata.birthDateInFuture`, `masterdata.belowMinimumAge` (laufende Mitgliedschaft in einer Einsatzabteilung unter `minimumAgeOperational`), `masterdata.belowMinimumAgeYouth` (Jugendfeuerwehr unter `minimumAgeYouth`), `masterdata.statusDoesNotFitDepartment` (Status passt nicht zum Typ der Stammabteilung), `masterdata.dateBeforeBirth`, `validation.failed` mit `bank.iban` bzw. `employer.iban` (Prüfziffer) |
 | `PUT` | `/masterdata/persons/:id` | Stammdaten ändern (`PersonInput`; der Führerschein ändert sich nur über eine Kontrolle). Sensible Felder (auch `notes`) ohne Recht werden ignoriert. Fehler: `masterdata.birthDateInFuture`, `masterdata.dateBeforeBirth` (geändertes Geburtsdatum nach erfassten Daten bzw. geänderter Eintritt vor der Geburt) |
 | `PUT` | `/masterdata/persons/:id/memberships` | Alle Mitgliedschaften ersetzen (Liste von `MembershipInput`). Recht für alte und neue Abteilungen nötig. Fehler: `masterdata.membershipPeriodInvalid`, `masterdata.primaryMembershipRequired`, `masterdata.belowMinimumAge` bzw. `masterdata.belowMinimumAgeYouth` (neue laufende Mitgliedschaft), `masterdata.dateBeforeBirth`, `masterdata.statusDoesNotFitDepartment` (neue Stammabteilung passt nicht zum Status) |
@@ -423,6 +409,35 @@ Alle Endpunkte brauchen `backup.manage` (privilegiert, nie für API-Tokens), au�
 | `DELETE` | `/backup/previous-databases/:name` | `backup.manage` | „Alte Datenbank löschen“ (`<db>_before_<zeit>`), Audit `backup.previous-database-dropped` |
 
 **Wartungsmodus:** Während einer Wiederherstellung antworten alle Anfragen unter `/api` außer dem Status `503` mit `{ "code": "maintenance", "retryAfter": 15 }` und `Retry-After: 15`, auch Kiosk und API-Tokens.
+
+## Datenschutz
+
+Modul `privacy` ([Datenschutz](datenschutz.md#aufteilung-modul-datenschutz-und-sicherheit-des-core)); bei abgeschaltetem Modul antworten alle Pfade `404 modules.inactive`. Fehlercodes `privacy.*`.
+
+| Methode | Pfad | Recht | Zweck |
+| --- | --- | --- | --- |
+| `GET`, `POST`, `PUT` | `/privacy/…` | `privacy.manage`; Datenschutzhinweis ohne Anmeldung, Mein Bereich angemeldet | Datenschutzhinweis, Textbausteine, Betroffenenanfragen, Mein Bereich; Tabelle in [Datenschutz](datenschutz.md#betroffenenanfragen-l7-l19) |
+| `GET`, `POST`, `PUT` | `/privacy/register…` | `privacy.manage` | Verzeichnis der Verarbeitungstätigkeiten, Ergänzungen je Tätigkeit, Empfänger nach Art. 19, Export als PDF und Excel (`?scope=dpia`: Angaben für die Folgenabschätzung); Tabelle in [Datenschutz](datenschutz.md#verzeichnis-der-verarbeitungstätigkeiten-l8) |
+| `GET`, `POST`, `PUT` | `/privacy/breaches…`, `/privacy/breach-tools/…` | `privacy.manage`; `breach-tools/lockdown` mit `@StepUp()` | Datenpannen, Kontaktliste, Protokolle, betroffene Personen, alle Sitzungen beenden; Tabellen in [Datenschutz](datenschutz.md#datenpannen-l20) |
+| `GET` | `/privacy/access-reports/preview?personId=&language=` | `privacy.manage` | Bereiche der Auskunft mit Zahl der Einträge (`AccessReportSectionSummary[]`). Fehler: `data.invalidPersonId`, `data.unknownPerson` |
+| `GET` | `/privacy/access-reports?personId=` | wie oben | Erstellte Auskünfte der Person (`AccessReport[]`) |
+| `POST` | `/privacy/access-reports` | wie oben | Auskunft erstellen (`AccessReportCreate`: `personId`, `language`, `includeJson`, `requestId`); `202` mit `status: pending`, das PDF entsteht im Hintergrund. Fehler: `privacy.noSecretKey` (`503`), `data.unknownPerson` (`404`), `privacy.requestMismatch` (`400`) |
+| `GET` | `/privacy/access-reports/:id` | wie oben | Eine Auskunft (`AccessReport`) |
+| `GET` | `/privacy/access-reports/:id/file?inline=1` | wie oben | PDF (entschlüsselt). Fehler: `privacy.documentExpired` (`410`), `privacy.documentNotReady`, `privacy.documentUnreadable` (`409`) |
+| `POST` | `/privacy/access-reports/:id/hand-over` | wie oben | Übergabe vermerken (`AccessReportHandOver`: `channel` `self-service`/`in-person`/`post`, `date`, `closeRequest`); `self-service` stellt in „Mein Bereich“ bereit und benachrichtigt die Person. Fehler: `privacy.noAccount` (`400`), `privacy.documentExpired`, `privacy.documentNotReady` |
+| `GET` | `/privacy/me/access-reports` | angemeldet | In „Mein Bereich“ bereitgestellte, nicht abgelaufene Auskünfte der eigenen Person (`MyAccessReport[]`) |
+| `GET` | `/privacy/me/access-reports/:id/file` | angemeldet, eigene Person | PDF herunterladen; andere Auskünfte `404` |
+| `GET` | `/privacy/notice/state` | angemeldet | Stand des Datenschutzhinweises für die Sitzung (`SessionPrivacyNotice`: `version`, `acknowledgedVersion`, `due`) |
+| `GET` | `/privacy/persons/:id` | `privacy.manage` | Reiter „Datenschutz“ der Personalakte (`PersonPrivacy`: Anfragen, Hinweis, `restriction`, `information`) |
+| `PUT`, `DELETE` | `/privacy/persons/:id/restriction` | `privacy.manage` | Verarbeitung einschränken (`ProcessingRestrictionInput`) bzw. aufheben; Audit `privacy.restricted`, `privacy.restriction-lifted` |
+| `GET` | `/privacy/restricted`, `/privacy/uninformed` | `privacy.manage` | eingeschränkte Personen (`RestrictedPerson[]`), Personen ohne vermerkte Information (`UninformedPerson[]`) |
+| `POST` | `/privacy/information` | `privacy.manage` | „Information erteilt am“ für viele Personen (`PrivacyInformationInput`), Antwort `{ count }` |
+| `GET`, `PUT`, `POST`, `DELETE` | `/privacy/consents…`, `/privacy/persons/:id/consents`, `/privacy/given-consents/:id/withdraw`, `/privacy/me/consents…` | `privacy.manage`, Erfassen und Widerrufen auch `privacy.consents` der Abteilung, eigene angemeldet | Einwilligungen; Tabelle in [Datenschutz](datenschutz.md#einwilligungen-l9) |
+| `POST`, `GET` | `/privacy/me/rectifications`, `/privacy/rectifications/:id`, `/privacy/rectifications/:id/corrected` | angemeldet bzw. Zuständige | Berichtigung ([Datenschutz](datenschutz.md#berichtigung-l12)) |
+| `GET`, `POST` | `/privacy/requests/:id/erasure` | `privacy.manage` | Löschprüfung und Ausführen ([Datenschutz](datenschutz.md#löschprüfung-l7)) |
+| `GET`, `POST` | `/privacy/third-parties`, `/privacy/third-parties/access-reports`, `/privacy/third-parties/erasure` | `privacy.manage` | Daten Dritter ([Datenschutz](datenschutz.md#daten-dritter-l14)) |
+| `GET` | `/privacy/access-log`, `/privacy/access-log/filters` | `core.audit.read` | Leseprotokoll ([Datenschutz](datenschutz.md#leseprotokoll)) |
+| `POST` | `/privacy/history/:id/redact` | `privacy.manage` und Leserecht auf die Historie | Wert in der Historie unkenntlich machen (`HistoryRedactionInput`) |
 
 ## Inaktive Module
 

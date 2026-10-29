@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type EntityName, EntityManager } from '@mikro-orm/core';
-import { AccessReportService, PersonDataRegistry, User } from '@forga/core-api';
+import { PersonDataRegistry, User } from '@forga/core-api';
+import { AccessReportService } from '@forga/privacy-api';
 import { INSTALLED_MODULES } from './app/installed-modules';
 import type { AccessReportFixture } from './testing/access-report/fixture';
 import { findAnywhere, IDENTIFYING, leaveLongAgo, seedEverything } from './testing/erasure/seed';
@@ -23,7 +24,7 @@ beforeAll(async () => {
   ({ fx } = await seedEverything(test, admin));
   before = await findAnywhere(test, IDENTIFYING);
   await leaveLongAgo(test, fx.ids.person);
-  await fx.put('/core/settings/privacy', {
+  await fx.put('/core/settings/retention', {
     retention: {
       'masterdata.person-file': { years: 10, action: 'anonymize' },
       'masterdata.person-core': { years: 10, action: 'anonymize' },
@@ -47,7 +48,7 @@ describe('complete anonymisation (L13)', () => {
   it('the seeds put the identifying data into many tables', () => {
     const tables = new Set(before.map((f) => f.split(' ')[0]));
     expect(tables.size).toBeGreaterThan(10);
-    expect([...tables]).toEqual(expect.arrayContaining(['masterdata.person', 'core.user', 'core.history', 'backup.run', 'backup.restore', 'promotions.promotion_list', 'mp_feuer.mapping', 'info_terminal.terminal', 'mp_feuer.run', 'core.privacy_request']));
+    expect([...tables]).toEqual(expect.arrayContaining(['masterdata.person', 'core.user', 'core.history', 'backup.run', 'backup.restore', 'promotions.promotion_list', 'mp_feuer.mapping', 'info_terminal.terminal', 'mp_feuer.run', 'privacy.request']));
   });
 
   it('leaves the identifying data nowhere', async () => {
@@ -64,8 +65,8 @@ describe('complete anonymisation (L13)', () => {
   });
 
   it('refuses the access report for the anonymised person', async () => {
-    expect((await fx.get(`/core/privacy/access-reports/preview?personId=${fx.ids.person}`).expect(409)).body.code).toBe('privacy.personAnonymized');
-    expect((await fx.post('/core/privacy/access-reports', { personId: fx.ids.person, language: 'de', includeJson: false }).expect(409)).body.code).toBe('privacy.personAnonymized');
+    expect((await fx.get(`/privacy/access-reports/preview?personId=${fx.ids.person}`).expect(409)).body.code).toBe('privacy.personAnonymized');
+    expect((await fx.post('/privacy/access-reports', { personId: fx.ids.person, language: 'de', includeJson: false }).expect(409)).body.code).toBe('privacy.personAnonymized');
     await expect(test.app.get(AccessReportService).sections(fx.ids.person, 'de')).rejects.toThrow();
   });
 });

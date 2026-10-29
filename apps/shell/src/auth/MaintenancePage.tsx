@@ -1,7 +1,7 @@
 import { Button, Center, Paper, Stack, Text, Title } from '@mantine/core';
 import { useEffect } from 'react';
 import { useTranslation } from '@forga/web-sdk';
-import { LanguageSwitch } from '../frame/LanguageSwitch';
+import { LanguageSwitch } from '@forga/web-ui';
 
 const RETRY_MS = 15_000;
 

@@ -112,7 +112,7 @@ describe('HTTPS and security headers (L1)', () => {
     expect(items.some((i) => i.key === 'https')).toBe(false);
     process.env.FORGA_STAGE = 'production';
     items = (await get('/core/onboarding').expect(200)).body;
-    expect(items[0]).toEqual({ key: 'https', done: false, to: '/admin/privacy/settings?tab=security' });
+    expect(items[0]).toEqual({ key: 'https', done: false, to: '/admin/settings?tab=security' });
   });
 });
 

@@ -1258,6 +1258,8 @@ async function promotions(): Promise<void> {
 
 /** Data protection: fictitious contacts, recipients, information after the transfer and two requests. Texts stay templates. */
 async function privacy(persons: PersonRef[]): Promise<void> {
+  // The module is active by default; switched on explicitly in case it was switched off.
+  await call('PUT', 'core/modules/privacy', { active: true });
   await call('PUT', 'core/settings/privacy.contacts', {
     controller: { name: 'Stadt Musterstadt (Beispiel)', address: 'Marktplatz 1, 12345 Musterstadt', representedBy: 'Bürgermeisterin' },
     dpo: { name: 'Datenschutzbeauftragter der Stadt Musterstadt (Beispiel)', address: 'Marktplatz 1, 12345 Musterstadt', email: 'datenschutz@musterstadt.example', phone: '' },
@@ -1265,11 +1267,11 @@ async function privacy(persons: PersonRef[]): Promise<void> {
   });
   await call('PUT', 'core/settings/privacy.selfServiceAccess', { mode: 'request', contact: 'Kommandant der Feuerwehr Musterstadt' });
   // Register of processing activities: recipients for all activities and one activity completed by the municipality.
-  await call('PUT', 'core/privacy/register/recipients', { recipients: [{ id: 'treasury', name: 'Stadtkasse Musterstadt (Beispiel)', note: 'Bankverbindung, Entschädigung' }] });
-  const register = await call<{ activities: { key: string; record: { version: number; legalBasis: string } }[] }>('GET', 'core/privacy/register');
+  await call('PUT', 'privacy/register/recipients', { recipients: [{ id: 'treasury', name: 'Stadtkasse Musterstadt (Beispiel)', note: 'Bankverbindung, Entschädigung' }] });
+  const register = await call<{ activities: { key: string; record: { version: number; legalBasis: string } }[] }>('GET', 'privacy/register');
   const personnel = register.activities.find((a) => a.key === 'masterdata.persons');
   if (personnel && !personnel.record.legalBasis) {
-    await call('PUT', 'core/privacy/register/activities/masterdata.persons', {
+    await call('PUT', 'privacy/register/activities/masterdata.persons', {
       version: personnel.record.version,
       legalBasis: '[Beispiel] Feuerwehrgesetz Baden-Württemberg und Feuerwehrsatzung der Stadt Musterstadt – mit dem DSB festlegen',
       recipients: [{ id: 'accident-insurance', name: 'Unfallkasse (Beispiel)', note: 'nur bei Dienstunfällen' }],
@@ -1280,21 +1282,21 @@ async function privacy(persons: PersonRef[]): Promise<void> {
   const active = persons.filter((p) => p.status !== 'left');
   // Information after the transfer: given to most members, a few are still open.
   const informed = active.slice(0, Math.max(0, active.length - 12)).map((p) => p.id);
-  if (informed.length) await call('POST', 'masterdata/privacy/information', { personIds: informed, informedOn: day(-20), via: 'letter' });
+  if (informed.length) await call('POST', 'privacy/information', { personIds: informed, informedOn: day(-20), via: 'letter' });
   await consents(active);
-  if ((await call<unknown[]>('GET', 'core/privacy/requests?state=all')).length) return;
+  if ((await call<unknown[]>('GET', 'privacy/requests?state=all')).length) return;
   const [first, second] = active.slice(-2);
-  if (first) await call('POST', 'core/privacy/requests', { personId: first.id, kind: 'access', receivedOn: day(-24), channel: 'letter', identityChecked: true, identityNote: 'Unterschrift und Anschrift', content: 'Bitte um Auskunft über meine gespeicherten Daten.' });
-  if (second) await call('POST', 'core/privacy/requests', { personId: second.id, kind: 'rectification', receivedOn: day(-5), channel: 'email', content: 'Der Lehrgang Maschinist fehlt in meinen Daten.' });
+  if (first) await call('POST', 'privacy/requests', { personId: first.id, kind: 'access', receivedOn: day(-24), channel: 'letter', identityChecked: true, identityNote: 'Unterschrift und Anschrift', content: 'Bitte um Auskunft über meine gespeicherten Daten.' });
+  if (second) await call('POST', 'privacy/requests', { personId: second.id, kind: 'rectification', receivedOn: day(-5), channel: 'email', content: 'Der Lehrgang Maschinist fehlt in meinen Daten.' });
   console.log(`  Information für ${informed.length} Personen, 2 Anfragen`);
   await breach();
 }
 
 /** A fictitious, closed data breach as example of the documentation (Art. 33(5)). */
 async function breach(): Promise<void> {
-  if ((await call<unknown[]>('GET', 'core/privacy/breaches?state=all')).length) return;
+  if ((await call<unknown[]>('GET', 'privacy/breaches?state=all')).length) return;
   const discoveredAt = new Date(Date.now() - 40 * 86_400_000);
-  const created = await call<{ id: string; version: number }>('POST', 'core/privacy/breaches', {
+  const created = await call<{ id: string; version: number }>('POST', 'privacy/breaches', {
     title: '[Beispiel] Ausdruck der Telefonliste im Schulungsraum liegen gelassen',
     discoveredAt: discoveredAt.toISOString(),
     occurredFrom: day(-41),
@@ -1309,7 +1311,7 @@ async function breach(): Promise<void> {
     authorityNotRequired: true,
     authorityNote: '[Beispiel] Risiko unwahrscheinlich: Raum abgeschlossen, Ausdruck nach wenigen Stunden gefunden.',
   });
-  await call('POST', `core/privacy/breaches/${created.id}/close`, { version: created.version, closedOn: day(-39) });
+  await call('POST', `privacy/breaches/${created.id}/close`, { version: created.version, closedOn: day(-39) });
   console.log('  1 Datenpanne (Beispiel, abgeschlossen)');
 }
 
@@ -1318,20 +1320,20 @@ async function breach(): Promise<void> {
  * template), and fictitious consents given in writing by some members, one of them withdrawn.
  */
 async function consents(active: PersonRef[]): Promise<void> {
-  const catalog = await call<{ consents: { key: string; version: number; reviewedAt: string | null }[]; given: Record<string, number> }>('POST', 'core/privacy/consents/templates', {});
+  const catalog = await call<{ consents: { key: string; version: number; reviewedAt: string | null }[]; given: Record<string, number> }>('POST', 'privacy/consents/templates', {});
   for (const c of catalog.consents) {
-    if (!c.reviewedAt && c.key !== 'birthday-greeting') await call('POST', `core/privacy/consents/${c.key}/review`, { version: c.version });
+    if (!c.reviewedAt && c.key !== 'birthday-greeting') await call('POST', `privacy/consents/${c.key}/review`, { version: c.version });
   }
   if (Object.keys(catalog.given).length) return;
   const recorded: { id: string }[] = [];
   for (const [index, person] of active.slice(0, 24).entries()) {
     const keys = ['phone-list-mobile', ...(index % 3 === 0 ? ['birthday-posting'] : []), ...(index % 4 === 0 ? ['photos-public-relations'] : [])];
     for (const key of keys) {
-      const consent = await call<{ id: string } | null>('POST', `core/privacy/persons/${person.id}/consents`, { key, givenOn: day(-60 + index), via: 'written' }).catch(() => null);
+      const consent = await call<{ id: string } | null>('POST', `privacy/persons/${person.id}/consents`, { key, givenOn: day(-60 + index), via: 'written' }).catch(() => null);
       if (consent) recorded.push(consent);
     }
   }
-  if (recorded[1]) await call('POST', `core/privacy/given-consents/${recorded[1].id}/withdraw`, { withdrawnOn: day(-3), via: 'email' });
+  if (recorded[1]) await call('POST', `privacy/given-consents/${recorded[1].id}/withdraw`, { withdrawnOn: day(-3), via: 'email' });
   console.log(`  ${recorded.length} Einwilligungen`);
 }
 

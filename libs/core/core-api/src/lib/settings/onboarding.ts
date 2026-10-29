@@ -1,7 +1,7 @@
-import { Controller, ForbiddenException, Get, Inject, Req } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Inject, Injectable, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { EntityManager } from '@mikro-orm/core';
-import { type BrigadeSettings, type OnboardingItem, PRIVACY_TEXT_KEYS, PrivacyContacts, PrivacyTexts, type SmtpSettings } from '@forga/core-contracts';
+import type { BrigadeSettings, OnboardingItem, SmtpSettings } from '@forga/core-contracts';
 import { ModuleStateService } from '../module/modules.js';
 import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
@@ -11,6 +11,21 @@ import { User } from '../security/security.entities.js';
 import { forgaStage } from '../stage.js';
 import { serverKey } from '../security/server-key.js';
 import { Setting, SettingsService } from './settings.js';
+
+/** Steps of the setup list a module adds besides its settings page, e.g. the data protection contacts. */
+export interface OnboardingProvider {
+  module: string;
+  items(): Promise<OnboardingItem[]>;
+}
+
+@Injectable()
+export class OnboardingRegistry {
+  readonly providers: OnboardingProvider[] = [];
+
+  register(provider: OnboardingProvider): void {
+    this.providers.push(provider);
+  }
+}
 
 /**
  * What an administrator still has to set up on a new installation: HTTPS, public address, e-mail, departments, catalogs,
@@ -23,6 +38,7 @@ export class OnboardingController {
     private readonly settings: SettingsService,
     private readonly organization: OrganizationDirectory,
     private readonly modules: ModuleStateService,
+    private readonly registry: OnboardingRegistry,
     @Inject(FORGA_CORE_OPTIONS) private readonly options: ForgaCoreOptions,
   ) {}
 
@@ -43,7 +59,7 @@ export class OnboardingController {
     ];
     // Passwords, sessions and health data only encrypted: warns while f.orga is opened over plain HTTP (not on the
     // developer's machine). Behind a TLS proxy this needs `FORGA_TRUST_PROXY`, so the request counts as HTTPS.
-    if (forgaStage() !== 'development') items.unshift({ key: 'https', done: req.secure, to: '/admin/privacy/settings?tab=security' });
+    if (forgaStage() !== 'development') items.unshift({ key: 'https', done: req.secure, to: '/admin/settings?tab=security' });
     const inactive = await this.modules.inactiveIds();
     if (this.organization.available && !inactive.has('masterdata')) {
       items.push({ key: 'departments', done: (await this.organization.departments()).length > 0, to: '/masterdata/organization' });
@@ -61,11 +77,10 @@ export class OnboardingController {
         label: page.label,
       });
     }
-    // Data protection: contacts of controller and DPO, and the text blocks reviewed with the DPO (templates otherwise).
-    const contacts = PrivacyContacts.parse((await this.settings.get('privacy.contacts')) ?? {});
-    const texts = PrivacyTexts.parse((await this.settings.get('privacy.texts')) ?? {});
-    items.push({ key: 'privacyContacts', done: Boolean(contacts.controller.name && contacts.dpo.name), to: '/admin/privacy/settings?tab=contacts' });
-    items.push({ key: 'privacyTexts', done: PRIVACY_TEXT_KEYS.every((key) => texts[key].reviewedAt), to: '/admin/privacy/settings?tab=texts' });
+    // Further steps of the active modules, e.g. the data protection contacts and text blocks.
+    for (const provider of this.registry.providers) {
+      if (!inactive.has(provider.module)) items.push(...(await provider.items()));
+    }
     items.push({ key: 'users', done: (await em.count(User, { technical: false })) > 1, to: '/admin/users' });
     return items;
   }

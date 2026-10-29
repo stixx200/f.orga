@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException, type OnAppl
 import { EntityManager } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
 import {
-  type PrivacySettings,
+  type RetentionSettings,
   type RetentionCase,
   type RetentionCategory,
   RetentionDecision,
@@ -137,7 +137,7 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
   }
 
   async storedRules(): Promise<Record<string, RetentionRule>> {
-    const stored = await this.settings.get<PrivacySettings>('privacy');
+    const stored = await this.settings.get<RetentionSettings>('retention');
     return stored?.retention ?? {};
   }
 
@@ -176,7 +176,7 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
         const rule = this.ruleOf(rules, definition, ruleKey);
         if (!active(rule)) continue;
         if (!definition.actions.includes(rule.action) || (rule.action === 'offer-archive' && !definition.actions.includes(rule.afterDecision ?? 'none'))) {
-          warnings.add('privacy.actionNotAllowed');
+          warnings.add('retention.actionNotAllowed');
           continue;
         }
         let years = rule.years!;
@@ -185,13 +185,13 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
         if (longer && active(longer) && longer.years! > years) {
           years = longer.years!;
           effectiveYears[ruleKey] = years;
-          warnings.add('privacy.personCoreShorter');
+          warnings.add('retention.personCoreShorter');
         }
         // Records others refer to (cost notices, payouts of an incident) should not be deleted before those.
         for (const referencing of definition.referencedBy ?? []) {
           const other = this.registry.categories.get(referencing);
           const otherRule = other ? this.ruleOf(rules, other, referencing) : null;
-          if (deletes(rule) && otherRule && (!active(otherRule) || otherRule.years! > years)) warnings.add('privacy.deletedBeforeReferences');
+          if (deletes(rule) && otherRule && (!active(otherRule) || otherRule.years! > years)) warnings.add('retention.deletedBeforeReferences');
         }
         const cutoff = new Date(now);
         cutoff.setFullYear(cutoff.getFullYear() - years);
@@ -210,7 +210,7 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
   // ----- Daily run -----
 
   /** `overrides` only for dry runs: what would other rules affect, before they are saved. */
-  async run(dryRun: boolean, overrides?: PrivacySettings): Promise<RetentionResult> {
+  async run(dryRun: boolean, overrides?: RetentionSettings): Promise<RetentionResult> {
     const rules = dryRun && overrides ? overrides.retention : await this.storedRules();
     const now = new Date();
     const { planned, warnings, effectiveYears } = await this.plan(rules, now);
@@ -246,7 +246,7 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
       const stale = (await em.find(RetentionCaseEntity, { status: 'due' })).filter((c) => !seen.has(`${c.category}|${c.recordId}`));
       if (stale.length) await em.nativeDelete(RetentionCaseEntity, { id: { $in: stale.map((c) => c.id) } });
       const changed = Object.entries({ ...counts, ...cases }).some(([, c]) => c > 0);
-      if (changed) await this.audit.log('privacy.retention-applied', { counts, cases }, null);
+      if (changed) await this.audit.log('retention.retention-applied', { counts, cases }, null);
     }
     return { dryRun, counts, cases, effectiveYears, warnings };
   }

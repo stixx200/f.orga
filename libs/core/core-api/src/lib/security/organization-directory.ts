@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import type { ProcessingRestrictionReason } from '@forga/core-contracts';
 import type { AuthenticatedUser, SubDepartments } from './authenticated-user.js';
 
 export interface DepartmentNode {
@@ -57,18 +56,12 @@ export interface OrganizationProvider {
   searchPersons?(user: AuthenticatedUser, query: string, limit: number): Promise<{ id: string; label: string }[]>;
   /** Postal address of a person (letters to the person); `null` for unknown persons. */
   postalAddress?(personId: string): Promise<PostalAddress | null>;
-  /**
-   * Persons whose processing is restricted (Art. 18): they disappear from deadlines, search and e-mails of the core.
-   */
-  restrictedPersonIds?(): Promise<string[]>;
   /** Persons the user may read (master data), e.g. to reconstruct who is affected by a data breach of the account. */
   readablePersonIds?(user: AuthenticatedUser): Promise<string[]>;
   /** All persons, also those who left (e.g. a full export). */
   allPersonIds?(): Promise<string[]>;
   /** Persons from `ids` under 18 today (consents of minors are given by their legal guardians). */
   minors?(ids: readonly string[]): Promise<string[]>;
-  /** Restricts the processing of a person (a request with `restrict`); `false` if the person is unknown. */
-  restrictProcessing?(personId: string, restriction: { reason: ProcessingRestrictionReason; until: string | null; requestId: string | null }): Promise<boolean>;
 }
 
 @Injectable()
@@ -139,20 +132,10 @@ export class OrganizationDirectory {
     return this.provider?.postalAddress ? this.provider.postalAddress(personId) : null;
   }
 
-  /** Persons whose processing is restricted (Art. 18); empty without a provider. */
-  async restrictedPersonIds(): Promise<Set<string>> {
-    return new Set(this.provider?.restrictedPersonIds ? await this.provider.restrictedPersonIds() : []);
-  }
-
   /** Persons from `ids` under 18 today; empty without a provider. */
   async minors(ids: readonly string[]): Promise<Set<string>> {
     const valid = ids.filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
     return new Set(this.provider?.minors && valid.length ? await this.provider.minors(valid) : []);
-  }
-
-  /** Restricts the processing of a person; `false` without a provider or for an unknown person. */
-  async restrictProcessing(personId: string, restriction: { reason: ProcessingRestrictionReason; until: string | null; requestId: string | null }): Promise<boolean> {
-    return this.provider?.restrictProcessing ? this.provider.restrictProcessing(personId, restriction) : false;
   }
 
   /** Persons the user may read; empty without a provider. */

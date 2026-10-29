@@ -5,10 +5,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet } from 'react-router';
 import type { BrigadeSettings, Session } from '@forga/core-contracts';
 import { api, formatTime, send, useLocalized, useTranslation } from '@forga/web-sdk';
+import { LanguageSwitch } from '@forga/web-ui';
 import type { LoadedModule } from '../modules';
 import classes from './frame.module.css';
 import { GlobalSearch } from './GlobalSearch';
-import { LanguageSwitch } from './LanguageSwitch';
 import { Sidebar } from './Sidebar';
 import { TasksBell } from './TasksBell';
 import { ElevationBadge } from '../auth/StepUp';
@@ -57,7 +57,7 @@ function UserMenu({ session }: { session: Session }) {
   );
 }
 
-function Footer() {
+function Footer({ modules }: { modules: LoadedModule[] }) {
   const { t } = useTranslation('shell');
   const { data: brigade } = useBrigade();
   const address = brigade ? [brigade.name, brigade.street, [brigade.postalCode, brigade.city].filter(Boolean).join(' ')].filter(Boolean).join(' · ') : '';
@@ -66,9 +66,12 @@ function Footer() {
     <footer className={classes.footer}>
       {address && <div>{address}</div>}
       {contact && <div>{contact}</div>}
-      <div>
-        <a href="/privacy">{t('privacy.notice.link')}</a>
-      </div>
+      {/* The privacy notice is a page of the module `privacy` (without sign-in). */}
+      {modules.some((m) => m.info.id === 'privacy') && (
+        <div>
+          <a href="/privacy-notice">{t('privacyNotice')}</a>
+        </div>
+      )}
     </footer>
   );
 }
@@ -163,7 +166,7 @@ export function AppFrame({ modules, session }: { modules: LoadedModule[]; sessio
             </Alert>
           ))}
         <Outlet />
-        <Footer />
+        <Footer modules={modules} />
       </AppShell.Main>
     </AppShell>
   );

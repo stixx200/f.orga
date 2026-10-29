@@ -95,6 +95,12 @@
     },
     {
       "path": "./modules/backup/backup-api"
+    },
+    {
+      "path": "./modules/privacy/privacy-contracts"
+    },
+    {
+      "path": "./modules/privacy/privacy-api"
     }
   ],
   "compilerOptions": {}

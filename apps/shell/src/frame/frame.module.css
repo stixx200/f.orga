@@ -68,28 +68,6 @@
   color: var(--forga-meta);
 }
 
-.languageSwitch {
-  display: inline-flex;
-  align-self: flex-start;
-  border: 1px solid var(--forga-field-border);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.languageSwitch button {
-  border: 0;
-  background: #fff;
-  padding: 6px 12px;
-  font-weight: 700;
-  cursor: pointer;
-  min-width: 44px;
-}
-
-.languageSwitch button[aria-pressed='true'] {
-  background: var(--forga-service);
-  color: #fff;
-}
-
 .impersonation {
   display: flex;
   align-items: center;

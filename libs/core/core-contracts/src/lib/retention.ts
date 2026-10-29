@@ -96,7 +96,7 @@ export const RetentionResult = z.object({
   cases: z.record(z.string(), z.number()),
   /** Period that applies per rule key when it differs from the entered one (e.g. basic data as long as the person file). */
   effectiveYears: z.record(z.string(), z.number()),
-  /** Warnings about the rules, e.g. `privacy.personCoreShorter`. */
+  /** Warnings about the rules, e.g. `retention.personCoreShorter`. */
   warnings: z.array(z.string()),
 });
 export type RetentionResult = z.infer<typeof RetentionResult>;

@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import type { Language } from '@forga/core-contracts';
+import { ProcessingRestrictions } from '@forga/core-api';
 import {
   type LicenseSelfCheckResult,
   type LicenseSelfCheckView,
@@ -20,6 +21,7 @@ export class LicenseSelfCheckService implements MasterdataLicenseSelfCheck {
   constructor(
     private readonly em: EntityManager,
     private readonly licenses: DriverLicensesService,
+    private readonly restrictions: ProcessingRestrictions,
   ) {}
 
   async enabled(): Promise<boolean> {
@@ -30,7 +32,7 @@ export class LicenseSelfCheckService implements MasterdataLicenseSelfCheck {
     const em = this.em.fork();
     const token = await this.licenses.activeToken(em, code);
     // A person whose processing is restricted does not exist for the info terminal.
-    if (!token || token.person.restrictedAt) return null;
+    if (!token || (await this.restrictions.isRestricted(token.person.id))) return null;
     const person = token.person;
     const [settings, records] = await Promise.all([this.licenses.settings(), this.licenses.records(em, [person.id])]);
     const status = this.licenses.status(person, records, settings);
@@ -49,7 +51,7 @@ export class LicenseSelfCheckService implements MasterdataLicenseSelfCheck {
   async confirm(code: string, origin: { terminalId: string; device: string; language: Language }): Promise<LicenseSelfCheckResult> {
     const em = this.em.fork();
     const token = await this.licenses.activeToken(em, code);
-    if (!token || token.person.restrictedAt) throw new NotFoundException({ code: 'masterdata.licenseNotRegistered' });
+    if (!token || (await this.restrictions.isRestricted(token.person.id))) throw new NotFoundException({ code: 'masterdata.licenseNotRegistered' });
     const settings = await this.licenses.settings();
     if (!selfCheckEnabled(settings)) throw new ForbiddenException({ code: 'masterdata.selfCheckOff' });
     const status = this.licenses.status(token.person, await this.licenses.records(em, [token.person.id]), settings);

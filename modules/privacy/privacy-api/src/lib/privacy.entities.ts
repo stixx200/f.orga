@@ -1,0 +1,128 @@
+import { defineEntity, p } from '@mikro-orm/core';
+import { v7 as uuidv7 } from 'uuid';
+import type { BreachNotificationVia, BreachRisk, BreachStatus, ErasureExecution, PrivacyNoticeSection, PrivacyRequestChannel, PrivacyRequestKind, PrivacyRequestStatus } from '@forga/privacy-contracts';
+import type { Language } from '@forga/core-contracts';
+
+/** Rectification of a request as stored. */
+export interface StoredRectification {
+  area: string;
+  wrong: string;
+  correct: string;
+  correctedAt: string | null;
+  /** User who marked it as corrected; no foreign key. */
+  correctedBy: string | null;
+}
+
+/**
+ * A request of a data subject (Art. 15–21): access, rectification, erasure, restriction, objection or withdrawal of a
+ * consent, with the deadline of Art. 12(3). Historized; readable only with `privacy.manage`.
+ */
+export const PrivacyRequestSchema = defineEntity({
+  name: 'PrivacyRequestEntity',
+  schema: 'privacy',
+  tableName: 'request',
+  indexes: [{ properties: ['personId'] }, { properties: ['status'] }],
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv7()),
+    /** Person in the masterdata module; no foreign key across modules. `null` for a request of a third party. */
+    personId: p.string().nullable(),
+    /** Third party (no person of the master data, L14) making the request: name and where the person appears. */
+    thirdParty: p.json<{ name: string; note: string }>().nullable(),
+    kind: p.string().$type<PrivacyRequestKind>(),
+    receivedOn: p.string().length(10),
+    channel: p.string().$type<PrivacyRequestChannel>(),
+    identityChecked: p.boolean().default(false),
+    identityNote: p.text().default(''),
+    content: p.text().default(''),
+    language: p.string().$type<Language>().default('de'),
+    /** Objection: processing activity of the register it refers to. */
+    activityKey: p.string().nullable(),
+    /** Objection: further description; requests recorded before the register refer to an activity only by this text. */
+    activity: p.text().default(''),
+    /** Received + 1 month. */
+    dueOn: p.string().length(10),
+    extendedUntil: p.string().length(10).nullable(),
+    extensionReason: p.text().default(''),
+    extensionNotifiedOn: p.string().length(10).nullable(),
+    status: p.string().$type<PrivacyRequestStatus>().default('received'),
+    closedOn: p.string().length(10).nullable(),
+    rejectionReason: p.text().default(''),
+    /** User working on the request; no foreign key, the user may be deleted. */
+    assigneeId: p.string().nullable(),
+    notes: p.text().default(''),
+    /** Recipients informed about the change (Art. 19). */
+    recipients: p.json<{ id: string; name: string; notifiedOn: string }[]>().defaultRaw("'[]'::jsonb").onCreate(() => []),
+    /** Access report created for the request (feature "Auskunft als PDF"). */
+    accessReportDocumentId: p.string().nullable(),
+    /** Rectification asked for in "My area" (L12): area, what is wrong, how it is right, marked as corrected. */
+    rectification: p.json<StoredRectification>().nullable(),
+    /** Erasure executed for the request (L7): counts of the areas and the end of the restriction, no content. */
+    erasure: p.json<ErasureExecution>().nullable(),
+    createdAt: p.datetime().onCreate(() => new Date()),
+    createdBy: p.string().nullable(),
+    version: p.integer().version(),
+  },
+});
+export class PrivacyRequestEntity extends PrivacyRequestSchema.class {}
+PrivacyRequestSchema.setClass(PrivacyRequestEntity);
+
+/** A version of the privacy notice; every change of its text blocks or the contacts creates a new one. */
+export const PrivacyNoticeSchema = defineEntity({
+  name: 'PrivacyNoticeEntity',
+  schema: 'privacy',
+  tableName: 'notice',
+  properties: {
+    version: p.integer().primary(),
+    publishedAt: p.datetime(),
+    sections: p.json<PrivacyNoticeSection[]>(),
+    /** A block of this version was not reviewed yet. */
+    template: p.boolean(),
+  },
+});
+export class PrivacyNoticeEntity extends PrivacyNoticeSchema.class {}
+PrivacyNoticeSchema.setClass(PrivacyNoticeEntity);
+
+/**
+ * A data breach (Art. 33/34): when it became known (72 hours to notify the supervisory authority), what is affected,
+ * the measures and the notifications. Historized (the history is the documentation under Art. 33(5)); readable only
+ * with `privacy.manage`.
+ */
+export const PrivacyBreachSchema = defineEntity({
+  name: 'PrivacyBreachEntity',
+  schema: 'privacy',
+  tableName: 'breach',
+  indexes: [{ properties: ['status'] }],
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv7()),
+    title: p.string().length(200),
+    discoveredAt: p.datetime(),
+    occurredFrom: p.string().length(10).nullable(),
+    occurredUntil: p.string().length(10).nullable(),
+    description: p.text().default(''),
+    /** Processing activities of the register (keys). */
+    activityKeys: p.json<string[]>().defaultRaw("'[]'::jsonb").onCreate(() => []),
+    dataCategories: p.text().default(''),
+    health: p.boolean().default(false),
+    affectedCount: p.integer().nullable(),
+    /** Persons in the master data module; no foreign key across modules. */
+    affectedPersonIds: p.json<string[]>().defaultRaw("'[]'::jsonb").onCreate(() => []),
+    affectedSource: p.text().default(''),
+    consequences: p.text().default(''),
+    measures: p.text().default(''),
+    risk: p.string().$type<BreachRisk>().nullable(),
+    authorityNotifiedOn: p.string().length(10).nullable(),
+    authorityReference: p.string().length(200).default(''),
+    authorityNotRequired: p.boolean().default(false),
+    authorityNote: p.text().default(''),
+    subjectsNotifiedOn: p.string().length(10).nullable(),
+    subjectsNotifiedVia: p.string().$type<BreachNotificationVia>().nullable(),
+    subjectsNote: p.text().default(''),
+    status: p.string().$type<BreachStatus>().default('open'),
+    closedOn: p.string().length(10).nullable(),
+    createdAt: p.datetime().onCreate(() => new Date()),
+    createdBy: p.string().nullable(),
+    version: p.integer().version(),
+  },
+});
+export class PrivacyBreachEntity extends PrivacyBreachSchema.class {}
+PrivacyBreachSchema.setClass(PrivacyBreachEntity);

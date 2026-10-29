@@ -1,13 +1,21 @@
 import type { Grant } from '@forga/core-contracts';
+
+// The module states need the ORM; the tests pass their own.
+jest.mock('../module/modules.js', () => ({ ModuleStateService: Object }));
+
 import { AuthenticatedUser } from '../security/authenticated-user.js';
-import { OrganizationDirectory } from '../security/organization-directory.js';
+import type { ModuleStateService } from '../module/modules.js';
+import { ProcessingRestrictions } from '../privacy/restriction.js';
 import { DeadlineRegistry, type DeadlineInput } from './deadline-registry.js';
 
-/** Organization without restricted persons, or with the given ones. */
-const organization = (restricted: string[] = []) => {
-  const directory = new OrganizationDirectory();
-  directory.register({ departments: async () => [], persons: async () => [], catalogEntries: async () => 0, linkPermission: 'x', restrictedPersonIds: async () => restricted });
-  return directory;
+/** Module states with the given inactive modules. */
+const modules = (inactive: string[] = []) => ({ inactiveIds: async () => new Set(inactive) }) as unknown as ModuleStateService;
+
+/** Restrictions recorded by the module `privacy`: none, or the given persons. */
+const restrictions = (restricted: string[] = [], inactive: string[] = []) => {
+  const registry = new ProcessingRestrictions(modules(inactive));
+  registry.register({ module: 'privacy', restrictedIds: async (ids) => new Set(restricted.filter((id) => !ids || ids.includes(id))) });
+  return registry;
 };
 
 const user = (grants: [string, Grant][]) => new AuthenticatedUser('u', 'user', 'User', null, 'de', new Map(grants), 'session');
@@ -25,8 +33,8 @@ const deadline = (permission: DeadlineInput['permission'], departmentIds: string
 
 const about = (subject: DeadlineInput['subject'], personId?: string): DeadlineInput => ({ ...deadline('masterdata.persons.write', []), subject, ...(personId ? { personId } : {}) });
 
-const registryWith = (input: DeadlineInput, restricted: string[] = []) => {
-  const registry = new DeadlineRegistry(organization(restricted));
+const registryWith = (input: DeadlineInput, restricted: string[] = [], inactive: string[] = []) => {
+  const registry = new DeadlineRegistry(restrictions(restricted, inactive), modules(inactive));
   registry.register({ module: 'incidents', deadlines: async () => [input] });
   return registry;
 };
@@ -38,12 +46,19 @@ describe('DeadlineRegistry', () => {
     expect(await registryWith(about({ type: 'core.me', id: 'p1', label: 'A' }), ['p1']).forUser(admin, '2026-10-18')).toEqual([]);
     expect(await registryWith(about({ type: 'compensation.item', id: 'i1', label: 'A' }, 'p1'), ['p1']).forUser(admin, '2026-10-18')).toEqual([]);
     expect(await registryWith(about({ type: 'masterdata.person', id: 'p2', label: 'B' }), ['p1']).forUser(admin, '2026-10-18')).toHaveLength(1);
+    // Without the module `privacy` nobody is restricted.
+    expect(await registryWith(about({ type: 'masterdata.person', id: 'p1', label: 'A' }), ['p1'], ['privacy']).forUser(admin, '2026-10-18')).toHaveLength(1);
+  });
+
+  it('leaves out the deadlines of inactive modules', async () => {
+    const admin = user([['masterdata.persons.write', 'brigade']]);
+    expect(await registryWith(about({ type: 'masterdata.person', id: 'p2', label: 'B' }), [], ['incidents']).forUser(admin, '2026-10-18')).toEqual([]);
   });
 
   it('counts a permission waiting for the step-up for deadlines marked `held`', async () => {
-    const waiting = new AuthenticatedUser('u', 'user', 'User', null, 'de', new Map(), 'session', new Map([['core.privacy.manage', 'brigade']]));
-    expect(await registryWith(deadline('core.privacy.manage', [])).forUser(waiting, '2026-10-18')).toEqual([]);
-    expect(await registryWith({ ...deadline('core.privacy.manage', []), held: true }).forUser(waiting, '2026-10-18')).toHaveLength(1);
+    const waiting = new AuthenticatedUser('u', 'user', 'User', null, 'de', new Map(), 'session', new Map([['privacy.manage', 'brigade']]));
+    expect(await registryWith(deadline('privacy.manage', [])).forUser(waiting, '2026-10-18')).toEqual([]);
+    expect(await registryWith({ ...deadline('privacy.manage', []), held: true }).forUser(waiting, '2026-10-18')).toHaveLength(1);
   });
 
   it('makes users with any of several permissions responsible, each deadline once', async () => {

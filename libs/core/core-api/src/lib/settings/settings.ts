@@ -64,7 +64,7 @@ export class SettingsService implements OnApplicationBootstrap {
 
   /**
    * Managers of a section: `core.settings.manage`, or `<module>.settings.manage` for the sections of that module, unless
-   * the section names its own (`SettingsAccess.managers`, e.g. `core.privacy.manage`).
+   * the section names its own (`SettingsAccess.managers`, e.g. `privacy.manage`).
    */
   managerPermissions(section: string): string[] {
     const managers = this.access.get(section)?.managers;

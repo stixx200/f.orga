@@ -114,7 +114,7 @@ export class DriverLicensesService {
   private async person(em: EntityManager, id: string, user: AuthenticatedUser, permission?: string): Promise<Person> {
     const person = await em.findOne(Person, id, { populate: ['memberships.department', 'qualifications'] });
     if (!person || !this.visible(user, person)) throw new NotFoundException();
-    this.persons.assertReadable(user, person);
+    await this.persons.assertReadable(user, person);
     if (permission && !this.persons.can(user, permission, person)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [permission] });
     return person;
   }

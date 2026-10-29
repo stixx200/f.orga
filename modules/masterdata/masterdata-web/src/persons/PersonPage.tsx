@@ -108,7 +108,7 @@ function PersonFile({ person }: { person: Person }) {
         }
       />
       {person.anonymizedAt && <Notice kind="info">{t('person.anonymized')}</Notice>}
-      {person.processingRestriction && <Notice kind="warning">{t('person.restricted')}</Notice>}
+      {person.processingRestricted && <Notice kind="warning">{t('person.restricted')}</Notice>}
       {person.stepUpAvailable && <Notice kind="info" action={<StepUpButton>{t('person.showSensitive')}</StepUpButton>}>{t('person.stepUpHidden')}</Notice>}
       <Panel>
         <Group wrap="nowrap" align="center">
@@ -117,7 +117,7 @@ function PersonFile({ person }: { person: Person }) {
             <Text c="dimmed">{subtitle}</Text>
             <Group gap={4}>
               <StatusBadge tone={STATUS_TONES[person.status]}>{t(`status.${person.status}`)}</StatusBadge>
-              {person.processingRestriction && <StatusBadge tone="error">{t('person.restrictedBadge')}</StatusBadge>}
+              {person.processingRestricted && <StatusBadge tone="error">{t('person.restrictedBadge')}</StatusBadge>}
               {person.qualifications.map((q) => <StatusBadge key={q.id}>{qualificationName(q.qualification, i18n.language)}</StatusBadge>)}
               {person.driverLicense.classes.length > 0 && <StatusBadge>{t('person.licenseBadge', { classes: classNames(person.driverLicense.classes) })}</StatusBadge>}
             </Group>

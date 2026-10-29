@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EntityManager } from '@mikro-orm/core';
-import { MailService, PrivacyRegister, Setting } from '@forga/core-api';
-import type { AffectedPersons, BreachSourceEntry, PrivacyBreach, PrivacyRequest, ProcessingRegister, RecipientOption } from '@forga/core-contracts';
+import { MailService, Setting } from '@forga/core-api';
+import { PrivacyRegister } from '@forga/privacy-api';
+import type { AffectedPersons, BreachSourceEntry, PrivacyBreach, PrivacyRequest, ProcessingRegister, RecipientOption } from '@forga/privacy-contracts';
 import { setUp, startTestApp, type TestApp, UI, TOKEN_FIELDS } from './testing/test-app';
 
 /**
@@ -32,7 +33,7 @@ const binary = (path: string, cookie = privacy) =>
     });
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date());
 const audit = async (action: string) => (await get(`/core/audit?action=${action}`).expect(200)).body as { userId: string | null; details: Record<string, unknown> }[];
-const register = async (cookie = privacy) => (await get('/core/privacy/register', cookie).expect(200)).body as ProcessingRegister;
+const register = async (cookie = privacy) => (await get('/privacy/register', cookie).expect(200)).body as ProcessingRegister;
 const activity = (r: ProcessingRegister, key: string) => r.activities.find((a) => a.key === key)!;
 const tasks = async (cookie = privacy) => (await get('/core/tasks?asOf=2099-01-01', cookie).expect(200)).body as { id: string; kind: string; dueOn: string; title: { de: string } }[];
 
@@ -60,7 +61,7 @@ beforeAll(async () => {
   ids.paul = await person('Paul', ids.berghausen);
 
   const role = async (name: string, permissions: string[]) => (await post('/core/roles', { name, permissions }).expect(201)).body.id as string;
-  const privacyRole = await role('Datenschutz', ['core.privacy.manage', 'masterdata.persons.read']);
+  const privacyRole = await role('Datenschutz', ['privacy.manage', 'masterdata.persons.read']);
   const readerRole = await role('Leser Abteilung', ['masterdata.persons.read', 'masterdata.lists.contact']);
   await post('/core/users', { username: 'dsb', displayName: 'Datenschutz Verwaltung', email: 'dsb@example.org', password: PASSWORD, roles: [{ roleId: privacyRole, departmentId: null }] }).expect(201);
   readerId = (await post('/core/users', { username: 'leser', displayName: 'Leser Musterstadt', password: PASSWORD, roles: [{ roleId: readerRole, departmentId: ids.musterstadt }] }).expect(201)).body.id;
@@ -72,13 +73,13 @@ beforeAll(async () => {
 afterAll(() => test?.app.close());
 
 describe('register of processing activities (L8)', () => {
-  it('needs core.privacy.manage with the second factor', async () => {
-    expect((await get('/core/privacy/register', reader).expect(403)).body.code).toBe('auth.forbidden');
-    expect((await get('/core/privacy/register', privacyUnconfirmed).expect(403)).body.code).toBe('auth.stepUpRequired');
+  it('needs privacy.manage with the second factor', async () => {
+    expect((await get('/privacy/register', reader).expect(403)).body.code).toBe('auth.forbidden');
+    expect((await get('/privacy/register', privacyUnconfirmed).expect(403)).body.code).toBe('auth.stepUpRequired');
   });
 
   it('composes the draft from the activities of the active modules with retention, recipients and categories', async () => {
-    await put('/core/settings/privacy', { retention: { 'masterdata.person-file': { years: 30, action: 'delete' } } }).expect(200);
+    await put('/core/settings/retention', { retention: { 'masterdata.person-file': { years: 30, action: 'delete' } } }).expect(200);
     let r = await register();
     expect(r.activities.map((a) => a.key)).toEqual(expect.arrayContaining(['masterdata.persons', 'incidents.reports', 'respiratory-protection.fitness', 'cost-recovery.notices', 'core.accounts']));
     expect(r.activities.at(-1)!.key).toBe('core.accounts');
@@ -119,7 +120,7 @@ describe('register of processing activities (L8)', () => {
     expect(measure('core.step-up')?.value.de).toMatch(/Step-up|FORGA_SECRET_KEY/);
     expect(measure('core.mail')?.value.de).toContain('mail.example.org');
     expect(measure('core.protocols')?.value.de).toContain('Audit-Log: 2 Jahre nach Eintrag');
-    expect(measure('core.access-log')?.value.de).toContain('Leseprotokoll: 1 Jahr nach');
+    expect(measure('privacy.access-log')?.value.de).toContain('Leseprotokoll: 1 Jahr nach');
     // The backup module without a folder: not set up.
     expect(measure('backup.state')).toMatchObject({ tone: 'warning', value: { de: 'nicht eingerichtet' } });
     await put('/core/modules/backup', { active: false }).expect(200);
@@ -130,16 +131,16 @@ describe('register of processing activities (L8)', () => {
   it('keeps the municipality’s part per activity, versioned, historized and reviewed', async () => {
     expect((await put('/core/settings/privacy.activities', {}, privacy).expect(400)).body.code).toBe('settings.dedicatedEndpoint');
     const input = { version: 1, legalBasis: '§ 2 FwG in Verbindung mit der Feuerwehrsatzung (Beispiel)', recipients: [{ id: 'insurance', name: 'Unfallkasse (Beispiel)', note: 'bei Dienstunfällen' }], thirdCountry: '', remarks: 'mit dem DSB am 15.09. besprochen' };
-    expect((await put('/core/privacy/register/activities/unknown.activity', input, privacy).expect(404)).body.code).toBe('privacy.activityUnknown');
-    let r = (await put('/core/privacy/register/activities/masterdata.persons', input, privacy).expect(200)).body as ProcessingRegister;
+    expect((await put('/privacy/register/activities/unknown.activity', input, privacy).expect(404)).body.code).toBe('privacy.activityUnknown');
+    let r = (await put('/privacy/register/activities/masterdata.persons', input, privacy).expect(200)).body as ProcessingRegister;
     expect(activity(r, 'masterdata.persons').record).toMatchObject({ version: 2, legalBasis: input.legalBasis, changedBy: 'Datenschutz Verwaltung', reviewedAt: null });
     expect(activity(r, 'masterdata.persons').recipients).toContainEqual({ id: 'insurance', name: { de: 'Unfallkasse (Beispiel)', en: 'Unfallkasse (Beispiel)' }, note: 'bei Dienstunfällen', source: 'municipality' });
-    expect((await put('/core/privacy/register/activities/masterdata.persons', input, privacy).expect(409)).body.code).toBe('conflict.stale');
-    expect((await post('/core/privacy/register/activities/masterdata.persons/review', { version: 1 }, privacy).expect(409)).body.code).toBe('conflict.stale');
-    r = (await post('/core/privacy/register/activities/masterdata.persons/review', { version: 2 }, privacy).expect(200)).body;
+    expect((await put('/privacy/register/activities/masterdata.persons', input, privacy).expect(409)).body.code).toBe('conflict.stale');
+    expect((await post('/privacy/register/activities/masterdata.persons/review', { version: 1 }, privacy).expect(409)).body.code).toBe('conflict.stale');
+    r = (await post('/privacy/register/activities/masterdata.persons/review', { version: 2 }, privacy).expect(200)).body;
     expect(activity(r, 'masterdata.persons').record).toMatchObject({ version: 2, reviewedBy: 'Datenschutz Verwaltung' });
     // A change makes it a draft again.
-    r = (await put('/core/privacy/register/activities/masterdata.persons', { ...input, version: 2, remarks: 'geändert' }, privacy).expect(200)).body;
+    r = (await put('/privacy/register/activities/masterdata.persons', { ...input, version: 2, remarks: 'geändert' }, privacy).expect(200)).body;
     expect(activity(r, 'masterdata.persons').record).toMatchObject({ version: 3, reviewedAt: null });
     expect((await audit('privacy.activity-changed')).map((e) => e.details)).toContainEqual({ activity: 'masterdata.persons', version: 2 });
     expect((await audit('privacy.activity-reviewed')).map((e) => e.details)).toContainEqual({ activity: 'masterdata.persons', version: 2 });
@@ -160,31 +161,31 @@ describe('register of processing activities (L8)', () => {
   });
 
   it('offers the recipients of the register for Art. 19 and the activities for an objection', async () => {
-    const options = (await get('/core/privacy/register/recipients', privacy).expect(200)).body as RecipientOption[];
+    const options = (await get('/privacy/register/recipients', privacy).expect(200)).body as RecipientOption[];
     expect(options.find((o) => o.id === 'treasury')).toMatchObject({ source: 'general', activities: [] });
     expect(options.find((o) => o.id === 'insurance')?.activities.map((a) => a.de)).toEqual(['Personalverwaltung']);
     expect(options.find((o) => o.id === `token:${ids.token}`)?.source).toBe('token');
     expect(options.some((o) => o.id.startsWith('processor:'))).toBe(false);
 
-    const activities = (await get('/core/privacy/register/activities', privacy).expect(200)).body as { key: string }[];
+    const activities = (await get('/privacy/register/activities', privacy).expect(200)).body as { key: string }[];
     expect(activities.map((a) => a.key)).toContain('masterdata.persons');
     const objection = { personId: ids.sandra, kind: 'objection', receivedOn: today(), channel: 'letter', activity: 'Telefonliste' };
-    expect((await post('/core/privacy/requests', { ...objection, activityKey: 'unknown.activity' }, privacy).expect(400)).body.code).toBe('privacy.activityUnknown');
-    const request = (await post('/core/privacy/requests', { ...objection, activityKey: 'masterdata.persons' }, privacy).expect(201)).body as PrivacyRequest;
+    expect((await post('/privacy/requests', { ...objection, activityKey: 'unknown.activity' }, privacy).expect(400)).body.code).toBe('privacy.activityUnknown');
+    const request = (await post('/privacy/requests', { ...objection, activityKey: 'masterdata.persons' }, privacy).expect(201)).body as PrivacyRequest;
     expect(request).toMatchObject({ activityKey: 'masterdata.persons', activityName: { de: 'Personalverwaltung', en: 'Personnel administration' }, activity: 'Telefonliste' });
-    const updated = (await put(`/core/privacy/requests/${request.id}`, { version: request.version, assigneeId: null, identityChecked: true, identityNote: '', notes: '', language: 'de', activityKey: 'incidents.reports', activity: '' }, privacy).expect(200)).body as PrivacyRequest;
+    const updated = (await put(`/privacy/requests/${request.id}`, { version: request.version, assigneeId: null, identityChecked: true, identityNote: '', notes: '', language: 'de', activityKey: 'incidents.reports', activity: '' }, privacy).expect(200)).body as PrivacyRequest;
     expect(updated.activityName?.de).toBe('Einsatzdokumentation');
-    const reply = await binary(`/core/privacy/requests/${request.id}/reply.pdf`).expect(200);
+    const reply = await binary(`/privacy/requests/${request.id}/reply.pdf`).expect(200);
     expect((reply.body as Buffer).subarray(0, 4).toString()).toBe('%PDF');
   });
 
   it('exports the register as PDF and Excel', async () => {
-    const pdf = await binary('/core/privacy/register/export/pdf?language=de').expect(200);
+    const pdf = await binary('/privacy/register/export/pdf?language=de').expect(200);
     expect(pdf.headers['content-type']).toBe('application/pdf');
     expect((pdf.body as Buffer).subarray(0, 4).toString()).toBe('%PDF');
-    const xlsx = await binary('/core/privacy/register/export/xlsx?language=en').expect(200);
+    const xlsx = await binary('/privacy/register/export/xlsx?language=en').expect(200);
     expect((xlsx.body as Buffer).subarray(0, 2).toString()).toBe('PK');
-    await binary('/core/privacy/register/export/docx').expect(404);
+    await binary('/privacy/register/export/docx').expect(404);
     expect((await audit('privacy.register-exported')).map((e) => e.details)).toEqual(expect.arrayContaining([{ format: 'pdf', language: 'de' }, { format: 'xlsx', language: 'en' }]));
   });
 });
@@ -201,12 +202,12 @@ describe('data breaches (L20)', () => {
   let breach: PrivacyBreach;
 
   it('records a breach with the 72-hour deadline as task and an e-mail without content', async () => {
-    expect((await post('/core/privacy/breaches', base(), reader).expect(403)).body.code).toBe('auth.forbidden');
-    expect((await post('/core/privacy/breaches', { ...base(), discoveredAt: new Date(Date.now() + 86_400_000).toISOString() }, privacy).expect(400)).body.code).toBe('privacy.discoveredInFuture');
-    expect((await post('/core/privacy/breaches', { ...base(), activityKeys: ['unknown.activity'] }, privacy).expect(400)).body.code).toBe('privacy.activityUnknown');
-    await post('/core/privacy/breaches', { ...base(), title: 'x' }, privacy).expect(400);
+    expect((await post('/privacy/breaches', base(), reader).expect(403)).body.code).toBe('auth.forbidden');
+    expect((await post('/privacy/breaches', { ...base(), discoveredAt: new Date(Date.now() + 86_400_000).toISOString() }, privacy).expect(400)).body.code).toBe('privacy.discoveredInFuture');
+    expect((await post('/privacy/breaches', { ...base(), activityKeys: ['unknown.activity'] }, privacy).expect(400)).body.code).toBe('privacy.activityUnknown');
+    await post('/privacy/breaches', { ...base(), title: 'x' }, privacy).expect(400);
     const mails = test.app.get(MailService).sent.length;
-    breach = (await post('/core/privacy/breaches', base(), privacy).expect(201)).body;
+    breach = (await post('/privacy/breaches', base(), privacy).expect(201)).body;
     expect(breach).toMatchObject({ status: 'open', createdByName: 'Datenschutz Verwaltung', version: 1 });
     expect(new Date(breach.notifyBy).getTime() - new Date(breach.discoveredAt).getTime()).toBe(72 * 3_600_000);
     expect((await audit('privacy.breach-recorded'))[0].details).toEqual({ breachId: breach.id });
@@ -218,27 +219,27 @@ describe('data breaches (L20)', () => {
     expect(task).toMatchObject({ kind: 'privacy-breach', dueOn: new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date(breach.notifyBy)) });
     expect(task?.title.de).not.toContain('Telefonliste');
     expect((await tasks(reader)).some((t) => t.kind === 'privacy-breach')).toBe(false);
-    const history = (await get(`/core/history/core.privacy_breach/${breach.id}`, privacy).expect(200)).body as unknown[];
+    const history = (await get(`/core/history/privacy.breach/${breach.id}`, privacy).expect(200)).body as unknown[];
     expect(history.length).toBe(1);
-    await get(`/core/history/core.privacy_breach/${breach.id}`, reader).expect(404);
+    await get(`/core/history/privacy.breach/${breach.id}`, reader).expect(404);
   });
 
   it('records the notification of the authority and of the persons', async () => {
     const update = { ...base(), version: breach.version, risk: 'high' as const };
-    expect((await put(`/core/privacy/breaches/${breach.id}`, { ...update, authorityNotifiedOn: '2000-01-01' }, privacy).expect(400)).body.code).toBe('privacy.notifiedBeforeDiscovered');
-    expect((await put(`/core/privacy/breaches/${breach.id}`, { ...update, subjectsNotifiedOn: today() }, privacy).expect(400)).body.code).toBe('privacy.notificationWayMissing');
-    expect((await put(`/core/privacy/breaches/${breach.id}`, { ...update, authorityNotifiedOn: today(), authorityNotRequired: true }, privacy).expect(400)).body.code).toBe('privacy.authorityNotifiedAndNotRequired');
-    expect((await post(`/core/privacy/breaches/${breach.id}/close`, { version: breach.version, closedOn: today() }, privacy).expect(400)).body.code).toBe('privacy.breachAuthorityOpen');
-    breach = (await put(`/core/privacy/breaches/${breach.id}`, { ...update, authorityNotifiedOn: today(), authorityReference: 'LfDI-2026-0815 (Beispiel)' }, privacy).expect(200)).body;
+    expect((await put(`/privacy/breaches/${breach.id}`, { ...update, authorityNotifiedOn: '2000-01-01' }, privacy).expect(400)).body.code).toBe('privacy.notifiedBeforeDiscovered');
+    expect((await put(`/privacy/breaches/${breach.id}`, { ...update, subjectsNotifiedOn: today() }, privacy).expect(400)).body.code).toBe('privacy.notificationWayMissing');
+    expect((await put(`/privacy/breaches/${breach.id}`, { ...update, authorityNotifiedOn: today(), authorityNotRequired: true }, privacy).expect(400)).body.code).toBe('privacy.authorityNotifiedAndNotRequired');
+    expect((await post(`/privacy/breaches/${breach.id}/close`, { version: breach.version, closedOn: today() }, privacy).expect(400)).body.code).toBe('privacy.breachAuthorityOpen');
+    breach = (await put(`/privacy/breaches/${breach.id}`, { ...update, authorityNotifiedOn: today(), authorityReference: 'LfDI-2026-0815 (Beispiel)' }, privacy).expect(200)).body;
     expect(breach).toMatchObject({ authorityNotifiedOn: today(), authorityReference: 'LfDI-2026-0815 (Beispiel)', risk: 'high' });
     let open = await tasks();
     expect(open.some((t) => t.kind === 'privacy-breach')).toBe(false);
     expect(open.some((t) => t.kind === 'privacy-breach-subjects')).toBe(true);
     expect((await audit('privacy.breach-authority-notified'))[0].details).toMatchObject({ breachId: breach.id, reference: 'LfDI-2026-0815 (Beispiel)' });
-    breach = (await put(`/core/privacy/breaches/${breach.id}`, { ...update, version: breach.version, authorityNotifiedOn: today(), subjectsNotifiedOn: today(), subjectsNotifiedVia: 'letter' }, privacy).expect(200)).body;
+    breach = (await put(`/privacy/breaches/${breach.id}`, { ...update, version: breach.version, authorityNotifiedOn: today(), subjectsNotifiedOn: today(), subjectsNotifiedVia: 'letter' }, privacy).expect(200)).body;
     open = await tasks();
     expect(open.some((t) => t.kind === 'privacy-breach-subjects')).toBe(false);
-    expect((await put(`/core/privacy/breaches/${breach.id}`, { ...update, version: 1 }, privacy).expect(409)).body.code).toBe('conflict.stale');
+    expect((await put(`/privacy/breaches/${breach.id}`, { ...update, version: 1 }, privacy).expect(409)).body.code).toBe('conflict.stale');
   });
 
   it('determines affected persons from a list export, a full export and an account', async () => {
@@ -248,80 +249,80 @@ describe('data breaches (L20)', () => {
     expect(exported.details).toMatchObject({ listId: 'masterdata.phones', format: 'xlsx', params: {}, purpose: 'department' });
     expect((exported.details['personIds'] as string[]).toSorted()).toEqual([ids.tobias, ids.sandra].toSorted());
 
-    const sources = (await get(`/core/privacy/breach-tools/sources?from=${today()}&to=${today()}&userId=${readerId}`, privacy).expect(200)).body as BreachSourceEntry[];
+    const sources = (await get(`/privacy/breach-tools/sources?from=${today()}&to=${today()}&userId=${readerId}`, privacy).expect(200)).body as BreachSourceEntry[];
     expect(sources[0]).toMatchObject({ action: 'lists.exported', userName: 'Leser Musterstadt', persons: 2, label: { de: 'Liste exportiert: Telefonliste (xlsx)' } });
-    expect((await get('/core/privacy/breach-tools/sources?from=2026-02-01&to=2026-01-01', privacy).expect(400)).body.code).toBe('privacy.periodInvalid');
+    expect((await get('/privacy/breach-tools/sources?from=2026-02-01&to=2026-01-01', privacy).expect(400)).body.code).toBe('privacy.periodInvalid');
 
-    let affected = (await post('/core/privacy/breach-tools/affected', { source: 'audit', auditId: sources[0].auditId }, privacy).expect(200)).body as AffectedPersons;
+    let affected = (await post('/privacy/breach-tools/affected', { source: 'audit', auditId: sources[0].auditId }, privacy).expect(200)).body as AffectedPersons;
     expect(affected).toMatchObject({ basis: 'recorded' });
     expect(affected.persons.map((p) => p.firstName)).toEqual(['Sandra', 'Tobias']);
     expect(affected.description.de).toContain('Telefonliste');
 
     // Persons the account can read today: its department only.
-    affected = (await post('/core/privacy/breach-tools/affected', { source: 'account', userId: readerId }, privacy).expect(200)).body;
+    affected = (await post('/privacy/breach-tools/affected', { source: 'account', userId: readerId }, privacy).expect(200)).body;
     expect(affected).toMatchObject({ basis: 'current' });
     expect(affected.persons.map((p) => p.id).toSorted()).toEqual([ids.tobias, ids.sandra].toSorted());
 
     // A technical user reads with the scopes of its token, brigade-wide.
     await post('/core/tokens', { ...TOKEN_FIELDS, name: 'Alarmierung (Beispiel)', scopes: ['masterdata.persons.read'] }).expect(201);
-    const accounts = (await get('/core/privacy/breach-tools/accounts', privacy).expect(200)).body as { id: string; displayName: string; technical: boolean }[];
+    const accounts = (await get('/privacy/breach-tools/accounts', privacy).expect(200)).body as { id: string; displayName: string; technical: boolean }[];
     const technical = accounts.find((a) => a.displayName === 'Alarmierung (Beispiel)')!;
     expect(technical.technical).toBe(true);
-    affected = (await post('/core/privacy/breach-tools/affected', { source: 'account', userId: technical.id }, privacy).expect(200)).body;
+    affected = (await post('/privacy/breach-tools/affected', { source: 'account', userId: technical.id }, privacy).expect(200)).body;
     expect(affected.persons.map((p) => p.id).toSorted()).toEqual([ids.tobias, ids.sandra, ids.paul].toSorted());
 
     // A full export concerns all persons.
     await get('/core/export/masterdata').expect(200);
-    const full = (await get(`/core/privacy/breach-tools/sources?from=${today()}&to=${today()}`, privacy).expect(200)).body as BreachSourceEntry[];
+    const full = (await get(`/privacy/breach-tools/sources?from=${today()}&to=${today()}`, privacy).expect(200)).body as BreachSourceEntry[];
     const fullEntry = full.find((s) => s.action === 'data.exported')!;
-    affected = (await post('/core/privacy/breach-tools/affected', { source: 'audit', auditId: fullEntry.auditId }, privacy).expect(200)).body;
+    affected = (await post('/privacy/breach-tools/affected', { source: 'audit', auditId: fullEntry.auditId }, privacy).expect(200)).body;
     expect(affected.persons.map((p) => p.id)).toEqual(expect.arrayContaining([ids.tobias, ids.sandra, ids.paul]));
 
     const entries = (await get('/core/audit?action=privacy.breach-recorded').expect(200)).body as { id: string }[];
-    expect((await post('/core/privacy/breach-tools/affected', { source: 'audit', auditId: entries[0].id }, privacy).expect(400)).body.code).toBe('privacy.sourceWithoutPersons');
+    expect((await post('/privacy/breach-tools/affected', { source: 'audit', auditId: entries[0].id }, privacy).expect(400)).body.code).toBe('privacy.sourceWithoutPersons');
     expect((await audit('privacy.breach-affected-determined')).length).toBe(4);
   });
 
   it('takes over the affected persons and exports the contact list for the notification', async () => {
-    expect((await put(`/core/privacy/breaches/${breach.id}/affected`, { version: breach.version, personIds: ['00000000-0000-4000-8000-000000000000'], source: '' }, privacy).expect(400)).body.code).toBe('privacy.personUnknown');
-    breach = (await put(`/core/privacy/breaches/${breach.id}/affected`, { version: breach.version, personIds: [ids.tobias, ids.sandra], source: 'Export der Telefonliste' }, privacy).expect(200)).body;
+    expect((await put(`/privacy/breaches/${breach.id}/affected`, { version: breach.version, personIds: ['00000000-0000-4000-8000-000000000000'], source: '' }, privacy).expect(400)).body.code).toBe('privacy.personUnknown');
+    breach = (await put(`/privacy/breaches/${breach.id}/affected`, { version: breach.version, personIds: [ids.tobias, ids.sandra], source: 'Export der Telefonliste' }, privacy).expect(200)).body;
     expect(breach.affectedPersonIds).toEqual([ids.tobias, ids.sandra]);
-    const xlsx = await binary(`/core/privacy/breaches/${breach.id}/contacts.xlsx`).expect(200);
+    const xlsx = await binary(`/privacy/breaches/${breach.id}/contacts.xlsx`).expect(200);
     expect((xlsx.body as Buffer).subarray(0, 2).toString()).toBe('PK');
     expect((await audit('privacy.breach-contacts-exported'))[0].details).toEqual({ breachId: breach.id, count: 2 });
   });
 
   it('exports the protocols of a period and a user', async () => {
-    const xlsx = await binary(`/core/privacy/breach-tools/protocols.xlsx?from=${today()}&to=${today()}&userId=${readerId}&breachId=${breach.id}`).expect(200);
+    const xlsx = await binary(`/privacy/breach-tools/protocols.xlsx?from=${today()}&to=${today()}&userId=${readerId}&breachId=${breach.id}`).expect(200);
     expect((xlsx.body as Buffer).subarray(0, 2).toString()).toBe('PK');
-    expect(((await get('/core/privacy/breach-tools/protocols', privacy).expect(200)).body as { key: string }[]).map((p) => p.key)).toEqual(['core.audit', 'core.access-log']);
-    await get('/core/privacy/breach-tools/protocols.xlsx?from=x&to=y', privacy).expect(400);
+    expect(((await get('/privacy/breach-tools/protocols', privacy).expect(200)).body as { key: string }[]).map((p) => p.key)).toEqual(['core.audit', 'privacy.access-log']);
+    await get('/privacy/breach-tools/protocols.xlsx?from=x&to=y', privacy).expect(400);
     expect((await audit('privacy.breach-protocol-exported'))[0].details).toEqual({ from: today(), to: today(), targetId: readerId, breachId: breach.id });
   });
 
   it('closes and reopens a breach', async () => {
-    breach = (await post(`/core/privacy/breaches/${breach.id}/close`, { version: breach.version, closedOn: today() }, privacy).expect(200)).body;
+    breach = (await post(`/privacy/breaches/${breach.id}/close`, { version: breach.version, closedOn: today() }, privacy).expect(200)).body;
     expect(breach).toMatchObject({ status: 'closed', closedOn: today() });
-    expect((await put(`/core/privacy/breaches/${breach.id}`, { ...base(), version: breach.version }, privacy).expect(409)).body.code).toBe('privacy.breachClosed');
-    expect(((await get('/core/privacy/breaches?state=open', privacy).expect(200)).body as unknown[]).length).toBe(0);
-    breach = (await post(`/core/privacy/breaches/${breach.id}/reopen`, { version: breach.version }, privacy).expect(200)).body;
+    expect((await put(`/privacy/breaches/${breach.id}`, { ...base(), version: breach.version }, privacy).expect(409)).body.code).toBe('privacy.breachClosed');
+    expect(((await get('/privacy/breaches?state=open', privacy).expect(200)).body as unknown[]).length).toBe(0);
+    breach = (await post(`/privacy/breaches/${breach.id}/reopen`, { version: breach.version }, privacy).expect(200)).body;
     expect(breach.status).toBe('open');
     // Not to be notified: the reason is documented and the task ends.
-    const other = (await post('/core/privacy/breaches', { ...base(), title: 'E-Mail an falschen Verteiler (Beispiel)', risk: 'unlikely', authorityNotRequired: true, authorityNote: 'nur dienstliche Adressen, sofort gelöscht' }, privacy).expect(201)).body as PrivacyBreach;
+    const other = (await post('/privacy/breaches', { ...base(), title: 'E-Mail an falschen Verteiler (Beispiel)', risk: 'unlikely', authorityNotRequired: true, authorityNote: 'nur dienstliche Adressen, sofort gelöscht' }, privacy).expect(201)).body as PrivacyBreach;
     expect((await tasks()).some((t) => t.id.endsWith(`privacy-breach:${other.id}`))).toBe(false);
-    await post(`/core/privacy/breaches/${other.id}/close`, { version: other.version, closedOn: today() }, privacy).expect(200);
+    await post(`/privacy/breaches/${other.id}/close`, { version: other.version, closedOn: today() }, privacy).expect(200);
   });
 
   it('ends all other sessions and revokes all API tokens after the step-up', async () => {
     const bearer = { Authorization: `Bearer ${ids.tokenSecret}` };
     await test.http.get('/api/core/session').set(bearer).expect(200);
-    expect((await post('/core/privacy/breach-tools/lockdown', { reason: 'Verdacht auf ein abgeflossenes Passwort' }, privacyUnconfirmed).expect(403)).body.code).toBe('auth.stepUpRequired');
-    await post('/core/privacy/breach-tools/lockdown', { reason: 'kurz' }, privacy).expect(400);
-    const result = (await post('/core/privacy/breach-tools/lockdown', { reason: 'Verdacht auf ein abgeflossenes Passwort', breachId: breach.id }, privacy).expect(200)).body;
+    expect((await post('/privacy/breach-tools/lockdown', { reason: 'Verdacht auf ein abgeflossenes Passwort' }, privacyUnconfirmed).expect(403)).body.code).toBe('auth.stepUpRequired');
+    await post('/privacy/breach-tools/lockdown', { reason: 'kurz' }, privacy).expect(400);
+    const result = (await post('/privacy/breach-tools/lockdown', { reason: 'Verdacht auf ein abgeflossenes Passwort', breachId: breach.id }, privacy).expect(200)).body;
     expect(result.sessions).toBeGreaterThanOrEqual(3);
     expect(result.tokens).toBe(2);
     // The own session stays, all others end; tokens no longer work.
-    await get('/core/privacy/breaches', privacy).expect(200);
+    await get('/privacy/breaches', privacy).expect(200);
     await get('/core/session', reader).expect(401);
     await get('/core/session', admin).expect(401);
     await test.http.get('/api/core/session').set(bearer).expect(401);

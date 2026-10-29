@@ -15,7 +15,6 @@ import type {
   SpecialTask,
   VehicleStatus,
 } from '@forga/masterdata-contracts';
-import type { PrivacyInformationVia, ProcessingRestrictionReason } from '@forga/core-contracts';
 
 // Organization and persons reference each other (department commander, memberships), so they share one file.
 
@@ -129,18 +128,6 @@ export const PersonSchema = defineEntity({
     anonymizedAt: p.datetime().nullable(),
     /** Set when the person file was anonymised (retention plan); name, memberships and ranks may stay longer. */
     fileAnonymizedAt: p.datetime().nullable(),
-    /**
-     * Restriction of processing (Art. 18): the person disappears from lists, search, pickers, info terminal, deadlines
-     * and e-mails; the file is readable only with `core.privacy.manage`.
-     */
-    restrictedAt: p.datetime().nullable().index(),
-    restrictionReason: p.string().$type<ProcessingRestrictionReason>().nullable(),
-    restrictedUntil: p.date().nullable(),
-    /** Data protection request that led to the restriction (core). */
-    restrictionRequestId: p.string().nullable(),
-    /** Information under Art. 13/14 given on (e.g. a letter after the transfer from MP-Feuer) and how. */
-    privacyInformedOn: p.date().nullable(),
-    privacyInformedVia: p.string().$type<PrivacyInformationVia>().nullable(),
     memberships: () => p.oneToMany(Membership).mappedBy('person').orphanRemoval(),
     qualifications: () => p.oneToMany(PersonQualification).mappedBy('person').orphanRemoval(),
     ranks: () => p.oneToMany(RankAssignment).mappedBy('person').orphanRemoval(),

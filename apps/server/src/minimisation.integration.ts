@@ -3,8 +3,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EntityManager } from '@mikro-orm/core';
 import ExcelJS from 'exceljs';
 import { v7 as uuidv7 } from 'uuid';
-import { AccessReportService, createDescribeContext, sectionTexts, ThirdPartyRegistry } from '@forga/core-api';
-import type { AccessReport, ListData, ListInfo, PrivacyRequest, ProcessingRegister, ThirdPartyErasureResult, ThirdPartyHit } from '@forga/core-contracts';
+import { createDescribeContext, sectionTexts, ThirdPartyRegistry } from '@forga/core-api';
+import { AccessReportService } from '@forga/privacy-api';
+import type { ListData, ListInfo, ThirdPartyHit } from '@forga/core-contracts';
+import type { AccessReport, PrivacyRequest, ProcessingRegister, ThirdPartyErasureResult } from '@forga/privacy-contracts';
 import type { PersonFieldState } from '@forga/masterdata-contracts';
 import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
 
@@ -201,10 +203,10 @@ describe('data of third parties (L14)', () => {
     ids.book = (await sql(`insert into cost_recovery.address_book (id, name, street, postal_code, city, role, notes, version) values (?, 'Erika Beispiel', 'Lindenweg 7', '12345', 'Musterstadt', 'Halterin', '', 1) returning id`, [uuidv7()]))[0]['id'] as string;
   });
 
-  it('finds parties and debtors by name, address or licence plate, only with core.privacy.manage', async () => {
-    const byPlate = (await get('/core/privacy/third-parties?q=MS-AB').expect(200)).body as ThirdPartyHit[];
+  it('finds parties and debtors by name, address or licence plate, only with privacy.manage', async () => {
+    const byPlate = (await get('/privacy/third-parties?q=MS-AB').expect(200)).body as ThirdPartyHit[];
     expect(byPlate).toEqual([expect.objectContaining({ source: 'incidents.involved-parties', id: ids.erika, name: 'Erika Beispiel', role: 'Verursacher/in', date: '2026-03-12', reference: expect.stringContaining('Einsatz 2026-104950 · TH1') })]);
-    const byName = (await get('/core/privacy/third-parties?q=erika beispiel').expect(200)).body as ThirdPartyHit[];
+    const byName = (await get('/privacy/third-parties?q=erika beispiel').expect(200)).body as ThirdPartyHit[];
     expect(byName.map((h) => [h.source, h.reference])).toEqual(
       expect.arrayContaining([
         ['incidents.involved-parties', expect.stringContaining('2026-104950')],
@@ -214,24 +216,24 @@ describe('data of third parties (L14)', () => {
       ]),
     );
     expect(byName.some((h) => h.name === 'Hans Zeuge')).toBe(false);
-    expect((await get('/core/privacy/third-parties?q=e').expect(200)).body).toEqual([]);
-    await get('/core/privacy/third-parties?q=Erika', reader).expect(403);
+    expect((await get('/privacy/third-parties?q=e').expect(200)).body).toEqual([]);
+    await get('/privacy/third-parties?q=Erika', reader).expect(403);
   });
 
   it('records requests of third parties', async () => {
     const base = { kind: 'access', receivedOn: '2026-10-20', channel: 'email', thirdParty: { name: 'Erika Beispiel', note: 'Verursacherin Einsatz 2026-104950' } };
-    const request = (await post('/core/privacy/requests', base).expect(201)).body as PrivacyRequest;
+    const request = (await post('/privacy/requests', base).expect(201)).body as PrivacyRequest;
     ids.request = request.id;
     expect(request).toMatchObject({ personId: null, personName: null, thirdParty: { name: 'Erika Beispiel' }, dueOn: '2026-11-20' });
-    ids.erasureRequest = (await post('/core/privacy/requests', { ...base, kind: 'erasure' }).expect(201)).body.id;
+    ids.erasureRequest = (await post('/privacy/requests', { ...base, kind: 'erasure' }).expect(201)).body.id;
     // The erasure check of the modules needs a person of the master data; a third party is erased at the places.
-    expect((await get(`/core/privacy/requests/${ids.erasureRequest}/erasure`).expect(400)).body.code).toBe('privacy.erasureThirdParty');
-    await post('/core/privacy/requests', { ...base, kind: 'restriction' }).expect(400);
-    await post('/core/privacy/requests', { ...base, personId: ids.minna }).expect(400);
-    await post('/core/privacy/requests', { ...base, kind: 'objection', restrict: true }).expect(400);
+    expect((await get(`/privacy/requests/${ids.erasureRequest}/erasure`).expect(400)).body.code).toBe('privacy.erasureThirdParty');
+    await post('/privacy/requests', { ...base, kind: 'restriction' }).expect(400);
+    await post('/privacy/requests', { ...base, personId: ids.minna }).expect(400);
+    await post('/privacy/requests', { ...base, kind: 'objection', restrict: true }).expect(400);
     expect((await audit('privacy.request-created'))[0].details).toMatchObject({ thirdParty: true });
     expect(JSON.stringify(await audit('privacy.request-created'))).not.toContain('Erika');
-    const reply = await binary(`/core/privacy/requests/${ids.request}/reply.pdf`).expect(200);
+    const reply = await binary(`/privacy/requests/${ids.request}/reply.pdf`).expect(200);
     expect(reply.headers['content-type']).toBe('application/pdf');
   });
 
@@ -250,19 +252,19 @@ describe('data of third parties (L14)', () => {
     expect(texts).not.toContain('Hans Zeuge');
     expect(texts).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/);
 
-    await post('/core/privacy/third-parties/access-reports', { name: 'Erika Beispiel', address: 'Lindenweg 7\n12345 Musterstadt', refs, requestId: ids.erasureRequest }).expect(400);
-    await post('/core/privacy/third-parties/access-reports', { name: 'Erika Beispiel', refs: [{ source: 'unbekannt.quelle', id: 'x' }] }).expect(400);
-    const created = (await post('/core/privacy/third-parties/access-reports', { name: 'Erika Beispiel', address: 'Lindenweg 7\n12345 Musterstadt', refs, requestId: ids.request }).expect(202)).body as AccessReport;
+    await post('/privacy/third-parties/access-reports', { name: 'Erika Beispiel', address: 'Lindenweg 7\n12345 Musterstadt', refs, requestId: ids.erasureRequest }).expect(400);
+    await post('/privacy/third-parties/access-reports', { name: 'Erika Beispiel', refs: [{ source: 'unbekannt.quelle', id: 'x' }] }).expect(400);
+    const created = (await post('/privacy/third-parties/access-reports', { name: 'Erika Beispiel', address: 'Lindenweg 7\n12345 Musterstadt', refs, requestId: ids.request }).expect(202)).body as AccessReport;
     expect(created).toMatchObject({ personId: null, thirdPartyName: 'Erika Beispiel', status: 'pending' });
     await test.app.get(AccessReportService).idle();
-    const reports = (await get(`/core/privacy/access-reports?requestId=${ids.request}`).expect(200)).body as AccessReport[];
+    const reports = (await get(`/privacy/access-reports?requestId=${ids.request}`).expect(200)).body as AccessReport[];
     expect(reports).toEqual([expect.objectContaining({ id: created.id, status: 'ready', thirdPartyName: 'Erika Beispiel' })]);
-    const pdf = (await binary(`/core/privacy/access-reports/${created.id}/file`).expect(200)).body as Buffer;
+    const pdf = (await binary(`/privacy/access-reports/${created.id}/file`).expect(200)).body as Buffer;
     expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
-    expect((await get(`/core/privacy/requests/${ids.request}`).expect(200)).body.accessReportDocumentId).toBe(created.id);
+    expect((await get(`/privacy/requests/${ids.request}`).expect(200)).body.accessReportDocumentId).toBe(created.id);
     // No account, no "My area".
-    expect((await post(`/core/privacy/access-reports/${created.id}/hand-over`, { channel: 'self-service' }).expect(400)).body.code).toBe('privacy.noAccount');
-    await post(`/core/privacy/access-reports/${created.id}/hand-over`, { channel: 'post' }).expect(201);
+    expect((await post(`/privacy/access-reports/${created.id}/hand-over`, { channel: 'self-service' }).expect(400)).body.code).toBe('privacy.noAccount');
+    await post(`/privacy/access-reports/${created.id}/hand-over`, { channel: 'post' }).expect(201);
     expect(JSON.stringify(await audit('privacy.access-report-created'))).not.toContain('Erika');
   });
 
@@ -273,9 +275,9 @@ describe('data of third parties (L14)', () => {
       { source: 'cost-recovery.debtors', id: `${ids.issued}:0` },
       { source: 'cost-recovery.debtors', id: `book:${ids.book}` },
     ];
-    await post('/core/privacy/third-parties/erasure', { refs, reason: 'zu kurz' }).expect(400);
-    await post('/core/privacy/third-parties/erasure', { refs, reason: 'Löschantrag vom 20.10.2026', requestId: ids.request }).expect(400);
-    const result = (await post('/core/privacy/third-parties/erasure', { refs, reason: 'Löschantrag vom 20.10.2026', requestId: ids.erasureRequest }).expect(200)).body as ThirdPartyErasureResult;
+    await post('/privacy/third-parties/erasure', { refs, reason: 'zu kurz' }).expect(400);
+    await post('/privacy/third-parties/erasure', { refs, reason: 'Löschantrag vom 20.10.2026', requestId: ids.request }).expect(400);
+    const result = (await post('/privacy/third-parties/erasure', { refs, reason: 'Löschantrag vom 20.10.2026', requestId: ids.erasureRequest }).expect(200)).body as ThirdPartyErasureResult;
     expect(result.results).toEqual([
       { source: 'incidents.involved-parties', id: ids.erika, outcome: 'anonymized', code: null },
       { source: 'cost-recovery.debtors', id: `${ids.draft}:0`, outcome: 'anonymized', code: null },
@@ -289,7 +291,7 @@ describe('data of third parties (L14)', () => {
     expect(await sql('select count(*)::int as n from incidents.report_revision where content::text ilike ?', ['%Erika%'])).toEqual([{ n: 0 }]);
     expect(await sql('select count(*)::int as n from incidents.report_revision where content::text ilike ?', ['%Hans Zeuge%'])).not.toEqual([{ n: 0 }]);
     // Only the requests of the person still name her (they document the handling of the request).
-    expect(await sql('select distinct entity from core.history where changes::text ilike ?', ['%Erika%'])).toEqual([{ entity: 'core.privacy_request' }]);
+    expect(await sql('select distinct entity from core.history where changes::text ilike ?', ['%Erika%'])).toEqual([{ entity: 'privacy.request' }]);
     expect(await sql('select debtors->0->>\'name\' as name from cost_recovery.notice where id = ?', [ids.draft])).toEqual([{ name: '' }]);
     expect(await sql('select debtors->0->>\'name\' as name from cost_recovery.notice where id = ?', [ids.issued])).toEqual([{ name: 'Erika Beispiel' }]);
     expect(await sql('select count(*)::int as n from cost_recovery.address_book where id = ?', [ids.book])).toEqual([{ n: 0 }]);
@@ -298,7 +300,7 @@ describe('data of third parties (L14)', () => {
   });
 
   it('marks the activities with data of third parties in the register', async () => {
-    const register = (await get('/core/privacy/register').expect(200)).body as ProcessingRegister;
+    const register = (await get('/privacy/register').expect(200)).body as ProcessingRegister;
     expect(register.activities.find((a) => a.key === 'incidents.reports')!.thirdParties).toBe(true);
     expect(register.activities.find((a) => a.key === 'cost-recovery.notices')!.thirdParties).toBe(true);
     expect(register.activities.find((a) => a.key === 'masterdata.persons')!.thirdParties).toBe(false);
@@ -312,7 +314,7 @@ describe('data of third parties (L14)', () => {
       times: { alarmedAt: '2019-03-12T10:00:00Z', returnedAt: '2019-03-12T11:00:00Z' },
       involvedParties: [{ role: 'injured-party', name: 'Paula Alt', street: 'Ringstraße 1', licensePlate: 'MS-XY 9' }],
     }).expect(200);
-    await put('/core/settings/privacy', { retention: { 'incidents.involved-parties': { years: 3, action: 'anonymize' } } }).expect(200);
+    await put('/core/settings/retention', { retention: { 'incidents.involved-parties': { years: 3, action: 'anonymize' } } }).expect(200);
     const dry = (await post('/core/retention/run', { dryRun: true }).expect(200)).body;
     expect(dry.counts['incidents.involved-parties']).toBe(1);
     await post('/core/retention/run', { dryRun: false }).expect(200);
@@ -321,7 +323,7 @@ describe('data of third parties (L14)', () => {
     // The incident itself follows its own rule.
     expect((await get(`/incidents/incidents/${old.id}`).expect(200)).body).toMatchObject({ alarmMessage: 'VU zwei PKW', anonymizedAt: null });
     expect(await sql('select count(*)::int as n from core.history where changes::text ilike ?', ['%Paula Alt%'])).toEqual([{ n: 0 }]);
-    await put('/core/settings/privacy', { retention: {} }).expect(200);
+    await put('/core/settings/retention', { retention: {} }).expect(200);
   });
 });
 
@@ -336,18 +338,18 @@ describe('retention of protocols and run reports (L29)', () => {
     await sql(`insert into backup.run (id, file_name, trigger, user_name, started_at, status, deleted_at) values (?, 'alt.forgabackup', 'manual', 'Admin', ?, 'deleted', ?)`, [deletedBackup, yearsAgo(3), yearsAgo(2)]);
     await sql(`insert into backup.run (id, file_name, trigger, user_name, started_at, status) values (?, 'vorhanden.forgabackup', 'manual', 'Admin', ?, 'ok')`, [existingBackup, yearsAgo(3)]);
     const document = uuidv7();
-    await sql(`insert into core.privacy_document (id, kind, person_id, language, status, created_at, expires_at, deleted_at) values (?, 'access-report', ?, 'de', 'ready', ?, ?, ?)`, [document, ids.minna, yearsAgo(4), yearsAgo(4), yearsAgo(4)]);
+    await sql(`insert into privacy.document (id, kind, person_id, language, status, created_at, expires_at, deleted_at) values (?, 'access-report', ?, 'de', 'ready', ?, ?, ?)`, [document, ids.minna, yearsAgo(4), yearsAgo(4), yearsAgo(4)]);
     const breach = uuidv7();
-    await sql(`insert into core.privacy_breach (id, title, discovered_at, status, closed_on, authority_not_required, created_at, version) values (?, '[Beispiel] Alte Datenpanne', ?, 'closed', ?, true, ?, 1)`, [breach, yearsAgo(7), yearsAgo(6).toISOString().slice(0, 10), yearsAgo(7)]);
+    await sql(`insert into privacy.breach (id, title, discovered_at, status, closed_on, authority_not_required, created_at, version) values (?, '[Beispiel] Alte Datenpanne', ?, 'closed', ?, true, ?, 1)`, [breach, yearsAgo(7), yearsAgo(6).toISOString().slice(0, 10), yearsAgo(7)]);
 
     const result = (await post('/core/retention/run', { dryRun: false }).expect(200)).body;
-    expect(result.counts).toMatchObject({ 'mp-feuer.run-reports': 1, 'backup.run-log': 1, 'core.access-reports': 1 });
+    expect(result.counts).toMatchObject({ 'mp-feuer.run-reports': 1, 'backup.run-log': 1, 'privacy.access-reports': 1 });
     expect(await sql('select id from mp_feuer.run')).toEqual([{ id: recent }]);
     expect((await sql<{ id: string }>('select id from backup.run')).map((r) => r.id)).toEqual([existingBackup]);
-    expect(await sql('select id from core.privacy_document where id = ?', [document])).toEqual([]);
+    expect(await sql('select id from privacy.document where id = ?', [document])).toEqual([]);
     // Data breaches are proof for the supervisory authority: a case to confirm, not deleted directly.
-    expect(await sql('select id from core.privacy_breach where id = ?', [breach])).toEqual([{ id: breach }]);
+    expect(await sql('select id from privacy.breach where id = ?', [breach])).toEqual([{ id: breach }]);
     const cases = (await get('/core/retention/cases').expect(200)).body as { category: string; recordId: string; status: string }[];
-    expect(cases).toEqual(expect.arrayContaining([expect.objectContaining({ category: 'core.privacy-breaches', recordId: breach })]));
+    expect(cases).toEqual(expect.arrayContaining([expect.objectContaining({ category: 'privacy.breaches', recordId: breach })]));
   });
 });

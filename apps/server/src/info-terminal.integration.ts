@@ -464,7 +464,7 @@ describe('new link, revocation and module state', () => {
 
   it('blocks the device keys when all sessions are ended in a data breach (L20, L22)', async () => {
     await kiosk.get('/terminal', cookies.musterstadt).expect(200);
-    const result = await post('/core/privacy/breach-tools/lockdown', { reason: 'Test: Tablet gestohlen, alle Zugänge sperren' }).expect(200);
+    const result = await post('/privacy/breach-tools/lockdown', { reason: 'Test: Tablet gestohlen, alle Zugänge sperren' }).expect(200);
     expect(result.body.devices).toBeGreaterThanOrEqual(1);
     expect((await kiosk.get('/terminal', cookies.musterstadt).expect(401)).body.code).toBe('info-terminal.invalidKey');
     const terminal = ((await get('/info-terminal/terminals').expect(200)).body as { id: string; linkAvailable: boolean }[]).find((t) => t.id === ids.terminal);

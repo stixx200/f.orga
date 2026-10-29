@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type EntityName, EntityManager } from '@mikro-orm/core';
-import type { ErasureCheck, PrivacyRequest } from '@forga/core-contracts';
+import type { ErasureCheck, PrivacyRequest } from '@forga/privacy-contracts';
 import { AuditEntry } from '@forga/core-api';
 import type { AccessReportFixture } from './testing/access-report/fixture';
 import { findAnywhere, IDENTIFYING, leaveLongAgo, seedEverything } from './testing/erasure/seed';
@@ -17,7 +17,7 @@ let fx: AccessReportFixture;
 let requestId: string;
 const entity = (name: string) => name as unknown as EntityName<object>;
 const em = () => test.app.get(EntityManager).fork();
-const check = async () => (await fx.get(`/core/privacy/requests/${requestId}/erasure`).expect(200)).body as ErasureCheck;
+const check = async () => (await fx.get(`/privacy/requests/${requestId}/erasure`).expect(200)).body as ErasureCheck;
 const area = (c: ErasureCheck, key: string) => c.areas.find((a) => a.key === key);
 
 beforeAll(async () => {
@@ -33,10 +33,10 @@ afterAll(async () => {
 });
 
 describe('erasure check', () => {
-  it('needs core.privacy.manage and a request on erasure', async () => {
-    await fx.get(`/core/privacy/requests/${requestId}/erasure`, fx.member).expect(403);
-    const access = (await fx.post('/core/privacy/requests', { personId: fx.ids.person, kind: 'access', receivedOn: new Date().toISOString().slice(0, 10), channel: 'letter' }).expect(201)).body as PrivacyRequest;
-    expect((await fx.get(`/core/privacy/requests/${access.id}/erasure`).expect(400)).body.code).toBe('privacy.notErasure');
+  it('needs privacy.manage and a request on erasure', async () => {
+    await fx.get(`/privacy/requests/${requestId}/erasure`, fx.member).expect(403);
+    const access = (await fx.post('/privacy/requests', { personId: fx.ids.person, kind: 'access', receivedOn: new Date().toISOString().slice(0, 10), channel: 'letter' }).expect(201)).body as PrivacyRequest;
+    expect((await fx.get(`/privacy/requests/${access.id}/erasure`).expect(400)).body.code).toBe('privacy.notErasure');
   });
 
   it('keeps master data of a member until the period starts with leaving', async () => {
@@ -69,7 +69,7 @@ describe('erasure check', () => {
     expect(area(c, 'compensation.open')).toMatchObject({ outcome: 'delete' });
     expect(area(c, 'mp-feuer.transfer')).toMatchObject({ outcome: 'anonymize' });
     expect(area(c, 'core.account')).toMatchObject({ outcome: 'anonymize', count: 1 });
-    expect(area(c, 'core.privacy')).toMatchObject({ outcome: 'anonymize' });
+    expect(area(c, 'privacy.requests')).toMatchObject({ outcome: 'anonymize' });
     // Audit log: 2 years by default.
     expect(area(c, 'core.protocols')).toMatchObject({ outcome: 'keep' });
     expect(area(c, 'core.protocols')!.keepUntil).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -77,7 +77,7 @@ describe('erasure check', () => {
 
   it('follows the retention plan once the member has left', async () => {
     await leaveLongAgo(test, fx.ids.person);
-    await fx.put('/core/settings/privacy', {
+    await fx.put('/core/settings/retention', {
       retention: {
         'masterdata.person-file': { years: 10, action: 'anonymize' },
         'masterdata.person-core': { years: 10, action: 'anonymize' },
@@ -94,12 +94,12 @@ describe('executing the erasure', () => {
   let result: ErasureCheck;
 
   it('asks for the name of the person', async () => {
-    expect((await fx.post(`/core/privacy/requests/${requestId}/erasure`, { confirmName: 'Max Dritter' }).expect(400)).body.code).toBe('privacy.erasureConfirmation');
-    await fx.post(`/core/privacy/requests/${requestId}/erasure`, { confirmName: 'Tobias Probe' }, fx.member).expect(403);
+    expect((await fx.post(`/privacy/requests/${requestId}/erasure`, { confirmName: 'Max Dritter' }).expect(400)).body.code).toBe('privacy.erasureConfirmation');
+    await fx.post(`/privacy/requests/${requestId}/erasure`, { confirmName: 'Tobias Probe' }, fx.member).expect(403);
   });
 
   it('erases what is allowed, restricts the rest and logs counts only', async () => {
-    result = (await fx.post(`/core/privacy/requests/${requestId}/erasure`, { confirmName: ' tobias  probe ' }).expect(201)).body as ErasureCheck;
+    result = (await fx.post(`/privacy/requests/${requestId}/erasure`, { confirmName: ' tobias  probe ' }).expect(201)).body as ErasureCheck;
     expect(result.executed).toMatchObject({ deleted: expect.any(Number), anonymized: expect.any(Number), kept: expect.any(Number), restrictedUntil: null });
     expect(result.executed!.kept).toBeGreaterThan(0);
     const audit = await em().find(AuditEntry, { action: 'privacy.erasure-executed' });
@@ -116,8 +116,10 @@ describe('executing the erasure', () => {
     expect(await em().count(entity('ExclusionEntity'), { personId: fx.ids.person })).toBe(0);
     // Booking records stay.
     expect(await em().count(entity('ItemEntity'), { personId: fx.ids.person })).toBeGreaterThan(0);
-    const person = (await em().findOneOrFail(entity('Person'), { id: fx.ids.person })) as { firstName: string; restrictionReason: string; restrictedUntil: string | null };
-    expect(person).toMatchObject({ firstName: 'N.', restrictionReason: 'retention', restrictedUntil: null });
+    const person = (await em().findOneOrFail(entity('Person'), { id: fx.ids.person })) as { firstName: string };
+    expect(person).toMatchObject({ firstName: 'N.' });
+    // The kept areas are restricted (module privacy) until their periods end.
+    expect(await em().findOneOrFail(entity('ProcessingRestrictionEntity'), { personId: fx.ids.person })).toMatchObject({ reason: 'retention', until: null });
   });
 
   it('leaves the identifying data nowhere, as the name was erased', async () => {
@@ -125,9 +127,9 @@ describe('executing the erasure', () => {
   });
 
   it('shows the execution at the request and refuses a second one', async () => {
-    const request = (await fx.get(`/core/privacy/requests/${requestId}`).expect(200)).body as PrivacyRequest;
+    const request = (await fx.get(`/privacy/requests/${requestId}`).expect(200)).body as PrivacyRequest;
     expect(request.erasure).toEqual(result.executed);
     expect((await check()).executed).toEqual(result.executed);
-    expect((await fx.post(`/core/privacy/requests/${requestId}/erasure`, { confirmName: 'N. N.' }).expect(409)).body.code).toBe('privacy.erasureExecuted');
+    expect((await fx.post(`/privacy/requests/${requestId}/erasure`, { confirmName: 'N. N.' }).expect(409)).body.code).toBe('privacy.erasureExecuted');
   });
 });

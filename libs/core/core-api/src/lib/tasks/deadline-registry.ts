@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { Deadline, DeadlineStage, LocalizedText } from '@forga/core-contracts';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
-import { OrganizationDirectory } from '../security/organization-directory.js';
+import { ModuleStateService } from '../module/modules.js';
+import { ProcessingRestrictions } from '../privacy/restriction.js';
 
 /** A deadline as a module computes it from its current data. */
 export interface DeadlineInput {
@@ -69,7 +70,10 @@ export function stageOf(dueOn: string, asOf: string): DeadlineStage {
 export class DeadlineRegistry {
   private readonly providers: DeadlineProvider[] = [];
 
-  constructor(private readonly organization: OrganizationDirectory) {}
+  constructor(
+    private readonly restrictions: ProcessingRestrictions,
+    private readonly modules: ModuleStateService,
+  ) {}
 
   register(provider: DeadlineProvider): void {
     this.providers.push(provider);
@@ -78,8 +82,10 @@ export class DeadlineRegistry {
   /** Deadlines the user is responsible for, already within their lead time, earliest first. */
   async forUser(user: AuthenticatedUser, asOf: string): Promise<Deadline[]> {
     const result: Deadline[] = [];
-    const restricted = await this.organization.restrictedPersonIds();
-    for (const provider of this.providers) {
+    const restricted = await this.restrictions.restrictedIds();
+    const inactive = await this.modules.inactiveIds();
+    // Inactive modules have no tasks (their permissions are not granted either, but a task may name a core permission).
+    for (const provider of this.providers.filter((p) => !inactive.has(p.module))) {
       for (const input of await provider.deadlines(asOf)) {
         const personId = input.personId ?? (PERSON_SUBJECTS.has(input.subject.type) ? input.subject.id : null);
         if (personId && restricted.has(personId)) continue;

@@ -1,5 +1,5 @@
 import { type EntityName, EntityManager } from '@mikro-orm/core';
-import { AccessReportService } from '@forga/core-api';
+import { AccessReportService } from '@forga/privacy-api';
 import { INSTALLED_MODULES } from '../../app/installed-modules';
 import { createFixture, type AccessReportFixture } from '../access-report/fixture';
 import { SEEDS } from '../access-report/seeds';
@@ -23,9 +23,9 @@ export const IDENTIFYING = ['Tobias', 'tobias.probe@example.org', '0170 0000000'
 export async function seedEverything(test: TestApp, admin: string): Promise<{ fx: AccessReportFixture; requestId: string }> {
   const fx = await createFixture(test, admin);
   for (const [, seed] of SEEDS) await seed(fx);
-  await fx.post('/core/privacy/access-reports', { personId: fx.ids.person, language: 'de', includeJson: true }).expect(202);
+  await fx.post('/privacy/access-reports', { personId: fx.ids.person, language: 'de', includeJson: true }).expect(202);
   await test.app.get(AccessReportService).idle();
-  const request = await fx.post('/core/privacy/requests', {
+  const request = await fx.post('/privacy/requests', {
     personId: fx.ids.person,
     kind: 'erasure',
     receivedOn: new Date().toISOString().slice(0, 10),

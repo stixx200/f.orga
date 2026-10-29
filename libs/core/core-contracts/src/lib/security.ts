@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { Language, LocalizedText } from './i18n.js';
-import { SessionPrivacyNotice } from './privacy.js';
 import type { Permission, RoleTemplate } from './module.js';
 
 /** Permissions of the core itself. Modules declare their own in their manifest. */
@@ -14,19 +13,13 @@ export const CORE_PERMISSIONS = [
   { id: 'core.audit.read', name: { de: 'Audit-Log lesen', en: 'Read audit log' }, scope: 'brigade', stepUp: true },
   { id: 'core.retention.manage', name: { de: 'Aussonderung bearbeiten (Archiv anbieten, Fristablauf ausführen)', en: 'Process retention (offer to the archive, execute expiry)' }, scope: 'brigade', stepUp: true },
   { id: 'core.data.export', name: { de: 'Vollexport und Auskunft (DSGVO)', en: 'Full export and data access requests' }, scope: 'brigade', stepUp: true },
-  {
-    id: 'core.privacy.manage',
-    name: { de: 'Datenschutz verwalten (Anfragen, Einschränkung, Datenschutzhinweis)', en: 'Manage data protection (requests, restriction, privacy notice)' },
-    scope: 'brigade',
-    privileged: true,
-    stepUp: true,
-  },
-  {
-    id: 'core.privacy.consents',
-    name: { de: 'Einwilligungen von Personen erfassen und widerrufen', en: 'Record and withdraw consents of persons' },
-    scope: 'department',
-  },
 ] as const satisfies readonly Permission[];
+
+/**
+ * Permission of the module `privacy` that opens pages of persons whose processing is restricted (Art. 18, see
+ * `assertNotRestricted`). Only takes effect while the module is active; otherwise no person is restricted.
+ */
+export const RESTRICTED_PERSONS_PERMISSION = 'privacy.manage';
 
 /**
  * Standard roles of a fire brigade. Modules add their permissions to these keys;
@@ -43,13 +36,12 @@ export const CORE_ROLE_TEMPLATES: RoleTemplate[] = [
     key: 'commander',
     name: { de: 'Kommandant', en: 'Commander' },
     description: { de: 'Fachlich alles, Berichte freigeben', en: 'All business functions, release reports' },
-    permissions: ['core.audit.read', 'core.privacy.consents'],
+    permissions: ['core.audit.read'],
   },
   {
     key: 'department-commander',
     name: { de: 'Abteilungskommandant', en: 'Department commander' },
     description: { de: 'Personen und Berichte der Abteilung', en: 'Persons and reports of the department' },
-    permissions: ['core.privacy.consents'],
   },
   {
     key: 'group-leader',
@@ -166,8 +158,6 @@ export const Session = z.object({
    * sign-in at the OIDC provider with its second factor (setting `oidc.stepUpViaProvider`, linked account).
    */
   mfa: z.object({ enrolled: z.boolean(), available: z.boolean(), passwordRequired: z.boolean(), recoveryCodesLeft: z.number().int(), viaProvider: z.boolean() }),
-  /** Privacy notice: version and whether the shell asks the user to acknowledge it (first sign-in, new version). */
-  privacyNotice: SessionPrivacyNotice,
   /**
    * The session itself: „Angemeldet bleiben“ (`persistent`) and after how many minutes without input it ends
    * (`idleMinutes`, `null` for persistent sessions).

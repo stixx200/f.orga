@@ -302,13 +302,13 @@ describe('search, export and retention', () => {
     await post(`/masterdata/persons/${person}/leave`, { leftOn: '2005-12-31', exitReason: 'own-request' }).expect(201);
     // Nobody is anonymised until an administrator chooses a period; a dry run shows what a period would affect.
     const retention = { 'masterdata.person-core': { years: 10, action: 'anonymize' }, 'masterdata.person-file': { years: 10, action: 'anonymize' } };
-    expect((await get('/core/settings/privacy')).body.retention).toEqual({});
+    expect((await get('/core/settings/retention')).body.retention).toEqual({});
     expect((await post('/core/retention/run', { dryRun: true }).expect(200)).body.counts['masterdata.person-core']).toBeUndefined();
     const preview = await post('/core/retention/run', { dryRun: true, settings: { retention } }).expect(200);
     expect(preview.body.counts['masterdata.person-core']).toBeGreaterThanOrEqual(1);
     // A real run never takes values from the request.
     expect((await post('/core/retention/run', { dryRun: false, settings: { retention } }).expect(200)).body.counts['masterdata.person-core']).toBeUndefined();
-    await test.http.put('/api/core/settings/privacy').set('Cookie', admin).set(UI).send({ retention }).expect(200);
+    await test.http.put('/api/core/settings/retention').set('Cookie', admin).set(UI).send({ retention }).expect(200);
     await post('/core/retention/run', { dryRun: false }).expect(200);
     const anonymised = (await get(`/masterdata/persons/${person}`)).body;
     // A language-neutral name; the UI marks the person as anonymised.

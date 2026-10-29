@@ -10,6 +10,7 @@ Was hier steht, existiert im Code. Umgesetzt sind:
 - das Modul Infoterminal: Selbsteintragung an der Wache in Einsatzberichte und Dienste (Kiosk-Seite `/terminal`)
 - das Modul MP-Feuer: Datenübernahme aus MP-Feuer-Transferdateien im Hintergrund, mit eigener Zuordnungsliste und Verlauf
 - das Modul Datensicherung: geplante, verschlüsselte Sicherung in einen Ordner auf dem Server, Prüfung, Herunterladen und Wiederherstellung mit Wartungsmodus und Neustart
+- das Modul Datenschutz (`privacy`, abschaltbar): Betroffenenanfragen mit Frist, Einschränkung, Löschprüfung, Datenschutzhinweis (Seite `/privacy-notice`), Einwilligungen, Auskunft als PDF, Leseprotokoll, Verzeichnis der Verarbeitungstätigkeiten, Datenpannen
 - die Module Übungsdienst, Atemschutz, Entschädigungen, Geräte, Kostenersatz, Beförderungen und Kleiderkammer
 - Plugins (signierte Zusatzmodule)
 - die Mehrsprachigkeit (Deutsch/Englisch)
@@ -30,6 +31,6 @@ Der Code ist durchgehend englisch, die Dokumentation deutsch. Die Zuordnung der 
 | [schnittstellen.md](schnittstellen.md) | Vorhandene HTTP-Endpunkte mit Rechten |
 | [entwicklung.md](entwicklung.md) | Entwicklungsumgebung, Befehle, Tests, Migrationen, CI |
 | [betrieb.md](betrieb.md) | Docker-Image und Compose-Stack |
-| [datenschutz.md](datenschutz.md) | Datenschutz: zweiter Faktor (TOTP) als Step-up bei sensiblen Daten und Verwaltung; HTTPS und Sicherheitsheader, Echt-, Test- und Entwicklungssystem, Gesundheitsdaten in Berichten und Entschuldigungen, E-Mails ohne Namen; Verzeichnis der Verarbeitungstätigkeiten, Datenpannen |
+| [datenschutz.md](datenschutz.md) | Datenschutz: Aufteilung zwischen Modul `privacy` und Core, zweiter Faktor (TOTP) als Step-up bei sensiblen Daten und Verwaltung; HTTPS und Sicherheitsheader, Echt-, Test- und Entwicklungssystem, Gesundheitsdaten in Berichten und Entschuldigungen, E-Mails ohne Namen; Verzeichnis der Verarbeitungstätigkeiten, Datenpannen |
 | [aufbewahrung.md](aufbewahrung.md) | Aufbewahrungsplan: Kategorien, Regeln, Vorlage „Kommunaler Aktenplan (Beispiel)“, täglicher Lauf, Aussonderung mit Export für das Archiv, Wirkung, Personendaten der Module |
 | [parallelbetrieb-mp-feuer.md](parallelbetrieb-mp-feuer.md) | Arbeitsweise während der Umstellung: Einsätze in MP-Feuer, Bescheide und Entschädigungen in f.orga; Verhalten beim erneuten Import |

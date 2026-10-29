@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { PrivacyInformation, ProcessingRestriction } from '@forga/core-contracts';
 import type { DepartmentType } from './department.js';
 import { DriverLicense } from './driver-license.js';
 import { isValidIban, normalizeIban } from './iban.js';
@@ -283,10 +282,11 @@ export const Person = z.object({
   stepUpAvailable: z.boolean(),
   /** Set when the person was anonymised after leaving. */
   anonymizedAt: z.string().nullable(),
-  /** Restriction of processing (Art. 18); the file is then readable only with `core.privacy.manage`. */
-  processingRestriction: ProcessingRestriction.nullable(),
-  /** Information under Art. 13/14 recorded for the person. */
-  privacyInformation: PrivacyInformation.nullable(),
+  /**
+   * Processing of the person is restricted (Art. 18, recorded in the module `privacy`); the file is then readable only
+   * with `privacy.manage`. Always `false` while the module is inactive.
+   */
+  processingRestricted: z.boolean(),
   birthDate: z.string().nullable().optional(),
   birthPlace: z.string().optional(),
   employer: Employer.optional(),
