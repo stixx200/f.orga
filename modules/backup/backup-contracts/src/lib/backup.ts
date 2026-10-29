@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ForgaStage } from '@forga/core-contracts';
 
 /** Settings section `backup.general` (read and written through `/api/backup/settings` with `backup.manage`). */
 export const BACKUP_SETTINGS_SECTION = 'backup.general';
@@ -98,6 +99,8 @@ export const BackupManifest = z.object({
   appVersion: z.string(),
   instance: z.string(),
   instanceId: z.string(),
+  /** `FORGA_STAGE` of the system that made the backup; missing in backups of older versions. */
+  stage: ForgaStage.optional(),
   createdAt: z.string(),
   trigger: BackupTrigger,
   modules: z.array(z.object({ id: z.string(), version: z.string(), plugin: z.boolean().default(false) })),
@@ -186,6 +189,8 @@ export const BackupOverview = z.object({
   events: z.array(z.object({ at: z.string(), kind: z.enum(['created', 'failed', 'verified', 'verifyFailed', 'restoreTested', 'restored', 'restoreFailed']), entry: BackupEntry.nullable(), userName: z.string().nullable(), detail: z.string().nullable() })),
   /** Databases kept after a restore (`<db>_before_<time>`), deleted after 7 days. */
   oldDatabases: z.array(z.string()),
+  /** Test system with restored real data: reason and the day all data is deleted. */
+  realData: z.object({ reason: z.string(), deleteAt: z.string(), userName: z.string().nullable() }).nullable(),
 });
 export type BackupOverview = z.infer<typeof BackupOverview>;
 
@@ -209,6 +214,11 @@ export const RestoreCheck = z.object({
   runningVersion: z.string(),
   brigadeName: z.string().nullable(),
   restoreMethod: z.enum(['swap', 'clean']),
+  /**
+   * The test system restores a backup of the real system (or one of unknown origin): only with a reason, and the data
+   * is deleted after 7 days (`REAL_DATA_DAYS`).
+   */
+  realData: z.boolean(),
 });
 export type RestoreCheck = z.infer<typeof RestoreCheck>;
 
@@ -216,6 +226,8 @@ export const RestoreInput = RestoreCheckInput.extend({
   /** Name of the brigade, typed as confirmation. */
   confirmName: z.string().max(300),
   usersInformed: z.literal(true),
+  /** Why real data goes into the test system (e.g. a restore test); required there, recorded in the audit log. */
+  realDataReason: z.string().trim().max(500).optional(),
 });
 export type RestoreInput = z.input<typeof RestoreInput>;
 
@@ -241,6 +253,11 @@ export type RestoreProgress = z.infer<typeof RestoreProgress>;
 /** Answer of `POST /api/backup/restore`: the token for the status (it outlives the restart). */
 export const RestoreStarted = z.object({ token: z.string() });
 export type RestoreStarted = z.infer<typeof RestoreStarted>;
+
+/** Real data restored into the test system is deleted after this many days (decision 4 of the data protection concept). */
+export const REAL_DATA_DAYS = 7;
+/** A reason for real data in the test system needs at least this many characters. */
+export const REAL_DATA_REASON_MIN = 10;
 
 /** Groups the fingerprint of a passphrase for display, e.g. `3F9A·C21B`. */
 export function formatPassphraseId(id: string | null): string {

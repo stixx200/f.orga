@@ -46,7 +46,7 @@ export class KioskController {
     // Like every request from the UI: no other site can make a browser open a terminal.
     if (req.headers[CSRF_HEADER] !== '1') throw new ForbiddenException({ code: 'auth.csrf' });
     const terminal = await this.auth.authenticate(input.key, req.ip ?? '');
-    res.cookie(TERMINAL_COOKIE, input.key, this.auth.cookieOptions());
+    res.cookie(TERMINAL_COOKIE, input.key, await this.auth.cookieOptions(req));
     return this.kiosk.terminal(terminal);
   }
 

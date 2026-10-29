@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { Session } from '@forga/core-contracts';
+import type { ForgaStage, Session, SetupState } from '@forga/core-contracts';
 import { api } from './api';
 
 export const SESSION_QUERY_KEY = ['core', 'session'] as const;
@@ -46,4 +46,16 @@ export function unlocked(session: Session | null | undefined, permission: string
 export function useCan(permission: string, departmentId?: string): boolean {
   const { data } = useSession();
   return can(data, permission, departmentId);
+}
+
+export const SETUP_QUERY_KEY = ['core', 'setup'] as const;
+
+/** Public state of the installation: setup needed, brigade name, sign-in with OIDC and the stage. */
+export function useSetupState() {
+  return useQuery({ queryKey: SETUP_QUERY_KEY, queryFn: () => api<SetupState>('core/setup') });
+}
+
+/** Stage of the installation (`FORGA_STAGE`); `undefined` while loading. */
+export function useStage(): ForgaStage | undefined {
+  return useSetupState().data?.stage;
 }

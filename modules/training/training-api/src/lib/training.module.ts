@@ -55,7 +55,9 @@ export class TrainingModule implements OnModuleInit {
     this.imports.registerLookup('training', this.sessionsImport.lookup());
     this.historyAccess.register('training.session', async (user, id) => {
       const session = await this.em.fork().findOne(SessionEntity, id);
-      return { allowed: Boolean(session) && this.sessions.can(user, READ, session!) };
+      if (!session || !this.sessions.can(user, READ, session)) return { allowed: false };
+      // The text of an excuse only for those who record the attendance (group leaders).
+      return { allowed: true, hiddenFields: this.sessions.can(user, ATTENDANCE, session) ? [] : ['training.attendance.note'] };
     });
     this.historyAccess.registerPermission('training.session_type', 'training.settings.manage');
     // Photos and documents of a session: readable like the session, added by those who plan it or record attendance.

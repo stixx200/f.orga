@@ -20,7 +20,7 @@ afterAll(() => test?.app.close());
 
 describe('setup and login', () => {
   it('requires a setup on first start and rejects anonymous access', async () => {
-    await http.get('/api/core/setup').expect(200, { required: true, brigadeName: null, oidc: null });
+    await http.get('/api/core/setup').expect(200, { required: true, brigadeName: null, oidc: null, stage: 'development' });
     await http.get('/api/core/session').expect(401);
   });
 
@@ -46,7 +46,7 @@ describe('setup and login', () => {
     );
 
     await http.post('/api/core/setup').send({ setupToken: SETUP_TOKEN, brigadeName: 'x', displayName: 'x', ...ADMIN }).expect(409);
-    await http.get('/api/core/setup').expect(200, { required: false, brigadeName: 'Feuerwehr Musterstadt', oidc: null });
+    await http.get('/api/core/setup').expect(200, { required: false, brigadeName: 'Feuerwehr Musterstadt', oidc: null, stage: 'development' });
   });
 
   it('rejects wrong passwords', async () => {

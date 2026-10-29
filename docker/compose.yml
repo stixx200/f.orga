@@ -1,5 +1,21 @@
-# Running f.orga: application and database.
+# Running f.orga: application and database, optionally behind Caddy with HTTPS.
 # Start: docker compose -f docker/compose.yml up -d   (values in docker/.env, template docker/.env.example)
+# HTTPS: docker compose -f docker/compose.yml --profile https up -d            (Let's Encrypt or own certificate)
+#        docker compose -f docker/compose.yml --profile https-internal up -d   (internal certificate of Caddy)
+x-caddy: &caddy
+  image: caddy:2-alpine
+  restart: unless-stopped
+  ports:
+    - '80:80'
+    - '443:443'
+  volumes:
+    - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    - ${FORGA_CERT_DIR:-./certs}:/certs:ro
+    - caddy-data:/data
+    - caddy-config:/config
+  depends_on:
+    - forga
+
 services:
   forga:
     build:
@@ -9,7 +25,16 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://forga:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is missing}@db:5432/forga
-      # Set to true as soon as f.orga is served via HTTPS.
+      # production (real data), test (demo data only: band, no transfer of real data) or development.
+      FORGA_STAGE: ${FORGA_STAGE:-production}
+      # Setup token for the first start; empty: a random one is printed to the log.
+      FORGA_SETUP_TOKEN: ${FORGA_SETUP_TOKEN:-}
+      # Address of f.orga (https://…); with https:// the session cookie is sent only encrypted.
+      FORGA_PUBLIC_URL: ${FORGA_PUBLIC_URL:-}
+      # Reverse proxy in front (e.g. Caddy): believe X-Forwarded-For/-Proto from it, e.g. uniquelocal. Without it login
+      # locks and rate limits count the proxy's address, so failed logins lock a username for everybody.
+      FORGA_TRUST_PROXY: ${FORGA_TRUST_PROXY:-}
+      # Cookies only via HTTPS even without an https:// address (automatic with one).
       FORGA_SECURE_COOKIES: ${FORGA_SECURE_COOKIES:-false}
       FORGA_SECRET_KEY: ${FORGA_SECRET_KEY:-}
       FORGA_IMPORT_URL_ALLOW_PRIVATE: ${FORGA_IMPORT_URL_ALLOW_PRIVATE:-false}
@@ -24,10 +49,28 @@ services:
       - forga-plugins:/plugins
       - ${FORGA_BACKUP_DIR:-forga-backups}:/backups
     ports:
+      # Behind Caddy only on the host: FORGA_PORT=127.0.0.1:8080
       - '${FORGA_PORT:-8080}:3000'
     depends_on:
       db:
         condition: service_healthy
+
+  # HTTPS with Let's Encrypt (FORGA_TLS = e-mail address) or an own certificate (FORGA_TLS = "/certs/… /certs/…").
+  caddy:
+    <<: *caddy
+    profiles: [https]
+    environment:
+      FORGA_DOMAIN: ${FORGA_DOMAIN:-}
+      FORGA_TLS: ${FORGA_TLS:-}
+
+  # HTTPS with the internal certificate authority of Caddy (network of the municipality without a public name); the
+  # root certificate (volume caddy-data, pki/authorities/local/root.crt) is installed on the devices.
+  caddy-internal:
+    <<: *caddy
+    profiles: [https-internal]
+    environment:
+      FORGA_DOMAIN: ${FORGA_DOMAIN:-}
+      FORGA_TLS: internal
 
   db:
     image: postgres:17-alpine
@@ -47,3 +90,5 @@ volumes:
   forga-db:
   forga-plugins:
   forga-backups:
+  caddy-data:
+  caddy-config:

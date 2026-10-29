@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, type OnApplicationBootstrap, type OnModuleDestroy, type OnModuleInit, Optional } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { type AuthenticatedUser, berlinDate, DomainEvents, Notifications, SettingsService } from '@forga/core-api';
+import { SecuritySettings } from '@forga/core-contracts';
 import { INCIDENTS_EVENTS, INCIDENTS_LOOKUP, type IncidentsLookup, type ReportReleasedEvent, type ReportUnlockedEvent } from '@forga/incidents-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory, type PersonSnapshot } from '@forga/masterdata-contracts';
 import {
@@ -405,16 +406,30 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     const name = `${person.firstName} ${person.lastName}`;
     const recipients = await this.notifications.recipients(NOTIFY, person.primaryDepartmentId);
     if (!recipients.length) return true;
+    // Health reference (data protection concept L18): by default without the name; f.orga shows who it is.
+    const withoutNames = SecuritySettings.parse((await this.settings.get('security')) ?? {}).mailHealthWithoutNames;
     const sent = await this.notifications.notify({
       permission: NOTIFY,
       departmentId: person.primaryDepartmentId,
       action: 'respiratory-protection.red-notified',
-      details: { personId: person.id },
-      path: `/masterdata/persons/${person.id}?tab=respiratory-protection`,
+      details: { personId: person.id, withoutNames },
+      path: withoutNames ? '/respiratory-protection/overview' : `/masterdata/persons/${person.id}?tab=respiratory-protection`,
       compose: (language, recipient) =>
-        language === 'de'
-          ? { subject: `Atemschutz: ${name} ist nicht mehr einsatzbereit`, text: `Hallo ${recipient},\n\ndie Atemschutztauglichkeit von ${name} ist auf Rot gewechselt. Die fehlenden Nachweise stehen in der Personalakte im Reiter „Atemschutz“.` }
-          : { subject: `Respiratory protection: ${name} is no longer fit for duty`, text: `Hello ${recipient},\n\nthe respiratory protection status of ${name} turned red. The missing records are shown in the person file, tab "Respiratory protection".` },
+        withoutNames
+          ? language === 'de'
+            ? { subject: 'Atemschutz: Ein Geräteträger ist nicht mehr einsatzbereit', text: `Hallo ${recipient},
+
+die Atemschutztauglichkeit eines Geräteträgers Ihrer Abteilung ist auf Rot gewechselt. Wer betroffen ist und was fehlt, steht in f.orga unter „Atemschutz → Tauglichkeit“.` }
+            : { subject: 'Respiratory protection: a wearer is no longer fit for duty', text: `Hello ${recipient},
+
+the respiratory protection status of a wearer of your department turned red. Who it is and what is missing is shown in f.orga under "Respiratory protection → Fitness".` }
+          : language === 'de'
+            ? { subject: `Atemschutz: ${name} ist nicht mehr einsatzbereit`, text: `Hallo ${recipient},
+
+die Atemschutztauglichkeit von ${name} ist auf Rot gewechselt. Die fehlenden Nachweise stehen in der Personalakte im Reiter „Atemschutz“.` }
+            : { subject: `Respiratory protection: ${name} is no longer fit for duty`, text: `Hello ${recipient},
+
+the respiratory protection status of ${name} turned red. The missing records are shown in the person file, tab "Respiratory protection".` },
     });
     return sent > 0;
   }

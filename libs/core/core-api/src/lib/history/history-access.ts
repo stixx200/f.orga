@@ -13,7 +13,7 @@ export interface HistoryAccess {
   allowed: boolean;
   /**
    * Fields whose values are masked in the history, e.g. sensitive personal data. A history name of a child entity
-   * (e.g. `masterdata.rest_period`) masks all fields of its entries.
+   * (e.g. `masterdata.rest_period`) masks all fields of its entries, `<history name>.<field>` one field of them.
    */
   hiddenFields?: readonly string[];
 }

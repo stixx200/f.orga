@@ -384,7 +384,7 @@ export class IncidentsController {
     if (content.times) await this.save(em, report, ReportInput.parse({ ...content, authorPersonId: content.authorPersonId ?? report.authorPersonId }), user);
     await em.flush();
     const loaded = await this.reports.load(em, report.id, user);
-    return this.reports.toDto(em, loaded);
+    return this.reports.toDtoFor(user, em, loaded);
   }
 
   // ----- Reports -----
@@ -393,7 +393,7 @@ export class IncidentsController {
   @RequirePermissions(READ)
   async getReport(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Report> {
     const em = this.em.fork();
-    return this.reports.toDto(em, await this.reports.load(em, id, user));
+    return this.reports.toDtoFor(user, em, await this.reports.load(em, id, user));
   }
 
   /** Saves the whole report content with the version the client loaded. Releasers lock the report by editing it. */
@@ -409,7 +409,7 @@ export class IncidentsController {
     this.reports.assertWrite(user, report);
     await this.save(em, report, input, user);
     await em.flush();
-    return this.reports.toDto(em, report);
+    return this.reports.toDtoFor(user, em, report);
   }
 
   /** The report as PDF (letterhead of the brigade) with times, personnel, vehicles, narrative, statistics and parties. */
@@ -488,7 +488,7 @@ export class IncidentsController {
     const content = ReportInput.parse({ ...revision.content, version: undefined });
     await this.save(em, report, { ...content, personnel: content.personnel.map((p) => ({ ...p, bookedAt: null })) }, user);
     await em.flush();
-    return this.reports.toDto(em, report);
+    return this.reports.toDtoFor(user, em, report);
   }
 
   /** Assigns the author of a report without changing its content (and without locking it). */
@@ -511,7 +511,7 @@ export class IncidentsController {
     }
     report.authorPersonId = input.authorPersonId;
     await em.flush();
-    return this.reports.toDto(em, report);
+    return this.reports.toDtoFor(user, em, report);
   }
 
   /**
@@ -570,7 +570,7 @@ export class IncidentsController {
     await this.reports.assertNotLedExternally(report);
     await this.reports.setPrimary(em, report);
     await em.flush();
-    return this.reports.toDto(em, report);
+    return this.reports.toDtoFor(user, em, report);
   }
 
   @Post('reports/:id/submit')
@@ -586,7 +586,7 @@ export class IncidentsController {
     this.reports.assertWrite(user, report);
     await this.reports.submit(em, report, user, input.acknowledgements);
     await em.flush();
-    return this.reports.toDto(em, report);
+    return this.reports.toDtoFor(user, em, report);
   }
 
   /** Returns a submitted report to its author; releasers for all departments, pre-reviewers for theirs. */
@@ -604,7 +604,7 @@ export class IncidentsController {
     await this.reports.returnToAuthor(report, input.comment, user);
     await em.flush();
     await this.tellAuthor(report, input.comment, user);
-    return this.reports.toDto(em, report);
+    return this.reports.toDtoFor(user, em, report);
   }
 
   /** E-mail to the author of a returned report; the return itself never fails because of it. */
@@ -671,7 +671,7 @@ export class IncidentsController {
     const em = this.em.fork();
     const report = await this.reports.load(em, id, user);
     await this.reports.release(em, report, user, input.level);
-    return this.reports.toDto(em, report);
+    return this.reports.toDtoFor(user, em, report);
   }
 
   /** Parallel operation with MP-Feuer: a releaser continues an imported report in f.orga; later imports leave it alone. */
@@ -683,7 +683,7 @@ export class IncidentsController {
     const em = this.em.fork();
     const report = await this.reports.load(em, id, user);
     await this.reports.takeOver(em, report);
-    return this.reports.toDto(em, report);
+    return this.reports.toDtoFor(user, em, report);
   }
 
   @Post('reports/:id/unlock')
@@ -697,7 +697,7 @@ export class IncidentsController {
     const em = this.em.fork();
     const report = await this.reports.load(em, id, user);
     await this.reports.unlock(em, report, input.reason, input.toStatus);
-    return this.reports.toDto(em, report);
+    return this.reports.toDtoFor(user, em, report);
   }
 
   /**

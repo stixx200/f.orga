@@ -17,6 +17,8 @@ export interface RestoreState extends RestoreProgress {
   userName: string | null;
   method: 'swap' | 'clean';
   previousDatabase: string | null;
+  /** Test system: reason for restoring real data; `null` otherwise. Older state files lack it. */
+  realDataReason?: string | null;
 }
 
 export const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');

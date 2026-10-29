@@ -23,7 +23,7 @@ Alle Pfade liegen unter `/api`.
 
 | Methode | Pfad | Recht | Zweck |
 | --- | --- | --- | --- |
-| `GET` | `/core/setup` | offen | `{ required, brigadeName, oidc }`: Ist die Ersteinrichtung nötig? `oidc: { label }` nur, wenn die Anmeldung mit dem Konto der Gemeinde eingerichtet und die Adresse von f.orga bekannt ist |
+| `GET` | `/core/setup` | offen | `{ required, brigadeName, oidc, stage }`: Ist die Ersteinrichtung nötig? `stage` ist `FORGA_STAGE` (Band im Testsystem). `oidc: { label }` nur, wenn die Anmeldung mit dem Konto der Gemeinde eingerichtet und die Adresse von f.orga bekannt ist |
 | `POST` | `/core/setup` | offen, nur vor der Einrichtung, mit Einrichtungsschlüssel | Feuerwehrname, Standardrollen aus den Rollenvorlagen und ersten Benutzer (Administrator, mit `email`) anlegen, anmelden (`Setup` mit `setupToken`). Fehler: `setup.invalidToken` (`403`), `setup.done` (`409`) |
 | `POST` | `/core/password-reset` | offen | Link zum Zurücksetzen anfordern (`{ login }`), Antwort immer `{ ok: true }`. Fehler: `auth.resetNotConfigured` (`503`), `auth.resetRateLimited` (`429`) |
 | `POST` | `/core/password-reset/confirm` | offen | Passwort mit Link aus Zurücksetzen oder Einladung setzen (`{ token, password }`). Fehler: `auth.resetInvalid` |
@@ -67,7 +67,8 @@ Alle Pfade liegen unter `/api`.
 | `GET` | `/core/settings/:section` | angemeldet; `smtp`, `oidc`, `privacy`, `reminders` nur Verwalter | Einstellungsabschnitt ohne geheime Felder und ohne Felder nur für Verwalter (z. B. `training.general.feedToken`), `null` wenn unvollständig |
 | `PUT` | `/core/settings/:section` | `core.settings.manage` bzw. `<modul>.settings.manage` | Einstellungsabschnitt speichern |
 | `POST` | `/core/settings/oidc/test` | `core.settings.manage` | Konfiguration des OIDC-Anbieters laden; Antwort `{ issuer, redirectUri }`. Fehler: `auth.oidcDiscoveryFailed` (`502`), `auth.oidcIncomplete`, `auth.oidcNoPublicUrl` |
-| `GET` | `/core/onboarding` | `core.settings.manage` oder `core.users.manage` | Einrichtungsliste (`OnboardingItem[]`: `key`, `done`, `to`, bei Modulen `label`) |
+| `GET` | `/core/onboarding` | `core.settings.manage` oder `core.users.manage` | Einrichtungsliste (`OnboardingItem[]`: `key`, `done`, `to`, bei Modulen `label`); außer in der Entwicklung zuerst `https`, erledigt bei einem Aufruf über HTTPS |
+| `GET` | `/core/security/status` | `core.settings.manage` | `SecurityStatus`: `stage`, `https` (Anfrage über HTTPS), `publicUrlHttps`, `secureCookies` |
 | `GET` | `/core/modules` | angemeldet | Aktive Module mit Name, Navigation und `frontend.entry` (`/modules/<id>/remoteEntry.js`) |
 | `GET` | `/core/modules/status` | `core.modules.manage` | Alle installierten Module mit Name, Version, `active`, `requires` und `optional` |
 | `GET` | `/core/modules/kiosk/:path` | offen | Kiosk-Seite eines aktiven Moduls (`KioskFrontend`: `moduleId`, `remote`, `exposed`, `entry`), z. B. `terminal`. Inaktiv: `404 modules.inactive` |
@@ -399,7 +400,7 @@ Alle Endpunkte brauchen `backup.manage` (privilegiert, nie für API-Tokens), au�
 | `GET` | `/backup/backups/:id/file` | `backup.manage` | Datei herunterladen (verschlüsselt, wie sie liegt), Audit `backup.downloaded` |
 | `DELETE` | `/backup/backups/:id` | `backup.manage` | Löschen (`204`), Audit `backup.deleted`. Fehler: `backup.foreignNotDeletable` |
 | `POST` | `/backup/restore/check` | `backup.manage` | Assistent, Schritt „Prüfen“ (`{ backupId, passphrase }`): Manifest, Prüfergebnis, Zahlen jetzt und in der Sicherung (`RestoreCheck`) |
-| `POST` | `/backup/restore` | `backup.manage` | Wiederherstellung starten (`{ backupId, passphrase, confirmName, usersInformed: true }`), `202` mit `{ token }` |
+| `POST` | `/backup/restore` | `backup.manage` | Wiederherstellung starten (`{ backupId, passphrase, confirmName, usersInformed: true, realDataReason? }`), `202` mit `{ token }`. Im Testsystem bei einer Sicherung des Echtsystems (`RestoreCheck.realData`) mit Begründung, sonst `400 backup.realDataReasonRequired` |
 | `GET` | `/backup/restore/status?token=` | Token der Wiederherstellung (ohne Anmeldung) | Fortschritt (`RestoreProgress`), auch im Wartungsmodus und nach dem Neustart; unbekanntes Token `404` |
 | `DELETE` | `/backup/previous-databases/:name` | `backup.manage` | „Alte Datenbank löschen“ (`<db>_before_<zeit>`), Audit `backup.previous-database-dropped` |
 

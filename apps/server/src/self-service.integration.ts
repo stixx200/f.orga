@@ -63,11 +63,11 @@ describe('my area', () => {
     expect(mine.upcoming.map((s: { id: string }) => s.id)).toEqual([ids.session]);
     expect(mine.year).toEqual({ sessions: 0, present: 0, excused: 0 });
 
-    const excused = (await put(`/training/me/sessions/${ids.session}/excuse`, { note: 'Spätdienst' }, member).expect(200)).body;
-    expect(excused.own).toEqual({ status: 'excused', note: 'Spätdienst' });
+    const excused = (await put(`/training/me/sessions/${ids.session}/excuse`, { reason: 'work', note: 'Spätdienst' }, member).expect(200)).body;
+    expect(excused.own).toEqual({ status: 'excused', excuseReason: 'work', note: 'Spätdienst' });
     const session = (await get(`/training/sessions/${ids.session}`).expect(200)).body;
     expect(session.attendance).toEqual([expect.objectContaining({ personId: ids.lena, status: 'excused', note: 'Spätdienst' })]);
-    await put(`/training/me/sessions/${ids.foreign}/excuse`, { note: '' }, member).expect(404);
+    await put(`/training/me/sessions/${ids.foreign}/excuse`, { reason: 'private' }, member).expect(404);
 
     expect((await del(`/training/me/sessions/${ids.session}/excuse`, member).expect(200)).body.own).toBeNull();
   });

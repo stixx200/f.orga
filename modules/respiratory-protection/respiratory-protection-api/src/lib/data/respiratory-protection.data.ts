@@ -70,6 +70,8 @@ export class RespiratoryProtectionData implements DeadlineProvider {
           leadDays: rule.leadDays,
           departmentIds: s.departmentIds,
           permission: EVIDENCE,
+          // The medical examination is health data: the weekly e-mail only counts these deadlines.
+          ...(c.key === 'examination' ? { health: true } : {}),
         })),
     )];
   }

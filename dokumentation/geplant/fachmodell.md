@@ -195,6 +195,8 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | --- | --- |
 | Dienst | session (`Session`, `SessionEntity`) |
 | Art des Dienstes | session type (`SessionType`, `key`) |
+| Entschuldigungsgrund (beruflich, privat, krank, Urlaub, sonstiges) | excuse reason (`ExcuseReason`: `work`, `private`, `sick`, `vacation`, `other`; `excuseReason` an der Anwesenheit) |
+| Bemerkung zur Entschuldigung (nur Gruppenführer) | `note` an der Anwesenheit |
 | Kategorie | `category` (`SessionCategory`) |
 | Übungsdienst (Übung, Unterricht, Ausbildung) | `category: 'training'` |
 | Sonderdienst (z. B. Unterstützung Gerätewart, Brandschutzerziehung, Brandsicherheitswache) | `category: 'special-service'` |
@@ -268,7 +270,17 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Zweiten Faktor zurücksetzen | `DELETE /api/core/users/:id/mfa`, Audit `auth.mfa-reset` |
 | Datenschutz verwalten | Recht `core.privacy.manage` |
 | Datenpanne | data breach |
-| Stufe der Installation (Echt-, Test-, Entwicklungssystem) | `FORGA_STAGE` |
+| Stufe der Installation (Echt-, Test-, Entwicklungssystem) | stage (`FORGA_STAGE`: `production`, `test`, `development`; `ForgaStage`, `forgaStage()`, `isTestStage()`, `useStage()`) |
+| Band „Testsystem – nur Demodaten“ | `StageBand` |
+| Im Testsystem gesperrt | locked in test stage (`imports.lockedInTestStage`, `mp-feuer.lockedInTestStage`, `ImportProfile.personData`, `lockedInTestStage`) |
+| Demodaten (erfunden, `npm run seed`) | demo data (`demoData` im Import) |
+| Echtdaten im Testsystem (Wiederherstellung mit Begründung, Löschen nach 7 Tagen) | real data (`RestoreCheck.realData`, `realDataReason`, `realDataUntil`, `REAL_DATA_DAYS`, `deleteExpiredRealData`) |
+| Sicherheitsheader | security headers (`securityHeaders`, `CONTENT_SECURITY_POLICY`, `PERMISSIONS_POLICY`) |
+| Sichere Cookies | `CookiePolicy` (`Secure` bei `https://`-Adresse, HTTPS oder `FORGA_SECURE_COOKIES`) |
+| Stand der Sicherheit (HTTPS, System) | security status (`GET /api/core/security/status`, `SecurityStatus`) |
+| E-Mails ohne Namen | Einstellung `security` (`mailHealthWithoutNames`, `mailAllWithoutNames`) |
+| Verletzte und Getötete im Personal sehen | Recht `incidents.injuries.read`, `Report.injuries` (`hidden`, `injured`, `killed`), `canSeeInjuries` |
+| Reverse Proxy mit HTTPS | Dienst `caddy` (Profile `https`, `https-internal`), `docker/Caddyfile` |
 
 ### Kleiderkammer
 

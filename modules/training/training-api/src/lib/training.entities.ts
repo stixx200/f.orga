@@ -1,7 +1,7 @@
 import { defineEntity, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
 import type { LocalizedText } from '@forga/core-contracts';
-import type { AttendanceStatus, RecordKind, SessionCategory, SessionCompensation, SessionStatus } from '@forga/training-contracts';
+import type { AttendanceStatus, ExcuseReason, RecordKind, SessionCategory, SessionCompensation, SessionStatus } from '@forga/training-contracts';
 
 export const SessionTypeSchema = defineEntity({
   name: 'SessionTypeEntity',
@@ -75,7 +75,9 @@ export const AttendanceSchema = defineEntity({
     checkedInVia: p.string().$type<'qr' | 'info-terminal'>().nullable(),
     /** `false` after a QR check-in until someone with the attendance permission saves the list. */
     confirmed: p.boolean().default(true),
-    /** Reason of an excuse sent by the member. */
+    /** Reason of an excuse sent by the member, as a choice (`ExcuseReason`). */
+    excuseReason: p.string().$type<ExcuseReason>().nullable(),
+    /** Optional text of an excuse sent by the member; only those who record the attendance see it. */
     note: p.text().default(''),
   },
 });

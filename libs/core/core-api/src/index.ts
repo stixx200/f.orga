@@ -49,3 +49,6 @@ export * from './lib/settings/assets.js';
 export * from './lib/plugins/plugin-directory.js';
 export * from './lib/plugins/plugin-package.js';
 export * from './lib/plugins/tar.js';
+export * from './lib/stage.js';
+export * from './lib/security/http-security.js';
+export * from './lib/security/cookie-policy.js';

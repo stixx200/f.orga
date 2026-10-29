@@ -1,7 +1,7 @@
-import { Button, Checkbox, Code, Grid, Group, PasswordInput, Stack, Stepper, Table, Text, TextInput } from '@mantine/core';
+import { Button, Checkbox, Code, Grid, Group, PasswordInput, Stack, Stepper, Table, Text, Textarea, TextInput } from '@mantine/core';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import type { BackupCounts, RestoreCheck, RestoreProgress, RestoreStarted } from '@forga/backup-contracts';
+import { type BackupCounts, REAL_DATA_DAYS, REAL_DATA_REASON_MIN, type RestoreCheck, type RestoreProgress, type RestoreStarted } from '@forga/backup-contracts';
 import { ApiError, formatDateTime, send, setLoginNotice, setMaintenanceHandledByPage, translateCode, useTranslation } from '@forga/web-sdk';
 import { Notice, PageHeader, Panel, StatusBadge, type Tone, useAction } from '@forga/web-ui';
 import { formatBytes, useBackup } from '../api';
@@ -61,7 +61,13 @@ function ConfirmStep({ check, passphrase, onStarted }: { check: RestoreCheck; pa
   const { t, i18n } = useTranslation('backup');
   const [name, setName] = useState('');
   const [informed, setInformed] = useState(false);
-  const start = useAction(() => send<RestoreStarted>('POST', 'backup/restore', { backupId: check.entry.id, passphrase, confirmName: name, usersInformed: true }), { onSuccess: (result) => onStarted(result.token) });
+  // Test system and a backup of the real system: only with a reason, deleted after 7 days.
+  const [reason, setReason] = useState('');
+  const reasonMissing = check.realData && reason.trim().length < REAL_DATA_REASON_MIN;
+  const start = useAction(
+    () => send<RestoreStarted>('POST', 'backup/restore', { backupId: check.entry.id, passphrase, confirmName: name, usersInformed: true, ...(check.realData ? { realDataReason: reason.trim() } : {}) }),
+    { onSuccess: (result) => onStarted(result.token) },
+  );
   const date = formatDateTime(check.manifest.createdAt, i18n.language);
   return (
     <Grid gap="lg">
@@ -90,11 +96,17 @@ function ConfirmStep({ check, passphrase, onStarted }: { check: RestoreCheck; pa
             <Notice kind="error">
               <strong>{t('restore.loss', { date })}</strong> {t('restore.lossText')}
             </Notice>
+            {check.realData && (
+              <>
+                <Notice kind="warning">{t('restore.realData', { days: REAL_DATA_DAYS })}</Notice>
+                <Textarea label={t('restore.realDataReason')} description={t('restore.realDataReasonHint', { min: REAL_DATA_REASON_MIN })} value={reason} onChange={(e) => setReason(e.currentTarget.value)} maxLength={500} autosize minRows={2} required />
+              </>
+            )}
             <TextInput label={t('restore.confirmName')} placeholder={check.brigadeName ?? undefined} value={name} onChange={(e) => setName(e.currentTarget.value)} required />
             <Checkbox label={t('restore.informed')} checked={informed} onChange={(e) => setInformed(e.currentTarget.checked)} />
             <Group justify="flex-end">
               <Button component={Link} to="/backup/backups" variant="default">{t('actions.cancel')}</Button>
-              <Button loading={start.isPending} disabled={!informed || !name.trim()} onClick={() => start.mutate(undefined)}>{t('restore.start')}</Button>
+              <Button loading={start.isPending} disabled={!informed || !name.trim() || reasonMissing} onClick={() => start.mutate(undefined)}>{t('restore.start')}</Button>
             </Group>
           </Stack>
         </Panel>

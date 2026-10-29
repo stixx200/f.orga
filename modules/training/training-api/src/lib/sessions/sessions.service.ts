@@ -94,7 +94,7 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
     const em = this.em.fork();
     if (filter.category) where.push({ type: { $in: (await em.find(SessionTypeEntity, { category: filter.category })).map((t) => t.key) } });
     const sessions = await em.find(SessionEntity, { $and: where }, { populate: ['attendance'], orderBy: { startsAt: 'asc' }, limit: 1000 });
-    return sessions.map((s) => this.toDto(s, []));
+    return sessions.map((s) => this.toDtoFor(user, s, []));
   }
 
   async requireType(em: EntityManager, key: string): Promise<SessionTypeEntity> {
@@ -259,7 +259,7 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
     if (session.status === 'closed') throw new ConflictException({ code: 'training.closed' });
     const row = session.attendance.getItems().find((a) => a.personId === personId);
     if (!row?.checkedInAt || row.confirmed) throw new ConflictException({ code: 'training.noUnconfirmedCheckIn' });
-    if (row.note) Object.assign(row, { status: 'excused', checkedInAt: null, checkedInVia: null, confirmed: true });
+    if (row.excuseReason || row.note) Object.assign(row, { status: 'excused', checkedInAt: null, checkedInVia: null, confirmed: true });
     else session.attendance.remove(row);
     session.status = session.attendance.getItems().some((a) => a.status === 'present') ? 'held' : 'planned';
     await em.flush();
@@ -461,6 +461,15 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
     return others.map((o) => ({ id: o.id, title: o.title, startsAt: o.startsAt.toISOString() }));
   }
 
+  /**
+   * The session for a reader: the text of an excuse (it may say more than the reason) only for those who record the
+   * attendance in one of its departments, e.g. the group leader.
+   */
+  toDtoFor(user: AuthenticatedUser, session: SessionEntity, overlaps: Session['overlaps']): Session {
+    const dto = this.toDto(session, overlaps);
+    return this.can(user, ATTENDANCE, session) ? dto : { ...dto, attendance: dto.attendance.map((a) => ({ ...a, note: '' })) };
+  }
+
   toDto(session: SessionEntity, overlaps: Session['overlaps']): Session {
     return {
       id: session.id,
@@ -492,6 +501,7 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
         checkedInAt: iso(a.checkedInAt),
         checkedInVia: a.checkedInVia ?? null,
         confirmed: a.confirmed,
+        excuseReason: a.excuseReason ?? null,
         note: a.note,
       })),
       overlaps,

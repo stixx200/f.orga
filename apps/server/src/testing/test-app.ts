@@ -1,10 +1,9 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { MikroORM } from '@mikro-orm/core';
-import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { EntityManager } from '@mikro-orm/core';
-import { applyTrustProxy, hashSecret, Session } from '@forga/core-api';
+import { hashSecret, Session } from '@forga/core-api';
 import { resetTestDatabase, TEST_DATABASE_URL } from './test-database';
 
 /** Header that marks requests from the UI (CSRF protection). */
@@ -45,13 +44,11 @@ export async function startTestApp(options: Parameters<typeof import('../app/app
   process.env.FORGA_STATUS_SCHEDULER = 'off';
   process.env.FORGA_SETUP_TOKEN = SETUP_TOKEN;
   // Imported after DATABASE_URL is set: the ORM configuration is read when the module is evaluated.
-  const { AppModule, servePluginFrontends } = await import('../app/app.module.js');
+  const { AppModule } = await import('../app/app.module.js');
+  const { configureHttp } = await import('../app/http.js');
   const moduleRef = await Test.createTestingModule({ imports: [AppModule.register(options)] }).compile();
   const app = moduleRef.createNestApplication();
-  app.setGlobalPrefix('api');
-  applyTrustProxy(app);
-  servePluginFrontends(app, options.plugins?.states ?? []);
-  app.use(cookieParser());
+  configureHttp(app, options.plugins?.states ?? []);
   if (start.keepDatabase) await app.get(MikroORM).migrator.up();
   await app.init();
   const http = request(app.getHttpServer());

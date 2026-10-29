@@ -100,6 +100,7 @@ export class BackupOverviewService {
       running: this.backups.isRunning,
       events: events.toSorted((a, b) => b.at.localeCompare(a.at)).slice(0, 6),
       oldDatabases: await this.restores.previousDatabases(),
+      realData: await this.restores.realDataStatus(),
     };
   }
 

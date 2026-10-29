@@ -1,0 +1,11 @@
+# HTTPS in front of f.orga (optional service `caddy` in docker/compose.yml).
+#   FORGA_DOMAIN  host name of f.orga, e.g. forga.feuerwehr-musterstadt.de
+#   FORGA_TLS     certificate: an e-mail address = Let's Encrypt (the host must be reachable from the internet on
+#                 ports 80/443), "/certs/forga.crt /certs/forga.key" = own certificate of the municipality (folder
+#                 FORGA_CERT_DIR), "internal" = own certificate authority of Caddy (profile https-internal).
+# No access log: Caddy writes none unless configured (IP addresses of the users are personal data).
+{$FORGA_DOMAIN} {
+	tls {$FORGA_TLS}
+	encode zstd gzip
+	reverse_proxy forga:3000
+}

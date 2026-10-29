@@ -64,6 +64,10 @@ export const BackupRestoreSchema = defineEntity({
     errorDetail: p.text().nullable(),
     /** The previous database, kept for 7 days. */
     previousDatabase: p.string().nullable(),
+    /** Test system: why a backup of the real system was restored (real data in the test system). */
+    realDataReason: p.text().nullable(),
+    /** Test system with real data: all data is deleted on this day (7 days after the restore). */
+    realDataUntil: p.datetime().nullable(),
   },
 });
 export class BackupRestore extends BackupRestoreSchema.class {}

@@ -22,6 +22,11 @@ export interface DeadlineInput {
   group?: LocalizedText;
   /** Page of the app where the task is done (absolute route, e.g. `/equipment/items/<id>`). */
   to?: string;
+  /**
+   * Says something about the health of the subject (e.g. a medical examination is required): the weekly e-mail names
+   * no persons for it (setting `security.mailHealthWithoutNames`), only how many there are.
+   */
+  health?: boolean;
 }
 
 /**
@@ -76,6 +81,7 @@ export class DeadlineRegistry {
           stage: stageOf(input.dueOn, asOf),
           ...(input.group ? { group: input.group } : {}),
           ...(input.to ? { to: input.to } : {}),
+          ...(input.health ? { health: true } : {}),
         });
       }
     }

@@ -1,7 +1,7 @@
-import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, Post, Put, Query, Res, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Put, Query, Res, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { Audit, type AuthenticatedUser, CurrentUser, RequirePermissions, ZodPipe } from '@forga/core-api';
+import { Audit, type AuthenticatedUser, CurrentUser, isTestStage, RequirePermissions, ZodPipe } from '@forga/core-api';
 import type { RememberedMapping } from '@forga/core-contracts';
 import { MP_FEUER_READ, MP_FEUER_TRANSFER, type MpFeuerExportInfo, type MpFeuerRemembered, type MpFeuerRun, type RunReport, RunSelection, type RunSummary } from '@forga/mp-feuer-contracts';
 import { MpFeuerExports } from '../exports/export-adapter.js';
@@ -10,6 +10,11 @@ import { MpFeuerRuns } from './runs.service.js';
 
 const MAX_FILES = 40;
 const MAX_SIZE = 200 * 1024 * 1024;
+
+/** The transfer files hold the real data of the brigade: never into the test system (`FORGA_STAGE=test`). */
+function assertNotTestStage(): void {
+  if (isTestStage()) throw new ForbiddenException({ code: 'mp-feuer.lockedInTestStage' });
+}
 
 interface UploadedFileData {
   originalname: string;
@@ -26,6 +31,7 @@ export class RunsController {
   @RequirePermissions(MP_FEUER_TRANSFER)
   @UseInterceptors(FilesInterceptor('files', MAX_FILES, { limits: { fileSize: MAX_SIZE } }))
   upload(@UploadedFiles() files: UploadedFileData[] | undefined, @CurrentUser() user: AuthenticatedUser): Promise<MpFeuerRun> {
+    assertNotTestStage();
     return this.runs.upload(user, files);
   }
 
@@ -53,6 +59,7 @@ export class RunsController {
   @HttpCode(202)
   @RequirePermissions(MP_FEUER_TRANSFER)
   dryRun(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<MpFeuerRun> {
+    assertNotTestStage();
     return this.runs.start(user, id, true);
   }
 
@@ -61,6 +68,7 @@ export class RunsController {
   @HttpCode(202)
   @RequirePermissions(MP_FEUER_TRANSFER)
   apply(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<MpFeuerRun> {
+    assertNotTestStage();
     return this.runs.start(user, id, false);
   }
 

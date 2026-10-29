@@ -26,7 +26,8 @@ test('my area of a member', async ({ browser }) => {
   const excuse = upcoming.getByRole('button', { name: 'Entschuldigen' }).first();
   if (await excuse.count()) {
     await excuse.click();
-    await page.getByRole('dialog').getByLabel('Grund').fill('E2E: Spätdienst');
+    await page.getByRole('dialog').getByRole('radio', { name: 'beruflich' }).check();
+    await page.getByRole('dialog').getByLabel('Bemerkung').fill('E2E: Spätdienst');
     await page.getByRole('dialog').getByRole('button', { name: 'Entschuldigen' }).click();
     await expect(upcoming.getByText('E2E: Spätdienst')).toBeVisible();
     await upcoming.getByRole('button', { name: 'Zurücknehmen' }).first().click();

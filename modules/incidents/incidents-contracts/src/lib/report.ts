@@ -341,6 +341,12 @@ export const Report = z.object({
   findings: z.array(Finding),
   /** Sum of the compensation of all personnel. */
   compensationTotal: z.number(),
+  /**
+   * Own forces injured or killed (health data). `hidden`: the reader is neither author nor releaser and lacks
+   * `incidents.injuries.read`; `injured`/`killed` of the personnel are then `false` and only the counts are given.
+   * `stepUpAvailable`: the reader holds the permission, the second factor would show them.
+   */
+  injuries: z.object({ hidden: z.boolean(), injured: z.number(), killed: z.number(), stepUpAvailable: z.boolean() }),
   version: z.number(),
   /** Latest `bookedAt` of the personnel (`null` = no terminal bookings); sent back as `bookingsKnownAt` when saving. */
   latestBookingAt: z.string().nullable(),

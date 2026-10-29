@@ -24,6 +24,8 @@ export const ImportProfileInfo = z.object({
   description: LocalizedText.optional(),
   fields: z.array(ImportField),
   options: z.array(ImportOption),
+  /** Personal data of the members on the test system (`FORGA_STAGE=test`): not offered, the server refuses it. */
+  lockedInTestStage: z.boolean().default(false),
 });
 export type ImportProfileInfo = z.infer<typeof ImportProfileInfo>;
 
@@ -80,6 +82,11 @@ export const ImportRequest = z.object({
   mapping: ImportMapping,
   options: z.record(z.string(), z.boolean()).default({}),
   mappings: ImportValueMappings.default({}),
+  /**
+   * Made-up demo data (`npm run seed`): the only way to import persons into the test system. The UI never sends it;
+   * the audit entry records it.
+   */
+  demoData: z.boolean().optional(),
 });
 export type ImportRequest = z.input<typeof ImportRequest>;
 

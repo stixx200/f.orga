@@ -49,7 +49,7 @@ export class TrainingData implements DeadlineProvider {
     const em = this.em.fork();
     const attendances = await em.find(AttendanceEntity, { personId: { $in: [...personIds] } });
     if (!attendances.length) return;
-    await em.nativeUpdate(AttendanceEntity, { personId: { $in: [...personIds] } }, { note: '' });
+    await em.nativeUpdate(AttendanceEntity, { personId: { $in: [...personIds] } }, { note: '', excuseReason: null });
     await em.nativeDelete(HistoryEntry, { entity: 'training.attendance', entityId: { $in: attendances.map((a) => a.id) } });
   }
 

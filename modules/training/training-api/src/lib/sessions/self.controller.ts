@@ -20,7 +20,7 @@ const toMySession = (s: SessionEntity, personId: string): MySession => {
     stationId: s.stationId ?? null,
     departmentIds: s.departmentIds,
     status: s.status,
-    own: own ? { status: own.status, note: own.note } : null,
+    own: own ? { status: own.status, excuseReason: own.excuseReason ?? null, note: own.note } : null,
   };
 };
 
@@ -69,8 +69,8 @@ export class TrainingSelfController {
     const session = await this.ownSession(em, id, person.departmentIds);
     const row = session.attendance.getItems().find((a) => a.personId === person.id);
     if (row?.status === 'present') throw new ConflictException({ code: 'training.alreadyPresent' });
-    if (row) Object.assign(row, { status: 'excused', note: input.note });
-    else session.attendance.add(em.create(AttendanceEntity, { session, personId: person.id, status: 'excused', note: input.note, checkedInAt: null, breathingApparatus: false, injured: false }));
+    if (row) Object.assign(row, { status: 'excused', excuseReason: input.reason, note: input.note });
+    else session.attendance.add(em.create(AttendanceEntity, { session, personId: person.id, status: 'excused', excuseReason: input.reason, note: input.note, checkedInAt: null, breathingApparatus: false, injured: false }));
     await em.flush();
     return toMySession(session, person.id);
   }

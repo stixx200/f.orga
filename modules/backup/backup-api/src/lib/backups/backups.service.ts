@@ -7,6 +7,7 @@ import { EntityManager } from '@mikro-orm/core';
 import {
   Audit,
   FORGA_CORE_OPTIONS,
+  forgaStage,
   type ForgaCoreOptions,
   Notifications,
   readTarGz,
@@ -380,6 +381,7 @@ export class BackupsService {
       appVersion: FORGA_VERSION,
       instance: backupEnvironment.instance(),
       instanceId: await this.settings.instanceId(),
+      stage: forgaStage(),
       createdAt: at.toISOString(),
       trigger,
       modules: this.options.modules.map(({ manifest }) => ({ id: manifest.id, version: manifest.version, plugin: plugins.has(manifest.id) })),

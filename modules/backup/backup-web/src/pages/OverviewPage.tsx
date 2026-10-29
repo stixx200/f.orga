@@ -142,6 +142,11 @@ export function OverviewPage() {
               {t(`warnings.${warning}`)}
             </Notice>
           ))}
+          {overview.realData && (
+            <Notice kind="warning">
+              {t('overview.realData', { date: formatDate(overview.realData.deleteAt, i18n.language), reason: overview.realData.reason, user: overview.realData.userName ?? '–' })}
+            </Notice>
+          )}
           {overview.configured && !overview.settingsSaved && (
             <Notice kind="info" action={<Button component={Link} to="/backup/settings" size="compact-sm" variant="default">{t('actions.settings')}</Button>}>
               {t('overview.notSetUp')}

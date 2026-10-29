@@ -1,5 +1,6 @@
 import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
+import { isTestStage } from '@forga/core-api';
 import { BackupRun } from '../backup.entities.js';
 import { Maintenance } from '../restore/maintenance.js';
 import { RestoreService } from '../restore/restore.service.js';
@@ -13,6 +14,7 @@ const CHECK_INTERVAL_MS = 60_000;
 /**
  * Scheduled backups: checks every minute whether the daily backup is due (Europe/Berlin), and once a day drops
  * previous databases of restores older than 7 days. Off with `FORGA_BACKUP_SCHEDULER=off`, paused in maintenance.
+ * On the test system real data restored from the real system is deleted after 7 days, also without scheduled backups.
  */
 @Injectable()
 export class BackupScheduler implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -29,7 +31,7 @@ export class BackupScheduler implements OnApplicationBootstrap, OnApplicationShu
   ) {}
 
   onApplicationBootstrap(): void {
-    if (!backupEnvironment.schedulerEnabled()) return;
+    if (!backupEnvironment.schedulerEnabled() && !isTestStage()) return;
     this.timer = setInterval(() => {
       this.tick(new Date()).catch((error: unknown) => this.logger.error('Backup schedule check failed', error instanceof Error ? error.stack : String(error)));
     }, CHECK_INTERVAL_MS);
@@ -60,11 +62,13 @@ export class BackupScheduler implements OnApplicationBootstrap, OnApplicationShu
   }
 
   async tick(now: Date): Promise<void> {
-    await this.runIfDue(now);
+    const scheduled = backupEnvironment.schedulerEnabled();
+    if (scheduled) await this.runIfDue(now);
     const today = berlinParts(now).date;
     if (this.cleanedOn !== today && !this.maintenance.current) {
       this.cleanedOn = today;
-      await this.restores.cleanUp(now);
+      if (await this.restores.deleteExpiredRealData(now)) return;
+      if (scheduled) await this.restores.cleanUp(now);
     }
   }
 }

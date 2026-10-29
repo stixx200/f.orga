@@ -49,6 +49,8 @@ export const REVIEW = 'incidents.reports.review';
 export const SELF = 'incidents.self';
 /** Costs and notes of the whole incident (commander). */
 export const COSTS = 'incidents.costs';
+/** "Injured"/"killed" in the personnel (health data); authors and releasers see them without it. */
+export const INJURIES = 'incidents.injuries.read';
 
 const iso = (date: Date | null | undefined) => (date ? date.toISOString() : null);
 
@@ -105,6 +107,9 @@ export interface BookingOrigin {
   bookedAt: Date | null;
   terminalId: string | null;
 }
+
+/** A personnel entry by person, guests by name. */
+const entryKey = (p: { personId?: string | null; guestName: string }) => (p.personId ? `p:${p.personId}` : `g:${normalized(p.guestName)}`);
 
 const time = (value: string | Date | null | undefined) => (value ? new Date(value).getTime() : null);
 
@@ -234,6 +239,40 @@ export class ReportsService {
     if (report.departmentId) return user.can(READ, report.departmentId);
     const unit = this.unitOf(report);
     return user.grant(READ) === 'brigade' || Boolean(unit && [unit.readPermission, unit.writePermission, unit.reviewPermission].some((p) => user.can(p)));
+  }
+
+  /**
+   * "Injured"/"killed" of the personnel (health data): the author of the report, releasers and holders of
+   * `incidents.injuries.read` for the department (brigade-wide for reports of a unit).
+   */
+  canSeeInjuries(user: AuthenticatedUser, report: Pick<ReportEntity, 'departmentId' | 'authorPersonId'>): boolean {
+    if (user.grant(RELEASE) === 'brigade') return true;
+    if (report.authorPersonId && user.personId === report.authorPersonId) return true;
+    return report.departmentId ? user.can(INJURIES, report.departmentId) : user.grant(INJURIES) === 'brigade';
+  }
+
+  /** The report for a reader: without the names of injured or killed persons unless `canSeeInjuries`, only counts. */
+  async toDtoFor(user: AuthenticatedUser, em: EntityManager, report: ReportEntity, context?: ReportContext): Promise<Report> {
+    const dto = await this.toDto(em, report, context);
+    if (this.canSeeInjuries(user, report)) return dto;
+    const stepUpAvailable = report.departmentId ? user.needsStepUp(INJURIES, report.departmentId) : user.needsStepUp(INJURIES);
+    return { ...dto, personnel: dto.personnel.map((p) => ({ ...p, injured: false, killed: false })), injuries: { ...dto.injuries, hidden: true, stepUpAvailable } };
+  }
+
+  /**
+   * Who may not see injuries saves the personnel without them: stored values stay (by person, guests by name), new
+   * entries get none.
+   */
+  private keepInjuries(report: ReportEntity, input: ParsedReportInput): ParsedReportInput {
+    const stored = report.personnel.getItems();
+    const byKey = new Map(stored.map((p) => [entryKey({ personId: p.personId ?? null, guestName: p.guestName }), p]));
+    return {
+      ...input,
+      personnel: input.personnel.map((p) => {
+        const before = byKey.get(entryKey(p));
+        return { ...p, injured: before?.injured ?? false, killed: before?.killed ?? false };
+      }),
+    };
   }
 
   /** Releasers write every report; writers of the department its reports; the writers of a unit its reports. */
@@ -444,8 +483,9 @@ export class ReportsService {
    * Validates and applies the content; releasers lock the report by editing it. Bookings of an info terminal the
    * client did not know yet stay (see `mergeBookings`).
    */
-  async save(em: EntityManager, report: ReportEntity, input: ParsedReportInput, user: AuthenticatedUser): Promise<void> {
-    assertVersion(report, input.version);
+  async save(em: EntityManager, report: ReportEntity, sent: ParsedReportInput, user: AuthenticatedUser): Promise<void> {
+    assertVersion(report, sent.version);
+    const input = this.canSeeInjuries(user, report) ? sent : this.keepInjuries(report, sent);
     await this.assertNotLedExternally(report);
     const { personnel, preserve, origins } = this.mergeBookings(report, input);
     const result = { ...input, personnel: [...[...preserve].map(entryToInput), ...personnel] };
@@ -819,6 +859,7 @@ export class ReportsService {
       })),
       findings: await this.findings(em, report, ctx),
       compensationTotal: Math.round(personnel.reduce((sum, p) => sum + p.compensation.amount, 0) * 100) / 100,
+      injuries: { hidden: false, injured: personnel.filter((p) => p.injured && !p.killed).length, killed: personnel.filter((p) => p.killed).length, stepUpAvailable: false },
       version: report.version,
       latestBookingAt: latestBookingAt(report),
     };

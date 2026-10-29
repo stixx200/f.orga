@@ -30,7 +30,8 @@ Umgesetzt ist (siehe [implementiert/architektur.md](../implementiert/architektur
 - **Protokolle:** Audit-Log (Anmeldungen, Rechte, Exporte, Importe, Impersonation mit Grund), Historie aller Änderungen.
 - **Auskunft** `GET /api/core/export/person/:personId`: JSON mit internen IDs aus allen Modulen außer Kostenersatz und Infoterminal, im Audit-Log (`data.person-exported`). Keine Angaben nach Art. 15 Abs. 1, keine lesbare Fassung.
 - **Aufbewahrung** ([Aufbewahrungsplan](../implementiert/aufbewahrung.md), Einstellung `privacy.retention`): Frist und Aktion je Datenkategorie (Grunddaten und Personalakte Ausgeschiedener, Einsätze, Dienste, ausgesonderte Geräte und Fahrzeuge, Kostenbescheide, Auszahlungsläufe, Audit-Log, Historie) mit Aussonderung und Anbietung an das Archiv; Standard nichts außer Audit-Log 2 Jahre. Import-Uploads 24 Stunden, Zeilen von MP-Feuer-Läufen 7 Tage. `PersonDataRegistry` mit Beiträgen von Core, Atemschutz, Kleiderkammer, Beförderungen, Diensten, Entschädigungen, Geräten und Einsatzleiter vom Dienst.
-- **Sicherheit:** scrypt, Sitzung 14 Tage als `HttpOnly`-Cookie, CSRF-Header, Anmeldesperre, API-Tokens als Hash mit Bereichen, OIDC, verschlüsselte Geräteschlüssel, zweiter Faktor (TOTP) als Step-up bei sensiblen Daten und Verwaltung ([Datenschutz, umgesetzt](../implementiert/datenschutz.md)); `Secure`-Cookie nur mit `FORGA_SECURE_COOKIES=true`. **HTTPS ist nicht eingerichtet** ([Betrieb](../implementiert/betrieb.md#einschränkungen-des-aktuellen-stands)).
+- **Sicherheit:** scrypt, Sitzung 14 Tage als `HttpOnly`-Cookie, CSRF-Header, Anmeldesperre, API-Tokens als Hash mit Bereichen, OIDC, verschlüsselte Geräteschlüssel, zweiter Faktor (TOTP) als Step-up bei sensiblen Daten und Verwaltung ([Datenschutz, umgesetzt](../implementiert/datenschutz.md)).
+- **Phase 1** ([implementiert/datenschutz.md](../implementiert/datenschutz.md)): HTTPS mit Caddy, `Secure`-Cookies bei `https://`-Adresse, Sicherheitsheader, `/api/docs` nur angemeldet (L1); `FORGA_STAGE` mit Band und Sperren im Testsystem (L6); Verletzte im Bericht nur mit `incidents.injuries.read`, Hinweise an Freitexten, Entschuldigungsgrund als Auswahl (L5, Teil); E-Mails mit Gesundheitsbezug ohne Namen (L18, Teil).
 - **Mein Bereich:** Kontakt und Bankverbindung selbst ändern, eigene Dienste, Einsätze, Entschädigung, Atemschutz, Schutzausrüstung.
 
 ## Auskunft nach Art. 15 als PDF
@@ -114,12 +115,12 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 | Nr. | Thema | DSGVO | Priorität |
 | --- | --- | --- | --- |
-| L1 | HTTPS, sichere Cookies, Sicherheitsheader | Art. 32 | kritisch |
+| L1 | HTTPS, sichere Cookies, Sicherheitsheader | Art. 32 | kritisch (umgesetzt) |
 | L2 | Zweiter Faktor beim Öffnen sensibler Daten (Step-up) | Art. 32 | kritisch |
 | L3 | Verständliche Auskunft mit Angaben nach Art. 15 Abs. 1 | Art. 12, 15 | kritisch |
 | L4 | Informationspflichten: Datenschutzhinweis, erste Anmeldung, Information bei Übernahme | Art. 13, 14 | kritisch |
-| L5 | Gesundheitsdaten: Zugriff, Protokoll, Weitergabe per E-Mail | Art. 9, 32 | kritisch |
-| L6 | Echtdaten nur im Echtsystem; Test- und Entwicklungsdaten | Art. 5 Abs. 1 f, 32 | kritisch |
+| L5 | Gesundheitsdaten: Zugriff, Protokoll, Weitergabe per E-Mail | Art. 9, 32 | kritisch (teilweise umgesetzt) |
+| L6 | Echtdaten nur im Echtsystem; Test- und Entwicklungsdaten | Art. 5 Abs. 1 f, 32 | kritisch (umgesetzt) |
 | L7 | Betroffenenanfragen mit Frist; Löschung und Einschränkung je Person | Art. 12, 17, 18 | kritisch |
 | L8 | Verzeichnis der Verarbeitungstätigkeiten und technische Maßnahmen | Art. 30, 32 | wichtig |
 | L9 | Einwilligungen erfassen, nachweisen, widerrufen (auch Minderjährige) | Art. 6, 7, 8 | wichtig |
@@ -131,7 +132,7 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 | L15 | Protokollierung von Lesezugriffen; Transparenz der Impersonation | Art. 5 Abs. 2, 32 | wichtig |
 | L16 | Sitzungen: Leerlauf-Abmeldung, Geräteübersicht | Art. 32 | wichtig |
 | L17 | Verschlüsselung der Sicherungen und der gespeicherten Daten | Art. 32 | wichtig |
-| L18 | E-Mails: Inhalt der Sammel-E-Mail und Benachrichtigungen | Art. 5 Abs. 1 c, f, 32 | wichtig |
+| L18 | E-Mails: Inhalt der Sammel-E-Mail und Benachrichtigungen | Art. 5 Abs. 1 c, f, 32 | wichtig (teilweise umgesetzt) |
 | L19 | Widerspruch | Art. 21 | wichtig |
 | L20 | Unterstützung bei Datenpannen | Art. 33, 34 | wichtig |
 | L21 | Benutzer ohne Person; gesperrte Konten | Art. 5 Abs. 1 e | empfohlen |
@@ -146,9 +147,8 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L1 HTTPS, sichere Cookies, Sicherheitsheader (kritisch)
 
-- **Heute:** Der Stack spricht nur HTTP auf Port 8080; `FORGA_SECURE_COOKIES` ist standardmäßig aus. Keine HSTS-, CSP-, `X-Frame-Options`- oder `Referrer-Policy`-Header (nur Anhänge und Wappen haben eine CSP). Passwörter, Sitzungen und Gesundheitsdaten gingen im Netz unverschlüsselt.
-- **Soll:** Im Echtbetrieb nur HTTPS (Art. 32 Abs. 1 a „Verschlüsselung“).
-- **Umsetzung:** Optionaler Dienst `caddy` in `docker/compose.yml` (TLS per Let's Encrypt oder eigenes Zertifikat der Gemeinde), Profil „intern“ mit eigenem Zertifikat. Ist `brigade.publicUrl` eine `https://`-Adresse, gelten `Secure`-Cookies automatisch. Sicherheitsheader global (HSTS nur bei HTTPS, CSP `default-src 'self'` mit den Modul-Frontends, `frame-ancestors 'none'`, `Referrer-Policy: same-origin`, `Permissions-Policy` mit Kamera/NFC nur für `/scan`). Die Einrichtungsliste und eine Plakette in „Einstellungen → Datenschutz → Sicherheit“ warnen, solange die Anwendung über HTTP aufgerufen wird. `/api/docs` nur angemeldet.
+- **Umgesetzt:** siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#https-und-sicherheitsheader-l1). Abweichung vom Konzept: Kamera und NFC gelten in der `Permissions-Policy` für die ganze Anwendung (eigener Ursprung), nicht nur für `/scan`, weil die Shell eine einzige Seite ist und auch Kleiderkammer, Geräte, Führerscheinkontrolle und Infoterminal die Kamera brauchen.
+- **Offen:** Plakette „HTTPS: nein“ im Verzeichnis der Verarbeitungstätigkeiten (L8).
 - **Organisatorisch:** Betrieb nur im Netz der Gemeinde oder hinter TLS; Zertifikat und Erneuerung beim IT-Dienstleister.
 
 ### L2 Zweiter Faktor beim Öffnen sensibler Daten (kritisch)
@@ -176,21 +176,17 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L5 Gesundheitsdaten (kritisch)
 
-- **Heute:** Gesundheitsdaten (Art. 9) liegen vor als Ergebnis und Einschränkungen der Eignungsuntersuchung (geschützt durch `examinations`), als „verletzt/getötet“ im Personal eines Berichts (sichtbar für jeden mit Leserecht auf den Bericht), mittelbar in Ruhezeiten, Übernahme in die Altersabteilung „aus gesundheitlichen Gründen“, Entschuldigungstexten der Dienste und freien Bemerkungen. Lesezugriffe werden nicht protokolliert. Die Ampel auf Rot geht per E-Mail mit Namen an Gerätewarte und Abteilungskommandanten; die Frist „Eignungsuntersuchung erforderlich“ nach „Bedenken“ steht mit Namen in der Sammel-E-Mail.
+- **Heute:** Gesundheitsdaten (Art. 9) liegen vor als Ergebnis und Einschränkungen der Eignungsuntersuchung (geschützt durch `examinations`), als „verletzt/getötet“ im Personal eines Berichts (nur Verfasser, Freigeber und `incidents.injuries.read`), mittelbar in Ruhezeiten, Übernahme in die Altersabteilung „aus gesundheitlichen Gründen“, Entschuldigungen (Grund als Auswahl, Text nur für den Gruppenführer) und freien Bemerkungen. Lesezugriffe werden nicht protokolliert.
 - **Soll:** Zugriff nur, wer es für seine Aufgabe braucht; Nachvollziehbarkeit; keine Gesundheitsangaben in E-Mails.
-- **Umsetzung:**
-  - Personal im Bericht: „verletzt“/„getötet“ nur für Verfasser, Freigeber und `incidents.injuries.read` (neu; Standard Kommandant). Andere Leser sehen „1 eigene Verletzte“ ohne Namen. Die Statistik zählt weiter.
+- **Umgesetzt:** Verletzte im Bericht nur mit Recht, Hinweise an Freitexten, Entschuldigungsgrund als Auswahl ([implementiert](../implementiert/datenschutz.md#gesundheitsdaten-l5-teil)).
+- **Offen:**
   - Kennzeichen `health` an Feldern und Entitäten im Manifest (`personData.categories`), ausgewertet in Auskunft, Verzeichnis und Leseprotokoll (L15).
   - Leseprotokoll für Untersuchungen (`respiratory-protection.examination-viewed`) und für die Liste fällige Untersuchungen.
-  - Hinweis an Freitextfeldern (Bemerkung, Entschuldigung, Ruhezeit): „Keine Gesundheitsangaben eintragen“; Entschuldigungsgrund als Auswahl (beruflich, privat, krank, Urlaub, sonstiges) statt Freitext, Freitext optional und nur für den Gruppenführer.
-  - E-Mails ohne Gesundheitsbezug, siehe L18.
 - **Organisatorisch:** Rechtsgrundlage für Untersuchungsdaten klären; Ärzte liefern nur die Bescheinigung „Bedenken/keine Bedenken“, keine Befunde.
 
 ### L6 Echtdaten nur im Echtsystem (kritisch)
 
-- **Heute:** Das Testsystem ist für Demodaten gedacht ([Betrieb](../implementiert/betrieb.md)), aber nichts verhindert Echtdaten darin; das [Sicherungsmodul](module/backup.md) sieht vor, eine Sicherung des Echtsystems im Testsystem wiederherzustellen. Echte MP-Feuer-Dateien liegen auf dem Entwicklungsrechner im Ordner `local/`, der nur über `.git/info/exclude` und nicht über `.gitignore` von Git ausgenommen ist.
-- **Soll:** Personendaten nur dort, wo der Zweck es verlangt; Entwicklung und Tests mit erfundenen Daten.
-- **Umsetzung:** Umgebungsvariable `FORGA_STAGE` (`production`, `test`, `development`). Im Testsystem zeigt jede Seite das Band „Testsystem – nur Demodaten“; Datenübernahme aus MP-Feuer, Tabellen-Import von Personen und Wiederherstellung einer Sicherung des Echtsystems verlangen dort die Eingabe „Echtdaten im Testsystem“ mit Grund (Audit) oder sind gesperrt (siehe Entscheidung). `.gitignore` bekommt `local/`, `*.xlsx`, `MPTRA_*.zip`, `*.dump`, `*.forgabackup` außerhalb von Testdaten. `npm run seed` lehnt ein System mit `FORGA_STAGE=production` ab.
+- **Umgesetzt:** `FORGA_STAGE` mit Band, Sperren und Löschen nach 7 Tagen, `.gitignore`, `npm run seed` nicht ins Echtsystem; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#echt--test--und-entwicklungssystem-l6). Abweichung: Der Tabellen-Import von Personen nimmt im Testsystem die als Demodaten gekennzeichneten Daten von `npm run seed` an (`demoData`), sonst ließe sich das Testsystem nicht füllen; die Oberfläche bietet das nicht an.
 - **Organisatorisch:** Echte Dateien nach der Umstellung löschen; Entwicklungsrechner mit verschlüsselter Festplatte; Testsystem nicht für alle Benutzer freigeben.
 
 ### L7 Betroffenenanfragen, Löschung und Einschränkung (kritisch)
@@ -286,8 +282,8 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L18 E-Mails (wichtig)
 
-- **Heute:** Die Sammel-E-Mail nennt je Frist Titel und Personen („Eignungsuntersuchung erforderlich – Funke, Felix“), die Ampel-Benachrichtigung den Namen der Person mit Rot. E-Mails gehen über den SMTP-Server der Einstellung, ob mit TLS, hängt von der Einstellung ab.
-- **Umsetzung:** Einstellung „E-Mails ohne Personennamen“ (Standard an für Fristen mit Gesundheitsbezug, wählbar für alle): „3 Fristen im Atemschutz, davon 1 überfällig – in f.orga ansehen“. Fristarten tragen `health: true`. SMTP ohne TLS nur mit Warnung. Keine Anhänge mit Personendaten (Auskunft nur zum Herunterladen).
+- **Umgesetzt:** Einstellung `security` mit „Fristen mit Gesundheitsbezug ohne Namen“ (Standard an) und „Alle Fristen ohne Namen“, Fristen mit `health: true` (Eignungsuntersuchung), Ampel auf Rot ohne Namen, Warnung bei SMTP ohne TLS; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#e-mails-ohne-gesundheitsbezug-l18-teil).
+- **Offen:** Die Einstellung zieht mit auf die Seite „Verwaltung → Datenschutz → Sicherheit“ (heute „Einstellungen → Sicherheit“). Keine Anhänge mit Personendaten (Auskunft nur zum Herunterladen, siehe L3).
 - **Organisatorisch:** E-Mail-Adressen der Gemeinde statt privater Anbieter, wo möglich.
 
 ### L19 Widerspruch (wichtig)
@@ -381,10 +377,9 @@ Abschnitte in `core.setting`: `privacy` (erweitert), `privacy.contacts`, `privac
 | --- | --- | --- | --- |
 | `core.privacy.manage` | Gesamtwehr | Anfragen, Auskünfte, Löschung, Einschränkung, Einwilligungen erfassen, Einstellungen Datenschutz, Verzeichnis | `administrator`, auf Wunsch `administration` |
 | `core.privacy.consents` | Abteilung | Einwilligungen von Personen der Abteilung erfassen und widerrufen | `commander`, `department-commander` |
-| `incidents.injuries.read` | Abteilung | Verletzte und Getötete im Personal sehen | `commander` |
 | `masterdata.lists.contact` | Abteilung | Listen mit Kontaktdaten ausgeben | `commander`, `department-commander` |
 
-`core.privacy.manage` gilt als privilegiert (`isPrivileged`) und trägt `stepUp` (siehe [Step-up](#step-up-zweiter-faktor-bei-sensiblen-daten)); ebenso `incidents.injuries.read`.
+`core.privacy.manage` gilt als privilegiert (`isPrivileged`) und trägt `stepUp` (siehe [Step-up](#step-up-zweiter-faktor-bei-sensiblen-daten)); ebenso das umgesetzte `incidents.injuries.read` (Abteilung, Vorlage `commander`, [umgesetzt](../implementiert/datenschutz.md#gesundheitsdaten-l5-teil)), sobald es das Kennzeichen gibt.
 
 ## Entscheidungen
 
@@ -405,7 +400,7 @@ Alle Entscheidungen sind festgelegt (wie empfohlen, Nr. 2 abweichend).
 
 | Phase | Inhalt | Lücken |
 | --- | --- | --- |
-| 1 – vor dem Echtbetrieb | HTTPS mit Caddy und Sicherheitsheader; `FORGA_STAGE` mit Band im Testsystem und `.gitignore`; E-Mails ohne Gesundheitsbezug; Verletzte nur mit Recht (mit `stepUp`); der zweite Faktor als Step-up ist umgesetzt | L1, L5 (Teil), L6, L18 |
+| 1 – vor dem Echtbetrieb | umgesetzt: zweiter Faktor als Step-up, HTTPS mit Caddy und Sicherheitsheader, `FORGA_STAGE` mit Band und Sperren im Testsystem, E-Mails ohne Gesundheitsbezug, Verletzte nur mit Recht (mit `stepUp`) ([implementiert](../implementiert/datenschutz.md)) | L1, L2, L5 (Teil), L6, L18 (Teil) |
 | 2 – Rechte der Betroffenen | Datenschutzhinweis und erste Anmeldung; Anfragen mit Frist; Auskunft als PDF mit `describePerson` in allen Modulen; Einschränkung | L3, L4, L7 (Anfragen, Einschränkung), L19 |
 | 3 – Nachweise | Verzeichnis aus den Manifesten mit technischen Maßnahmen; Einwilligungen; Berichtigung in Mein Bereich; Leseprotokoll; Impersonation sichtbar | L8, L9, L12, L15, L20 |
 | 4 – Löschen und Minimieren | Löschprüfung je Modul; vollständige Anonymisierung mit Startprüfung; Daten Dritter; abschaltbare Felder; Zweck der Listen; Aufbewahrungsplan | L7 (Löschung), L10, L11, L13, L14, L29 |

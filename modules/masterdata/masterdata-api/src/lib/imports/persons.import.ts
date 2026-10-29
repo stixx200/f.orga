@@ -112,6 +112,8 @@ export class PersonsImport {
         en: 'Create or update persons, e.g. from the MP-Feuer export "Personal.xlsx". Persons are matched by personnel number, otherwise by first and last name (and date of birth).',
       },
       permission: WRITE,
+      // Persons of the brigade: never into the test system (FORGA_STAGE=test), apart from the demo data of the seed.
+      personData: true,
       fields: FIELDS,
       options: [
         { key: 'createDepartments', label: { de: 'Fehlende Abteilungen anlegen', en: 'Create missing departments' }, default: false },
