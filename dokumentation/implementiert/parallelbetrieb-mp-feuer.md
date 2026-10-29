@@ -58,7 +58,7 @@ Zum Beispiel wöchentlich und vor jedem Auszahlungslauf:
 1. In MP-Feuer Berichte fertig schreiben; was abgerechnet werden kann, im Zusatzfeld 2 „zur Abrechnung freigegeben“ setzen.
 2. In MP-Feuer die Transferdateien aller Abteilungen exportieren (je Abteilung eine `MPTRA_…zip`, auch „Gesamtfeuerwehr“ für die EvD-Berichte).
 3. In f.orga „Verwaltung → MP-Feuer → Neue Übernahme“: alle Dateien hochladen. Abteilungen, „Einsatzberichte als“, übersprungene Archive, Datensätze und Optionen sind wie bei der letzten Übernahme vorbelegt (Einstellungsabschnitt `mp-feuer.remembered`). Bekannte Bezeichnungen erkennt der Lauf über die Zuordnungen des Moduls.
-4. Datensätze wählen: „Personen“ nur, wenn neue Mitglieder in MP-Feuer stehen; damit f.orga führend bleibt, die Option „Vorhandene Personen aktualisieren“ ausschalten. Datensätze, die in f.orga geführt werden, ausschalten. Die Auswahl wird mit der Übernahme gemerkt.
+4. Datensätze wählen: „Personen“ nur, wenn neue Mitglieder in MP-Feuer stehen; damit f.orga führend bleibt, die Option „Vorhandene Personen aktualisieren“ ausschalten. Datensätze, die in f.orga geführt werden, ausschalten. Beim Einsatzpersonal begrenzt „Erst ab“ die Übernahme auf Berichte ab einem Datum (z. B. 01.01.2025), ältere Einsätze bleiben dann in MP-Feuer. Die Auswahl wird mit der Übernahme gemerkt.
 5. Probelauf, offene Bezeichnungen zuordnen, erneut prüfen, „Übernehmen …“. Die Übernahme läuft im Hintergrund in Teilen; das Ergebnis steht danach im Bericht des Laufs (auch unter „Verlauf“).
 6. In f.orga: Kostenersatz → kostenpflichtige Einsätze → Bescheid erstellen und erlassen; Entschädigungen → Auszahlungslauf mit den neuen Posten.
 

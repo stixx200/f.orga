@@ -199,6 +199,7 @@ export class MpFeuerRuns implements OnApplicationBootstrap {
         rows: locked ? null : rows,
         enabled: !locked && (known?.enabled ?? true),
         options: Object.fromEntries(offered.map((o) => [o.key, known?.options[o.key] ?? o.default])),
+        from: definition.dateField ? (known?.from ?? null) : null,
         locked,
         counts: null,
         results: [],
@@ -237,6 +238,10 @@ export class MpFeuerRuns implements OnApplicationBootstrap {
         const offered = this.options(definition).map((o) => o.key);
         dataset.enabled = !dataset.locked && chosen.enabled;
         dataset.options = { ...dataset.options, ...Object.fromEntries(Object.entries(chosen.options).filter(([key]) => offered.includes(key))) };
+        if (chosen.from !== undefined) {
+          if (chosen.from && !definition.dateField) throw new BadRequestException({ code: 'mp-feuer.noDateFilter', profile: dataset.profile });
+          dataset.from = chosen.from;
+        }
       }
     }
     if (selection.mappings) {
@@ -308,7 +313,7 @@ export class MpFeuerRuns implements OnApplicationBootstrap {
       const archives = new Map(run.archives.map((a) => [a.key, a]));
       const plans = datasets.map((dataset) => {
         const definition = DATASETS.find((d) => d.profile === dataset.profile)!;
-        const rows = this.prepareRows(dataset.rows ?? [], archives, definition);
+        const rows = this.prepareRows(dataset.rows ?? [], archives, definition, dataset.from ?? null);
         return { dataset, definition, parts: splitIntoParts(rows, this.partSize, definition.groups) };
       });
       const total = plans.reduce((sum, p) => sum + p.parts.reduce((s, part) => s + part.length, 0), 0);
@@ -398,10 +403,12 @@ export class MpFeuerRuns implements OnApplicationBootstrap {
   }
 
   /** Rows of a dataset without skipped archives, with the department and unit chosen for their archive. */
-  private prepareRows(rows: readonly TransferRow[], archives: ReadonlyMap<string, RunArchive>, definition: DatasetDefinition): NumberedRow[] {
+  private prepareRows(rows: readonly TransferRow[], archives: ReadonlyMap<string, RunArchive>, definition: DatasetDefinition, from: string | null): NumberedRow[] {
     return rows.flatMap((r, index) => {
       const archive = archives.get(r.archive);
       if (!archive || archive.skip) return [];
+      // Rows before the "from" date stay out (row numbers keep their place in the file).
+      if (from && definition.dateField && (r.values[definition.dateField] ?? '').slice(0, 10) < from) return [];
       const values = { ...r.values };
       if ('department' in values && archive.department) values['department'] = archive.department;
       if (definition.units && archive.unit) values['unit'] = archive.unit;
@@ -419,7 +426,7 @@ export class MpFeuerRuns implements OnApplicationBootstrap {
         ...current.archives,
         ...Object.fromEntries(run.archives.map((a) => [a.key, { label: a.label, department: a.department, unit: a.unit, skip: a.skip, at }])),
       },
-      datasets: { ...current.datasets, ...Object.fromEntries(datasets.map((d) => [d.profile, { enabled: d.enabled, options: d.options }])) },
+      datasets: { ...current.datasets, ...Object.fromEntries(datasets.map((d) => [d.profile, { enabled: d.enabled, options: d.options, from: d.from ?? null }])) },
     });
   }
 
@@ -535,6 +542,8 @@ export class MpFeuerRuns implements OnApplicationBootstrap {
       enabled: d.enabled,
       options: d.options,
       optionInfo: definition ? this.options(definition) : [],
+      from: d.from ?? null,
+      fromAvailable: !!definition?.dateField,
       locked: d.locked,
       counts: d.counts ?? null,
       unmatched: d.unmatched,
@@ -556,7 +565,7 @@ export class MpFeuerRuns implements OnApplicationBootstrap {
   private signature(run: MpFeuerRunEntity, datasets: readonly MpFeuerRunDatasetEntity[]): string {
     return stable({
       archives: run.archives.map((a) => [a.key, a.department, a.unit, a.skip]),
-      datasets: datasets.map((d) => [d.profile, d.enabled, d.options]),
+      datasets: datasets.map((d) => [d.profile, d.enabled, d.options, d.from ?? null]),
       mappings: run.mappings,
     });
   }
