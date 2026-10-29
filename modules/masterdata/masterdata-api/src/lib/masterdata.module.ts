@@ -1,6 +1,6 @@
 import { Global, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, OrganizationDirectory, RetentionRegistry, RoleAssignment, SearchRegistry } from '@forga/core-api';
+import { AccessLog, AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, OrganizationDirectory, RetentionRegistry, RoleAssignment, SearchRegistry } from '@forga/core-api';
 import {
   CATALOG_REFERENCES,
   MASTERDATA_LICENSE_SELF_CHECK,
@@ -39,7 +39,10 @@ import { MasterdataDescription } from './data/masterdata.description.js';
 import { MasterdataRetention } from './data/masterdata.retention.js';
 import { OrganizationReferenceRegistry } from './organization/references.js';
 import { PersonHoldingsRegistry } from './persons/holdings.js';
-import { PersonsController } from './persons/persons.controller.js';
+import { PERSON_SENSITIVE_AREA, PersonsController } from './persons/persons.controller.js';
+import { LISTS_ACCESS_AREA } from './lists/masterdata.lists.js';
+import { ageOn } from './shared/dates.js';
+import { today } from './shared/access.js';
 import { SelfController } from './self/self.controller.js';
 import { PersonPrivacyController, PersonPrivacyService, RestrictionDeadlines } from './privacy/privacy.controller.js';
 import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/persons.service.js';
@@ -109,6 +112,7 @@ export class MasterdataModule implements OnModuleInit {
     private readonly licenseLists: DriverLicenseLists,
     private readonly personPrivacy: PersonPrivacyService,
     private readonly restrictionDeadlines: RestrictionDeadlines,
+    private readonly accessLog: AccessLog,
   ) {}
 
   /**
@@ -160,7 +164,14 @@ export class MasterdataModule implements OnModuleInit {
       // Restriction of processing (Art. 18): the core leaves these persons out of deadlines and search.
       restrictedPersonIds: () => this.personPrivacy.restrictedIds(),
       restrictProcessing: (personId, restriction) => this.personPrivacy.restrict(personId, restriction),
+      // Consents of minors are given by their legal guardians (L9).
+      minors: async (ids) => {
+        const day = today();
+        return (await this.em.fork().find(Person, { id: { $in: [...ids] } }, { fields: ['id', 'birthDate'] })).filter((p) => p.birthDate && ageOn(p.birthDate, day) < 18).map((p) => p.id);
+      },
     });
+    this.accessLog.registerArea(PERSON_SENSITIVE_AREA, { de: 'Personalakte mit sensiblen Feldern', en: 'Person file with sensitive fields' });
+    this.accessLog.registerArea(LISTS_ACCESS_AREA, { de: 'Listen mit Kontakt- oder sensiblen Daten', en: 'Lists with contact or sensitive data' });
     this.search.register('masterdata', (user, query) => this.data.search(user, query));
     registerAuditReferences(this.auditReferences, this.em);
     this.exports.register('masterdata', {

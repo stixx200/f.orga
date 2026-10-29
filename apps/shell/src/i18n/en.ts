@@ -1,9 +1,11 @@
 import type { de } from './de';
 import { privacyEn } from './privacy';
+import { transparencyAuditEn, transparencyAuditKeysEn, transparencyEn } from './transparency';
 
 /** English texts of the shell; the type keeps the keys in sync with `de.ts`. */
 export const en: typeof de = {
   privacy: privacyEn,
+  transparency: transparencyEn,
   appName: 'f.orga',
   loading: 'Loading …',
   skipToContent: 'Skip to content',
@@ -639,8 +641,10 @@ export const en: typeof de = {
       informedOn: 'Informed on',
       text: 'Text block',
       channel: 'Channel',
+      ...transparencyAuditKeysEn,
     },
     actions: {
+      ...transparencyAuditEn,
       'retention.offered': 'Offered to the archive',
       'retention.exported': 'Export for the archive downloaded',
       'retention.decided': 'Decision of the archive recorded',

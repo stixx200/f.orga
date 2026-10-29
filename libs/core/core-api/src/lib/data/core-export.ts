@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { AuditEntry } from '../audit/audit.js';
 import { HistoryEntry } from '../history/history.entity.js';
+import { AccessLogEntity } from '../privacy/access-log.js';
+import { ConsentEntity } from '../privacy/consents.js';
 import { PrivacyRequestEntity } from '../privacy/privacy.entities.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { PasswordReset } from '../security/password-reset.js';
@@ -65,8 +67,22 @@ export class CoreExport {
       status: r.status,
       closedOn: r.closedOn ?? null,
       rejectionReason: r.rejectionReason,
+      rectification: r.rectification ? { area: r.rectification.area, wrong: r.rectification.wrong, correct: r.rectification.correct, correctedAt: r.rectification.correctedAt } : null,
     }));
-    if (!users.length) return { users: [], privacyRequests };
+    // Consents with the version consented to (L9) and accesses to especially protected data (L15).
+    const consents = (await em.find(ConsentEntity, { personId }, { orderBy: { givenOn: 'asc' } })).map((c) => ({
+      key: c.key,
+      version: c.definitionVersion,
+      title: c.title,
+      text: c.text,
+      givenOn: c.givenOn,
+      givenVia: c.givenVia,
+      withdrawnOn: c.withdrawnOn ?? null,
+      withdrawnVia: c.withdrawnVia ?? null,
+      supersededOn: c.supersededOn ?? null,
+    }));
+    const accessLog = (await em.find(AccessLogEntity, { personId }, { orderBy: { day: 'asc' } })).map((a) => ({ userId: a.userId, area: a.area, day: a.day, count: a.count }));
+    if (!users.length) return { users: [], privacyRequests, consents, accessLog };
     const ids = users.map((u) => u.id);
     const sessions = await em.find(Session, { user: { $in: ids } }, { populate: ['impersonator'], orderBy: { createdAt: 'asc' } });
     const audit = await em.find(
@@ -83,6 +99,8 @@ export class CoreExport {
       })),
       audit: audit.map(auditDto),
       privacyRequests,
+      consents,
+      accessLog,
     };
   }
 
@@ -96,7 +114,7 @@ export class CoreExport {
     const requests = await em.find(PrivacyRequestEntity, { personId: { $in: [...personIds] } }, { fields: ['id'] });
     if (requests.length) {
       const requestIds = requests.map((r) => r.id);
-      await em.nativeUpdate(PrivacyRequestEntity, { id: { $in: requestIds } }, { content: '', identityNote: '', notes: '', activity: '' });
+      await em.nativeUpdate(PrivacyRequestEntity, { id: { $in: requestIds } }, { content: '', identityNote: '', notes: '', activity: '', rectification: null });
       await em.nativeDelete(HistoryEntry, { entity: 'core.privacy_request', entityId: { $in: requestIds } });
     }
     const users = await em.find(User, { personId: { $in: [...personIds] } }, { populate: ['passwordHash'] });

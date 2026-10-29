@@ -1,17 +1,24 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261029134906_initial extends Migration {
+export class Migration20261029150334_initial extends Migration {
 
-  override name = 'Migration20261029134906_initial';
+  override name = 'Migration20261029150334_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"core\";");
+    this.addSql("create table \"core\".\"access_log\" (\"id\" uuid not null, \"user_id\" varchar(255) not null, \"person_id\" varchar(255) null, \"person_key\" varchar(255) not null, \"area\" varchar(255) not null, \"day\" varchar(10) not null, \"count\" int not null default 1, \"first_at\" timestamptz not null, \"last_at\" timestamptz not null, primary key (\"id\"));");
+    this.addSql("create index \"access_log_person_id_index\" on \"core\".\"access_log\" (\"person_id\");");
+    this.addSql("create index \"access_log_day_index\" on \"core\".\"access_log\" (\"day\");");
+    this.addSql("alter table \"core\".\"access_log\" add constraint \"access_log_user_id_person_key_area_day_unique\" unique (\"user_id\", \"person_key\", \"area\", \"day\");");
     this.addSql("create table \"core\".\"attachment\" (\"id\" uuid not null, \"owner_type\" varchar(255) not null, \"owner_id\" varchar(255) not null, \"file_name\" varchar(255) not null, \"content_type\" varchar(255) not null, \"size\" int not null, \"data\" bytea not null, \"created_by\" varchar(255) not null, \"created_at\" timestamptz not null, primary key (\"id\"));");
     this.addSql("create index \"attachment_owner_type_owner_id_index\" on \"core\".\"attachment\" (\"owner_type\", \"owner_id\");");
     this.addSql("create table \"core\".\"audit\" (\"id\" uuid not null, \"timestamp\" timestamptz not null, \"user_id\" varchar(255) null, \"impersonator_id\" varchar(255) null, \"action\" varchar(255) not null, \"details\" jsonb not null, primary key (\"id\"));");
     this.addSql("create index \"audit_timestamp_index\" on \"core\".\"audit\" (\"timestamp\");");
     this.addSql("create table \"core\".\"brigade_asset\" (\"key\" varchar(255) not null, \"content_type\" varchar(255) not null, \"data\" bytea not null, \"updated_at\" timestamptz not null, primary key (\"key\"));");
-    this.addSql("create table \"core\".\"history\" (\"id\" uuid not null, \"entity\" varchar(255) not null, \"entity_id\" varchar(255) not null, \"parent_entity\" varchar(255) null, \"parent_id\" varchar(255) null, \"action\" varchar(255) not null, \"changes\" jsonb not null, \"user_id\" varchar(255) null, \"impersonator_id\" varchar(255) null, \"timestamp\" timestamptz not null, primary key (\"id\"));");
+    this.addSql("create table \"core\".\"consent\" (\"id\" uuid not null, \"person_id\" varchar(255) not null, \"key\" varchar(255) not null, \"definition_version\" int not null, \"title\" jsonb not null, \"text\" jsonb not null, \"given_on\" varchar(10) not null, \"given_via\" varchar(255) not null, \"recorded_by\" varchar(255) null, \"withdrawn_on\" varchar(10) null, \"withdrawn_via\" varchar(255) null, \"withdrawn_by\" varchar(255) null, \"request_id\" varchar(255) null, \"superseded_on\" varchar(10) null, \"created_at\" timestamptz not null, primary key (\"id\"));");
+    this.addSql("create index \"consent_person_id_index\" on \"core\".\"consent\" (\"person_id\");");
+    this.addSql("create index \"consent_key_index\" on \"core\".\"consent\" (\"key\");");
+    this.addSql("create table \"core\".\"history\" (\"id\" uuid not null, \"entity\" varchar(255) not null, \"entity_id\" varchar(255) not null, \"parent_entity\" varchar(255) null, \"parent_id\" varchar(255) null, \"action\" varchar(255) not null, \"changes\" jsonb not null, \"user_id\" varchar(255) null, \"impersonator_id\" varchar(255) null, \"timestamp\" timestamptz not null, \"redactions\" jsonb null, primary key (\"id\"));");
     this.addSql("create index \"history_entity_entity_id_index\" on \"core\".\"history\" (\"entity\", \"entity_id\");");
     this.addSql("create index \"history_parent_entity_parent_id_index\" on \"core\".\"history\" (\"parent_entity\", \"parent_id\");");
     this.addSql("create table \"core\".\"import_mapping\" (\"id\" uuid not null, \"kind\" varchar(255) not null, \"value\" varchar(255) not null, \"normalized\" varchar(255) not null, \"key\" varchar(255) not null, \"profile\" varchar(255) not null, \"created_by\" varchar(255) null, \"created_at\" timestamptz not null, \"last_used_at\" timestamptz not null, primary key (\"id\"));");
@@ -23,7 +30,7 @@ export class Migration20261029134906_initial extends Migration {
     this.addSql("create index \"privacy_document_person_id_index\" on \"core\".\"privacy_document\" (\"person_id\");");
     this.addSql("create index \"privacy_document_expires_at_index\" on \"core\".\"privacy_document\" (\"expires_at\");");
     this.addSql("create table \"core\".\"privacy_notice\" (\"version\" serial primary key, \"published_at\" timestamptz not null, \"sections\" jsonb not null, \"template\" boolean not null);");
-    this.addSql("create table \"core\".\"privacy_request\" (\"id\" uuid not null, \"person_id\" varchar(255) not null, \"kind\" varchar(255) not null, \"received_on\" varchar(10) not null, \"channel\" varchar(255) not null, \"identity_checked\" boolean not null default false, \"identity_note\" text not null default '', \"content\" text not null default '', \"language\" varchar(255) not null default 'de', \"activity\" text not null default '', \"due_on\" varchar(10) not null, \"extended_until\" varchar(10) null, \"extension_reason\" text not null default '', \"extension_notified_on\" varchar(10) null, \"status\" varchar(255) not null default 'received', \"closed_on\" varchar(10) null, \"rejection_reason\" text not null default '', \"assignee_id\" varchar(255) null, \"notes\" text not null default '', \"recipients\" jsonb not null default '[]', \"access_report_document_id\" varchar(255) null, \"created_at\" timestamptz not null, \"created_by\" varchar(255) null, \"version\" int not null default 1, primary key (\"id\"));");
+    this.addSql("create table \"core\".\"privacy_request\" (\"id\" uuid not null, \"person_id\" varchar(255) not null, \"kind\" varchar(255) not null, \"received_on\" varchar(10) not null, \"channel\" varchar(255) not null, \"identity_checked\" boolean not null default false, \"identity_note\" text not null default '', \"content\" text not null default '', \"language\" varchar(255) not null default 'de', \"activity\" text not null default '', \"due_on\" varchar(10) not null, \"extended_until\" varchar(10) null, \"extension_reason\" text not null default '', \"extension_notified_on\" varchar(10) null, \"status\" varchar(255) not null default 'received', \"closed_on\" varchar(10) null, \"rejection_reason\" text not null default '', \"assignee_id\" varchar(255) null, \"notes\" text not null default '', \"recipients\" jsonb not null default '[]', \"access_report_document_id\" varchar(255) null, \"rectification\" jsonb null, \"created_at\" timestamptz not null, \"created_by\" varchar(255) null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("create index \"privacy_request_person_id_index\" on \"core\".\"privacy_request\" (\"person_id\");");
     this.addSql("create index \"privacy_request_status_index\" on \"core\".\"privacy_request\" (\"status\");");
     this.addSql("create table \"core\".\"retention_case\" (\"id\" uuid not null, \"category\" varchar(255) not null, \"rule_key\" varchar(255) not null, \"record_id\" varchar(255) not null, \"label\" text not null, \"neutral_label\" text not null, \"reason\" jsonb null, \"event_date\" varchar(10) not null, \"due_since\" varchar(10) not null, \"attachments\" int not null default 0, \"status\" varchar(255) not null default 'due', \"action\" varchar(255) not null, \"after_decision\" varchar(255) null, \"special_case\" boolean not null default false, \"blocked_by\" varchar(255) null, \"offer_id\" varchar(255) null, \"offered_at\" timestamptz null, \"archive\" varchar(255) null, \"offer_note\" text null, \"decided_on\" varchar(10) null, \"decision_note\" text null, \"deferred_until\" varchar(10) null, \"defer_reason\" text null, \"executed_at\" timestamptz null, \"executed_action\" varchar(255) null, \"created_at\" timestamptz not null, \"version\" int not null default 1, primary key (\"id\"));");
@@ -63,9 +70,11 @@ export class Migration20261029134906_initial extends Migration {
     this.addSql("alter table \"core\".\"password_reset\" drop constraint \"password_reset_user_id_foreign\";");
     this.addSql("alter table \"core\".\"api_token\" drop constraint \"api_token_user_id_foreign\";");
     this.addSql("alter table \"core\".\"user_mfa\" drop constraint \"user_mfa_user_id_foreign\";");
+    this.addSql("drop table if exists \"core\".\"access_log\" cascade;");
     this.addSql("drop table if exists \"core\".\"attachment\" cascade;");
     this.addSql("drop table if exists \"core\".\"audit\" cascade;");
     this.addSql("drop table if exists \"core\".\"brigade_asset\" cascade;");
+    this.addSql("drop table if exists \"core\".\"consent\" cascade;");
     this.addSql("drop table if exists \"core\".\"history\" cascade;");
     this.addSql("drop table if exists \"core\".\"import_mapping\" cascade;");
     this.addSql("drop table if exists \"core\".\"import_upload\" cascade;");

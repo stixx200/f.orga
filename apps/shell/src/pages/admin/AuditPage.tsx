@@ -1,12 +1,13 @@
-import { Anchor, Select, SimpleGrid, Stack, Text, TextInput, Tooltip } from '@mantine/core';
+import { Anchor, Select, SimpleGrid, Stack, Tabs, Text, TextInput, Tooltip } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useDebouncedValue } from '@mantine/hooks';
 import { useQuery } from '@tanstack/react-query';
 import { Fragment, type ReactNode, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import type { AuditEntry, AuditFilters, AuditReference } from '@forga/core-contracts';
 import { api, formatDate, formatDateTime, useLocalized, useTranslation, withQuery } from '@forga/web-sdk';
 import { DataTable, PageHeader } from '@forga/web-ui';
+import { AccessLogView } from './AccessLogView';
 
 /** Starting the action filter on a prefix (e.g. `?action=events.` from a task) selects all actions of that area. */
 function initialAction(): string | null {
@@ -139,8 +140,28 @@ function Details({ entry }: { entry: AuditEntry }) {
   );
 }
 
-/** Security-relevant actions, filtered on the server: period, user, action and words in the details. */
+/** "Verwaltung → Audit-Log" with the tabs audit log and read log (`?tab=access`). */
 export function AuditPage() {
+  const { t } = useTranslation('shell');
+  const [search, setSearch] = useSearchParams();
+  const tab = search.get('tab') === 'access' ? 'access' : 'audit';
+  return (
+    <Stack gap="lg">
+      <PageHeader breadcrumbs={[{ label: t('nav.administration') }, { label: t('nav.audit') }]} title={t('nav.audit')} subtitle={t('audit.subtitle')} />
+      <Tabs value={tab} onChange={(value) => setSearch(value === 'access' ? { tab: 'access' } : {}, { replace: true })} keepMounted={false}>
+        <Tabs.List mb="lg">
+          <Tabs.Tab value="audit">{t('transparency.accessLog.tabAudit')}</Tabs.Tab>
+          <Tabs.Tab value="access">{t('transparency.accessLog.tab')}</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="audit"><AuditLogView /></Tabs.Panel>
+        <Tabs.Panel value="access"><AccessLogView /></Tabs.Panel>
+      </Tabs>
+    </Stack>
+  );
+}
+
+/** Security-relevant actions, filtered on the server: period, user, action and words in the details. */
+function AuditLogView() {
   const { t, i18n } = useTranslation('shell');
   const texts = useAuditTexts();
   const [limit, setLimit] = useState('200');
@@ -162,7 +183,6 @@ export function AuditPage() {
 
   return (
     <Stack gap="lg">
-      <PageHeader breadcrumbs={[{ label: t('nav.administration') }, { label: t('nav.audit') }]} title={t('nav.audit')} subtitle={t('audit.subtitle')} />
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 6 }}>
         <DateInput label={t('audit.from')} value={from} onChange={setFrom} valueFormat="DD.MM.YYYY" clearable />
         <DateInput label={t('audit.to')} value={to} onChange={setTo} valueFormat="DD.MM.YYYY" clearable />

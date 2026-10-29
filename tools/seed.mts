@@ -1268,11 +1268,34 @@ async function privacy(persons: PersonRef[]): Promise<void> {
   // Information after the transfer: given to most members, a few are still open.
   const informed = active.slice(0, Math.max(0, active.length - 12)).map((p) => p.id);
   if (informed.length) await call('POST', 'masterdata/privacy/information', { personIds: informed, informedOn: day(-20), via: 'letter' });
+  await consents(active);
   if ((await call<unknown[]>('GET', 'core/privacy/requests?state=all')).length) return;
   const [first, second] = active.slice(-2);
   if (first) await call('POST', 'core/privacy/requests', { personId: first.id, kind: 'access', receivedOn: day(-24), channel: 'letter', identityChecked: true, identityNote: 'Unterschrift und Anschrift', content: 'Bitte um Auskunft über meine gespeicherten Daten.' });
   if (second) await call('POST', 'core/privacy/requests', { personId: second.id, kind: 'rectification', receivedOn: day(-5), channel: 'email', content: 'Der Lehrgang Maschinist fehlt in meinen Daten.' });
   console.log(`  Information für ${informed.length} Personen, 2 Anfragen`);
+}
+
+/**
+ * Consents (L9): the templates of the catalog, three of them marked as reviewed for the demo (the greeting stays a
+ * template), and fictitious consents given in writing by some members, one of them withdrawn.
+ */
+async function consents(active: PersonRef[]): Promise<void> {
+  const catalog = await call<{ consents: { key: string; version: number; reviewedAt: string | null }[]; given: Record<string, number> }>('POST', 'core/privacy/consents/templates', {});
+  for (const c of catalog.consents) {
+    if (!c.reviewedAt && c.key !== 'birthday-greeting') await call('POST', `core/privacy/consents/${c.key}/review`, { version: c.version });
+  }
+  if (Object.keys(catalog.given).length) return;
+  const recorded: { id: string }[] = [];
+  for (const [index, person] of active.slice(0, 24).entries()) {
+    const keys = ['phone-list-mobile', ...(index % 3 === 0 ? ['birthday-posting'] : []), ...(index % 4 === 0 ? ['photos-public-relations'] : [])];
+    for (const key of keys) {
+      const consent = await call<{ id: string } | null>('POST', `core/privacy/persons/${person.id}/consents`, { key, givenOn: day(-60 + index), via: 'written' }).catch(() => null);
+      if (consent) recorded.push(consent);
+    }
+  }
+  if (recorded[1]) await call('POST', `core/privacy/given-consents/${recorded[1].id}/withdraw`, { withdrawnOn: day(-3), via: 'email' });
+  console.log(`  ${recorded.length} Einwilligungen`);
 }
 
 /** The day `offset` days from today, `YYYY-MM-DD` (Europe/Berlin). */

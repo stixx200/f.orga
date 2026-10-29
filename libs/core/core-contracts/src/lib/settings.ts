@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { LocalizedText } from './i18n.js';
 import { RetentionRule } from './retention.js';
 import { PRIVACY_PERMISSION, PrivacyContacts, PrivacyRecipients, PrivacySelfService, PrivacyTexts } from './privacy.js';
+import { PrivacyConsents } from './consents.js';
 import { SecuritySettings } from './stage.js';
 import { ReminderSettings } from './tasks.js';
 
@@ -100,6 +101,7 @@ export const CORE_SETTINGS = {
   'privacy.texts': PrivacyTexts,
   'privacy.selfServiceAccess': PrivacySelfService,
   'privacy.recipients': PrivacyRecipients,
+  'privacy.consents': PrivacyConsents,
 } as const;
 
 /** Fields that are write-only and never leave the server. */
@@ -151,4 +153,5 @@ export const CORE_SETTINGS_ACCESS: Record<string, SettingsAccess> = {
   'privacy.texts': { managersOnly: true, managers: [PRIVACY_PERMISSION], dedicatedEndpoint: true },
   'privacy.selfServiceAccess': { managersOnly: true, managers: [PRIVACY_PERMISSION] },
   'privacy.recipients': { managersOnly: true, managers: [PRIVACY_PERMISSION] },
+  'privacy.consents': { managersOnly: true, managers: [PRIVACY_PERMISSION], dedicatedEndpoint: true },
 };

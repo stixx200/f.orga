@@ -45,7 +45,7 @@ export const CORE_ACTIVITIES: ProcessingActivity[] = [
       en: 'Access to f.orga, evidence of changes and access (data security)',
     },
     recipients: [],
-    retention: ['core.audit', 'core.history'],
+    retention: ['core.audit', 'core.history', 'core.access-log'],
   },
 ];
 
