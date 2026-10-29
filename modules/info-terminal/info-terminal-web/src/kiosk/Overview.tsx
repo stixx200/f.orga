@@ -64,6 +64,19 @@ function SessionTile({ session, open }: { session: KioskSession; open: boolean }
   );
 }
 
+/** Tile "Führerschein kontrollieren" when self-checks of driving licences are switched on. */
+function LicenseTile() {
+  const { t } = useTranslation('info-terminal');
+  const { go } = useKiosk();
+  return (
+    <button type="button" className={cx(classes.event, classes.session)} onClick={() => go({ kind: 'driver-license', code: null })}>
+      <span className={classes.eventArt}>{t('kiosk.license.tileArt')}</span>
+      <strong>{t('kiosk.license.tile')}</strong>
+      <span>{t('kiosk.license.tileText')}</span>
+    </button>
+  );
+}
+
 /** Start screen: what is open for signing in in the chosen department. */
 export function Overview() {
   const { t, i18n } = useTranslation('info-terminal');
@@ -87,6 +100,13 @@ export function Overview() {
             {t('kiosk.overview.newIncident')}
           </button>
         )}
+        {terminal.driverLicenseCheck && (
+          <p>
+            <button type="button" className={cx(classes.button, classes.big)} onClick={() => go({ kind: 'driver-license', code: null })}>
+              {t('kiosk.license.tile')}
+            </button>
+          </p>
+        )}
       </div>
     );
   }
@@ -108,6 +128,7 @@ export function Overview() {
               {t('kiosk.overview.newIncident')}
             </button>
           )}
+          {terminal.driverLicenseCheck && <LicenseTile />}
         </div>
       )}
       <p className={classes.meta}>

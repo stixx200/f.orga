@@ -290,7 +290,7 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Kiosk-Seite | kiosk, Shell-Route `/terminal` (`frontend.kiosk` im Manifest), API `/api/info-terminal/kiosk/…` |
 | Fahrzeugbeschriftung „Bezeichnung · Funkrufname (Abteilung)“ | `vehicleLabel(vehicle, departmentShortName)` |
 
-### Führerscheinkontrolle (geplant)
+### Führerscheinkontrolle
 
 | Fachbegriff | Code |
 | --- | --- |
@@ -302,6 +302,9 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Selbstkontrolle, Selbsterklärung | self-check (`MASTERDATA_LICENSE_SELF_CHECK`), `selfDeclaration` |
 | Transponder, Barcode-Aufkleber | `DriverLicenseToken` (`kind`: `nfc`, `barcode`; `codeHash`) |
 | Recht „Führerscheine kontrollieren“ | `masterdata.licenses.check` |
+| Zielgruppe, überwachte Klassen, Qualifikationen für Fahrer | `monitoredClasses`, `driverQualifications` (Einstellung `masterdata.driverLicense`) |
+| Stand (Klassen fehlen, überfällig, Vorlage angefordert, Ersterfassung fehlt, fällig, kontrolliert) | `DriverLicenseState` |
+| Nachweis für die Gemeinde | Listenvorlage `masterdata.driver-license-checks` |
 
 ### Datensicherung (geplant)
 

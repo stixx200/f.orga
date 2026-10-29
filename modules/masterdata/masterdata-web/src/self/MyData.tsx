@@ -6,6 +6,7 @@ import { ibanError } from '../persons/MasterDataTab';
 import { api, formatDate, send, useTranslation } from '@forga/web-sdk';
 import { Panel, useAction } from '@forga/web-ui';
 import { today as todayDate, useCatalogNames, useDepartments } from '../api';
+import { MyDriverLicense } from '../driver-licenses/MyDriverLicense';
 
 const KEY = ['masterdata', 'me'] as const;
 
@@ -48,7 +49,7 @@ function ContactForm({ person }: { person: Person }) {
   );
 }
 
-/** "My area": the own file (read) and contact details (editable). */
+/** "My area": the own file (read), the own driving licence and contact details (editable). */
 export function MyData() {
   const { t, i18n } = useTranslation('masterdata');
   const { data: person } = useQuery({ queryKey: KEY, queryFn: () => api<Person>('masterdata/me') });
@@ -78,6 +79,7 @@ export function MyData() {
           ))}
         </Stack>
       </Panel>
+      <MyDriverLicense />
       <Panel title={t('me.contact')}>
         <ContactForm key={person.id} person={person} />
       </Panel>

@@ -22,5 +22,5 @@ Alles in diesem Ordner ist noch nicht umgesetzt. Was fertig ist, steht in [`../i
 | Einsatzberichte | 1 | [einsatzberichte.md](module/einsatzberichte.md) |
 | Infoterminal | umgesetzt (offene Punkte) | [infoterminal.md](module/infoterminal.md) |
 | MP-Feuer (`mp-feuer`) | umgesetzt (offene Punkte) | [mp-feuer.md](module/mp-feuer.md) |
-| Führerscheinkontrolle (Stammdaten) | Konzept | [fuehrerscheinkontrolle.md](module/fuehrerscheinkontrolle.md) |
+| Führerscheinkontrolle (Stammdaten) | umgesetzt (offene Punkte) | [fuehrerscheinkontrolle.md](module/fuehrerscheinkontrolle.md) |
 | Datensicherung | Konzept | [backup.md](module/backup.md) |

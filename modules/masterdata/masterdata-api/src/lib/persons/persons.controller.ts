@@ -21,6 +21,7 @@ import {
   Admission,
   CertificateSettings,
   CreatePersonInput,
+  EMPTY_DRIVER_LICENSE,
   HonorAwardInput,
   Leave,
   MASTERDATA_EVENTS,
@@ -119,6 +120,7 @@ export class PersonsController {
     await this.assertStatusFitsDepartment(em, status, memberships);
     const person = em.create(Person, {
       ...master,
+      driverLicense: { ...EMPTY_DRIVER_LICENSE },
       status,
       joinedOn: input.joinedOn ?? start,
       probationEndsOn: status === 'probation' ? probationEnd(start, rules.probationMonths) : null,

@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { CSRF_HEADER, Public, ZodPipe } from '@forga/core-api';
 import { TerminalBookingInput } from '@forga/incidents-contracts';
 import {
+  KioskDriverLicenseInput,
+  type KioskDriverLicense,
   KioskIncidentInput,
   type KioskEntry,
   type KioskMatch,
@@ -152,5 +154,16 @@ export class KioskController {
     @Query('departmentId') departmentId?: string,
   ): Promise<void> {
     await this.kiosk.cancelCheckIn(terminal, departmentId, sessionId, personId);
+  }
+
+  /**
+   * Self-check of a driving licence with a registered sticker: without `confirm` name, classes and whether a
+   * self-check is possible; with `confirm` the check is recorded. Unknown codes: `404 info-terminal.licenseNotRegistered`.
+   */
+  @Post('driver-license')
+  @HttpCode(200)
+  @UseGuards(TerminalGuard)
+  driverLicense(@CurrentTerminal() terminal: TerminalEntity, @Body(new ZodPipe(KioskDriverLicenseInput)) input: z.output<typeof KioskDriverLicenseInput>): Promise<KioskDriverLicense> {
+    return this.kiosk.driverLicense(terminal, input);
   }
 }

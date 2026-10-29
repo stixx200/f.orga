@@ -28,6 +28,11 @@ export const MASTERDATA_MANIFEST = {
       name: { de: 'Lehrgänge planen und Teilnahmen eintragen', en: 'Plan courses and record attendances' },
       scope: 'department',
     },
+    {
+      id: 'masterdata.licenses.check',
+      name: { de: 'Führerscheine kontrollieren', en: 'Check driving licences' },
+      scope: 'department',
+    },
     { id: 'masterdata.catalogs.manage', name: { de: 'Kataloge verwalten', en: 'Manage catalogs' }, scope: 'brigade' },
     { id: 'masterdata.settings.manage', name: { de: 'Regeln der Feuerwehrsatzung einstellen', en: 'Configure the rules of the fire brigade statute' }, scope: 'brigade' },
   ],
@@ -36,8 +41,10 @@ export const MASTERDATA_MANIFEST = {
     { label: { de: 'Organisation', en: 'Organization' }, path: 'organization', icon: 'sitemap' },
     { label: { de: 'Fahrzeuge', en: 'Vehicles' }, path: 'vehicles', icon: 'truck' },
     { label: { de: 'Lehrgangsplanung', en: 'Course planning' }, path: 'courses', permission: 'masterdata.courses.plan', icon: 'school' },
+    { label: { de: 'Führerscheinkontrollen', en: 'Driving licence checks' }, path: 'driver-licenses', permission: 'masterdata.licenses.check', icon: 'id' },
     { label: { de: 'Kataloge', en: 'Catalogs' }, path: 'catalogs', permission: 'masterdata.catalogs.manage', icon: 'catalog', section: 'administration' },
     { label: { de: 'Feuerwehrsatzung', en: 'Fire brigade statute' }, path: 'settings', permission: 'masterdata.settings.manage', icon: 'settings', section: 'settings' },
+    { label: { de: 'Führerscheinkontrolle', en: 'Driving licence checks' }, path: 'driver-licenses/settings', permission: 'masterdata.settings.manage', icon: 'id', section: 'settings' },
   ],
   roles: [
     { key: 'member', permissions: ['masterdata.self'] },
@@ -57,6 +64,7 @@ export const MASTERDATA_MANIFEST = {
         'masterdata.persons.sensitive',
         'masterdata.organization.manage',
         'masterdata.courses.plan',
+        'masterdata.licenses.check',
       ],
       // Of other departments only name, status and department (e.g. for support in incidents); the personnel file stays in the own department.
       permissionsAllDepartments: ['masterdata.persons.directory'],

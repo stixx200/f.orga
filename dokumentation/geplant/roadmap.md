@@ -53,7 +53,8 @@ Offen:
 - Kataloge mit BW-Vorlage
 - Lehrgangskatalog, Teilnahmen, Vormerkungen und Lehrgangsplanung (auch durch den Lehrgangsbeauftragten)
 - Schnittstellen `PERSON_DIRECTORY` und `ORGANIZATION`
-- Fristen zu Probezeit, Grundausbildung, Altersgrenzen, Führerschein und Qualifikationen
+- Fristen zu Probezeit, Grundausbildung, Altersgrenzen und Qualifikationen
+- Führerscheinkontrolle mit Befristung je Klasse, Kontrollen, erneuter Vorlage, Fristen (anlassbezogen oder zusätzlich regelmäßig), Nachweis für die Gemeinde und Selbstkontrolle mit Transponder am Infoterminal (Mockups freigegeben); offen sind die Punkte in [module/fuehrerscheinkontrolle.md](module/fuehrerscheinkontrolle.md)
 - 12 Listenvorlagen
 - Importprofil für Personen inklusive MP-Feuer `Personal.xlsx`
 
@@ -121,6 +122,5 @@ Umgesetzt, siehe [Modul Infoterminal](../implementiert/architektur.md#modul-info
 
 Konzept und Mockups liegen vor; umgesetzt wird nach Freigabe der Mockups und Klärung der offenen Entscheidungen im jeweiligen Konzept.
 
-- **Führerscheinkontrolle** ([Konzept](module/fuehrerscheinkontrolle.md)): Befristung je Klasse, Kontrollen mit Historie und Nachweis für die Gemeinde, anlassbezogene Fristen (optional regelmäßig), erneute Vorlage, Selbstkontrolle mit Transponder am Infoterminal und in „Mein Bereich“.
 - **Datensicherung** ([Konzept](module/backup.md)): Modul `backup` mit verschlüsselter, geplanter Sicherung in einen Ordner auf dem Server, Prüfen, Wiederherstellung in der Oberfläche mit Wartungsmodus. Voraussetzung: PostgreSQL-Clientwerkzeuge im Image, Volume `/backups`.
 - **Aufbewahrungsplan** ([Konzept](aufbewahrung.md)): Fristen je Datenkategorie, Vorlage „Kommunaler Aktenplan (Beispiel)“, Aussonderung mit Anbietung an das Archiv.

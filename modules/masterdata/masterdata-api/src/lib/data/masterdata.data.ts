@@ -2,10 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { type EntityClass, EntityManager, wrap } from '@mikro-orm/core';
 import { type AuthenticatedUser, HistoryEntry, PersonDataRegistry, wordsWhere } from '@forga/core-api';
 import type { PrivacySettings, SearchHit } from '@forga/core-contracts';
+import { EMPTY_DRIVER_LICENSE } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { Course, CourseAttendance, CourseNomination, CourseRun } from '../courses/course.entities.js';
 import { DepartmentGroup } from '../organization/group.entities.js';
-import { Department, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod, Station, Vehicle } from '../masterdata.entities.js';
+import { Department, DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod, Station, Vehicle } from '../masterdata.entities.js';
 import { departmentsOf, PersonsService } from '../persons/persons.service.js';
 
 /** First and last name of anonymised persons: "N." (nomen nescio) reads the same in every language. */
@@ -66,6 +67,10 @@ export class MasterdataData {
       honors: await plain(em, HonorAward),
       offices: await plain(em, OfficeAssignment),
       restPeriods: await plain(em, RestPeriod),
+      // Stickers without the hash of their ID (hidden property).
+      driverLicenseChecks: await plain(em, DriverLicenseCheck),
+      driverLicenseRequests: await plain(em, DriverLicenseRequest),
+      driverLicenseTokens: await plain(em, DriverLicenseToken),
       groups: await plain(em, DepartmentGroup),
       courses: await plain(em, Course),
       courseRuns: await plain(em, CourseRun),
@@ -86,6 +91,9 @@ export class MasterdataData {
       honors: await plain(em, HonorAward, { person: personId }),
       offices: await plain(em, OfficeAssignment, { person: personId }),
       restPeriods: await plain(em, RestPeriod, { person: personId }),
+      driverLicenseChecks: await plain(em, DriverLicenseCheck, { person: personId }),
+      driverLicenseRequests: await plain(em, DriverLicenseRequest, { person: personId }),
+      driverLicenseTokens: await plain(em, DriverLicenseToken, { person: personId }),
       groups: (await em.find(DepartmentGroup, {})).filter((g) => g.leader?.id === personId || g.memberIds.includes(personId)).map((g) => wrap(g).toObject()),
       courseAttendances: await plain(em, CourseAttendance, { person: personId }),
       courseNominations: await plain(em, CourseNomination, { person: personId }),
@@ -95,7 +103,8 @@ export class MasterdataData {
 
   /**
    * Anonymises persons who left more than the configured years ago: name becomes the language-neutral "N., N." (nomen nescio; the UI marks anonymised persons in the user's language),
-   * contact, sensitive data, qualifications, honours and courses are removed, and so is their history.
+   * contact, sensitive data, qualifications, honours, courses and the driving licence with its checks, requests and
+   * stickers are removed, and so is their history.
    * Memberships and ranks stay for past statistics; incident reports keep the reference.
    */
   async anonymize(settings: PrivacySettings, dryRun: boolean): Promise<number> {
@@ -110,12 +119,15 @@ export class MasterdataData {
         personnelNumber: null, salutation: '', title: '', firstName: ANONYMIZED_NAME, lastName: ANONYMIZED_NAME, nickname: '',
         street: '', postalCode: '', city: '', phonePrivate: '', phoneMobile: '', phoneWork: '', email: '',
         birthDate: null, birthPlace: '', employer: null, bank: null, notes: '',
-        driverLicense: { classes: [], expiresOn: null, lastCheckedOn: null }, anonymizedAt: new Date(),
+        driverLicense: { ...EMPTY_DRIVER_LICENSE }, anonymizedAt: new Date(),
       });
       person.qualifications.removeAll();
       person.honors.removeAll();
       await em.nativeDelete(CourseAttendance, { person });
       await em.nativeDelete(CourseNomination, { person });
+      await em.nativeDelete(DriverLicenseCheck, { person });
+      await em.nativeDelete(DriverLicenseRequest, { person });
+      await em.nativeDelete(DriverLicenseToken, { person });
     }
     await em.flush();
     const ids = persons.map((p) => p.id);

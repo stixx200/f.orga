@@ -8,7 +8,8 @@ import { KioskContext, type KioskContextValue, type Screen } from './context';
 import classes from './kiosk.module.css';
 import { NewIncident } from './NewIncident';
 import { Overview } from './Overview';
-import { Icon } from './parts';
+import { DriverLicenseFlow } from './DriverLicenseFlow';
+import { Icon, useKeyboardScan } from './parts';
 import { ReportFlow } from './ReportFlow';
 import { SessionFlow } from './SessionFlow';
 
@@ -127,6 +128,9 @@ export function Kiosk() {
     return () => clearInterval(timer);
   }, [idle, idleSeconds, reset]);
 
+  // A reader in keyboard mode may scan a licence sticker right on the overview.
+  useKeyboardScan((code) => setScreen({ kind: 'driver-license', code }), Boolean(data?.driverLicenseCheck) && screen.kind === 'overview');
+
   const context = useMemo<KioskContextValue | null>(
     () => (data && department ? { terminal: data, department, go: setScreen, reset, now, blocked } : null),
     [data, department, reset, now, blocked],
@@ -205,6 +209,7 @@ export function Kiosk() {
             {screen.kind === 'report' && <ReportFlow reportId={screen.reportId} />}
             {screen.kind === 'new-incident' && <NewIncident />}
             {screen.kind === 'session' && <SessionFlow sessionId={screen.sessionId} />}
+            {screen.kind === 'driver-license' && <DriverLicenseFlow initialCode={screen.code} />}
           </div>
         </main>
       </div>
