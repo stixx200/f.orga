@@ -53,7 +53,7 @@ export class TrainingModule implements OnModuleInit {
       person: (id) => this.data.exportPerson(id),
       describePerson: (id, ctx) => this.data.describePerson(id, ctx),
     });
-    this.personData.register('training', { anonymize: (ids) => this.data.anonymize(ids) });
+    this.personData.register('training', { anonymize: (ids) => this.data.anonymize(ids), erasure: (id) => this.data.erasure(id), erase: (id) => this.data.anonymize([id]) });
     this.retentionCategory.register(this.retention);
     this.imports.register('training', this.sessionsImport.profile());
     this.imports.registerLookup('training', this.sessionsImport.lookup());

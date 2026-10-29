@@ -57,7 +57,7 @@ export class EquipmentModule implements OnModuleInit {
     });
     this.imports.register('equipment', this.inventory.profile());
     this.retentionCategory.register(this.retention);
-    this.personData.register('equipment', { anonymize: (ids) => this.retentionCategory.anonymize(ids) });
+    this.personData.register('equipment', { anonymize: (ids) => this.retentionCategory.anonymize(ids), erasure: (id, ctx) => this.retentionCategory.erasure(id, ctx), erase: (id, areas) => this.retentionCategory.erase(id, areas) });
     // Inspections by a competent person are checked against these qualifications.
     for (const key of Object.values(INSPECTOR_QUALIFICATIONS)) this.catalogReferences.require('equipment', 'qualification', key);
     this.historyAccess.register('equipment.item', async (user, id) => {

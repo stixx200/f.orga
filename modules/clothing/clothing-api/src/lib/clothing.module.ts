@@ -36,7 +36,7 @@ export class ClothingModule implements OnModuleInit {
       person: (id) => this.data.exportPerson(id),
       describePerson: (id, ctx) => this.data.describePerson(id, ctx),
     });
-    this.personData.register('clothing', { anonymize: (ids) => this.data.anonymize(ids) });
+    this.personData.register('clothing', { anonymize: (ids) => this.data.anonymize(ids), erasure: (id) => this.data.erasure(id), erase: (id, areas) => this.data.erase(id, areas) });
     this.historyAccess.register('clothing.item', async (user, id) => {
       const item = await this.em.fork().findOne(ClothingItemEntity, id);
       return { allowed: Boolean(item) && user.can(READ, item!.departmentId) };

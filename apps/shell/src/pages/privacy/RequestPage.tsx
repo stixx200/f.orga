@@ -7,6 +7,7 @@ import { api, apiUrl, formatDate, formatDateTime, send, useLocalized, useTransla
 import { EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { berlinToday, useActivityOptions, useAssignees, useRecipientOptions, useRequest } from './api';
 import { LiftDialog, RestrictDialog, useRefreshPrivacy } from './dialogs';
+import { ErasurePanel } from './ErasurePanel';
 import { DeadlineBadge, Field, STATUS_TONES } from './PrivacyPage';
 import { RequestAccessReports } from '../../privacy/AccessReports';
 import { RequestConsents } from '../../privacy/consents/PersonConsents';
@@ -69,6 +70,7 @@ function RequestView({ request }: { request: PrivacyRequest }) {
       {request.kind === 'consent-withdrawal' && <RequestConsents personId={request.personId} requestId={request.id} open={open} />}
       <ExtensionPanel request={request} />
       <WorkPanel request={request} />
+      {request.kind === 'erasure' && <ErasurePanel request={request} />}
       {['rectification', 'erasure', 'restriction'].includes(request.kind) && <RecipientsPanel request={request} />}
       {['restriction', 'objection', 'erasure', 'rectification'].includes(request.kind) && <RestrictionPanel request={request} />}
       {request.kind === 'access' && (

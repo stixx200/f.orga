@@ -102,20 +102,22 @@ Seite `/admin/retention` (Menü „Verwaltung → Aussonderung“, Recht **`core
 
 ## Personendaten in den Modulen (`PersonDataRegistry`)
 
-Die Anonymisierung der Personalakte ruft `PersonDataRegistry.anonymize(personIds)` auf; jedes Modul entfernt, was es über die Personen speichert:
+Die Anonymisierung der Personalakte ruft `PersonDataRegistry.anonymize(personIds)` auf; jedes Modul entfernt, was es über die Personen speichert, danach ersetzt der Core die Namen der Personen und ihrer Konten in allen Text- und JSON-Spalten durch „N. N.“ ([vollständige Anonymisierung](datenschutz.md#vollständige-anonymisierung-l13)). Dieselben Beiträge beantworten die [Löschprüfung](datenschutz.md#löschprüfung-l7) einer Anfrage auf Löschung (`erasure`, `erase`).
 
 | Modul | Wirkung |
 | --- | --- |
-| Core | verknüpfte Benutzer gesperrt, „N. N.“, ohne E-Mail, Passwort, OIDC, Sitzungen, Links, Tokens und Historie |
+| Core | verknüpfte Benutzer gesperrt, „N. N.“, ohne E-Mail, Passwort, OIDC, zweiten Faktor, Sitzungen, Links, Tokens und Historie; Datenschutzanfragen ohne Texte, erstellte Auskünfte gelöscht, gemerkte Zuordnungen des Tabellen-Imports zur Person gelöscht |
 | Atemschutz | Eignungsuntersuchungen gelöscht, übrige Nachweise ohne Untersucher, Einrichtung, Einschränkungen und Notizen, Historie und gespeicherte Ampel |
 | Kleiderkammer | Größen gelöscht, Notizen und Stornogründe der Ausgaben geleert |
-| Beförderungen | Gründe der Ausschlüsse geleert, Namen und Kommentare in Beförderungslisten ersetzt |
+| Beförderungen | Gründe der Ausschlüsse geleert, Namen und Kommentare in Beförderungslisten ersetzt, auch in der Historie der Listen |
 | Übungsdienst | Entschuldigungstexte der Anwesenheiten geleert (samt Historie) |
 | Einsatzleiter vom Dienst | Notizen der Dienste im EvD-Dienstplan geleert (samt Historie) |
 | Entschädigungen | Name in Auszahlungen ohne Bankverbindung und in der Liste „ohne IBAN“ wird „N. N.“ (samt Historie der Läufe); Beträge und Verweis auf die Person bleiben als Buchungsunterlage |
 | Geräte | gemeldete Mängel nennen statt des Namens „N. N.“, wenn ein Benutzer der Person sie gemeldet hat (samt Historie) |
+| Einsätze | Begründungen manueller Beträge des Personals geleert (samt Historie der Personaleinträge); Personal und Verfasser bleiben als Verweis |
+| MP-Feuer | Zeilen der Laufberichte mit dem Namen „N. N.“, Zeilen der Transferdateien mit dem Namen entfernt, gemerkte Zuordnungen zur Person gelöscht |
 
-Einsatzberichte speichern Mitglieder nur als Verweis (Personal, Verfasser); Kostenersatz speichert keine Daten über Mitglieder.
+Einsatzberichte speichern Mitglieder nur als Verweis (Personal, Verfasser); ihre Namen folgen den Grunddaten. Kostenersatz, Infoterminal und Datensicherung speichern keine Daten über Mitglieder, nur Namen von Benutzern („erfasst von“, „eingerichtet von“, „gestartet von“); diese ersetzt die Namensersetzung des Core. Gespeicherte PDF-Dateien der Kostenbescheide bleiben unverändert bis zu ihrer Frist.
 
 ## Schnittstellen
 

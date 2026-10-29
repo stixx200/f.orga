@@ -102,7 +102,7 @@ Die Module melden ihre Beiträge beim Start an die Registries des Core. Die Shel
 | `ImportRegistry` | Import-Assistent, Läufe des Moduls MP-Feuer | ● | ● | ● | ● | | ● | ● | | | ● | | nutzt | |
 | `SearchRegistry` | Globale Suche | ● | ● | ● | | | ● | ● | | ● | | | | |
 | `CodeRegistry` | Code-Scan (Etiketten) | | | | | | ● | | | ● | | | | |
-| `PersonDataRegistry` | Anonymisieren von Personen | ruft auf | | ● | ● | ● | ● | | ● | ● | ● | | | |
+| `PersonDataRegistry` | Löschprüfung, Anonymisieren von Personen | ● (ruft auf) | ● | ● | ● | ● | ● | | ● | ● | ● | | ● | |
 | `RetentionRegistry` | Aufbewahrungsplan, täglicher Lauf, Aussonderung | ● | ● | ● | | ● | ● | ● | | | ● | | ● | |
 | `Notifications` | Sofortige E-Mails | | ● | | ● | | ● | | | | | | | ● |
 | `OrganizationDirectory` | Rechte je Abteilung, Einrichtungsliste | stellt bereit | nutzt | | | | | | | | | | | |

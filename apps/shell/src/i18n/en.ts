@@ -3,6 +3,7 @@ import { privacyEn } from './privacy';
 import { breachesEn, registerEn, registerAuditEn } from './register';
 import { transparencyAuditEn, transparencyAuditKeysEn, transparencyEn } from './transparency';
 import { hardeningAuditEn, hardeningAuditKeysEn, hardeningEn } from './hardening';
+import { erasureAuditEn, erasureAuditKeysEn, erasureEn } from './erasure';
 
 /** English texts of the shell; the type keeps the keys in sync with `de.ts`. */
 export const en: typeof de = {
@@ -11,6 +12,7 @@ export const en: typeof de = {
   breaches: breachesEn,
   transparency: transparencyEn,
   hardening: hardeningEn,
+  erasure: erasureEn,
   appName: 'f.orga',
   loading: 'Loading …',
   skipToContent: 'Skip to content',
@@ -649,11 +651,13 @@ export const en: typeof de = {
       channel: 'Channel',
       ...transparencyAuditKeysEn,
       ...hardeningAuditKeysEn,
+      ...erasureAuditKeysEn,
     },
     actions: {
       ...registerAuditEn.actions,
       ...transparencyAuditEn,
       ...hardeningAuditEn,
+      ...erasureAuditEn,
       'retention.offered': 'Offered to the archive',
       'retention.exported': 'Export for the archive downloaded',
       'retention.decided': 'Decision of the archive recorded',

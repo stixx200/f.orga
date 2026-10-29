@@ -8,17 +8,27 @@ import { sectionEntries } from './person-description.js';
 const forgaModule = (id: string, privacy?: ModuleManifest['privacy']) => ({ manifest: { id, name: { de: id, en: id }, version: '1', privacy } });
 
 describe('completeness check at startup', () => {
-  it('refuses a module that declares personal data but neither describes nor anonymises it', () => {
+  it('refuses a module that declares personal data but does not describe it', () => {
     const modules = [forgaModule('alpha', { personData: true }), forgaModule('beta', { personData: true }), forgaModule('gamma', { personData: true }), forgaModule('delta')];
-    const handled = new Set(['alpha', 'beta']);
-    expect(() => assertPersonDataComplete(modules, (id) => handled.has(id))).toThrow(/gamma declare personal data/);
-    handled.add('gamma');
-    expect(() => assertPersonDataComplete(modules, (id) => handled.has(id))).not.toThrow();
+    const described = new Set(['alpha', 'beta']);
+    const check = () => assertPersonDataComplete(modules, { describes: (id) => described.has(id), anonymizes: () => true });
+    expect(check).toThrow(/gamma declare personal data but do not describe it/);
+    described.add('gamma');
+    expect(check).not.toThrow();
+  });
+
+  it('refuses a module that declares personal data but does not erase and anonymise it', () => {
+    const modules = [forgaModule('alpha', { personData: true }), forgaModule('beta', { personData: true }), forgaModule('delta')];
+    const anonymized = new Set(['alpha']);
+    const check = () => assertPersonDataComplete(modules, { describes: () => true, anonymizes: (id) => anonymized.has(id) });
+    expect(check).toThrow(/beta declare personal data but do not erase and anonymise it/);
+    anonymized.add('beta');
+    expect(check).not.toThrow();
   });
 
   it('refuses activities named after another module', () => {
     const modules = [forgaModule('alpha', { activities: [{ key: 'beta.things', name: { de: 'x', en: 'x' }, purpose: { de: 'x', en: 'x' } }] })];
-    expect(() => assertPersonDataComplete(modules, () => true)).toThrow(/beta\.things/);
+    expect(() => assertPersonDataComplete(modules, { describes: () => true, anonymizes: () => true })).toThrow(/beta\.things/);
   });
 });
 

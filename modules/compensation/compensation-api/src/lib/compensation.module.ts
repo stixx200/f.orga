@@ -52,7 +52,7 @@ export class CompensationModule implements OnModuleInit {
       describePerson: (id, ctx) => this.data.describePerson(id, ctx),
     });
     this.retentionCategory.register(this.retention);
-    this.personData.register('compensation', { anonymize: (ids) => this.retentionCategory.anonymize(ids) });
+    this.personData.register('compensation', { anonymize: (ids) => this.retentionCategory.anonymize(ids), erasure: (id, ctx) => this.retentionCategory.erasure(id, ctx), erase: (id, areas) => this.retentionCategory.erase(id, areas) });
     // Function allowances paid to the holders of an office (settings) refer to the office catalog.
     this.catalogReferences.register('compensation', async (kind, key) =>
       kind === 'office' ? (await this.items.config()).functionAllowances.filter((a) => a.office === key).length : 0,

@@ -189,6 +189,7 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
         recipients: r.recipients ?? [],
         accessReportDocumentId: r.accessReportDocumentId ?? null,
         rectification: this.rectificationDto(r.rectification, users),
+        erasure: r.erasure ?? null,
         createdAt: r.createdAt.toISOString(),
         createdByName: r.createdBy ? (users.get(r.createdBy) ?? null) : null,
         version: r.version,

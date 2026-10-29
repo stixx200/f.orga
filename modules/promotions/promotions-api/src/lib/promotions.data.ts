@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import { type DescribeContext, HistoryEntry, type PersonDataSection } from '@forga/core-api';
+import { type DescribeContext, type ErasureArea, type ErasureAreaInput, HistoryEntry, type PersonDataSection } from '@forga/core-api';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
-import type { ListStatus } from '@forga/promotions-contracts';
+import type { ListEntry, ListStatus } from '@forga/promotions-contracts';
 import { ExclusionEntity, PromotionListEntity } from './promotions.entities.js';
 
 /** Name of anonymised persons in stored list entries; reads the same in every language. */
@@ -87,15 +87,82 @@ export class PromotionsData {
   /** Reasons of exclusions and comments on list entries are free text about the person: they are emptied, names replaced. */
   async anonymize(personIds: readonly string[]): Promise<void> {
     const em = this.em.fork();
-    const ids = new Set(personIds);
-    const exclusions = await em.find(ExclusionEntity, { personId: { $in: [...ids] } });
+    const exclusions = await em.find(ExclusionEntity, { personId: { $in: [...personIds] } });
     for (const exclusion of exclusions) exclusion.reason = '';
-    for (const list of await em.find(PromotionListEntity, {})) {
-      if (!list.entries.some((e) => ids.has(e.personId))) continue;
-      list.entries = list.entries.map((e) => (ids.has(e.personId) ? { ...e, firstName: ANONYMIZED_NAME, lastName: ANONYMIZED_NAME, comment: '' } : e));
-    }
     await em.flush();
     // The history of the exclusions keeps the former reasons.
     if (exclusions.length) await em.nativeDelete(HistoryEntry, { entity: 'promotions.exclusion', entityId: { $in: exclusions.map((e) => e.id) } });
+    await this.anonymizeEntries(personIds);
+  }
+
+  /**
+   * Names and comments of the persons in promotion lists become "N." and empty, also in the history of the lists (it
+   * keeps the entries as JSON); the entries of other persons stay.
+   */
+  private async anonymizeEntries(personIds: readonly string[]): Promise<void> {
+    const em = this.em.fork();
+    const ids = new Set(personIds);
+    const anonymized = (e: ListEntry): ListEntry => (ids.has(e.personId) ? { ...e, firstName: ANONYMIZED_NAME, lastName: ANONYMIZED_NAME, comment: '' } : e);
+    const changed: string[] = [];
+    for (const list of await em.find(PromotionListEntity, {})) {
+      if (!list.entries.some((e) => ids.has(e.personId))) continue;
+      list.entries = list.entries.map(anonymized);
+      changed.push(list.id);
+    }
+    await em.flush();
+    if (!changed.length) return;
+    const redact = (value: unknown): unknown => {
+      const parsed = typeof value === 'string' && value.startsWith('[') ? (JSON.parse(value) as unknown) : value;
+      if (!Array.isArray(parsed)) return value;
+      const entries = (parsed as ListEntry[]).map((e) => (e && typeof e === 'object' ? anonymized(e) : e));
+      return typeof value === 'string' ? JSON.stringify(entries) : entries;
+    };
+    for (const entry of await em.find(HistoryEntry, { entity: 'promotions.promotion_list', entityId: { $in: changed } })) {
+      const entries = entry.changes['entries'];
+      if (entries) entry.changes = { ...entry.changes, entries: { old: redact(entries.old), new: redact(entries.new) } as typeof entries };
+    }
+    await em.flush();
+  }
+
+  /** Erasure check: exclusions may be deleted; entries in promotion lists stay as record of the decision, anonymised. */
+  async erasure(personId: string): Promise<ErasureAreaInput[]> {
+    const em = this.em.fork();
+    const areas: ErasureAreaInput[] = [];
+    const exclusions = await em.count(ExclusionEntity, { personId });
+    if (exclusions) {
+      areas.push({
+        key: 'promotions.exclusions',
+        title: { de: 'Beförderungen', en: 'Promotions' },
+        data: { de: `${exclusions} ${exclusions === 1 ? 'Ausschluss' : 'Ausschlüsse'} mit Grund`, en: `${exclusions} ${exclusions === 1 ? 'exclusion' : 'exclusions'} with reason` },
+        count: exclusions,
+        outcome: 'delete',
+        keepUntil: null,
+        reason: null,
+      });
+    }
+    const lists = (await em.find(PromotionListEntity, {}, { fields: ['id', 'entries'] })).filter((l) => l.entries.some((e) => e.personId === personId)).length;
+    if (lists) {
+      areas.push({
+        key: 'promotions.lists',
+        title: { de: 'Beförderungen', en: 'Promotions' },
+        data: { de: `Einträge in ${lists} ${lists === 1 ? 'Beförderungsliste' : 'Beförderungslisten'}`, en: `Entries in ${lists} promotion ${lists === 1 ? 'list' : 'lists'}` },
+        count: lists,
+        outcome: 'anonymize',
+        keepUntil: null,
+        reason: { de: 'Liste bleibt mit „N.“, ohne Kommentar; Dienstgrade stehen bei den Grunddaten', en: 'List stays with "N.", without comment; ranks are part of the basic data' },
+      });
+    }
+    return areas;
+  }
+
+  async erase(personId: string, areas: readonly ErasureArea[]): Promise<void> {
+    const keys = new Set(areas.map((a) => a.key));
+    if (keys.has('promotions.exclusions')) {
+      const em = this.em.fork();
+      const exclusions = await em.find(ExclusionEntity, { personId }, { fields: ['id'] });
+      if (exclusions.length) await em.nativeDelete(HistoryEntry, { entity: 'promotions.exclusion', entityId: { $in: exclusions.map((e) => e.id) } });
+      await em.nativeDelete(ExclusionEntity, { personId });
+    }
+    if (keys.has('promotions.lists')) await this.anonymizeEntries([personId]);
   }
 }
