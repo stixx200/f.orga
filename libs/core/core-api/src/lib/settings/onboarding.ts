@@ -44,7 +44,7 @@ export class OnboardingController {
     for (const { manifest, settings } of this.options.modules) {
       if (inactive.has(manifest.id) || !Object.keys(settings).length) continue;
       const page = (manifest.navigation ?? []).find((n) => n.section === 'settings' && n.path === 'settings');
-      if (!page) continue;
+      if (!page || page.onboarding === false) continue;
       items.push({
         key: `module:${manifest.id}`,
         done: Object.keys(settings).some((section) => stored.has(section)),

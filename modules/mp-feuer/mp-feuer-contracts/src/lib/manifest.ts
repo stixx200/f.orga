@@ -16,7 +16,7 @@ export const MP_FEUER_MANIFEST = {
   navigation: [
     { label: { de: 'MP-Feuer', en: 'MP-Feuer' }, path: 'overview', permission: MP_FEUER_READ, icon: 'transfer', section: 'administration' },
     // Remembered selection; shown at the module on "Verwaltung → Module".
-    { label: { de: 'MP-Feuer', en: 'MP-Feuer' }, path: 'settings', permission: MP_FEUER_READ, icon: 'settings', section: 'settings' },
+    { label: { de: 'MP-Feuer', en: 'MP-Feuer' }, path: 'settings', permission: MP_FEUER_READ, icon: 'settings', section: 'settings', onboarding: false },
   ],
   roles: [{ key: 'commander', permissions: ['mp-feuer.*'] }],
   frontend: { remote: 'mp_feuer_web', exposed: './Module' },
