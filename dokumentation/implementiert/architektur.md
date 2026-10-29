@@ -1233,10 +1233,10 @@ Der Einsatzleiter vom Dienst (EvD) hat nach Dienstplan für die ganze Feuerwehr 
 | `ExpectedReportEntity` | `expected_report` | Einsatz, der einen EvD-Bericht bekommt (angelegt, während Modul und Einstellung aktiv waren); nur diese Einsätze können „EvD-Bericht fehlt“ melden |
 | `IncidentExemptionEntity` | `incident_exemption` | „Kein EvD bei diesem Einsatz“: Einsatz (eindeutig), Grund, wer, wann; historisiert (Historie mit `duty-officer.read`) |
 
-**Einstellung** `duty-officer.general`: `reportRequired` („EvD-Bericht für jeden Einsatz anlegen“, Standard an) und `dutyKinds` (Dienstarten mit Name, Satz je Tag mit Gültig-ab und `unit`: nur volle Tage von 24 Stunden oder jeder angefangene Tag). Die Dienstarten sind anfangs leer; „Vorlage übernehmen“ setzt `DUTY_KIND_TEMPLATE` (`duty-officer` „Einsatzleiter vom Dienst (EvD)“, 10 € je vollem Tag ab 01.01.2026). Satzungswerte sind Vorlagen, keine Standardwerte.
+**Einstellung** `duty-officer.general`: `reportRequired` („EvD-Bericht für jeden Einsatz anlegen“, Standard an) und `dutyKinds` (Dienstarten mit Name, Satz je Tag mit Gültig-ab und `unit`: nur volle Tage von 24 Stunden, jeder angefangene Tag oder `midnight`: die Tage, an deren Beginn um 00:00 Uhr die Person eingetragen ist; der Beginn zählt, wenn er genau um 00:00 Uhr liegt, das Ende nicht). Die Dienstarten sind anfangs leer; „Vorlage übernehmen“ setzt `DUTY_KIND_TEMPLATE` (`duty-officer` „Einsatzleiter vom Dienst (EvD)“, 10 € je vollem Tag ab 01.01.2026). Satzungswerte sind Vorlagen, keine Standardwerte.
 
 **Dienstplan** (`roster/roster.ts`)
-- EvD-Dienste stehen nicht in Berichten; sie werden je Tag entschädigt (`dutyCompensation` in den Verträgen): volle oder angefangene Tage × Satz am Tag des Beginns.
+- EvD-Dienste stehen nicht in Berichten; sie werden je Tag entschädigt (`dutyCompensation` in den Verträgen): volle, angefangene oder um 00:00 Uhr belegte Tage × Satz am Tag des Beginns.
 - Pflege von Hand (`/api/duty-officer/roster`, Recht `duty-officer.roster.manage`; unbekannte Art `duty-officer.unknownKind`, unbekannte Person `duty-officer.unknownPerson`) oder per **iCal-Import** über das Importprofil `duty-officer.roster`:
   - Felder `uid`, `title`, `from`, `to` (Pflicht), `notes`; Vorschläge über `UID`, `SUMMARY`, `DTSTART`, `DTEND`, `DESCRIPTION`.
   - Die Person wird am Namen im Titel erkannt („EvD Max Test“, „Test, Max“) unter den Mitgliedern am ersten Tag. Kein oder mehrere Treffer: `duty-officer.unknownPerson` bzw. `duty-officer.ambiguousPerson`; ohne Dienstart `duty-officer.noKind`.
