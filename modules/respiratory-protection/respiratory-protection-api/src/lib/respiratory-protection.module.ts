@@ -51,7 +51,7 @@ export class RespiratoryProtectionModule implements OnModuleInit {
       person: (id) => this.data.exportPerson(id),
       describePerson: (id, ctx) => this.data.describePerson(id, ctx),
     });
-    this.personData.register('respiratory-protection', { anonymize: (ids) => this.data.anonymize(ids) });
+    this.personData.register('respiratory-protection', { anonymize: (ids) => this.data.anonymize(ids), erasure: (id) => this.data.erasure(id), erase: (id) => this.data.erase(id) });
     this.imports.register('respiratory-protection', this.examinations.profile());
     this.imports.register('respiratory-protection', this.stressExercises.profile());
     // Wearers and the chemical suit condition are recognised by these qualifications.

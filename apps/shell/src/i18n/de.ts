@@ -1,6 +1,7 @@
 import { privacyDe } from './privacy';
 import { breachesDe, registerDe, registerAuditDe } from './register';
 import { transparencyAuditDe, transparencyAuditKeysDe, transparencyDe } from './transparency';
+import { erasureAuditDe, erasureAuditKeysDe, erasureDe } from './erasure';
 
 /** German texts of the shell. Keep the keys in sync with `en.ts`. */
 export const de = {
@@ -8,6 +9,7 @@ export const de = {
   register: registerDe,
   breaches: breachesDe,
   transparency: transparencyDe,
+  erasure: erasureDe,
   appName: 'f.orga',
   loading: 'Wird geladen …',
   skipToContent: 'Zum Inhalt springen',
@@ -645,10 +647,12 @@ export const de = {
       text: 'Textbaustein',
       channel: 'Weg',
       ...transparencyAuditKeysDe,
+      ...erasureAuditKeysDe,
     },
     actions: {
       ...registerAuditDe.actions,
       ...transparencyAuditDe,
+      ...erasureAuditDe,
       'retention.offered': 'Dem Archiv angeboten',
       'retention.exported': 'Export für das Archiv heruntergeladen',
       'retention.decided': 'Entscheidung des Archivs erfasst',

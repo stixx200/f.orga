@@ -1,6 +1,6 @@
 import { defineEntity, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import type { BreachNotificationVia, BreachRisk, BreachStatus, Language, PrivacyNoticeSection, PrivacyRequestChannel, PrivacyRequestKind, PrivacyRequestStatus } from '@forga/core-contracts';
+import type { BreachNotificationVia, BreachRisk, BreachStatus, ErasureExecution, Language, PrivacyNoticeSection, PrivacyRequestChannel, PrivacyRequestKind, PrivacyRequestStatus } from '@forga/core-contracts';
 
 /** Rectification of a request as stored. */
 export interface StoredRectification {
@@ -53,6 +53,8 @@ export const PrivacyRequestSchema = defineEntity({
     accessReportDocumentId: p.string().nullable(),
     /** Rectification asked for in "My area" (L12): area, what is wrong, how it is right, marked as corrected. */
     rectification: p.json<StoredRectification>().nullable(),
+    /** Erasure executed for the request (L7): counts of the areas and the end of the restriction, no content. */
+    erasure: p.json<ErasureExecution>().nullable(),
     createdAt: p.datetime().onCreate(() => new Date()),
     createdBy: p.string().nullable(),
     version: p.integer().version(),

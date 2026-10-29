@@ -24,6 +24,8 @@ export interface PersonSummary {
   city?: string;
   /** Mobile or private phone, e.g. for the contact list of a data breach notification. */
   phone?: string;
+  /** Completely anonymised (retention plan or erasure): nothing left to report about the person. */
+  anonymized?: boolean;
 }
 
 /** Postal address of a person, e.g. for the cover letter of the access report. */

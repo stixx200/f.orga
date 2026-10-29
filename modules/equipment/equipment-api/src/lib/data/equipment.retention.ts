@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import { Attachments, HistoryEntry, type RetentionCandidate, type RetentionExportRecord, type RetentionQuery, RetentionRegistry, User } from '@forga/core-api';
+import { ANONYMIZED_NAME, Attachments, type ErasureArea, type ErasureAreaInput, type ErasureContext, HistoryEntry, type RetentionCandidate, type RetentionExportRecord, type RetentionQuery, RetentionRegistry, User } from '@forga/core-api';
 import { DefectEntity, EquipmentItemEntity, InspectionEntity, UsageEntity } from '../equipment.entities.js';
 
 const cutoffDay = (query: RetentionQuery) => query.cutoff.toISOString().slice(0, 10);
@@ -101,11 +101,67 @@ export class EquipmentRetention {
    */
   async anonymize(personIds: readonly string[]): Promise<void> {
     const em = this.em.fork();
-    const users = await em.find(User, { personId: { $in: [...personIds] } }, { fields: ['id'] });
-    if (!users.length) return;
-    const defects = await em.find(DefectEntity, { reportedByUserId: { $in: users.map((u) => u.id) } }, { fields: ['id'] });
+    const defects = await this.reportedDefects(em, personIds);
     if (!defects.length) return;
-    await em.nativeUpdate(DefectEntity, { id: { $in: defects.map((d) => d.id) } }, { reportedBy: 'N. N.' });
-    await em.nativeDelete(HistoryEntry, { entity: 'equipment.defect', entityId: { $in: defects.map((d) => d.id) } });
+    await em.nativeUpdate(DefectEntity, { id: { $in: defects } }, { reportedBy: ANONYMIZED_NAME });
+    await em.nativeDelete(HistoryEntry, { entity: 'equipment.defect', entityId: { $in: defects } });
+  }
+
+  private async reportedDefects(em: EntityManager, personIds: readonly string[]): Promise<string[]> {
+    const users = await em.find(User, { personId: { $in: [...personIds] } }, { fields: ['id'] });
+    if (!users.length) return [];
+    return (await em.find(DefectEntity, { reportedByUserId: { $in: users.map((u) => u.id) } }, { fields: ['id'] })).map((d) => d.id);
+  }
+
+  /**
+   * Erasure check: reported defects stay without the name of the reporter; inspections the person performed are the
+   * proof of the inspection and stay with the item, after its retirement for the period of retired equipment.
+   */
+  async erasure(personId: string, ctx: ErasureContext): Promise<ErasureAreaInput[]> {
+    const em = this.em.fork();
+    const areas: ErasureAreaInput[] = [];
+    const defects = await this.reportedDefects(em, [personId]);
+    if (defects.length) {
+      areas.push({
+        key: 'equipment.defects',
+        title: { de: 'Geräte', en: 'Equipment' },
+        data: { de: `${defects.length} ${defects.length === 1 ? 'gemeldeter Mangel' : 'gemeldete Mängel'}`, en: `${defects.length} reported ${defects.length === 1 ? 'defect' : 'defects'}` },
+        count: defects.length,
+        outcome: 'anonymize',
+        keepUntil: null,
+        reason: { de: 'Mangel bleibt, Meldender „N. N.“', en: 'Defect stays, reporter "N. N."' },
+      });
+    }
+    const inspections = await em.find(InspectionEntity, { inspectorPersonId: personId }, { populate: ['item'] });
+    if (inspections.length) {
+      const items = [...new Map(inspections.map((i) => [i.item.id, i.item])).values()];
+      const holds = items.map((item) => ctx.retain('equipment.retired', item.status === 'retired' ? (item.retirement?.date ?? null) : null));
+      const kept = holds.filter((h) => h !== null);
+      const hold = kept.find((h) => h.until === null) ?? kept.toSorted((a, b) => (a.until! < b.until! ? 1 : -1))[0];
+      areas.push({
+        key: 'equipment.inspections',
+        title: { de: 'Geräte', en: 'Equipment' },
+        data: { de: `${inspections.length} ${inspections.length === 1 ? 'durchgeführte Prüfung' : 'durchgeführte Prüfungen'}`, en: `${inspections.length} ${inspections.length === 1 ? 'inspection' : 'inspections'} performed` },
+        count: inspections.length,
+        outcome: hold ? 'keep' : 'anonymize',
+        keepUntil: hold?.until ?? null,
+        reason: hold
+          ? { de: `Prüfnachweis des Geräts; ${hold.reason.de}`, en: `Proof of inspection of the item; ${hold.reason.en}` }
+          : { de: 'Prüfung bleibt ohne Prüfer', en: 'Inspection stays without inspector' },
+      });
+    }
+    return areas;
+  }
+
+  async erase(personId: string, areas: readonly ErasureArea[]): Promise<void> {
+    const keys = new Set(areas.map((a) => a.key));
+    if (keys.has('equipment.defects')) await this.anonymize([personId]);
+    if (keys.has('equipment.inspections')) {
+      const em = this.em.fork();
+      const inspections = await em.find(InspectionEntity, { inspectorPersonId: personId }, { fields: ['id'] });
+      if (!inspections.length) return;
+      await em.nativeUpdate(InspectionEntity, { inspectorPersonId: personId }, { inspectorPersonId: null });
+      await em.nativeDelete(HistoryEntry, { entity: 'equipment.inspection', entityId: { $in: inspections.map((i) => i.id) } });
+    }
   }
 }

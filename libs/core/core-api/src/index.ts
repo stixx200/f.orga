@@ -60,6 +60,7 @@ export * from './lib/access-report/access-report.texts.js';
 export * from './lib/privacy/privacy.entities.js';
 export * from './lib/privacy/privacy-notice.js';
 export * from './lib/privacy/privacy-requests.js';
+export * from './lib/privacy/erasure.js';
 export * from './lib/privacy/privacy-text.js';
 export * from './lib/privacy/restriction.js';
 export * from './lib/privacy/register.js';

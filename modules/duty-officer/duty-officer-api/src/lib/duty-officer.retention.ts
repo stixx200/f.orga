@@ -84,14 +84,30 @@ export class DutyOfficerRetention {
       },
     });
     // Anonymised persons: notes on their duties are emptied, and so is the history holding them.
+    const anonymize = async (personIds: readonly string[]) => {
+      const em = this.em.fork();
+      const duties = await em.find(DutyAssignmentEntity, { personId: { $in: [...personIds] } }, { fields: ['id'] });
+      if (!duties.length) return;
+      await em.nativeUpdate(DutyAssignmentEntity, { personId: { $in: [...personIds] } }, { notes: '' });
+      await em.nativeDelete(HistoryEntry, { entity: 'duty_officer.duty_assignment', entityId: { $in: duties.map((d) => d.id) } });
+    };
     personData.register('duty-officer', {
-      anonymize: async (personIds) => {
-        const em = this.em.fork();
-        const duties = await em.find(DutyAssignmentEntity, { personId: { $in: [...personIds] } }, { fields: ['id'] });
-        if (!duties.length) return;
-        await em.nativeUpdate(DutyAssignmentEntity, { personId: { $in: [...personIds] } }, { notes: '' });
-        await em.nativeDelete(HistoryEntry, { entity: 'duty_officer.duty_assignment', entityId: { $in: duties.map((d) => d.id) } });
+      anonymize,
+      // Duties stay in the roster (allowance, who was on duty at an incident), without the notes.
+      erasure: async (personId) => {
+        const count = await this.em.fork().count(DutyAssignmentEntity, { personId });
+        if (!count) return [];
+        return [{
+          key: 'duty-officer.roster',
+          title: { de: 'Einsatzleiter vom Dienst', en: 'Duty officer' },
+          data: { de: `${count} ${count === 1 ? 'Dienst' : 'Dienste'} im Dienstplan`, en: `${count} ${count === 1 ? 'duty' : 'duties'} in the roster` },
+          count,
+          outcome: 'anonymize',
+          keepUntil: null,
+          reason: { de: 'Dienste bleiben für Entschädigung und Einsätze, ohne Notizen', en: 'Duties stay for allowance and incidents, without notes' },
+        }];
       },
+      erase: (personId) => anonymize([personId]),
     });
   }
 }
