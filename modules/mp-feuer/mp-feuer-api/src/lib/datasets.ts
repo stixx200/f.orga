@@ -22,6 +22,8 @@ export interface DatasetDefinition {
   units?: boolean;
   /** Options of the profile not offered here, e.g. creating catalog entries blindly (choosing entries replaces it). */
   hiddenOptions?: string[];
+  /** Value (`YYYY-MM-DD…`) a "from" date limits the rows by, e.g. the begin of an incident report. */
+  dateField?: string;
 }
 
 const normalized = (text: string | undefined) => (text ?? '').toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
@@ -53,6 +55,7 @@ export const DATASETS: readonly DatasetDefinition[] = [
       });
     },
     units: true,
+    dateField: 'begin',
   },
 ];
 
