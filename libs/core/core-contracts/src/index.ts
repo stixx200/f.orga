@@ -8,3 +8,4 @@ export * from './lib/tasks.js';
 export * from './lib/imports.js';
 export * from './lib/search.js';
 export * from './lib/attachments.js';
+export * from './lib/audit.js';
