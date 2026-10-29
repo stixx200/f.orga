@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
-import { addBerlinDays, Audit, berlinDate, berlinDayAfter, ModuleStateService, SettingsService } from '@forga/core-api';
+import { addBerlinDays, Audit, berlinDate, berlinDayAfter, ModuleStateService, RateLimits, SettingsService } from '@forga/core-api';
 import type { BrigadeSettings, LocalizedText } from '@forga/core-contracts';
 import {
   type BookingWindowSettings,
@@ -51,7 +51,6 @@ import {
 } from '@forga/training-contracts';
 import type { z } from 'zod';
 import type { TerminalEntity } from '../info-terminal.entities.js';
-import { RateLimiter } from '../security/rate-limit.js';
 
 /** Statuses of the persons on the name tiles of a department: active members there (in youth and veterans departments their status there). */
 function tileStatuses(type: DepartmentType): readonly PersonStatus[] {
@@ -62,6 +61,21 @@ function tileStatuses(type: DepartmentType): readonly PersonStatus[] {
 
 const tooMany = () => new HttpException({ code: 'info-terminal.tooManyRequests' }, HttpStatus.TOO_MANY_REQUESTS);
 
+/** At most 120 changes in 10 minutes and 30 searches a minute per terminal. */
+const WRITES = { limit: 120, windowMs: 10 * 60_000 };
+const SEARCHES = { limit: 30, windowMs: 60_000 };
+/** At most 10 unknown licence stickers in 10 minutes per terminal (then blocked for 10 minutes); one audit entry an hour. */
+const UNKNOWN_CODES = { limit: 10, windowMs: 10 * 60_000, blockMs: 10 * 60_000 };
+const ONCE_AN_HOUR = { limit: 1, windowMs: 60 * 60_000 };
+
+/**
+ * The street of an incident without house number (L22): the terminal is a device in a room many people enter, the
+ * street is enough to recognise the incident. `Hauptstr. 12a`, `Am Markt 3-5` → `Hauptstr.`, `Am Markt`.
+ */
+export function streetWithoutNumber(street: string): string {
+  return street.replace(/\s+\d+\s*[a-zA-Z]?(\s*[-–/]\s*\d+\s*[a-zA-Z]?)?\s*$/, '').trim();
+}
+
 /** Tolerance for clocks: an alarm a few minutes in the future (clock of the device ahead) is still accepted. */
 const FUTURE_TOLERANCE_MS = 5 * 60_000;
 
@@ -71,14 +85,8 @@ const FUTURE_TOLERANCE_MS = 5 * 60_000;
  */
 @Injectable()
 export class KioskService {
-  /** At most 120 changes in 10 minutes and 30 searches a minute per terminal. */
-  private readonly writes = new RateLimiter(120, 10 * 60_000);
-  private readonly searches = new RateLimiter(30, 60_000);
-  /** At most 10 unknown licence stickers in 10 minutes per terminal (then blocked for 10 minutes); one audit entry an hour. */
-  private readonly unknownCodes = new RateLimiter(10, 10 * 60_000, 10 * 60_000);
-  private readonly unknownCodesLogged = new RateLimiter(1, 60 * 60_000);
-
   constructor(
+    private readonly rateLimits: RateLimits,
     private readonly settings: SettingsService,
     private readonly modules: ModuleStateService,
     private readonly audit: Audit,
@@ -131,8 +139,8 @@ export class KioskService {
   }
 
   /** Counts a change of the terminal; `429` above the limit. */
-  write(terminal: TerminalEntity): void {
-    if (!this.writes.hit(terminal.id)) throw new HttpException({ code: 'info-terminal.tooManyRequests' }, HttpStatus.TOO_MANY_REQUESTS);
+  async write(terminal: TerminalEntity): Promise<void> {
+    if (!(await this.rateLimits.hit('info-terminal.write', terminal.id, WRITES))) throw tooMany();
   }
 
   private actor(terminal: TerminalEntity, userName: string): TerminalActor {
@@ -171,7 +179,7 @@ export class KioskService {
   }
 
   private incident(r: TerminalReport): KioskIncident {
-    return { reportId: r.reportId, alarmKeyword: r.alarmKeyword, alarmedAt: r.alarmedAt, street: r.street, city: r.city, endedAt: r.endedAt, closesAt: r.closesAt, bookable: r.bookable, booked: r.booked };
+    return { reportId: r.reportId, alarmKeyword: r.alarmKeyword, alarmedAt: r.alarmedAt, street: streetWithoutNumber(r.street), city: r.city, endedAt: r.endedAt, closesAt: r.closesAt, bookable: r.bookable, booked: r.booked };
   }
 
   private scope(terminal: TerminalEntity, department: Department, settings: InfoTerminalSettings): TerminalSessionScope {
@@ -222,17 +230,38 @@ export class KioskService {
       .toSorted((a, b) => a.lastName.localeCompare(b.lastName, 'de') || a.firstName.localeCompare(b.firstName, 'de'));
   }
 
-  /** Search over all persons who have not left (from 3 letters, at most 10): name and short names of the departments. */
+  /**
+   * Search over the persons who have not left (from 3 letters, at most 10): name and short names of the departments. By
+   * default only persons of the terminal's departments and the departments below them (L22); with the setting
+   * `searchAllPersons` all persons of the brigade. Persons whose processing is restricted never appear.
+   */
   async search(terminal: TerminalEntity, departmentId: string | undefined, query: string): Promise<KioskPerson[]> {
     await this.department(terminal, departmentId);
-    if (!this.searches.hit(terminal.id)) throw new HttpException({ code: 'info-terminal.tooManyRequests' }, HttpStatus.TOO_MANY_REQUESTS);
+    if (!(await this.rateLimits.hit('info-terminal.search', terminal.id, SEARCHES))) throw tooMany();
     if (query.trim().length < 3) return [];
-    const [found, departments] = await Promise.all([this.directory.search(query.trim(), { limit: 10 }), this.organization.departments()]);
+    const [settings, departments] = await Promise.all([this.moduleSettings(), this.organization.departments()]);
+    const scope = settings.searchAllPersons ? undefined : this.searchDepartments(terminal, departments);
+    const found = await this.directory.search(query.trim(), { limit: 10, ...(scope ? { departmentIds: scope } : {}) });
     const short = new Map(departments.map((d) => [d.id, d.shortName]));
     return found
       .filter((p) => p.status !== 'left')
       .slice(0, 10)
       .map((p) => ({ id: p.id, firstName: p.firstName, lastName: p.lastName, departments: p.departmentIds.flatMap((d) => (short.has(d) ? [short.get(d)!] : [])) }));
+  }
+
+  /** The terminal's departments with all departments below them (youth, veterans …). */
+  private searchDepartments(terminal: TerminalEntity, departments: readonly Department[]): string[] {
+    const result = new Set(terminal.departmentIds);
+    for (let added = true; added; ) {
+      added = false;
+      for (const d of departments) {
+        if (d.parentId && result.has(d.parentId) && !result.has(d.id)) {
+          result.add(d.id);
+          added = true;
+        }
+      }
+    }
+    return [...result];
   }
 
   private async names(personIds: readonly string[]): Promise<Map<string, { firstName: string; lastName: string }>> {
@@ -299,7 +328,7 @@ export class KioskService {
   async book(terminal: TerminalEntity, departmentId: string | undefined, reportId: string, input: TerminalBookingInput): Promise<KioskEntry> {
     const department = await this.department(terminal, departmentId);
     this.operational(department);
-    this.write(terminal);
+    await this.write(terminal);
     const settings = await this.moduleSettings();
     await this.booking.book(reportId, department.id, input, this.actor(terminal, await this.actorName(terminal)), this.window(settings));
     return this.entry(terminal, department.id, reportId, input.personId);
@@ -308,7 +337,7 @@ export class KioskService {
   async cancel(terminal: TerminalEntity, departmentId: string | undefined, reportId: string, personId: string): Promise<void> {
     const department = await this.department(terminal, departmentId);
     this.operational(department);
-    this.write(terminal);
+    await this.write(terminal);
     const settings = await this.moduleSettings();
     await this.booking.cancel(reportId, department.id, personId, this.actor(terminal, await this.actorName(terminal)), this.window(settings));
   }
@@ -339,7 +368,7 @@ export class KioskService {
       incidentId: m.incidentId,
       alarmKeyword: m.alarmKeyword,
       alarmedAt: m.alarmedAt,
-      street: m.street,
+      street: streetWithoutNumber(m.street),
       city: m.city,
       departments: m.departmentIds.flatMap((d) => (short.has(d) ? [short.get(d)!] : [])),
       ownReport: m.departmentIds.includes(department.id),
@@ -348,7 +377,7 @@ export class KioskService {
 
   async createIncident(terminal: TerminalEntity, input: z.output<typeof KioskIncidentInput>): Promise<{ reportId: string }> {
     const department = await this.assertNewIncident(terminal, input);
-    this.write(terminal);
+    await this.write(terminal);
     const result = await this.booking.createIncident(
       { alarmKeyword: input.alarmKeyword, alarmedAt: input.alarmedAt, dispatchNumber: input.dispatchNumber || null, street: input.street, city: input.city },
       department.id,
@@ -384,7 +413,7 @@ export class KioskService {
   async checkIn(terminal: TerminalEntity, departmentId: string | undefined, sessionId: string, input: TerminalCheckInInput): Promise<void> {
     const department = await this.department(terminal, departmentId);
     const checkIns = await this.training(terminal);
-    this.write(terminal);
+    await this.write(terminal);
     const settings = await this.moduleSettings();
     // Breathing apparatus only in the view of an operational department.
     await checkIns.checkIn(sessionId, this.scope(terminal, department, settings), { ...input, breathingApparatus: department.type === 'operational' && Boolean(input.breathingApparatus) });
@@ -393,7 +422,7 @@ export class KioskService {
   async cancelCheckIn(terminal: TerminalEntity, departmentId: string | undefined, sessionId: string, personId: string): Promise<void> {
     const department = await this.department(terminal, departmentId);
     const checkIns = await this.training(terminal);
-    this.write(terminal);
+    await this.write(terminal);
     const settings = await this.moduleSettings();
     await checkIns.cancel(sessionId, this.scope(terminal, department, settings), personId);
   }
@@ -404,15 +433,15 @@ export class KioskService {
    */
   async driverLicense(terminal: TerminalEntity, input: z.output<typeof KioskDriverLicenseInput>): Promise<KioskDriverLicense> {
     if (!this.licenses) throw new ForbiddenException({ code: 'info-terminal.licenseCheckOff' });
-    if (this.unknownCodes.blocked(terminal.id)) throw tooMany();
+    if (await this.rateLimits.blocked('info-terminal.license-code', terminal.id)) throw tooMany();
     const view = await this.licenses.lookup(input.code);
     if (!view) {
-      if (!this.unknownCodes.hit(terminal.id)) throw tooMany();
-      if (this.unknownCodesLogged.hit(terminal.id)) await this.audit.log('info-terminal.unknown-license-code', { terminalId: terminal.id }, terminal.userId);
+      if (!(await this.rateLimits.hit('info-terminal.license-code', terminal.id, UNKNOWN_CODES))) throw tooMany();
+      if (await this.rateLimits.hit('info-terminal.license-code-logged', terminal.id, ONCE_AN_HOUR)) await this.audit.log('info-terminal.unknown-license-code', { terminalId: terminal.id }, terminal.userId);
       throw new NotFoundException({ code: 'info-terminal.licenseNotRegistered' });
     }
     if (!input.confirm) return { ...view, confirmed: null };
-    this.write(terminal);
+    await this.write(terminal);
     try {
       const confirmed = await this.licenses.confirm(input.code, { terminalId: terminal.id, device: await this.actorName(terminal), language: input.language ?? terminal.language });
       return { ...view, confirmed };

@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261029180556_initial extends Migration {
+export class Migration20261029184810_initial extends Migration {
 
-  override name = 'Migration20261029180556_initial';
+  override name = 'Migration20261029184810_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"core\";");
@@ -35,6 +35,9 @@ export class Migration20261029180556_initial extends Migration {
     this.addSql("create table \"core\".\"privacy_request\" (\"id\" uuid not null, \"person_id\" varchar(255) null, \"third_party\" jsonb null, \"kind\" varchar(255) not null, \"received_on\" varchar(10) not null, \"channel\" varchar(255) not null, \"identity_checked\" boolean not null default false, \"identity_note\" text not null default '', \"content\" text not null default '', \"language\" varchar(255) not null default 'de', \"activity_key\" varchar(255) null, \"activity\" text not null default '', \"due_on\" varchar(10) not null, \"extended_until\" varchar(10) null, \"extension_reason\" text not null default '', \"extension_notified_on\" varchar(10) null, \"status\" varchar(255) not null default 'received', \"closed_on\" varchar(10) null, \"rejection_reason\" text not null default '', \"assignee_id\" varchar(255) null, \"notes\" text not null default '', \"recipients\" jsonb not null default '[]', \"access_report_document_id\" varchar(255) null, \"rectification\" jsonb null, \"erasure\" jsonb null, \"created_at\" timestamptz not null, \"created_by\" varchar(255) null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("create index \"privacy_request_person_id_index\" on \"core\".\"privacy_request\" (\"person_id\");");
     this.addSql("create index \"privacy_request_status_index\" on \"core\".\"privacy_request\" (\"status\");");
+    this.addSql("create table \"core\".\"rate_limit\" (\"id\" varchar(255) not null, \"scope\" varchar(255) not null, \"count\" int not null, \"window_start\" timestamptz not null, \"blocked_until\" timestamptz null, \"updated_at\" timestamptz not null, primary key (\"id\"));");
+    this.addSql("create index \"rate_limit_scope_index\" on \"core\".\"rate_limit\" (\"scope\");");
+    this.addSql("create index \"rate_limit_updated_at_index\" on \"core\".\"rate_limit\" (\"updated_at\");");
     this.addSql("create table \"core\".\"retention_case\" (\"id\" uuid not null, \"category\" varchar(255) not null, \"rule_key\" varchar(255) not null, \"record_id\" varchar(255) not null, \"label\" text not null, \"neutral_label\" text not null, \"reason\" jsonb null, \"event_date\" varchar(10) not null, \"due_since\" varchar(10) not null, \"attachments\" int not null default 0, \"status\" varchar(255) not null default 'due', \"action\" varchar(255) not null, \"after_decision\" varchar(255) null, \"special_case\" boolean not null default false, \"blocked_by\" varchar(255) null, \"offer_id\" varchar(255) null, \"offered_at\" timestamptz null, \"archive\" varchar(255) null, \"offer_note\" text null, \"decided_on\" varchar(10) null, \"decision_note\" text null, \"deferred_until\" varchar(10) null, \"defer_reason\" text null, \"executed_at\" timestamptz null, \"executed_action\" varchar(255) null, \"created_at\" timestamptz not null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("create index \"retention_case_category_record_id_index\" on \"core\".\"retention_case\" (\"category\", \"record_id\");");
     this.addSql("create index \"retention_case_status_index\" on \"core\".\"retention_case\" (\"status\");");
@@ -42,16 +45,17 @@ export class Migration20261029180556_initial extends Migration {
     this.addSql("create table \"core\".\"role\" (\"id\" uuid not null, \"name\" jsonb not null, \"template_key\" varchar(255) null, \"description\" jsonb not null default '{\"de\":\"\",\"en\":\"\"}', \"permissions\" jsonb not null, \"permissions_all_departments\" jsonb not null default '[]', \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"role\" add constraint \"role_template_key_unique\" unique (\"template_key\");");
     this.addSql("create table \"core\".\"setting\" (\"section\" varchar(255) not null, \"value\" jsonb not null, \"version\" int not null default 1, primary key (\"section\"));");
-    this.addSql("create table \"core\".\"user\" (\"id\" uuid not null, \"username\" varchar(255) not null, \"display_name\" varchar(255) not null, \"email\" varchar(255) null, \"password_hash\" varchar(255) null, \"person_id\" varchar(255) null, \"language\" varchar(255) not null default 'de', \"receive_digest\" boolean not null default true, \"hidden_tasks\" jsonb not null default '[]', \"active\" boolean not null default true, \"technical\" boolean not null default false, \"last_login\" timestamptz null, \"oidc_subject\" varchar(255) null, \"privacy_notice_version\" int null, \"privacy_notice_acknowledged_at\" timestamptz null, \"version\" int not null default 1, primary key (\"id\"));");
+    this.addSql("create table \"core\".\"user\" (\"id\" uuid not null, \"username\" varchar(255) not null, \"display_name\" varchar(255) not null, \"email\" varchar(255) null, \"password_hash\" varchar(255) null, \"person_id\" varchar(255) null, \"language\" varchar(255) not null default 'de', \"receive_digest\" boolean not null default true, \"hidden_tasks\" jsonb not null default '[]', \"active\" boolean not null default true, \"locked_at\" timestamptz null, \"technical\" boolean not null default false, \"last_login\" timestamptz null, \"oidc_subject\" varchar(255) null, \"privacy_notice_version\" int null, \"privacy_notice_acknowledged_at\" timestamptz null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"user\" add constraint \"user_username_unique\" unique (\"username\");");
     this.addSql("alter table \"core\".\"user\" add constraint \"user_person_id_unique\" unique (\"person_id\");");
     this.addSql("alter table \"core\".\"user\" add constraint \"user_oidc_subject_unique\" unique (\"oidc_subject\");");
-    this.addSql("create table \"core\".\"session\" (\"id\" varchar(255) not null, \"user_id\" uuid not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz not null, \"impersonator_id\" uuid null, \"impersonation_reason\" text null, \"elevated_until\" timestamptz null, primary key (\"id\"));");
+    this.addSql("create table \"core\".\"session\" (\"id\" varchar(255) not null, \"ref\" uuid not null, \"user_id\" uuid not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz not null, \"last_activity_at\" timestamptz not null, \"persistent\" boolean not null default false, \"user_agent\" varchar(255) null, \"address\" varchar(255) null, \"impersonator_id\" uuid null, \"impersonation_reason\" text null, \"elevated_until\" timestamptz null, primary key (\"id\"));");
+    this.addSql("alter table \"core\".\"session\" add constraint \"session_ref_unique\" unique (\"ref\");");
     this.addSql("create index \"session_expires_at_index\" on \"core\".\"session\" (\"expires_at\");");
     this.addSql("create table \"core\".\"role_assignment\" (\"id\" uuid not null, \"user_id\" uuid not null, \"role_id\" uuid not null, \"department_id\" varchar(255) null, primary key (\"id\"));");
     this.addSql("create table \"core\".\"password_reset\" (\"id\" uuid not null, \"user_id\" uuid not null, \"purpose\" varchar(255) not null default 'reset', \"email\" varchar(255) null, \"hash\" varchar(255) not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz not null, \"used_at\" timestamptz null, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"password_reset\" add constraint \"password_reset_hash_unique\" unique (\"hash\");");
-    this.addSql("create table \"core\".\"api_token\" (\"id\" uuid not null, \"name\" varchar(255) not null, \"user_id\" uuid not null, \"scopes\" jsonb not null, \"prefix\" varchar(255) not null, \"hash\" varchar(255) not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz null, \"last_used_at\" timestamptz null, \"revoked_at\" timestamptz null, primary key (\"id\"));");
+    this.addSql("create table \"core\".\"api_token\" (\"id\" uuid not null, \"name\" varchar(255) not null, \"recipient\" varchar(255) not null default '', \"purpose\" text not null default '', \"allowed_addresses\" jsonb not null default '[]', \"user_id\" uuid not null, \"scopes\" jsonb not null, \"prefix\" varchar(255) not null, \"hash\" varchar(255) not null, \"created_at\" timestamptz not null, \"expires_at\" timestamptz null, \"last_used_at\" timestamptz null, \"revoked_at\" timestamptz null, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"api_token\" add constraint \"api_token_hash_unique\" unique (\"hash\");");
     this.addSql("create table \"core\".\"user_mfa\" (\"id\" uuid not null, \"user_id\" uuid not null, \"secret\" text not null, \"confirmed_at\" timestamptz null, \"last_step\" int null, \"recovery_codes\" jsonb not null default '[]', \"failures\" int not null default 0, \"failure_window_start\" timestamptz null, \"locked_until\" timestamptz null, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"user_mfa\" add constraint \"user_mfa_user_id_unique\" unique (\"user_id\");");
@@ -86,6 +90,7 @@ export class Migration20261029180556_initial extends Migration {
     this.addSql("drop table if exists \"core\".\"privacy_document\" cascade;");
     this.addSql("drop table if exists \"core\".\"privacy_notice\" cascade;");
     this.addSql("drop table if exists \"core\".\"privacy_request\" cascade;");
+    this.addSql("drop table if exists \"core\".\"rate_limit\" cascade;");
     this.addSql("drop table if exists \"core\".\"retention_case\" cascade;");
     this.addSql("drop table if exists \"core\".\"role\" cascade;");
     this.addSql("drop table if exists \"core\".\"setting\" cascade;");

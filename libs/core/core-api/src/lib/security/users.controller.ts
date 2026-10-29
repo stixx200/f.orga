@@ -29,6 +29,7 @@ import { CurrentUser, RequirePermissions } from './decorators.js';
 import { OrganizationDirectory, type PersonSummary } from './organization-directory.js';
 import { assertEmailFree, sameEmail, usersWithEmail } from './emails.js';
 import { hashPassword } from './password.js';
+import { assertPasswordAllowed } from './password-policy.js';
 import { MfaService } from './mfa.js';
 import { PasswordResetService } from './password-reset.js';
 import { PermissionRegistry } from './permission-registry.js';
@@ -55,6 +56,7 @@ export function toUserDto(user: User, mfa: MfaInfo = { mfaEnrolled: false, mfaNe
     active: user.active,
     technical: user.technical,
     lastLogin: user.lastLogin?.toISOString() ?? null,
+    lockedAt: user.active ? null : (user.lockedAt?.toISOString() ?? null),
     oidcLinked: Boolean(user.oidcSubject),
     passwordSet: Boolean(user.passwordHash),
     ...mfa,
@@ -127,6 +129,7 @@ export class UsersController {
   @Post()
   async create(@Body(new ZodPipe(UserInput)) input: ParsedUserInput, @CurrentUser() current: AuthenticatedUser): Promise<UserDto> {
     if (!input.password) throw new BadRequestException({ code: 'users.passwordRequired' });
+    assertPasswordAllowed(input.password, [input.username, input.displayName, input.email]);
     const em = this.em.fork();
     await this.assertNotWider(em, current, input.roles);
     await this.validateReferences(em, input.roles, input.personId, null);
@@ -143,6 +146,7 @@ export class UsersController {
       language: input.language,
       receiveDigest: input.receiveDigest,
       active: input.active,
+      lockedAt: input.active ? null : new Date(),
       passwordHash: await hashPassword(input.password),
     });
     await this.assignRoles(em, user, input.roles);
@@ -173,6 +177,9 @@ export class UsersController {
       const emailChanged = !sameEmail(input.email, user.email);
       if (input.active && (emailChanged || !user.active)) await assertEmailFree(em, input.email, user.id);
       const previousPersonId = user.personId ?? null;
+      if (input.password) assertPasswordAllowed(input.password, [input.username, input.displayName, input.email]);
+      // The retention period of a locked account runs from the lock (L21).
+      if (user.active !== input.active) user.lockedAt = input.active ? null : new Date();
 
       em.assign(user, {
         username: input.username,

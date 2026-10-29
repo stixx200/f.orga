@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Department, PersonSummary, Station } from '@forga/masterdata-contracts';
-import type { Session, SessionType, TrainingSettings } from '@forga/training-contracts';
+import type { Session, SessionType, TrainingFeedLinks, TrainingSettings } from '@forga/training-contracts';
 import { api, useLocalized, withQuery } from '@forga/web-sdk';
 
 export const READ = 'training.read';
@@ -13,6 +13,7 @@ export const keys = {
   sessions: ['training', 'sessions'] as const,
   session: (id: string) => ['training', 'sessions', id] as const,
   types: ['training', 'types'] as const,
+  feedLinks: ['training', 'feed-links'] as const,
 };
 
 const LONG = 5 * 60_000;
@@ -32,6 +33,11 @@ export function useTypes() {
 
 export function useTrainingSettings() {
   return useQuery({ queryKey: ['core', 'settings', 'training.general'], queryFn: () => api<TrainingSettings | null>('core/settings/training.general') });
+}
+
+/** Addresses of the calendar feed: all departments and one per department (managers of the settings). */
+export function useFeedLinks() {
+  return useQuery({ queryKey: keys.feedLinks, queryFn: () => api<TrainingFeedLinks>('training/feed-links') });
 }
 
 export function useDepartments() {

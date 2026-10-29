@@ -6,7 +6,7 @@ import type { ActiveModule } from '@forga/core-contracts';
 import type { Terminal, TerminalLink } from '@forga/info-terminal-contracts';
 import type { Department, Station } from '@forga/masterdata-contracts';
 import { api, can, formatDateTime, send, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { ConfirmDialog, DataTable, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { fetchLink, keys, MANAGE, notSeenFor, useDepartments, useSettings, useStations, useTerminals } from '../api';
 import { LinkDialog } from '../components/LinkDialog';
 import { draftOf, emptyDraft, type TerminalDraft, TerminalForm } from '../components/TerminalForm';
@@ -67,6 +67,8 @@ export function TerminalsPage() {
   const shown = terminals.filter((terminal) => !departmentId || terminal.departmentIds.includes(departmentId));
   const status = (terminal: Terminal) => {
     if (terminal.revokedAt) return <StatusBadge>{t('terminals.revokedOn', { date: formatDateTime(terminal.revokedAt, i18n.language), by: terminal.revokedBy ?? '' })}</StatusBadge>;
+    // Blocked by „Alle Sitzungen beenden“ in a data breach: the device needs a new link.
+    if (!terminal.keyPrefix) return <StatusBadge tone="warning">{t('terminals.blocked')}</StatusBadge>;
     const days = settings ? notSeenFor(terminal, settings.notSeenWarningDays) : null;
     return days ? <StatusBadge tone="warning">{t('terminals.notSeen', { count: days })}</StatusBadge> : <StatusBadge tone="done">{t('terminals.active')}</StatusBadge>;
   };
@@ -76,6 +78,7 @@ export function TerminalsPage() {
   return (
     <Stack gap="lg">
       <PageHeader breadcrumbs={[{ label: t('administration') }, { label: t('terminals.title') }]} title={t('terminals.title')} />
+      <Notice kind="info">{t('terminals.placement')}</Notice>
       <Group align="end" gap="md">
         <Select
           label={t('terminals.department')}

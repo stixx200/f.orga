@@ -15,6 +15,12 @@ export const SecuritySettings = z.object({
   mailAllWithoutNames: z.boolean().default(false),
   /** Users get an e-mail when an administrator logs in as them ("Anmelden als", L15). */
   notifyImpersonation: z.boolean().default(true),
+  /** Sessions of accounts with privileged permissions (step-up, privileged) end after this many minutes without input. */
+  idleMinutesPrivileged: z.number().int().min(5).max(24 * 60).default(60),
+  /** Sessions of other accounts end after this many minutes without input. */
+  idleMinutesOther: z.number().int().min(5).max(7 * 24 * 60).default(8 * 60),
+  /** „Angemeldet bleiben“ (at most 14 days, no idle logout) is offered to accounts without privileged permissions. */
+  allowRemember: z.boolean().default(true),
 });
 export type SecuritySettings = z.infer<typeof SecuritySettings>;
 
@@ -36,4 +42,6 @@ export interface SetupState {
   brigadeName: string | null;
   oidc: { label: { de: string; en: string } } | null;
   stage: ForgaStage;
+  /** The sign-in page offers „Angemeldet bleiben“ (setting `security.allowRemember`). */
+  rememberAllowed: boolean;
 }

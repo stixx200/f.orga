@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { ImportValueMappings } from '@forga/core-contracts';
-import { FINAL, type MpFeuerRun, type RunArchive, type RunDataset } from '@forga/mp-feuer-contracts';
+import { FINAL, MESSAGES_KEEP_DAYS, type MpFeuerRun, type RunArchive, type RunDataset } from '@forga/mp-feuer-contracts';
 import { apiUrl, formatDateTime, send, translateCode, useCan, useLocalized, useTranslation } from '@forga/web-sdk';
 import { ActionBar, ConfirmDialog, DataTable, EmptyState, Notice, Panel, StatusBadge, UnmatchedValues, mergeUnmatched, useAction } from '@forga/web-ui';
 import { isRunning, keys, TRANSFER, useDepartments, useReport, useRun, useSelect } from '../api';
@@ -433,6 +433,12 @@ function ResultStep({ run }: { run: MpFeuerRun }) {
           {t('result.applied', { date: formatDateTime(run.finishedAt, i18n.language), duration, errors: counts.error, remembered: report?.remembered ?? 0 })}
         </Notice>
       )}
+      {run.status === 'applied' && (run.datasets.find((d) => d.profile === 'masterdata.persons')?.counts?.create ?? 0) > 0 && (
+        <Notice kind="info" action={<Button size="xs" variant="outline" component={Link} to="/admin/privacy/information">{t('result.informAction')}</Button>}>
+          {t('result.inform')}
+        </Notice>
+      )}
+      {report?.messagesRemovedAt && <Notice kind="info">{t('result.messagesRemoved', { date: formatDateTime(report.messagesRemovedAt, i18n.language), days: MESSAGES_KEEP_DAYS })}</Notice>}
       {run.status === 'cancelled' && <Notice kind="warning">{t('result.cancelled', { at: stoppedAt })}</Notice>}
       {run.status === 'failed' && (
         <Notice kind="error">{run.error === 'mp-feuer.interrupted' ? t('result.interrupted', { at: stoppedAt }) : translateCode(run.error ?? 'mp-feuer.failed')}</Notice>

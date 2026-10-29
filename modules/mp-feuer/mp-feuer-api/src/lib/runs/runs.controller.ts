@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Put, Query, Res, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, NotFoundException, Param, ParseUUIDPipe, Post, Put, Query, Res, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { Audit, type AuthenticatedUser, CurrentUser, isTestStage, RequirePermissions, ZodPipe } from '@forga/core-api';
@@ -10,6 +10,9 @@ import { MpFeuerRuns } from './runs.service.js';
 
 const MAX_FILES = 40;
 const MAX_SIZE = 200 * 1024 * 1024;
+
+/** The ID of a run: anything but a UUID is an unknown run (`404`), not a database error. */
+const RunId = new ParseUUIDPipe({ exceptionFactory: () => new NotFoundException({ code: 'mp-feuer.runNotFound' }) });
 
 /** The transfer files hold the real data of the brigade: never into the test system (`FORGA_STAGE=test`). */
 function assertNotTestStage(): void {
@@ -24,7 +27,10 @@ interface UploadedFileData {
 /** Runs of the data transfer from MP-Feuer. */
 @Controller('mp-feuer/runs')
 export class RunsController {
-  constructor(private readonly runs: MpFeuerRuns) {}
+  constructor(
+    private readonly runs: MpFeuerRuns,
+    private readonly audit: Audit,
+  ) {}
 
   /** Uploads the transfer files (`multipart/form-data`, field `files`) and reads them into a prepared run. */
   @Post()
@@ -41,24 +47,37 @@ export class RunsController {
     return this.runs.list();
   }
 
+  /**
+   * „Umstellung abgeschlossen“: removes the rows with messages of all finished runs now instead of after 90 days (L28);
+   * counts and runs stay. Returns the number of runs.
+   */
+  @Post('remove-messages')
+  @HttpCode(200)
+  @RequirePermissions(MP_FEUER_TRANSFER)
+  async removeMessages(): Promise<{ runs: number }> {
+    const runs = await this.runs.removeMessages(null);
+    await this.audit.log('mp-feuer.messages-removed', { runs });
+    return { runs };
+  }
+
   /** State and progress; poll every 2 seconds while the run works. */
   @Get(':id')
   @RequirePermissions(MP_FEUER_READ)
-  get(@Param('id') id: string): Promise<MpFeuerRun> {
+  get(@Param('id', RunId) id: string): Promise<MpFeuerRun> {
     return this.runs.get(id);
   }
 
   /** Archives (department, unit, skip), datasets (on/off, options) and mappings. */
   @Put(':id')
   @RequirePermissions(MP_FEUER_TRANSFER)
-  update(@Param('id') id: string, @Body(new ZodPipe(RunSelection)) selection: ReturnType<typeof RunSelection.parse>): Promise<MpFeuerRun> {
+  update(@Param('id', RunId) id: string, @Body(new ZodPipe(RunSelection)) selection: ReturnType<typeof RunSelection.parse>): Promise<MpFeuerRun> {
     return this.runs.update(id, selection);
   }
 
   @Post(':id/dry-run')
   @HttpCode(202)
   @RequirePermissions(MP_FEUER_TRANSFER)
-  dryRun(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<MpFeuerRun> {
+  dryRun(@Param('id', RunId) id: string, @CurrentUser() user: AuthenticatedUser): Promise<MpFeuerRun> {
     assertNotTestStage();
     return this.runs.start(user, id, true);
   }
@@ -67,7 +86,7 @@ export class RunsController {
   @Post(':id/apply')
   @HttpCode(202)
   @RequirePermissions(MP_FEUER_TRANSFER)
-  apply(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<MpFeuerRun> {
+  apply(@Param('id', RunId) id: string, @CurrentUser() user: AuthenticatedUser): Promise<MpFeuerRun> {
     assertNotTestStage();
     return this.runs.start(user, id, false);
   }
@@ -76,14 +95,14 @@ export class RunsController {
   @Post(':id/cancel')
   @HttpCode(202)
   @RequirePermissions(MP_FEUER_TRANSFER)
-  cancel(@Param('id') id: string): Promise<MpFeuerRun> {
+  cancel(@Param('id', RunId) id: string): Promise<MpFeuerRun> {
     return this.runs.cancel(id);
   }
 
   /** Result report; `?format=csv`: all rows with messages. */
   @Get(':id/report')
   @RequirePermissions(MP_FEUER_READ)
-  async report(@Param('id') id: string, @Query('format') format: string | undefined, @Res({ passthrough: true }) res: Response): Promise<RunReport | string> {
+  async report(@Param('id', RunId) id: string, @Query('format') format: string | undefined, @Res({ passthrough: true }) res: Response): Promise<RunReport | string> {
     if (format !== 'csv') return this.runs.report(id);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="mp-feuer-${id}.csv"`);
@@ -94,7 +113,7 @@ export class RunsController {
   @Delete(':id')
   @HttpCode(204)
   @RequirePermissions(MP_FEUER_TRANSFER)
-  remove(@Param('id') id: string): Promise<void> {
+  remove(@Param('id', RunId) id: string): Promise<void> {
     return this.runs.remove(id);
   }
 }
@@ -119,7 +138,7 @@ export class MpFeuerController {
   @Delete('mappings/:id')
   @HttpCode(204)
   @RequirePermissions(MP_FEUER_TRANSFER)
-  async deleteMapping(@Param('id') id: string): Promise<void> {
+  async deleteMapping(@Param('id', RunId) id: string): Promise<void> {
     const removed = await this.mappings.remove(id);
     if (!removed) throw new NotFoundException({ code: 'mp-feuer.mappingNotFound' });
     await this.audit.log('mp-feuer.mapping-deleted', { kind: removed.kind, value: removed.value, key: removed.key });

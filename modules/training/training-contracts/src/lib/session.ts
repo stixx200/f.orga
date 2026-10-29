@@ -259,3 +259,11 @@ export const Participation = z.object({
   hours: z.number(),
 });
 export type Participation = z.infer<typeof Participation>;
+
+/** Addresses of the calendar feed (`GET /api/training/feed-links`), paths below the origin of f.orga. */
+export interface TrainingFeedLinks {
+  /** All departments; `null` while the feed is off. */
+  all: string | null;
+  /** One address per department with a token of its own. */
+  departments: { departmentId: string; name: string; path: string }[];
+}

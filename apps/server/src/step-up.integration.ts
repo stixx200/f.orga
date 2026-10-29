@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EntityManager } from '@mikro-orm/core';
 import { ApiToken, AuditEntry, generateSecret, hashSecret, MailService, totp, User, UserMfa } from '@forga/core-api';
-import { ADMIN, setUp, startTestApp, type TestApp, UI } from './testing/test-app';
+import { ADMIN, setUp, startTestApp, type TestApp, UI, TOKEN_FIELDS } from './testing/test-app';
 
 let test: TestApp;
 let http: TestApp['http'];
@@ -202,7 +202,7 @@ describe('sensitive data without confirmation', () => {
 
 describe('API tokens', () => {
   it('never get permissions with step-up; existing ones lose them', async () => {
-    const refused = await http.post('/api/core/tokens').set('Cookie', admin).set(UI).send({ name: 'Leitstelle', scopes: ['masterdata.persons.read', 'masterdata.persons.sensitive'] }).expect(400);
+    const refused = await http.post('/api/core/tokens').set('Cookie', admin).set(UI).send({ ...TOKEN_FIELDS, name: 'Leitstelle', scopes: ['masterdata.persons.read', 'masterdata.persons.sensitive'] }).expect(400);
     expect(refused.body).toMatchObject({ code: 'tokens.stepUpScope', scopes: ['masterdata.persons.sensitive'] });
 
     // A token from before the update with such a scope.

@@ -61,7 +61,7 @@ export const CORE_ACTIVITIES: ProcessingActivity[] = [
       en: 'Access to f.orga, evidence of changes and access (data security)',
     },
     recipients: [],
-    retention: ['core.audit', 'core.history', 'core.access-log', 'core.access-reports', 'core.privacy-breaches'],
+    retention: ['core.audit', 'core.history', 'core.access-log', 'core.access-reports', 'core.privacy-breaches', 'core.locked-accounts'],
     subjects: [{ de: 'Benutzer von f.orga', en: 'Users of f.orga' }],
     categories: [
       { de: 'Benutzername, Name, E-Mail-Adresse, Rollen und Rechte', en: 'Username, name, e-mail address, roles and permissions' },

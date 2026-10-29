@@ -1,6 +1,6 @@
 # Datenschutz (umgesetzter Stand)
 
-Was vom [Datenschutzkonzept](../geplant/datenschutz.md) im Code existiert: Phase 1 (L1, L2, L5 teilweise, L6, L18 teilweise), aus Phase 2 Datenschutzhinweis und Information (L4), Betroffenenanfragen mit Frist und Einschränkung der Verarbeitung (L7) sowie Widerspruch (L19) und die Auskunft als PDF (L3), aus Phase 3 Verzeichnis der Verarbeitungstätigkeiten mit technischen Maßnahmen (L8), Einwilligungen (L9), Berichtigung (L12), Leseprotokoll und Transparenz der Impersonation (L15) sowie Datenpannen (L20), aus Phase 4 die Löschprüfung je Modul (L7), die vollständige Anonymisierung über alle Module (L13), abschaltbare Felder der Personalakte (L10), Zweck der Listen und Exporte (L11), Daten Dritter (L14) und die Aufbewahrung der Protokolle und Laufberichte (L29). Offene Punkte stehen dort. Weitere umgesetzte Bausteine: Rechte je Abteilung, sensible Felder, Historie und Audit-Log ([Architektur](architektur.md#sicherheit)), Auskunft als JSON und Aufbewahrungsplan ([Aufbewahrung](aufbewahrung.md)).
+Was vom [Datenschutzkonzept](../geplant/datenschutz.md) im Code existiert: Phase 1 (L1, L2, L5 teilweise, L6, L18 teilweise), aus Phase 2 Datenschutzhinweis und Information (L4), Betroffenenanfragen mit Frist und Einschränkung der Verarbeitung (L7) sowie Widerspruch (L19) und die Auskunft als PDF (L3), aus Phase 3 Verzeichnis der Verarbeitungstätigkeiten mit technischen Maßnahmen (L8), Einwilligungen (L9), Berichtigung (L12), Leseprotokoll und Transparenz der Impersonation (L15) sowie Datenpannen (L20), aus Phase 4 die Löschprüfung je Modul (L7), die vollständige Anonymisierung über alle Module (L13), abschaltbare Felder der Personalakte (L10), Zweck der Listen und Exporte (L11), Daten Dritter (L14) und die Aufbewahrung der Protokolle und Laufberichte (L29), aus Phase 5 (Härtung) Sitzungen (L16), Verschlüsselung (L17), gesperrte Benutzer ohne Person (L21), Infoterminal (L22), API-Tokens (L23), Passwörter und Anfragebegrenzung (L24), Auftragsverarbeiter (L25), Hinweis auf die Folgenabschätzung (L26), Anhänge (L27) und MP-Feuer-Übernahme (L28). Offene Punkte stehen dort. Weitere umgesetzte Bausteine: Rechte je Abteilung, sensible Felder, Historie und Audit-Log ([Architektur](architektur.md#sicherheit)), Auskunft als JSON und Aufbewahrungsplan ([Aufbewahrung](aufbewahrung.md)).
 
 ## Zweiter Faktor bei sensiblen Daten (Step-up)
 
@@ -660,7 +660,7 @@ Reiter „Datenpannen“ (`/admin/privacy/breaches`) und Seite einer Datenpanne 
   - **Vollexport** (`data.exported`): alle Personen, berechnet aus den heutigen Daten (`basis: current`).
   - **Benutzerkonto:** die Personen, die das Konto heute mit `masterdata.persons.read` lesen kann (ohne eingeschränkte; technische Benutzer mit den Rechten ihres Tokens), `basis: current`.
   - Einträge ohne Personen: `400 privacy.sourceWithoutPersons`. Audit `privacy.breach-affected-determined` (Quelle, Zahl).
-- **Alle Sitzungen beenden und alle Tokens widerrufen** (`POST lockdown`, `{ reason }` mit mindestens 10 Zeichen, optional `breachId`; Endpunkt mit `@StepUp()`): beendet alle Sitzungen außer der eigenen (auch Impersonationen) und widerruft alle API-Tokens; Infoterminals behalten ihren Geräteschlüssel. Audit `privacy.breach-lockdown` mit Grund und Zahlen.
+- **Alle Sitzungen beenden und alle Tokens widerrufen** (`POST lockdown`, `{ reason }` mit mindestens 10 Zeichen, optional `breachId`; Endpunkt mit `@StepUp()`): beendet alle Sitzungen außer der eigenen (auch Impersonationen), widerruft alle API-Tokens und sperrt die Geräteschlüssel der Module (`LockdownRegistry`; heute die Infoterminals, siehe [Infoterminal](#infoterminal-als-öffentlich-zugängliches-gerät-l22)). Antwort `{ sessions, tokens, devices }`, Audit `privacy.breach-lockdown` mit Grund und Zahlen.
 
 Für die Hilfen liefert die Stammdaten zusätzlich `OrganizationProvider.readablePersonIds(user)`, `allPersonIds()` und `PersonSummary.phone`.
 
@@ -669,3 +669,99 @@ Für die Hilfen liefert die Stammdaten zusätzlich `OrganizationProvider.readabl
 **Demodaten:** `npm run seed` trägt die Stadtkasse als Empfänger für alle Tätigkeiten ein, ergänzt die Personalverwaltung um eine Beispiel-Rechtsgrundlage und legt eine erfundene, abgeschlossene Datenpanne an („[Beispiel] Ausdruck der Telefonliste im Schulungsraum liegen gelassen“, nicht meldepflichtig).
 
 **Tests:** `apps/server/src/privacy-register.integration.ts` (Recht und Step-up, Entwurf aus aktiven Modulen mit Fristen, Empfänger aus Tokens, SMTP und OIDC, technische Maßnahmen einschließlich Datensicherung, Ergänzung mit Fassung, Prüfung und Historie, Übernahme von `privacy.recipients`, Empfänger nach Art. 19 und Widerspruch mit Tätigkeit, Export PDF und Excel; Datenpanne mit Aufgabe und E-Mail ohne Inhalt, Meldungen, Prüfungen der Felder, Betroffene aus Listenexport, Vollexport und Konto, Kontaktliste, Protokolle, Abschluss, Notfall mit Step-up).
+
+## Sitzungen (L16)
+
+**Abmeldung ohne Bedienung.** Jede Sitzung (`core.session`) merkt sich die letzte Bedienung (`lastActivityAt`, höchstens einmal je Minute geschrieben) und endet nach der Leerlaufzeit des Einstellungsabschnitts `security`:
+
+| Feld | Bedeutung | Standard |
+| --- | --- | --- |
+| `idleMinutesPrivileged` | Konten mit Rechten unter Step-up oder `privileged` (Verwaltung, sensible Daten; `PermissionRegistry.isPrivilegedAccount`) und jede Impersonation | 60 Minuten (5–1440) |
+| `idleMinutesOther` | alle anderen Konten | 480 Minuten (5–10 080) |
+| `allowRemember` | „Angemeldet bleiben“ wird angeboten | an |
+
+- Gezählt wird die Eingabe im Browser, nicht die Anfrage: Der API-Client im `web-sdk` schickt mit jeder Anfrage `x-forga-idle` (Sekunden seit der letzten Tastatur-, Maus- oder Touch-Eingabe). Der Server setzt die Aktivität auf „jetzt minus diese Zeit“; Seiten, die nur Daten nachladen (z. B. ein offener Einsatzbericht), halten eine Sitzung so nicht offen. Ohne Kopfzeile (Skripte mit Cookie) zählt die Anfrage.
+- Eine abgelaufene Sitzung wird gelöscht, die Anfrage antwortet `401 auth.required`, die Shell zeigt die Anmeldung. Audit `auth.session-idle-ended` mit `idleMinutes` (Benutzer bzw. Administrator der Impersonation).
+- Die Einstellungen stehen unter „Verwaltung → Datenschutz → Einstellungen → Sicherheit → Sitzungen“; der Server liest sie nach einer Änderung neu.
+
+**Angemeldet bleiben.** Die Anmeldeseite bietet den Haken an, solange `allowRemember` an ist (`GET /api/core/setup` liefert `rememberAllowed`). `POST /api/core/login` mit `remember: true` öffnet für Konten ohne privilegierte Rechte eine dauerhafte Sitzung (`persistent`): Cookie mit `Max-Age` 14 Tage, keine Leerlauf-Abmeldung; die Antwort nennt `persistent`. Für privilegierte Konten wird der Wunsch ignoriert. Ohne Haken (auch bei OIDC, Einrichtung und Impersonation) ist das Cookie ein Sitzungs-Cookie des Browsers, das mit dem Schließen des Browsers endet; die Sitzung selbst gilt höchstens 14 Tage. Bekommt ein Konto später privilegierte Rechte oder wird `allowRemember` abgeschaltet, gilt für bestehende dauerhafte Sitzungen wieder die Leerlaufzeit. `GET /api/core/session` liefert `current: { persistent, idleMinutes }`.
+
+**Angemeldete Geräte** (Profil, Abschnitt „Angemeldete Geräte“):
+
+| Methode | Pfad | Zweck |
+| --- | --- | --- |
+| `GET` | `/api/core/me/sessions` | eigene Sitzungen ohne Impersonationen (`MySession`: öffentliche ID `ref`, Browser und System aus dem User-Agent, z. B. „Firefox 131 · Windows“, gekürzte Adresse `203.0.113.x` bzw. die ersten drei Gruppen einer IPv6-Adresse, angemeldet seit, letzte Aktivität, `persistent`, `current`) |
+| `DELETE` | `/api/core/me/sessions/:id` | ein anderes Gerät abmelden (die eigene Sitzung: `400 auth.sessionCurrent`, fremde oder unbekannte: `404 auth.sessionNotFound`). Audit `auth.session-ended` |
+| `POST` | `/api/core/me/sessions/end-others` | „Alle anderen abmelden“. Audit `auth.other-sessions-ended` mit Zahl |
+
+Während einer Impersonation und mit API-Tokens sind die Endpunkte gesperrt (`auth.impersonationNotAllowed`, `auth.sessionRequired`). Browser und Adresse werden beim Öffnen der Sitzung gespeichert und mit ihr gelöscht; der Cookie-Wert bleibt nur als Hash gespeichert, nach außen geht nur `ref`. Das Infoterminal hat ein eigenes Gerätecookie und ist davon nicht betroffen.
+
+## Verschlüsselung (L17)
+
+- **Zugangsdaten in den Einstellungen:** Das SMTP-Passwort (`smtp.password`) und das Client-Secret des Anmeldedienstes (`oidc.clientSecret`) liegen mit `FORGA_SECRET_KEY` verschlüsselt (AES-256-GCM, Präfix `enc:`; `ENCRYPTED_SETTING_FIELDS` in `settings.ts`). `SettingsService.get` liefert sie entschlüsselt, Antworten und Historie enthalten sie nie. Beim Start verschlüsselt der Server im Klartext gespeicherte Werte (ohne Historie). Ohne `FORGA_SECRET_KEY` bleiben sie im Klartext; mit einem anderen Schlüssel sind sie nicht lesbar und müssen neu eingegeben werden. Die technischen Maßnahmen des Verzeichnisses melden beides als Warnung.
+- **Sicherungen:** Das Modul Datensicherung verschlüsselt standardmäßig (unverschlüsselt nur mit Bestätigung), die Seite „Sicherheit“ und das Verzeichnis zeigen den Stand. `docker/backup.sh --encrypt` verschlüsselt jede Datei beim Schreiben mit `openssl` (siehe [Betrieb](betrieb.md#komplette-sicherung-mit-dockerbackupsh)).
+- **Datenbank und Anhänge** bleiben unverschlüsselt in PostgreSQL (Entscheidung 5): Festplattenverschlüsselung des Servers gehört zum Betrieb ([Datenschutz im Betrieb](betrieb.md#datenschutz-im-betrieb)).
+- **Datenbankrolle:** Die Anwendung verbindet sich in Compose als `forga_app` ohne Superuser-Rechte; eine Sicherung wird nur wiederhergestellt, wenn ihr Inhaltsverzeichnis nur Schemas, Tabellen, Daten, Sequenzen, Vorgabewerte, Constraints und Indizes enthält (siehe [Betrieb](betrieb.md#datenbankrolle-der-anwendung)).
+
+## Gesperrte Benutzer ohne Person (L21)
+
+- Benutzer haben `lockedAt` („gesperrt seit“): gesetzt beim Sperren (`PUT /api/core/users/:id` mit `active: false`, auch beim Anlegen als gesperrt), geleert beim Entsperren; beim Start bekommen gesperrte Konten ohne Datum das aktuelle. Die Benutzerliste zeigt „gesperrt seit …“ (`User.lockedAt`).
+- Aufbewahrungskategorie `core.locked-accounts` „Gesperrte Benutzer ohne Person“ (Ereignis „Sperre“, Aktionen anonymisieren oder nichts, Standard **2 Jahre, anonymisieren**; in der Tätigkeit `core.accounts`): gesperrte, nicht technische Konten ohne verknüpfte Person, die noch nicht anonymisiert sind. Anonymisiert wird wie bei verknüpften Konten (`anonymizeAccounts`): Benutzername `anonymized-<id>`, Name „N. N.“, ohne E-Mail, Passwort und OIDC-Verknüpfung, Sitzungen, Links und eigene Historie gelöscht, Tokens widerrufen. Konten mit Person folgen der Frist der Person.
+
+## Infoterminal als öffentlich zugängliches Gerät (L22)
+
+- **Namenssuche** nur über Personen der Abteilungen des Terminals und der Abteilungen darunter (Jugendfeuerwehr, Altersabteilung); mit der Einstellung `info-terminal.general.searchAllPersons` („Namenssuche über alle Personen der Feuerwehr“) wie bisher über alle. Eingeschränkte Personen (Art. 18) erscheinen weder in den Namenskacheln noch in der Suche.
+- **Einsatzort** nur als Straße ohne Hausnummer (`streetWithoutNumber`: „Hauptstr. 12a“ → „Hauptstr.“), auch in den passenden Einsätzen bei „Neuer Einsatz“.
+- **Notfall:** „Alle Sitzungen beenden“ einer Datenpanne gibt jedem nicht widerrufenen Terminal einen unbekannten Schlüssel und löscht den gespeicherten Link; die Geräte arbeiten erst mit einem neuen Link weiter. Audit `info-terminal.keys-blocked` mit Zahl.
+- Die Verwaltung der Terminals weist darauf hin, das Gerät nicht in öffentlich zugänglichen Räumen aufzustellen.
+- Begrenzungen (falsche Schlüssel, Änderungen, Suchen, unbekannte Führerschein-Aufkleber) zählt die Datenbank (L24).
+
+## API-Tokens (L23)
+
+- `ApiTokenInput` verlangt **Empfänger/System** (`recipient`), **Zweck** (`purpose`) und ein **Ablaufdatum** (`expiresOn`, frühestens heute, höchstens 2 Jahre: `tokens.expiryInPast`, `tokens.expiryTooLate` mit `days`). Optional **erlaubte Adressen** (`allowedAddresses`, IPv4/IPv6 oder Netz mit Präfix, höchstens 20; `tokens.addressInvalid`): Anfragen von anderen Adressen gelten als nicht angemeldet (`401`), Audit `tokens.address-rejected` höchstens einmal je Token und Stunde. Hinter einem Reverse Proxy zählt die Adresse nur mit `FORGA_TRUST_PROXY`.
+- **Verzeichnis und Auskunft** nennen Tokens als „Schnittstelle „Name“ – Empfänger“ mit dem Zweck (`tokenRecipientName`).
+- **Erinnerung:** Aufgabe `api-token-expiry` „API-Token „…“ läuft ab“ für alle mit `core.tokens.manage`, 30 Tage vor dem Ablauf (`API_TOKEN_REMINDER_DAYS`); Tokens aus der Zeit vor dem Pflichtablauf erscheinen sofort als „ohne Ablauf – neu mit Ablaufdatum ausstellen“.
+- Die Token-Seite warnt bei Bereichen mit Personendaten (`masterdata.persons.*`) und zeigt Empfänger, Zweck, Ablauf („läuft bald ab“, „ohne Ablauf“) und erlaubte Adressen.
+
+## Passwörter und Anfragebegrenzung (L24)
+
+- **Passwortregeln** (`assertPasswordAllowed`, bei Einrichtung, Passwortwechsel, Zurücksetzen und Anlegen bzw. Ändern durch die Verwaltung): mindestens 10 Zeichen wie bisher; abgelehnt werden Passwörter aus einer mitgelieferten Liste häufiger Passwörter, häufige Wörter mit angehängten Ziffern oder Zeichen (z. B. „Feuerwehr112!“, „Sommer2026“) und triviale Folgen (`auth.passwordCommon`) sowie Benutzername, Name oder E-Mail-Adresse mit Ziffern (`auth.passwordPersonal`). Die Oberfläche empfiehlt einen Passwortmanager.
+- **Anfragebegrenzung in der Datenbank** (`RateLimits`, Tabelle `core.rate_limit`, nicht historisiert): Zähler je Bereich und Schlüssel, gespeichert nur als SHA-256 von Bereich und Schlüssel (Benutzername, Adresse), mit Fenster und Sperre. Ein Neustart oder eine zweite Server-Instanz setzt nichts zurück. Die Regel `core.rate-limits` des Aufbewahrungslaufs löscht Zähler einen Tag nach der letzten Nutzung. Bereiche: `login` (5 Fehlversuche je Benutzername und Adresse in 15 Minuten, dann 1 Minute gesperrt), `password-reset.address` (20 in 15 Minuten), `password-reset.account` (3 in 15 Minuten), `tokens.address-logged`, `info-terminal.key`, `info-terminal.write`, `info-terminal.search`, `info-terminal.license-code` und deren Protokoll-Zähler. Module nutzen `RateLimits.hit`, `blocked` und `reset`.
+- **Anmeldung ohne Benutzer-Enumeration:** Für unbekannte Benutzernamen prüft der Server gegen einen Dummy-Hash, die Antwort dauert so lange wie bei einem falschen Passwort.
+- **Login-CSRF:** Ändernde Anfragen ohne API-Token brauchen `x-forga: 1` auch ohne Sitzung (Anmeldung, Einrichtung, Passwort vergessen, E-Mail bestätigen), sonst `403 auth.csrf`.
+
+## Auftragsverarbeiter und Betrieb (L25)
+
+Das Verzeichnis listet unter „Technische Empfänger und Auftragsverarbeiter“ aus der Konfiguration (`ProcessorRegistry`; Module melden eigene an, Quellen inaktiver Module fallen weg): den **Server von f.orga** mit der Adresse von f.orga (Hosting, Betrieb und Fernwartung), den **E-Mail-Server**, den **Anmeldedienst** (OIDC) und das **Sicherungsziel** des Moduls Datensicherung (Ordner, verschlüsselt ja/nein), sobald dessen Einstellungen gespeichert sind. Die Betriebsanleitung hat den Abschnitt [Datenschutz im Betrieb](betrieb.md#datenschutz-im-betrieb).
+
+## Hinweis auf die Folgenabschätzung (L26)
+
+- Tätigkeiten mit Gesundheitsdaten (`health`) tragen im Verzeichnis (Seite, PDF) den Hinweis „Prüfen, ob eine Datenschutz-Folgenabschätzung nötig ist (Art. 35 DSGVO)“.
+- `GET /api/core/privacy/register/export/pdf?scope=dpia` (bzw. `xlsx`) liefert „Angaben für eine Datenschutz-Folgenabschätzung nach Art. 35 DSGVO“: nur die Tätigkeiten mit Gesundheitsdaten mit Zweck, Daten, Empfängern, Fristen, dazu technische Empfänger und technische Maßnahmen. Audit `privacy.register-exported` mit `scope: dpia`. Ob eine Folgenabschätzung nötig ist, entscheidet der Verantwortliche.
+
+## Anhänge (L27)
+
+- Beim Hochladen entfernt der Server aus Fotos die Metadaten (`stripImageMetadata`): JPEG ohne EXIF (Standort, Kamera, Zeit), XMP, IPTC und Kommentare; die Ausrichtung bleibt als minimales EXIF, Farbprofil (APP2), JFIF und Adobe-Marker bleiben. PNG ohne `eXIf`, `tEXt`, `iTXt`, `zTXt`, `tIME`; WebP ohne `EXIF` und `XMP ` (Kennzeichen im `VP8X` gelöscht). PDFs bleiben unverändert. Audit `attachments.added` mit `metadataRemoved`.
+- Höchstens 50 Anhänge je Datensatz (`ATTACHMENT_MAX_PER_RECORD`, `400 attachments.tooMany`), 10 MB je Datei wie bisher.
+- Die Oberfläche nennt das Entfernen der Metadaten; Einsatzberichte weisen zusätzlich darauf hin, nur nötige Fotos ohne Gesichter, Kennzeichen oder Verletzte hochzuladen.
+- Anhänge folgen weiter der Frist ihres Datensatzes ([Aufbewahrung](aufbewahrung.md)).
+
+## MP-Feuer-Übernahme (L28)
+
+- Die Zeilen mit Meldungen und die Beispielzeilen des Berichts (sie nennen Personen aus MP-Feuer) entfernt der Aufbewahrungslauf 90 Tage nach dem Ende eines Laufs (Regel `mp-feuer.messages`, `MESSAGES_KEEP_DAYS`); Lauf und Zähler bleiben, `RunReport.messagesRemovedAt` nennt den Zeitpunkt.
+- „Umstellung abgeschlossen“ in den Einstellungen des Moduls: `POST /api/mp-feuer/runs/remove-messages` (`mp-feuer.transfer`) entfernt sie sofort für alle beendeten Läufe. Audit `mp-feuer.messages-removed` mit Zahl.
+- Nur aktivierte Felder der Personalakte werden übernommen: Der Personenimport, über den die Datenübernahme läuft, lässt abgeschaltete Felder (`masterdata.personFields`, L10) weg, z. B. Geschlecht oder Telefon privat.
+- Die 90-Tage-Regel gilt neben der Aufbewahrungskategorie `mp-feuer.run-reports` (L29), die ganze Läufe mit ihren Berichten nach einem Jahr löscht.
+- Nach einer Übernahme mit neuen Personen weist das Ergebnis darauf hin, die Mitglieder nach Art. 14 zu informieren (Link auf „Verwaltung → Datenschutz → Information“).
+- Hochgeladene Transferdateien werden wie bisher nur im Speicher gelesen, die Datenbank daraus in einem temporären Ordner geöffnet und gelöscht; gelesene Zeilen gehen nach der Übernahme bzw. nach 7 Tagen.
+
+## Weitere Härtung (Prüfung)
+
+- `GET /api/core/roles` nur mit `core.roles.manage` oder `core.users.manage` (Rollen mit ihren Rechten zeigen, wer was darf).
+- `GET /api/cost-recovery/incidents/:id/offense` nur für Leser eines Berichts des Einsatzes oder mit `cost-recovery.read`, `cost-recovery.write`, `incidents.costs`; sonst `404 cost-recovery.unknownIncident`.
+- Kalender-Abo der Dienste: Tokens werden in konstanter Zeit verglichen; jede Abteilung hat eine eigene Adresse mit eigenem, aus dem Feed-Token abgeleitetem Token (HMAC), das nur ihre Dienste liefert. `GET /api/training/feed-links` liefert die Adressen für die Verwalter der Einstellungen.
+- `GET /api/mp-feuer/runs/<keine UUID>` antwortet `404 mp-feuer.runNotFound` statt `500`.
+
+## Tests (Phase 5)
+
+`apps/server/src/hardening.integration.ts`: Login-CSRF, Anmeldesperre in der Datenbank ohne Klartext, Passwortregeln, Rollen nur für Verwalter; Geräte mit Browser und Adresse, einzeln und „alle anderen“ abmelden, Leerlauf-Abmeldung privilegiert und normal mit `x-forga-idle`, „Angemeldet bleiben“ und Einstellungen; verschlüsselte Zugangsdaten und Verschlüsselung beim Start; API-Tokens mit Pflichtfeldern, Ablauf, Adressen, Verzeichnis und Aufgabe; Auftragsverarbeiter und Export für die Folgenabschätzung; gesperrte Konten nach Frist anonymisiert; Metadaten von Fotos und Höchstzahl der Anhänge; Kalender-Abo je Abteilung; Tatbestand des Kostenersatzes; Lauf-IDs und Meldungen von MP-Feuer. `apps/server/src/mp-feuer.integration.ts`: nur aktivierte Felder werden übernommen. `apps/server/src/info-terminal.integration.ts`: Namenssuche je Abteilung, Straße ohne Hausnummer, Sperre der Geräteschlüssel im Notfall. Unit-Tests: `image-metadata.spec.ts`, `password-policy.spec.ts` (Passwörter, Adressen, Geräte), `database.spec.ts` (Inhaltsverzeichnis der Sicherung).

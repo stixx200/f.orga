@@ -6,7 +6,7 @@ import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MailService } from '@forga/core-api';
 import { BackupScheduler, newHeader, RestoreService, writeBackupFile } from '@forga/backup-api';
-import { type TestApp, setUp, startTestApp, UI } from './testing/test-app';
+import { type TestApp, setUp, startTestApp, UI, TOKEN_FIELDS } from './testing/test-app';
 import { TEST_DATABASE_URL } from './testing/test-database';
 
 /**
@@ -93,7 +93,7 @@ describe('backup', { timeout: 120_000 }, () => {
     const reader = await test.login({ username: 'leser', password: 'leser-passwort-1' });
     await get('/backup/status', reader).expect(403);
     await post('/backup/backups', {}, reader).expect(403);
-    const refused = await post('/core/tokens', { name: 'Sicherung', scopes: ['backup.manage'] }).expect(400);
+    const refused = await post('/core/tokens', { ...TOKEN_FIELDS, name: 'Sicherung', scopes: ['backup.manage'] }).expect(400);
     expect(refused.body.code).toBe('tokens.privilegedScopes');
     // The restore status is public but only answers the holder of the token.
     await test.http.get('/api/backup/restore/status?token=unknown').expect(404);
@@ -290,14 +290,15 @@ describe('backup', { timeout: 120_000 }, () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
       progress = (await test.http.get(`/api/backup/restore/status?token=${started.body.token}`).expect(200)).body;
     }
-    expect(progress).toMatchObject({ phase: 'failed', error: 'backup.restoreFailed' });
+    // The table of contents is read before anything is restored: an unreadable dump stops there.
+    expect(progress).toMatchObject({ phase: 'failed', error: 'backup.dumpUnreadable' });
     expect(progress.steps.find((s) => s.step === 'safetyBackup')?.state).toBe('done');
     expect(existsSync(maintenanceFile)).toBe(false);
     // Still the running database: the session works, nothing was swapped.
     await get('/core/session').expect(200);
     expect(psql(`select count(*) from pg_database where datname like '${database}_restore_%' or datname like '${database}_before_%'`)).toBe('0');
     const audit = await get('/core/audit?action=backup.restore-failed').expect(200);
-    expect(audit.body[0].details.code).toBe('backup.restoreFailed');
+    expect(audit.body[0].details.code).toBe('backup.dumpUnreadable');
     rmSync(join(root, 'forga', 'forga-broken.forgabackup'));
   });
 
@@ -321,7 +322,7 @@ describe('backup', { timeout: 120_000 }, () => {
         expect(session.body.code).toBe('maintenance');
         expect(session.headers['retry-after']).toBeDefined();
         await test.http.get('/api/info-terminal/kiosk/state').expect(503);
-        await test.http.post('/api/core/login').send({ username: 'admin', password: 'x' }).expect(503);
+        await test.http.post('/api/core/login').set(UI).send({ username: 'admin', password: 'x' }).expect(503);
         sawMaintenance = true;
       }
     }

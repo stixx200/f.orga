@@ -4,7 +4,8 @@ import { useState } from 'react';
 import type { ImportProfileInfo } from '@forga/core-contracts';
 import { Link } from 'react-router';
 import { api, formatDate, send, useCan, useLocalized, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, Panel, StatusBadge, useAction } from '@forga/web-ui';
+import { ConfirmDialog, DataTable, notifySuccess, Panel, StatusBadge, useAction } from '@forga/web-ui';
+import { MESSAGES_KEEP_DAYS } from '@forga/mp-feuer-contracts';
 import { keys, TRANSFER, useRemembered } from '../api';
 import { ModulePage } from '../components/ModulePage';
 
@@ -17,6 +18,14 @@ export function SettingsPage() {
   const { data: profiles = [] } = useQuery({ queryKey: ['core', 'imports', 'profiles'], queryFn: () => api<ImportProfileInfo[]>('core/imports/profiles') });
   const [confirm, setConfirm] = useState(false);
   const reset = useAction(() => send<void>('DELETE', 'mp-feuer/remembered'), { invalidate: [keys.remembered], success: t('settings.resetDone'), onSuccess: () => setConfirm(false) });
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const removeMessages = useAction(() => send<{ runs: number }>('POST', 'mp-feuer/runs/remove-messages'), {
+    invalidate: [keys.runs],
+    onSuccess: ({ runs }) => {
+      setConfirmRemove(false);
+      notifySuccess(t('settings.messagesRemoved', { count: runs }));
+    },
+  });
   const archives = Object.entries(remembered?.archives ?? {}).map(([key, value]) => ({ key, ...value }));
   const datasets = Object.entries(remembered?.datasets ?? {});
   const profile = (id: string) => profiles.find((p) => p.id === id);
@@ -62,6 +71,14 @@ export function SettingsPage() {
           </Group>
         )}
       </Panel>
+      {mayReset && (
+        <Panel title={t('settings.transitionDone')}>
+          <Text size="sm">{t('settings.transitionDoneText', { days: MESSAGES_KEEP_DAYS })}</Text>
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" color="red" onClick={() => setConfirmRemove(true)}>{t('settings.removeMessages')}</Button>
+          </Group>
+        </Panel>
+      )}
       <Panel title={t('settings.inbox')} aside={<StatusBadge>{t('settings.later')}</StatusBadge>}>
         <Text size="sm">{t('settings.inboxText')}</Text>
       </Panel>
@@ -73,6 +90,15 @@ export function SettingsPage() {
         confirmLabel={t('settings.resetConfirm')}
         loading={reset.isPending}
         onConfirm={() => reset.mutate(undefined)}
+      />
+      <ConfirmDialog
+        opened={confirmRemove}
+        onClose={() => setConfirmRemove(false)}
+        title={t('settings.removeMessagesTitle')}
+        description={t('settings.removeMessagesText')}
+        confirmLabel={t('settings.removeMessagesConfirm')}
+        loading={removeMessages.isPending}
+        onConfirm={() => removeMessages.mutate(undefined)}
       />
     </ModulePage>
   );

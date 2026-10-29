@@ -57,7 +57,7 @@ export async function startTestApp(options: Parameters<typeof import('../app/app
     app,
     http,
     async login(credentials = ADMIN, loginOptions = {}) {
-      const response = await http.post('/api/core/login').send(credentials).expect(200);
+      const response = await http.post('/api/core/login').set(UI).send(credentials).expect(200);
       const cookie = String(response.headers['set-cookie']).split(';')[0];
       if (loginOptions.elevated !== false) await elevateSession(app, cookie);
       return cookie;
@@ -69,10 +69,17 @@ export async function startTestApp(options: Parameters<typeof import('../app/app
 /** Runs the initial setup with the default administrator and returns the session cookie. */
 export async function setUp(test: TestApp): Promise<string> {
   const response = await test.http
-    .post('/api/core/setup')
+    .post('/api/core/setup').set(UI)
     .send({ setupToken: SETUP_TOKEN, brigadeName: 'Feuerwehr Musterstadt', displayName: 'Admin', ...ADMIN })
     .expect(201);
   const cookie = String(response.headers['set-cookie']).split(';')[0];
   await test.elevate(cookie);
   return cookie;
 }
+
+/** Recipient, purpose and expiry an API token needs (L23), for tests that create tokens. */
+export const TOKEN_FIELDS = {
+  recipient: 'Testsystem (Beispiel)',
+  purpose: 'Integrationstest',
+  expiresOn: new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10),
+};

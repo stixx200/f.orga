@@ -9,6 +9,8 @@ interface ExportContext {
   language: Language;
   brigade: BrigadeSettings | null;
   now: Date;
+  /** Only the activities with health data, as the basis of a data protection impact assessment (L26). */
+  dpia?: boolean;
 }
 
 const T = {
@@ -40,6 +42,16 @@ const T = {
   remarks: { de: 'Bemerkungen', en: 'Remarks' },
   reviewed: { de: 'Geprüft', en: 'Reviewed' },
   draftBadge: { de: 'Entwurf', en: 'Draft' },
+  dpiaHint: {
+    de: 'Prüfen, ob eine Datenschutz-Folgenabschätzung nötig ist (Art. 35 DSGVO): Gesundheitsdaten (Art. 9).',
+    en: 'Check whether a data protection impact assessment is needed (Art. 35 GDPR): health data (Art. 9).',
+  },
+  dpiaTitle: { de: 'Angaben für eine Datenschutz-Folgenabschätzung', en: 'Information for a data protection impact assessment' },
+  dpiaSubtitle: { de: 'nach Art. 35 DSGVO', en: 'under Art. 35 GDPR' },
+  dpiaIntro: {
+    de: 'Auszug aus dem Verzeichnis von Verarbeitungstätigkeiten: die Tätigkeiten mit Gesundheitsdaten mit Zweck, Daten, Empfängern, Fristen und den technischen und organisatorischen Maßnahmen. Ob eine Folgenabschätzung nötig ist und wie sie ausfällt, entscheidet der Verantwortliche mit dem Datenschutzbeauftragten; f.orga liefert nur die Angaben.',
+    en: 'Extract of the record of processing activities: the activities with health data with purpose, data, recipients, periods and the technical and organisational measures. Whether an impact assessment is needed and its result is decided by the controller with the data protection officer; f.orga only provides the information.',
+  },
   general: { de: 'Empfänger für alle Tätigkeiten', en: 'Recipients for all activities' },
   processors: { de: 'Technische Empfänger und Auftragsverarbeiter', en: 'Technical recipients and processors' },
   measures: { de: 'Technische und organisatorische Maßnahmen (Art. 32)', en: 'Technical and organisational measures (Art. 32)' },
@@ -74,6 +86,7 @@ function rows(activity: RegisterActivity, language: Language): [string, string][
     [t(T.thirdCountry), record.thirdCountry || t(T.none)],
     [t(T.retention), t(activity.retention)],
     [t(T.legalBasis), record.legalBasis || `${t(T.legalBasisOpen)}${activity.legalBasisHint ? ` (${t(T.hint)}: ${t(activity.legalBasisHint)})` : ''}`],
+    ...(activity.health ? [[t(T.hint), t(T.dpiaHint)] as [string, string]] : []),
   ];
 }
 
@@ -109,8 +122,8 @@ export async function renderRegisterPdf(context: ExportContext & { logo: string 
   const { register, language } = context;
   const t = (text: LocalizedText) => text[language];
   const content: unknown[] = [
-    { text: `${t(T.title)} ${t(T.subtitle)}`, style: 'title' },
-    { text: t(T.draft), style: 'small', margin: [0, 0, 0, 10] },
+    { text: context.dpia ? `${t(T.dpiaTitle)} ${t(T.dpiaSubtitle)}` : `${t(T.title)} ${t(T.subtitle)}`, style: 'title' },
+    { text: t(context.dpia ? T.dpiaIntro : T.draft), style: 'small', margin: [0, 0, 0, 10] },
     {
       columns: [
         { stack: [{ text: t(T.controller), style: 'heading' }, { text: controllerLines(register, language) }] },
@@ -144,7 +157,7 @@ export async function renderRegisterPdf(context: ExportContext & { logo: string 
   }
   content.push({ text: t(T.measures), style: 'heading', margin: [0, 12, 0, 4] });
   content.push(table([t(T.measure), t(T.state)], register.measures.map((m) => [t(m.title), t(m.value)]), [120, '*']));
-  return renderLetterPdf({ brigade: context.brigade, letterhead: null, logo: context.logo, title: t(T.title), content, language, now: context.now, compactTitle: true });
+  return renderLetterPdf({ brigade: context.brigade, letterhead: null, logo: context.logo, title: t(context.dpia ? T.dpiaTitle : T.title), content, language, now: context.now, compactTitle: true });
 }
 
 /** The register as Excel to work on: one row per activity, recipients and technical measures on own sheets. */
@@ -157,10 +170,10 @@ export async function renderRegisterXlsx(context: ExportContext): Promise<Buffer
   const sheet = addStyledSheet(
     workbook,
     t(T.sheetRegister),
-    `${t(T.title)} ${t(T.subtitle)}`,
+    context.dpia ? `${t(T.dpiaTitle)} ${t(T.dpiaSubtitle)}` : `${t(T.title)} ${t(T.subtitle)}`,
     subtitle,
     [t(T.activity), t(T.module), ...FIELDS.map(t), t(T.remarks), t(T.reviewed)],
-    register.activities.map((a) => [t(a.name), t(a.module.name), ...rows(a, language).map(([, value]) => value), a.record.remarks, reviewed(a, language)]),
+    register.activities.map((a) => [t(a.name), t(a.module.name), ...rows(a, language).slice(0, FIELDS.length).map(([, value]) => value), a.record.remarks, reviewed(a, language)]),
     [26, 16, 40, 30, 40, 26, 40, 16, 34, 34, 30, 18],
   );
   sheet.eachRow((row, number) => {

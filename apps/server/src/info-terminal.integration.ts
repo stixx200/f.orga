@@ -181,16 +181,24 @@ describe('info terminal lifecycle', () => {
     await kiosk.get(`/overview?departmentId=${ids.ahornfeld}`, cookies.ahornfeld).expect(200);
   });
 
-  it('shows name tiles of the active members and searches all persons who have not left', async () => {
+  it('shows name tiles of the active members and searches the persons of its departments who have not left (L22)', async () => {
     const members = (await kiosk.get(`/members?departmentId=${ids.musterstadt}`, cookies.musterstadt).expect(200)).body as { id: string; firstName: string }[];
     expect(members.map((m) => m.firstName)).toEqual(['Jonas', 'Max', 'Tim']);
     expect(Object.keys(members[0]).toSorted()).toEqual(['departments', 'firstName', 'id', 'lastName']);
     const youth = (await kiosk.get(`/members?departmentId=${ids.youth}`, cookies.musterstadt).expect(200)).body as { id: string }[];
     expect(youth.map((m) => m.id)).toEqual([ids.mia]);
     expect((await kiosk.get(`/persons?departmentId=${ids.musterstadt}&q=Te`, cookies.musterstadt).expect(200)).body).toEqual([]);
+    // By default only persons of the terminal's departments and the departments below them.
+    const own = (await kiosk.get(`/persons?departmentId=${ids.musterstadt}&q=Terminal`, cookies.musterstadt).expect(200)).body as { id: string; departments: string[] }[];
+    expect(own.map((p) => p.id)).toEqual(expect.arrayContaining([ids.paul, ids.mia]));
+    expect(own.map((p) => p.id)).not.toContain(ids.lena);
+    // With the setting all persons of the brigade.
+    const settings = (await get('/core/settings/info-terminal.general').expect(200)).body;
+    await put('/core/settings/info-terminal.general', { ...settings, searchAllPersons: true }).expect(200);
     const found = (await kiosk.get(`/persons?departmentId=${ids.musterstadt}&q=Terminal`, cookies.musterstadt).expect(200)).body as { id: string; departments: string[] }[];
     expect(found.map((p) => p.id)).toEqual(expect.arrayContaining([ids.paul, ids.lena, ids.mia]));
     expect(found.find((p) => p.id === ids.lena)?.departments).toEqual(['Ahornfeld']);
+    await put('/core/settings/info-terminal.general', { ...settings, searchAllPersons: false }).expect(200);
   });
 });
 
@@ -445,6 +453,26 @@ describe('new link, revocation and module state', () => {
     expect((await get('/info-terminal/terminals?includeRevoked=true').expect(200)).body.map((t: { id: string }) => t.id)).toContain(ids.ahornfeldTerminal);
     const actions = ((await get('/core/audit?action=info-terminal.').expect(200)).body as { action: string }[]).map((a) => a.action);
     expect(actions).toEqual(expect.arrayContaining(['info-terminal.key-rotated', 'info-terminal.revoked']));
+  });
+
+  it('shows the street of incidents without house number (L22)', async () => {
+    const { incidentId, reportId } = await incident('2026-L22-1', -5, { location: { street: 'Hauptstr.', houseNumber: '12a', city: 'Musterstadt' } });
+    const overview = (await kiosk.get(`/overview?departmentId=${ids.musterstadt}`, cookies.musterstadt).expect(200)).body as { incidents: { reportId: string; street: string }[] };
+    expect(overview.incidents.find((i) => i.reportId === reportId)?.street).toBe('Hauptstr.');
+    expect(incidentId).toBeTruthy();
+  });
+
+  it('blocks the device keys when all sessions are ended in a data breach (L20, L22)', async () => {
+    await kiosk.get('/terminal', cookies.musterstadt).expect(200);
+    const result = await post('/core/privacy/breach-tools/lockdown', { reason: 'Test: Tablet gestohlen, alle Zugänge sperren' }).expect(200);
+    expect(result.body.devices).toBeGreaterThanOrEqual(1);
+    expect((await kiosk.get('/terminal', cookies.musterstadt).expect(401)).body.code).toBe('info-terminal.invalidKey');
+    const terminal = ((await get('/info-terminal/terminals').expect(200)).body as { id: string; linkAvailable: boolean }[]).find((t) => t.id === ids.terminal);
+    expect(terminal?.linkAvailable).toBe(false);
+    // A new link works again.
+    const link = await post(`/info-terminal/terminals/${ids.terminal}/rotate`, {}).expect(200);
+    cookies.musterstadt = await open(link.body.url);
+    await kiosk.get('/terminal', cookies.musterstadt).expect(200);
   });
 
   it('serves the kiosk page only while the module is active, which needs the incidents module', async () => {

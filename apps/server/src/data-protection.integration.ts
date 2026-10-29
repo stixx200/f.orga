@@ -76,12 +76,12 @@ describe('HTTPS and security headers (L1)', () => {
 
   it('sets HSTS and Secure cookies behind a trusted TLS proxy', async () => {
     // Without FORGA_TRUST_PROXY the header of the proxy is not believed.
-    const plain = await test.http.post('/api/core/login').set('X-Forwarded-Proto', 'https').send(ADMIN).expect(200);
+    const plain = await test.http.post('/api/core/login').set(UI).set('X-Forwarded-Proto', 'https').send(ADMIN).expect(200);
     expect(plain.headers['strict-transport-security']).toBeUndefined();
     expect(String(plain.headers['set-cookie'])).not.toMatch(/;\s*Secure/i);
     test.app.getHttpAdapter().getInstance().set('trust proxy', 'loopback');
     try {
-      const secure = await test.http.post('/api/core/login').set('X-Forwarded-Proto', 'https').send(ADMIN).expect(200);
+      const secure = await test.http.post('/api/core/login').set(UI).set('X-Forwarded-Proto', 'https').send(ADMIN).expect(200);
       expect(secure.headers['strict-transport-security']).toMatch(/^max-age=\d+/);
       expect(String(secure.headers['set-cookie'])).toMatch(/;\s*Secure/i);
       const status = (await get('/core/security/status').set('X-Forwarded-Proto', 'https').expect(200)).body;
@@ -93,7 +93,7 @@ describe('HTTPS and security headers (L1)', () => {
 
   it('sends Secure cookies as soon as the address of f.orga is https', async () => {
     process.env.FORGA_PUBLIC_URL = 'https://forga.example.org';
-    const login = await test.http.post('/api/core/login').send(ADMIN).expect(200);
+    const login = await test.http.post('/api/core/login').set(UI).send(ADMIN).expect(200);
     expect(String(login.headers['set-cookie'])).toMatch(/;\s*Secure/i);
     expect((await get('/core/security/status').expect(200)).body).toEqual({ stage: 'development', https: false, publicUrlHttps: true, secureCookies: true });
     await get('/core/security/status', reader).expect(403);

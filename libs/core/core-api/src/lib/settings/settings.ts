@@ -5,7 +5,9 @@ import {
   Get,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  type OnApplicationBootstrap,
   Param,
   Put,
 } from '@nestjs/common';
@@ -15,7 +17,21 @@ import { CORE_SETTINGS, CORE_SETTINGS_ACCESS, SECRET_SETTING_FIELDS, type Settin
 import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { CurrentUser } from '../security/decorators.js';
+import { decryptSecret, encryptSecret, serverKey } from '../security/server-key.js';
 import { ZodPipe } from '../zod.pipe.js';
+
+/**
+ * Write-only fields stored encrypted with `FORGA_SECRET_KEY` (AES-256-GCM, prefix `enc:`): the SMTP password and the
+ * client secret of the OIDC provider. Without the server key they stay as they are (the register warns).
+ */
+export const ENCRYPTED_SETTING_FIELDS: Record<string, string[]> = {
+  smtp: ['password'],
+  oidc: ['clientSecret'],
+};
+const ENCRYPTED_PREFIX = 'enc:';
+
+/** How a write-only field is stored: encrypted, in plain text (no server key yet), not readable (other key) or empty. */
+export type SecretState = 'encrypted' | 'plain' | 'unreadable' | 'none';
 
 /** One settings section (e.g. `brigade`, `smtp`, `incidents.compensation`) stored as JSON. */
 export const SettingSchema = defineEntity({
@@ -32,9 +48,10 @@ export class Setting extends SettingSchema.class {}
 SettingSchema.setClass(Setting);
 
 @Injectable()
-export class SettingsService {
+export class SettingsService implements OnApplicationBootstrap {
   private readonly schemas: Map<string, z.ZodType>;
   private readonly access: Map<string, SettingsAccess>;
+  private readonly logger = new Logger('Settings');
 
   constructor(
     private readonly em: EntityManager,
@@ -66,11 +83,46 @@ export class SettingsService {
     return schema;
   }
 
+  /**
+   * Encrypts write-only fields stored in plain text (before the server key was set, or by an older version), without
+   * history: the history shows such fields only masked anyway.
+   */
+  async onApplicationBootstrap(): Promise<void> {
+    const key = serverKey();
+    if (!key) return;
+    const em = this.em.fork();
+    for (const [section, fields] of Object.entries(ENCRYPTED_SETTING_FIELDS)) {
+      const stored = await em.findOne(Setting, { section });
+      if (!stored) continue;
+      const plain = fields.filter((field) => typeof stored.value[field] === 'string' && stored.value[field] && !(stored.value[field] as string).startsWith(ENCRYPTED_PREFIX));
+      if (!plain.length) continue;
+      const value = { ...stored.value, ...Object.fromEntries(plain.map((field) => [field, ENCRYPTED_PREFIX + encryptSecret(stored.value[field] as string, key)])) };
+      await em.nativeUpdate(Setting, { section }, { value });
+      this.logger.log(`Encrypted the stored ${plain.join(', ')} of the settings section ${section}.`);
+    }
+  }
+
+  /** The stored value of an encrypted field in plain text; `''` if it cannot be decrypted (other server key). */
+  private decrypted(value: unknown): unknown {
+    if (typeof value !== 'string' || !value.startsWith(ENCRYPTED_PREFIX)) return value;
+    const key = serverKey();
+    return (key && decryptSecret(value.slice(ENCRYPTED_PREFIX.length), key)) || '';
+  }
+
+  /** How a write-only field is stored (technical measures of the register). */
+  async secretState(section: string, field: string): Promise<SecretState> {
+    const stored = (await this.em.fork().findOne(Setting, { section }))?.value[field];
+    if (typeof stored !== 'string' || !stored) return 'none';
+    if (!stored.startsWith(ENCRYPTED_PREFIX)) return 'plain';
+    return this.decrypted(stored) ? 'encrypted' : 'unreadable';
+  }
+
   /** The stored value with defaults applied, or `null` if it is incomplete (e.g. before setup). */
   async get<T = Record<string, unknown>>(section: string): Promise<T | null> {
     const schema = this.schema(section);
     const stored = await this.em.fork().findOne(Setting, { section });
-    const value = stored?.value ?? {};
+    const raw = stored?.value ?? {};
+    const value = ENCRYPTED_SETTING_FIELDS[section] ? Object.fromEntries(Object.entries(raw).map(([field, v]) => [field, ENCRYPTED_SETTING_FIELDS[section].includes(field) ? this.decrypted(v) : v])) : raw;
     const result = schema.safeParse(value);
     if (result.success) return result.data as T;
     // A field stored before a stricter rule existed (e.g. an invalid address) falls back to its default
@@ -100,6 +152,11 @@ export class SettingsService {
     // Write-only fields keep their stored value when left empty.
     for (const field of SECRET_SETTING_FIELDS[section] ?? []) {
       if (!next[field] && stored?.value[field]) next[field] = stored.value[field];
+    }
+    const key = serverKey();
+    for (const field of ENCRYPTED_SETTING_FIELDS[section] ?? []) {
+      const plain = next[field];
+      if (key && typeof plain === 'string' && plain && !plain.startsWith(ENCRYPTED_PREFIX)) next[field] = ENCRYPTED_PREFIX + encryptSecret(plain, key);
     }
     if (stored) stored.value = next;
     else em.create(Setting, { section, value: next });

@@ -30,13 +30,14 @@ Umgesetzt ist (siehe [implementiert/architektur.md](../implementiert/architektur
 - **Protokolle:** Audit-Log (Anmeldungen, Rechte, Exporte, Importe, Impersonation mit Grund), Historie aller Änderungen, Leseprotokoll für besonders geschützte Daten.
 - **Auskunft** als lesbares PDF mit den Angaben nach Art. 15 Abs. 1 aus allen Modulen (`describePerson`), verschlüsselt 30 Tage abgelegt, Übergabe auch in „Mein Bereich“ ([implementiert/datenschutz.md](../implementiert/datenschutz.md#auskunft-nach-art-15-als-pdf-l3)); dazu weiter das JSON `GET /api/core/export/person/:personId` (`data.person-exported`).
 - **Aufbewahrung** ([Aufbewahrungsplan](../implementiert/aufbewahrung.md), Einstellung `privacy.retention`): Frist und Aktion je Datenkategorie (Grunddaten und Personalakte Ausgeschiedener, Einsätze, Dienste, ausgesonderte Geräte und Fahrzeuge, Kostenbescheide, Auszahlungsläufe, Audit-Log, Historie) mit Aussonderung und Anbietung an das Archiv; Standard nichts außer Audit-Log 2 Jahre. Import-Uploads 24 Stunden, Zeilen von MP-Feuer-Läufen 7 Tage. `PersonDataRegistry` mit Beiträgen aller Module mit Personendaten.
-- **Sicherheit:** scrypt, Sitzung 14 Tage als `HttpOnly`-Cookie, CSRF-Header, Anmeldesperre, API-Tokens als Hash mit Bereichen, OIDC, verschlüsselte Geräteschlüssel, zweiter Faktor (TOTP) als Step-up bei sensiblen Daten und Verwaltung ([Datenschutz, umgesetzt](../implementiert/datenschutz.md)).
+- **Sicherheit:** scrypt, Sitzung höchstens 14 Tage als `HttpOnly`-Cookie mit Leerlauf-Abmeldung, CSRF-Header, Anmeldesperre in der Datenbank, API-Tokens als Hash mit Bereichen, Empfänger und Ablauf, OIDC, verschlüsselte Geräteschlüssel und Zugangsdaten, zweiter Faktor (TOTP) als Step-up bei sensiblen Daten und Verwaltung ([Datenschutz, umgesetzt](../implementiert/datenschutz.md)).
 - **Phase 1** ([implementiert/datenschutz.md](../implementiert/datenschutz.md)): HTTPS mit Caddy, `Secure`-Cookies bei `https://`-Adresse, Sicherheitsheader, `/api/docs` nur angemeldet (L1); `FORGA_STAGE` mit Band und Sperren im Testsystem (L6); Verletzte im Bericht nur mit `incidents.injuries.read`, Hinweise an Freitexten, Entschuldigungsgrund als Auswahl (L5, Teil); E-Mails mit Gesundheitsbezug ohne Namen (L18, Teil).
 - **Phase 2, Teil 1** ([implementiert/datenschutz.md](../implementiert/datenschutz.md#recht-und-seite-datenschutz)): Recht `core.privacy.manage`, Seite „Verwaltung → Datenschutz“ mit Kontakten, versionierten Textbausteinen, Selbstauskunft, Sicherheit und Aufbewahrung; Datenschutzhinweis `/privacy` mit Fassungen, PDF und Hinweis bei der ersten Anmeldung, „Information erteilt am“ mit Liste und Massenaktion (L4); Betroffenenanfragen mit Frist, Verlängerung, Antwortschreiben und Empfängern nach Art. 19, Einschränkung der Verarbeitung über alle Module (L7 ohne Löschprüfung); Widerspruch (L19); „Auskunft anfordern“ in Mein Bereich.
 - **Phase 3, Teil 1** ([implementiert/datenschutz.md](../implementiert/datenschutz.md#verzeichnis-der-verarbeitungstätigkeiten-l8)): Verzeichnis der Verarbeitungstätigkeiten als Entwurf aus den Manifesten mit Ergänzungen der Gemeinde, technischen Maßnahmen und Export als PDF und Excel (L8); Widerspruch und Empfänger nach Art. 19 aus dem Verzeichnis; Datenpannen mit 72-Stunden-Frist, Meldungen, betroffenen Personen, Kontaktliste, Protokollen und „Alle Sitzungen beenden“ (L20).
 - **Phase 3, Teil 2** ([implementiert/datenschutz.md](../implementiert/datenschutz.md#einwilligungen-l9)): Katalog der Einwilligungen mit Fassungen und Vorlagen, Einwilligungen an der Person mit Nachweis und Widerruf, Wirkung in Telefonliste und Geburtstagsliste, Mein Bereich und erste Anmeldung (L9); „Berichtigung beantragen“ mit Aufgabe für die Abteilung, Wert in der Historie unkenntlich machen (L12); Leseprotokoll mit eigener Aufbewahrung, „Anmeldungen als Sie“ mit E-Mail (L15).
 - **Phase 4, Teil A** ([implementiert/datenschutz.md](../implementiert/datenschutz.md#löschprüfung-l7)): Löschprüfung je Modul mit Ausführen und Einschränkung des Aufzubewahrenden (L7); vollständige Anonymisierung über alle Module mit Namensersetzung und Startprüfung (L13).
 - **Phase 4, Teil B** ([implementiert/datenschutz.md](../implementiert/datenschutz.md#felder-der-personalakte-l10)): abschaltbare Felder der Personalakte mit Löschen gespeicherter Werte (L10); Zweck der Listen mit Spalten je Zweck, Pflichtzweck beim Export, Recht `masterdata.lists.contact`, Kennzeichnung und Personen aller Listen im Audit (L11); Daten Dritter mit Suche, Anfragen, Auskunft und Löschung, eigener Aufbewahrung der Beteiligten und Hinweis im Verzeichnis (L14); Aufbewahrung der Protokolle und Laufberichte mit Standardregeln (L29).
+- **Phase 5** ([implementiert/datenschutz.md](../implementiert/datenschutz.md#sitzungen-l16)): Leerlauf-Abmeldung, „Angemeldet bleiben“ und „Angemeldete Geräte“ (L16); verschlüsselte Zugangsdaten in den Einstellungen, `docker/backup.sh --encrypt`, Datenbankrolle ohne Superuser und Prüfung des Inhaltsverzeichnisses vor der Wiederherstellung (L17); gesperrte Benutzer ohne Person nach Frist anonymisiert (L21); Infoterminal mit Namenssuche je Abteilung, Straße ohne Hausnummer und Sperre im Notfall (L22); API-Tokens mit Empfänger, Zweck, Pflichtablauf, Erinnerung und erlaubten Adressen (L23); Passwortregeln und Anfragebegrenzung in der Datenbank (L24); technische Empfänger und „Datenschutz im Betrieb“ (L25); Hinweis und Export für die Folgenabschätzung (L26); Metadaten von Fotos entfernt, Höchstzahl der Anhänge (L27); Meldungen der MP-Feuer-Läufe nach 90 Tagen bzw. „Umstellung abgeschlossen“ entfernt, Hinweis „Mitglieder informieren“ (L28).
 - **Mein Bereich:** Kontakt und Bankverbindung selbst ändern, eigene Dienste, Einsätze, Entschädigung, Atemschutz, Schutzausrüstung, Einwilligungen, Berichtigung beantragen, Anmeldungen als Sie.
 
 ## Auskunft nach Art. 15 als PDF
@@ -70,19 +71,19 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 | L13 | Vollständige Anonymisierung über alle Module | Art. 5 Abs. 1 e, 17 | wichtig (umgesetzt) |
 | L14 | Daten Dritter (Beteiligte, Kostenschuldner, Anrufer) | Art. 14, 15, 17 | wichtig (umgesetzt) |
 | L15 | Protokollierung von Lesezugriffen; Transparenz der Impersonation | Art. 5 Abs. 2, 32 | wichtig (umgesetzt) |
-| L16 | Sitzungen: Leerlauf-Abmeldung, Geräteübersicht | Art. 32 | wichtig |
-| L17 | Verschlüsselung der Sicherungen und der gespeicherten Daten | Art. 32 | wichtig |
+| L16 | Sitzungen: Leerlauf-Abmeldung, Geräteübersicht | Art. 32 | wichtig (umgesetzt) |
+| L17 | Verschlüsselung der Sicherungen und der gespeicherten Daten | Art. 32 | wichtig (umgesetzt) |
 | L18 | E-Mails: Inhalt der Sammel-E-Mail und Benachrichtigungen | Art. 5 Abs. 1 c, f, 32 | wichtig (teilweise umgesetzt) |
 | L19 | Widerspruch | Art. 21 | wichtig (umgesetzt) |
 | L20 | Unterstützung bei Datenpannen | Art. 33, 34 | wichtig (umgesetzt) |
-| L21 | Benutzer ohne Person; gesperrte Konten | Art. 5 Abs. 1 e | empfohlen |
-| L22 | Infoterminal als öffentlich zugängliches Gerät | Art. 25, 32 | empfohlen |
-| L23 | API-Tokens: Ablauf, Bereiche, Empfänger | Art. 5 Abs. 1 f, 32 | empfohlen |
-| L24 | Passwortregeln, Anfragebegrenzung dauerhaft | Art. 32 | empfohlen |
-| L25 | Auftragsverarbeiter und Hinweise für den Betrieb | Art. 28 | empfohlen |
-| L26 | Datenschutz-Folgenabschätzung | Art. 35 | empfohlen |
-| L27 | Anhänge (Fotos) | Art. 5, 9 | empfohlen |
-| L28 | MP-Feuer-Übernahme und Dateien aus MP-Feuer | Art. 5, 14, 32 | empfohlen |
+| L21 | Benutzer ohne Person; gesperrte Konten | Art. 5 Abs. 1 e | empfohlen (umgesetzt) |
+| L22 | Infoterminal als öffentlich zugängliches Gerät | Art. 25, 32 | empfohlen (umgesetzt) |
+| L23 | API-Tokens: Ablauf, Bereiche, Empfänger | Art. 5 Abs. 1 f, 32 | empfohlen (umgesetzt) |
+| L24 | Passwortregeln, Anfragebegrenzung dauerhaft | Art. 32 | empfohlen (umgesetzt) |
+| L25 | Auftragsverarbeiter und Hinweise für den Betrieb | Art. 28 | empfohlen (umgesetzt) |
+| L26 | Datenschutz-Folgenabschätzung | Art. 35 | empfohlen (umgesetzt) |
+| L27 | Anhänge (Fotos) | Art. 5, 9 | empfohlen (umgesetzt) |
+| L28 | MP-Feuer-Übernahme und Dateien aus MP-Feuer | Art. 5, 14, 32 | empfohlen (umgesetzt) |
 | L29 | Aufbewahrung von Protokollen und Laufberichten | Art. 5 Abs. 1 e | empfohlen (umgesetzt) |
 
 ### L1 HTTPS, sichere Cookies, Sicherheitsheader (kritisch)
@@ -109,9 +110,6 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 - **Umgesetzt:** Datenschutzhinweis `/privacy` aus Textbausteinen und Kontakten mit Fassungen und PDF, Hinweis bei der ersten Anmeldung und nach einer neuen Fassung, „Information erteilt am“ an der Person mit Liste und Massenaktion; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#datenschutzhinweis-l4). Abweichung: Der Hinweis bei der ersten Anmeldung erscheint erst, wenn alle Bausteine des Hinweises als geprüft markiert sind, weil eine ungeprüfte Vorlage noch nicht gilt.
 - **Offen:**
   - Zwecke, Rechtsgrundlagen, Empfänger und Fristen je Tätigkeit aus dem Verzeichnis (L8, umgesetzt) statt aus dem Baustein `noticeProcessing`.
->>>
-
-  - Hinweis nach der ersten Übernahme aus MP-Feuer „Mitglieder informieren“ mit Link auf die Liste (L28).
 - **Organisatorisch:** Text abstimmen; Mitglieder bei Aufnahme und nach der Umstellung informieren (Dienstabend, Aushang, Schreiben).
 
 ### L5 Gesundheitsdaten (kritisch)
@@ -141,9 +139,6 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 - **Soll:** Verzeichnis nach Art. 30 Abs. 1 (Verantwortlicher, DSB, Zwecke, Kategorien von Betroffenen und Daten, Empfänger, Drittland, Fristen, technische und organisatorische Maßnahmen).
 - **Umgesetzt:** Entwurf aus den Tätigkeiten der aktiven Module (Manifest mit `subjects`, `categories`, `health`, `legalBasisHint`), Fristen aus `privacy.retention`, Empfänger aus Manifest, API-Tokens, SMTP und OIDC, Ergänzungen der Gemeinde je Tätigkeit (`privacy.activities`, historisiert, „geprüft am/von“), technische Maßnahmen mit dem aktuellen Stand, Export als PDF und Excel; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#verzeichnis-der-verarbeitungstätigkeiten-l8). Abweichungen vom Mockup: Die technischen Maßnahmen stehen einmal als eigener Abschnitt statt in jeder Tätigkeit, weil sie für alle gelten; weitere Empfänger sind eine Liste (Bezeichnung, Hinweis) statt eines Freitexts, damit Anfragen sie nach Art. 19 zum Abhaken anbieten können; die Gemeinde ergänzt zusätzlich „Drittland“ und „Bemerkungen“; eine Änderung macht eine geprüfte Tätigkeit wieder zum Entwurf (wie bei den Textbausteinen). Kostenersatz hat eine eigene Tätigkeit (Kostenschuldner).
-- **Offen:**
-  - Sicherungsziel und Adresse von f.orga (Hosting) als technische Empfänger (L25).
-  - Hinweis auf eine Folgenabschätzung bei Tätigkeiten mit Gesundheitsdaten (L26).
 - **Organisatorisch:** Verzeichnis führt der Verantwortliche; der Entwurf ersetzt keine Prüfung.
 
 ### L9 Einwilligungen (wichtig)
@@ -192,14 +187,12 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L16 Sitzungen (wichtig)
 
-- **Heute:** Sitzung 14 Tage fest, keine Abmeldung bei Inaktivität, keine Übersicht der eigenen Sitzungen. Auf einem geteilten PC in der Wache bleibt ein Kommandantenkonto zwei Wochen offen.
-- **Umsetzung:** Leerlauf-Abmeldung (Einstellung, Standard 60 Minuten für privilegierte Konten, 8 Stunden für andere; „Angemeldet bleiben“ nur für nicht privilegierte Konten, höchstens 14 Tage). Profil „Angemeldete Geräte“ mit Browser, Adresse (gekürzt), letzte Aktivität, Abmelden einzeln und „Alle anderen abmelden“. Die Anmeldeseite des Infoterminals ist davon unberührt.
+- **Umgesetzt:** Leerlauf-Abmeldung (Einstellung `security`, 60 Minuten für privilegierte Konten, 8 Stunden für andere), „Angemeldet bleiben“ nur für Konten ohne privilegierte Rechte (höchstens 14 Tage), Profil „Angemeldete Geräte“ mit Browser, gekürzter Adresse, letzter Aktivität, einzeln und „Alle anderen abmelden“; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#sitzungen-l16). Abweichungen: Als Aktivität zählt die letzte Eingabe im Browser (Kopfzeile `x-forga-idle`), nicht jede Anfrage, damit nachladende Seiten keine Sitzung offen halten; ohne „Angemeldet bleiben“ ist das Cookie ein Sitzungs-Cookie des Browsers; „Angemeldet bleiben“ lässt sich in den Einstellungen abschalten; privilegiert ist ein Konto mit Rechten unter Step-up oder `privileged`; Impersonationen erscheinen nicht in den Geräten (sie stehen unter „Anmeldungen als Sie“).
 - **Organisatorisch:** geteilte Rechner mit eigenem Benutzerkonto des Betriebssystems und Bildschirmsperre.
 
 ### L17 Verschlüsselung (wichtig)
 
-- **Heute:** Datenbank, Anhänge und Sicherungen aus `docker/backup.sh` sind unverschlüsselt; das [Sicherungsmodul](module/backup.md) plant AES-256-GCM.
-- **Umsetzung:** Verschlüsselte Sicherung als Standard im Modul `backup` (unverschlüsselt nur mit Bestätigung, wie geplant); `docker/backup.sh` bekommt `--encrypt` mit `age` oder `openssl`. Die Seite „Sicherheit“ zeigt, ob Sicherungen verschlüsselt sind. Feldverschlüsselung in der Datenbank (z. B. Untersuchungsergebnisse) bringt wenig, solange Schlüssel und Datenbank auf demselben Server liegen; empfohlen ist Festplattenverschlüsselung des Hosts (siehe Entscheidung).
+- **Umgesetzt:** Das Modul `backup` verschlüsselt standardmäßig; `docker/backup.sh --encrypt` verschlüsselt jede Datei mit `openssl`; SMTP-Passwort und OIDC-Client-Secret liegen mit `FORGA_SECRET_KEY` verschlüsselt; die Anwendung verbindet sich als Datenbankrolle ohne Superuser-Rechte, und eine Sicherung wird nur mit geprüftem Inhaltsverzeichnis wiederhergestellt; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#verschlüsselung-l17). Keine Feldverschlüsselung (Entscheidung 5). Abweichungen: `backup.sh` nutzt nur `openssl` (überall vorhanden), nicht `age`; ob Sicherungen verschlüsselt sind, zeigen die technischen Maßnahmen des Verzeichnisses und die Seite der Datensicherung, nicht der Reiter „Sicherheit“.
 - **Organisatorisch:** Host mit verschlüsseltem Datenträger, Zutritt zum Serverraum, Passphrase und `FORGA_SECRET_KEY` im Passwortsafe.
 
 ### L18 E-Mails (wichtig)
@@ -218,52 +211,43 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 - **Umgesetzt:** „Datenpanne erfassen“ unter Datenschutz mit 72-Stunden-Frist als Aufgabe und E-Mail ohne Inhalt, Meldung an die Aufsichtsbehörde (Datum, Aktenzeichen) oder Begründung ohne Meldung, Benachrichtigung der Personen (Datum, Weg), Abschluss; Hilfen: Audit-Log eines Zeitraums oder Benutzers als Excel, betroffene Personen aus einem Listenexport (`lists.exported` mit Parametern und Personen), Vollexport, Auskunft oder Konto, Kontaktliste als Excel, „Alle Sitzungen beenden und alle Tokens widerrufen“ mit Step-up und Grund; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#datenpannen-l20). Abweichungen: Personen eines Listenexports stehen im Audit-Eintrag (`personIds`), statt die Liste mit den gespeicherten Parametern erneut zu erzeugen, weil nur so der Stand des Exports erhalten bleibt; Vollexport und Konto werden aus den heutigen Daten berechnet (so gekennzeichnet); die eigene Sitzung bleibt beim Notfall bestehen.
 - **Offen:**
-  - Geräteschlüssel der Infoterminals beim Notfall sperren.
   - Dokumentation einer Datenpanne als PDF.
 - **Organisatorisch:** Meldung an die Aufsichtsbehörde, Dokumentation (Art. 33 Abs. 5).
 
 ### L21 Benutzer ohne Person (empfohlen)
 
-- **Heute:** Benutzer werden nur gesperrt, nie gelöscht; ohne verknüpfte Person werden sie nie anonymisiert (z. B. externer Administrator, Mitarbeiter der Kämmerei).
-- **Umsetzung:** Gesperrte Benutzer ohne Person nach Frist (Einstellung, Standard 2 Jahre nach Sperre) anonymisieren wie verknüpfte; Benutzerliste zeigt „gesperrt seit“.
+- **Umgesetzt:** „gesperrt seit“ am Benutzer und in der Benutzerliste; Aufbewahrungskategorie „Gesperrte Benutzer ohne Person“ (Standard 2 Jahre nach der Sperre, anonymisieren wie verknüpfte Konten); siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#gesperrte-benutzer-ohne-person-l21). Technische Benutzer der API-Tokens zählen nicht dazu (sie tragen nur den Namen des Tokens).
 
 ### L22 Infoterminal (empfohlen)
 
-- **Heute:** Das Terminal zeigt Vor- und Nachnamen der Mitglieder der Abteilung und sucht über alle nicht ausgeschiedenen Personen; nach 60 Sekunden ohne Bedienung zurück zur Startseite. Einsätze mit Straße und Ort sind sichtbar.
-- **Umsetzung:** Namenssuche auf die Abteilungen des Terminals und Personen mit Mitgliedschaft in derselben Wache beschränken (Einstellung); eingeschränkte Personen (L7) erscheinen nie; Einsatzort nur Straße ohne Hausnummer; Hinweis in der Verwaltung, das Gerät nicht in öffentlich zugänglichen Räumen aufzustellen. Kein Geburtsdatum, keine Kontaktdaten, keine Ampel am Terminal (heute schon so).
+- **Umgesetzt:** Namenssuche nur über die Abteilungen des Terminals und die Abteilungen darunter (Einstellung „über alle Personen“), eingeschränkte Personen nie, Einsatzort ohne Hausnummer, Hinweis zum Aufstellort in der Verwaltung, Geräteschlüssel beim Notfall einer Datenpanne gesperrt; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#infoterminal-als-öffentlich-zugängliches-gerät-l22). Abweichung: Die Suche richtet sich nach den Abteilungen des Terminals statt nach den Mitgliedschaften „in derselben Wache“, weil Wachen in f.orga einer Abteilung gehören.
 - **Organisatorisch:** Aufstellort, Bildschirmschutz.
 
 ### L23 API-Tokens (empfohlen)
 
-- **Heute:** Ablauf optional; Bereiche gelten immer für die Gesamtwehr; die Empfänger (Leitstelle, Alarmierungsdienst) stehen nirgends als Empfänger.
-- **Umsetzung:** Ablauf Pflicht (höchstens 2 Jahre, Erinnerung als Frist); Feld „Empfänger/System“ und „Zweck“, das in das Verzeichnis und die Auskunft eingeht; optional erlaubte Adressen. Bereiche mit Personendaten (`masterdata.persons.read`) mit Warnung.
+- **Umgesetzt:** Ablauf Pflicht (höchstens 2 Jahre, Aufgabe 30 Tage vorher), Empfänger/System und Zweck im Verzeichnis und in der Auskunft, optional erlaubte Adressen, Warnung bei Bereichen mit Personendaten; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#api-tokens-l23). Abweichung: Tokens aus der Zeit ohne Pflichtablauf wirken weiter und erscheinen als Aufgabe „ohne Ablauf – neu ausstellen“.
 
 ### L24 Passwörter und Begrenzungen (empfohlen)
 
-- **Heute:** mindestens 10 Zeichen; Anmeldesperre und Begrenzungen im Speicher des Prozesses.
-- **Umsetzung:** Abgleich mit einer mitgelieferten Liste häufiger Passwörter; Hinweis auf Passwortmanager; Zähler in der Datenbank statt im Speicher.
+- **Umgesetzt:** Abgleich mit einer mitgelieferten Liste häufiger Passwörter und Wörter, Ablehnung von Benutzername, Name und E-Mail-Adresse als Passwort, Hinweis auf Passwortmanager, Zähler der Anmeldesperre, von „Passwort vergessen“ und der Infoterminals in der Datenbank; dazu Anmeldung ohne Benutzer-Enumeration und mit CSRF-Kopfzeile; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#passwörter-und-anfragebegrenzung-l24). Abweichung: Die Liste ist bewusst kurz (häufige Passwörter ab 10 Zeichen und typische Wörter mit Ziffern) statt einer großen Datei aus Passwortlecks.
 
 ### L25 Auftragsverarbeiter und Betrieb (empfohlen)
 
-- **Heute:** Keine Hinweise.
-- **Umsetzung:** Das Verzeichnis listet automatisch die technischen Empfänger aus der Konfiguration: SMTP-Server und OIDC-Anbieter (umgesetzt), Sicherungsziel, Adresse von f.orga (Hosting). Die Betriebsanleitung bekommt einen Abschnitt „Datenschutz im Betrieb“ (Hosting, Fernwartung, Protokolle des Reverse Proxy mit IP-Adressen und ihre Löschung).
+- **Umgesetzt:** Das Verzeichnis nennt Server von f.orga (Hosting), E-Mail-Server, Anmeldedienst und Sicherungsziel als technische Empfänger; die Betriebsanleitung hat den Abschnitt „Datenschutz im Betrieb“ (Auftragsverarbeiter, Hosting, Fernwartung, Protokolle des Reverse Proxy und ihre Löschung); siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#auftragsverarbeiter-und-betrieb-l25) und [Betrieb](../implementiert/betrieb.md#datenschutz-im-betrieb).
 - **Organisatorisch:** Verträge nach Art. 28 mit Hoster, IT-Dienstleister, E-Mail- und Anmeldedienst, ggf. dem Entwickler bei Fernwartung.
 
 ### L26 Datenschutz-Folgenabschätzung (empfohlen)
 
-- **Heute:** –
-- **Umsetzung:** Hinweis im Verzeichnis bei Tätigkeiten mit `health: true` („Prüfen, ob eine Folgenabschätzung nötig ist“); Export der Angaben, die eine Folgenabschätzung braucht (Tätigkeiten, Daten, Empfänger, technische Maßnahmen).
+- **Umgesetzt:** Hinweis „Prüfen, ob eine Folgenabschätzung nötig ist“ bei Tätigkeiten mit Gesundheitsdaten, Export der Angaben (Tätigkeiten mit Gesundheitsdaten, Daten, Empfänger, Fristen, technische Maßnahmen) als PDF und Excel; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#hinweis-auf-die-folgenabschätzung-l26).
 - **Organisatorisch:** Ob eine Folgenabschätzung nötig ist, entscheidet der Verantwortliche mit dem DSB.
 
 ### L27 Anhänge (empfohlen)
 
-- **Heute:** Fotos und PDFs an Berichten, Diensten, Geräten liegen in der Datenbank; sie können Verletzte, Kennzeichen oder Gesichter zeigen.
-- **Umsetzung:** Hinweis beim Hochladen von Einsatzfotos; Metadaten (EXIF mit Standort) beim Hochladen entfernen; Anhänge folgen der Frist ihres Datensatzes ([Aufbewahrungsplan](aufbewahrung.md)).
+- **Umgesetzt:** Metadaten (EXIF mit Standort, XMP, IPTC, Kommentare) werden beim Hochladen aus Fotos entfernt, die Ausrichtung bleibt; Hinweis beim Hochladen, bei Einsatzberichten mit dem Zusatz zu Gesichtern, Kennzeichen und Verletzten; höchstens 50 Anhänge je Datensatz; Anhänge folgen der Frist ihres Datensatzes; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#anhänge-l27). Abweichung: PDFs bleiben unverändert (ihre Metadaten nennen höchstens den Ersteller des Dokuments).
 
 ### L28 MP-Feuer-Übernahme (empfohlen)
 
-- **Heute:** Hochgeladene Transferdateien werden nach dem Lesen gelöscht, die gelesenen Zeilen nach der Übernahme bzw. nach 7 Tagen; Zeilen mit Meldungen und Laufberichte (mit Beispielzeilen und Namen) bleiben unbegrenzt. Die Archive in MP-Feuer selbst sind unverschlüsselt.
-- **Umsetzung:** Zeilen mit Meldungen nach Abschluss der Umstellung bzw. nach 90 Tagen entfernen (Bericht behält Zähler); Hinweis nach der ersten Übernahme „Mitglieder informieren“ (L4); nur aktivierte Felder übernehmen (L10).
+- **Umgesetzt:** Zeilen mit Meldungen nach 90 Tagen bzw. mit „Umstellung abgeschlossen“ entfernt (Bericht behält Zähler), Hinweis „Mitglieder informieren“ nach einer Übernahme mit neuen Personen, nur aktivierte Felder der Personalakte werden übernommen (L10); ganze Laufberichte folgen der Kategorie `mp-feuer.run-reports` (L29); siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#mp-feuer-übernahme-l28).
 - **Organisatorisch:** Transferdateien nach der Übernahme auf allen Rechnern löschen; MP-Feuer-Datenbestand nach dem Parallelbetrieb nach Aufbewahrungsregeln löschen oder archivieren; Vertrag mit dem Anbieter von MP-Feuer zum Ende.
 
 ### L29 Aufbewahrung von Protokollen (empfohlen)
@@ -276,7 +260,7 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 Umgesetzt (Faktor, Auslöser, Durchsetzung, Oberfläche): siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#zweiter-faktor-bei-sensiblen-daten-step-up). Offen ist:
 
 - **Weitere Bereiche mit `stepUp`**, sobald es sie gibt (`incidents.injuries.read`, `core.privacy.manage` und das Leseprotokoll unter `core.audit.read` tragen es bereits). Der Mechanismus ist allgemein: Die Berechtigung bekommt im Manifest `stepUp: true`, Lesepfade mit solchen Feldern prüfen `user.can` (bzw. `needsStepUp` für `stepUpAvailable`), Schreibpfade antworten mit `user.denied(...)`.
-- **Reiter „Sicherheit“** in „Verwaltung → Datenschutz → Einstellungen“ (umgesetzt mit HTTPS, System und E-Mails): Zahl der Benutzer mit sensiblen Rechten und eingerichtetem Faktor, Leerlauf-Abmeldung (L16), Stand der Sicherung.
+- **Reiter „Sicherheit“** in „Verwaltung → Datenschutz → Einstellungen“ (umgesetzt mit HTTPS, System, E-Mails und Sitzungen): Zahl der Benutzer mit sensiblen Rechten und eingerichtetem Faktor, Stand der Sicherung.
 - Später zusätzlich **WebAuthn** (Passkeys) als zweiter Faktor.
 
 ## Einstellungen „Datenschutz“
@@ -285,7 +269,7 @@ Umgesetzt: Seite „Verwaltung → Datenschutz“ mit den Reitern Anfragen, Info
 
 | Reiter | Inhalt |
 | --- | --- |
-| Sicherheit | zusätzlich Stand des Step-up (Benutzer mit sensiblen Rechten und eingerichtetem Faktor), Leerlauf-Abmeldung, Stand der Sicherung |
+| Sicherheit | zusätzlich Stand des Step-up (Benutzer mit sensiblen Rechten und eingerichtetem Faktor), Stand der Sicherung |
 
 ## Rechte und Rollen
 
@@ -314,6 +298,6 @@ Alle Entscheidungen sind festgelegt (wie empfohlen, Nr. 2 abweichend).
 | 2 – Rechte der Betroffenen | umgesetzt: Datenschutzhinweis und erste Anmeldung, Anfragen mit Frist, Einschränkung, Widerspruch, Auskunft als PDF mit `describePerson` in allen Modulen ([implementiert](../implementiert/datenschutz.md#datenschutzhinweis-l4)) | umgesetzt L3, L4, L7 (Anfragen, Einschränkung), L19 |
 | 3 – Nachweise | umgesetzt: Verzeichnis aus den Manifesten mit technischen Maßnahmen, Datenpannen ([implementiert](../implementiert/datenschutz.md#verzeichnis-der-verarbeitungstätigkeiten-l8)), Einwilligungen, Berichtigung in Mein Bereich, Leseprotokoll, Impersonation sichtbar ([implementiert](../implementiert/datenschutz.md#einwilligungen-l9)) | umgesetzt L8, L9, L12, L15, L20 |
 | 4 – Löschen und Minimieren | umgesetzt: Löschprüfung je Modul, vollständige Anonymisierung mit Startprüfung ([implementiert](../implementiert/datenschutz.md#löschprüfung-l7)); Daten Dritter, abschaltbare Felder, Zweck der Listen, Aufbewahrung der Protokolle ([implementiert](../implementiert/datenschutz.md#felder-der-personalakte-l10)) | umgesetzt L7 (Löschung), L10, L11, L13, L14, L29 |
-| 5 – Härtung | Sitzungen, Benutzer ohne Person, Infoterminal, API-Tokens, Passwörter, Anhänge, MP-Feuer-Laufberichte, Betriebsanleitung | L16, L17, L21–L28 |
+| 5 – Härtung | umgesetzt: Sitzungen, Verschlüsselung, Benutzer ohne Person, Infoterminal, API-Tokens, Passwörter, Auftragsverarbeiter und Betriebsanleitung, Folgenabschätzung, Anhänge, MP-Feuer-Laufberichte ([implementiert](../implementiert/datenschutz.md#sitzungen-l16)) | umgesetzt L16, L17, L21–L28 |
 
 Phase 1 ist klein und senkt das größte Risiko; Phase 2 erfüllt die Pflichten, die jedes Mitglied direkt einfordern kann. Die Mockups in `mockups/datenschutz/` sind freigegeben.

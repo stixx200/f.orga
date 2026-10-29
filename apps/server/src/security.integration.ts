@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EntityManager } from '@mikro-orm/core';
 import { DomainEvents, ModuleState, ModuleStateService } from '@forga/core-api';
-import { ADMIN, SETUP_TOKEN, startTestApp, type TestApp, UI } from './testing/test-app';
+import { ADMIN, SETUP_TOKEN, startTestApp, type TestApp, TOKEN_FIELDS, UI } from './testing/test-app';
 
 let test: TestApp;
 let http: TestApp['http'];
@@ -20,19 +20,21 @@ afterAll(() => test?.app.close());
 
 describe('setup and login', () => {
   it('requires a setup on first start and rejects anonymous access', async () => {
-    await http.get('/api/core/setup').expect(200, { required: true, brigadeName: null, oidc: null, stage: 'development' });
+    await http.get('/api/core/setup').expect(200, { required: true, brigadeName: null, oidc: null, stage: 'development', rememberAllowed: true });
     await http.get('/api/core/session').expect(401);
   });
 
   it('creates the administrator and logs in', async () => {
     const response = await http
-      .post('/api/core/setup')
+      .post('/api/core/setup').set(UI)
       .send({ setupToken: SETUP_TOKEN, brigadeName: 'Feuerwehr Musterstadt', displayName: 'Admin', language: 'en', ...ADMIN })
       .expect(201);
     const cookie = String(response.headers['set-cookie']);
     expect(cookie).toMatch(/forga_session=.+HttpOnly/);
 
     const session = await http.get('/api/core/session').set('Cookie', cookie.split(';')[0]).expect(200);
+    // Reading the roles needs core.roles.manage, which waits for the second factor.
+    await test.elevate(cookie.split(';')[0]);
     expect(session.body.user).toMatchObject({ username: 'admin', language: 'en' });
     expect(session.body.permissions['core.users.manage']).toBe('brigade');
     expect(session.body.permissions['incidents.reports.release']).toBe('brigade');
@@ -45,19 +47,19 @@ describe('setup and login', () => {
       expect.arrayContaining(['masterdata.persons.read', 'incidents.reports.read', 'incidents.reports.write', 'training.read', 'training.attendance']),
     );
 
-    await http.post('/api/core/setup').send({ setupToken: SETUP_TOKEN, brigadeName: 'x', displayName: 'x', ...ADMIN }).expect(409);
-    await http.get('/api/core/setup').expect(200, { required: false, brigadeName: 'Feuerwehr Musterstadt', oidc: null, stage: 'development' });
+    await http.post('/api/core/setup').set(UI).send({ setupToken: SETUP_TOKEN, brigadeName: 'x', displayName: 'x', ...ADMIN }).expect(409);
+    await http.get('/api/core/setup').expect(200, { required: false, brigadeName: 'Feuerwehr Musterstadt', oidc: null, stage: 'development', rememberAllowed: true });
   });
 
   it('rejects wrong passwords', async () => {
-    await http.post('/api/core/login').send({ ...ADMIN, password: 'falsch-falsch' }).expect(401);
+    await http.post('/api/core/login').set(UI).send({ ...ADMIN, password: 'falsch-falsch' }).expect(401);
   });
 
   it('locks a username after failed logins only for the address they came from', async () => {
-    for (let i = 0; i < 5; i++) await http.post('/api/core/login').set(from('203.0.113.7')).send({ ...ADMIN, password: 'geraten-123' }).expect(401);
-    expect((await http.post('/api/core/login').set(from('203.0.113.7')).send(ADMIN).expect(429)).body.code).toBe('auth.locked');
+    for (let i = 0; i < 5; i++) await http.post('/api/core/login').set(UI).set(from('203.0.113.7')).send({ ...ADMIN, password: 'geraten-123' }).expect(401);
+    expect((await http.post('/api/core/login').set(UI).set(from('203.0.113.7')).send(ADMIN).expect(429)).body.code).toBe('auth.locked');
     // The owner of the account logs in from elsewhere; a guesser cannot lock him out.
-    await http.post('/api/core/login').set(from('198.51.100.20')).send(ADMIN).expect(200);
+    await http.post('/api/core/login').set(UI).set(from('198.51.100.20')).send(ADMIN).expect(200);
   });
 
   it('requires the CSRF header for changes made with a session cookie', async () => {
@@ -137,7 +139,7 @@ describe('API tokens', () => {
       .post('/api/core/tokens')
       .set('Cookie', admin)
       .set(UI)
-      .send({ name: 'Alarmfax', scopes: ['incidents.api.create'] })
+      .send({ ...TOKEN_FIELDS, name: 'Alarmfax', scopes: ['incidents.api.create'] })
       .expect(201);
     const bearer = { Authorization: `Bearer ${created.body.token}` };
 

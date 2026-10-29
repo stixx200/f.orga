@@ -71,9 +71,13 @@ export class RolesController {
     return result;
   }
 
-  /** Readable for role editing and for assigning roles to users. */
+  /**
+   * Readable for role editing and for assigning roles to users only: the roles with their permissions show who may do
+   * what, which other users do not need to know.
+   */
   @Get('roles')
-  async list(): Promise<RoleDto[]> {
+  async list(@CurrentUser() user: AuthenticatedUser): Promise<RoleDto[]> {
+    if (!user.can('core.roles.manage') && !user.can('core.users.manage')) throw user.denied(['core.roles.manage', 'core.users.manage']);
     const roles = await this.em.fork().find(Role, {});
     return roles.map(toRoleDto).toSorted((a, b) => a.name.de.localeCompare(b.name.de, 'de'));
   }

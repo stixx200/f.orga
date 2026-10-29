@@ -38,7 +38,7 @@ export function SetupPage() {
             <TextInput label={t('setup.displayName')} {...field('displayName')} />
             <TextInput label={t('setup.username')} autoComplete="username" {...field('username')} />
             <TextInput label={t('setup.email')} description={t('setup.emailHint')} type="email" autoComplete="email" {...field('email')} />
-            <PasswordInput label={t('setup.password')} autoComplete="new-password" minLength={10} {...field('password')} />
+            <PasswordInput label={t('setup.password')} description={t('users.passwordHint')} autoComplete="new-password" minLength={10} {...field('password')} />
             <Button type="submit" loading={setup.isPending}>
               {t('setup.submit')}
             </Button>

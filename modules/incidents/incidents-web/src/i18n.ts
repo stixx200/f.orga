@@ -104,6 +104,7 @@ const texts: Translations = {
     },
     editor: {
       attachments: 'Anhänge (Fotos, Alarmfax, Skizzen)',
+      attachmentsHint: 'Nur Fotos, die für den Bericht nötig sind; möglichst keine Gesichter, Kennzeichen oder Verletzten.',
       pdf: 'PDF',
       statisticsOnIncident: 'Die Statistikmerkmale des Einsatzes fehlen noch. Sie gelten für den ganzen Einsatz und stehen auf der Seite des Einsatzes.',
       conflict: 'Konflikt – nicht gespeichert',
@@ -724,6 +725,7 @@ const texts: Translations = {
     },
     editor: {
       attachments: 'Attachments (photos, alarm fax, sketches)',
+      attachmentsHint: 'Only photos needed for the report; if possible no faces, number plates or injured persons.',
       pdf: 'PDF',
       statisticsOnIncident: 'The statistics of the incident are still missing. They apply to the whole incident and are on the page of the incident.',
       conflict: 'Conflict – not saved',

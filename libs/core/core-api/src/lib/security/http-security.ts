@@ -57,7 +57,7 @@ export function protectApiDocs(app: INestApplication, path = '/api/docs'): void 
   app.use(path, (req: Request, res: Response, next: NextFunction) => {
     const header = req.headers.authorization;
     const cookie = (req.cookies as Record<string, string> | undefined)?.[SESSION_COOKIE];
-    const user = header?.startsWith('Bearer ') ? auth.userFromApiToken(header.slice(7).trim()) : cookie ? auth.userFromSession(cookie) : Promise.resolve(null);
+    const user = header?.startsWith('Bearer ') ? auth.userFromApiToken(header.slice(7).trim(), req.ip ?? null) : cookie ? auth.userFromSession(cookie) : Promise.resolve(null);
     user.then(
       (found) => (found ? next() : res.status(401).json({ code: 'auth.required' })),
       (error: unknown) => next(error),

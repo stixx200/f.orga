@@ -212,6 +212,18 @@ export class NoticesService {
     return offenseKey;
   }
 
+  /**
+   * May the user read the incident: cost notices or costs of incidents (brigade-wide permissions of this card), or the
+   * reports of one of its departments (reports of brigade-wide units need the permission brigade-wide).
+   */
+  async mayReadIncident(user: AuthenticatedUser, incidentId: string): Promise<boolean> {
+    if (['cost-recovery.read', 'cost-recovery.write', 'incidents.costs'].some((p) => user.can(p))) return true;
+    if (!user.can('incidents.reports.read')) return false;
+    const incident = await this.incidents.forCostRecovery(incidentId);
+    if (!incident) return false;
+    return incident.reports.some((r) => user.can('incidents.reports.read', r.departmentId ?? null));
+  }
+
   /** All notices of an incident, also cancelled, amended and discarded ones (incident page). */
   async ofIncident(incidentId: string): Promise<IncidentNotice[]> {
     const notices = await this.em.fork().find(NoticeEntity, { incidentId }, { orderBy: { createdAt: 'asc' } });

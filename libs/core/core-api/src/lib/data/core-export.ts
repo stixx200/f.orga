@@ -24,6 +24,30 @@ const auditDto = (e: AuditEntry) => ({
 
 
 /**
+ * Anonymises user accounts (of anonymised persons, and locked accounts without person after their period, L21): they are
+ * locked and lose name, e-mail address, password, sessions, tokens, open links and their own history; the account itself
+ * stays, so other histories refer to "N. N." instead of a missing user. The second factor is deleted.
+ */
+export async function anonymizeAccounts(base: EntityManager, userIds: readonly string[]): Promise<number> {
+  const ids = [...userIds];
+  if (!ids.length) return 0;
+  const em = base.fork();
+  const users = await em.find(User, { id: { $in: ids } }, { populate: ['passwordHash'] });
+  for (const user of users) {
+    // The username must stay unique; the ID does not reveal anything about the person.
+    em.assign(user, { username: `anonymized-${user.id}`, displayName: ANONYMIZED_NAME, email: null, passwordHash: null, oidcSubject: null, active: false, lockedAt: user.lockedAt ?? new Date(), hiddenTasks: [] });
+  }
+  await em.flush();
+  await em.nativeDelete(Session, { user: { $in: ids } });
+  await em.nativeDelete(PasswordReset, { user: { $in: ids } });
+  await em.nativeDelete(UserMfa, { user: { $in: ids } });
+  await em.nativeUpdate(ApiToken, { user: { $in: ids }, revokedAt: null }, { revokedAt: new Date() });
+  // The history of the accounts holds the former names and addresses.
+  await em.nativeDelete(HistoryEntry, { $or: [{ entity: 'core.user', entityId: { $in: ids } }, { parentEntity: 'core.user', parentId: { $in: ids } }] });
+  return users.length;
+}
+
+/**
  * The core's part of the full export, of the data access request and of the anonymisation: users, roles and settings,
  * never password hashes, session or token secrets and write-only settings.
  */
@@ -213,22 +237,10 @@ export class CoreExport {
     await em.nativeUpdate(PrivacyDocument, { personId: { $in: [...personIds] }, deletedAt: null }, { content: null, deletedAt: new Date() });
   }
 
+  /** Accounts linked to the persons, anonymised with `anonymizeAccounts`. */
   private async anonymizeAccounts(personIds: readonly string[]): Promise<void> {
-    const em = this.em.fork();
-    const users = await em.find(User, { personId: { $in: [...personIds] } }, { populate: ['passwordHash'] });
-    if (!users.length) return;
-    for (const user of users) {
-      // The username must stay unique; the ID does not reveal anything about the person.
-      em.assign(user, { username: `anonymized-${user.id}`, displayName: ANONYMIZED_NAME, email: null, passwordHash: null, oidcSubject: null, active: false, hiddenTasks: [] });
-    }
-    await em.flush();
-    const ids = users.map((u) => u.id);
-    await em.nativeDelete(Session, { user: { $in: ids } });
-    await em.nativeDelete(PasswordReset, { user: { $in: ids } });
-    await em.nativeDelete(UserMfa, { user: { $in: ids } });
-    await em.nativeUpdate(ApiToken, { user: { $in: ids }, revokedAt: null }, { revokedAt: new Date() });
-    // The history of the accounts holds the former names and addresses.
-    await em.nativeDelete(HistoryEntry, { $or: [{ entity: 'core.user', entityId: { $in: ids } }, { parentEntity: 'core.user', parentId: { $in: ids } }] });
+    const users = await this.em.fork().find(User, { personId: { $in: [...personIds] } }, { fields: ['id'] });
+    await anonymizeAccounts(this.em, users.map((u) => u.id));
   }
 
   private user(u: User) {

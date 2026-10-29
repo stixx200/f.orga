@@ -17,7 +17,7 @@ So entsteht das Image aus `docker/Dockerfile`:
 ## Starten
 
 ```bash
-cp docker/.env.example docker/.env      # Passwort setzen
+cp docker/.env.example docker/.env      # Passwörter setzen (POSTGRES_PASSWORD, FORGA_DB_APP_PASSWORD)
 docker compose -f docker/compose.yml up -d --build
 ```
 
@@ -28,7 +28,8 @@ docker compose -f docker/compose.yml up -d --build
 
 | Variable | Bedeutung | Standard |
 | --- | --- | --- |
-| `POSTGRES_PASSWORD` | Datenbankpasswort, Pflicht | – |
+| `POSTGRES_PASSWORD` | Passwort des Superusers `forga` der Datenbank (nur Verwaltung), Pflicht | – |
+| `FORGA_DB_APP_PASSWORD` | Passwort der Datenbankrolle `forga_app`, mit der sich die Anwendung verbindet (kein Superuser, siehe [Datenbankrolle der Anwendung](#datenbankrolle-der-anwendung)), Pflicht; bei den Stufen `FORGA_DB_APP_PASSWORD_REAL`, `_TEST` | – |
 | `FORGA_PORT` | Port auf dem Host | `8080` |
 | `FORGA_STAGE` | Art des Systems: `production` (Echtdaten), `test` (nur Demodaten: Band „Testsystem – nur Demodaten“ auf jeder Seite, Datenübernahme aus MP-Feuer und Import von Personen gesperrt, Wiederherstellung einer Sicherung des Echtsystems nur mit Begründung und Löschen nach 7 Tagen) oder `development`. Ein anderer Wert verhindert den Start. Siehe [Datenschutz](datenschutz.md#echt--test--und-entwicklungssystem-l6). | `production` (Image, Compose), ohne Angabe `development` |
 | `FORGA_SECURE_COOKIES` | Cookies auch ohne `https://`-Adresse nur über HTTPS senden. Automatisch, sobald die Adresse von f.orga mit `https://` beginnt oder die Anfrage über HTTPS kam. | `false` |
@@ -86,8 +87,8 @@ FORGA_URL=http://localhost:8081 FORGA_SETUP_TOKEN=<FORGA_SETUP_TOKEN_TEST> npm r
 
 | System | Adresse | Variablen |
 | --- | --- | --- |
-| Echtsystem | `http://<server>:8080` | `POSTGRES_PASSWORD_REAL`, `FORGA_SETUP_TOKEN_REAL`, `FORGA_SECRET_KEY_REAL`, `FORGA_PUBLIC_URL_REAL`, `FORGA_BACKUP_DIR_REAL`, `FORGA_REAL_PORT`, gemeinsam `FORGA_TRUST_PROXY`; fest `FORGA_STAGE=production` |
-| Testsystem | `http://<server>:8081` | `POSTGRES_PASSWORD_TEST`, `FORGA_SETUP_TOKEN_TEST`, `FORGA_SECRET_KEY_TEST`, `FORGA_PUBLIC_URL_TEST`, `FORGA_BACKUP_DIR_TEST`, `FORGA_BACKUP_SCHEDULER_TEST`, `FORGA_TEST_PORT`, gemeinsam `FORGA_TRUST_PROXY`; fest `FORGA_STAGE=test` |
+| Echtsystem | `http://<server>:8080` | `POSTGRES_PASSWORD_REAL`, `FORGA_DB_APP_PASSWORD_REAL`, `FORGA_SETUP_TOKEN_REAL`, `FORGA_SECRET_KEY_REAL`, `FORGA_PUBLIC_URL_REAL`, `FORGA_BACKUP_DIR_REAL`, `FORGA_REAL_PORT`, gemeinsam `FORGA_TRUST_PROXY`; fest `FORGA_STAGE=production` |
+| Testsystem | `http://<server>:8081` | `POSTGRES_PASSWORD_TEST`, `FORGA_DB_APP_PASSWORD_TEST`, `FORGA_SETUP_TOKEN_TEST`, `FORGA_SECRET_KEY_TEST`, `FORGA_PUBLIC_URL_TEST`, `FORGA_BACKUP_DIR_TEST`, `FORGA_BACKUP_SCHEDULER_TEST`, `FORGA_TEST_PORT`, gemeinsam `FORGA_TRUST_PROXY`; fest `FORGA_STAGE=test` |
 
 Jedes System sichert sich selbst in einen eigenen Ordner (`FORGA_BACKUP_DIR_REAL` bzw. `_TEST`, sonst die Volumes `forga_real_backups` und `forga_test_backups`), mit eigener Passphrase und eigenem `FORGA_SECRET_KEY`. Das Testsystem kann eine Sicherung des Echtsystems wiederherstellen (Wiederherstellungsprobe): Datei unter „Sicherungen“ hochladen, mit der Passphrase des Echtsystems und einer Begründung (Audit-Log). Nach 7 Tagen löscht das Testsystem alle Daten und die hochgeladene Datei und verlangt danach die Einrichtung neu; bis dahin nennt die Übersicht der Datensicherung den Tag.
 
@@ -103,9 +104,40 @@ Die Datei hat den eigenen Projektnamen `forga-stages` und feste Volumenamen (`fo
 
 **Aufbewahrung:** Daten werden erst anonymisiert oder gelöscht, wenn ein Administrator unter „Einstellungen → Datenschutz“ Fristen und Aktionen wählt (Standard: nichts, nur das Audit-Log nach 2 Jahren). Die Seite zeigt je Zeile, wie viele Datensätze jetzt betroffen wären. Gerade nach einer Datenübernahme mit alten Austritten und Einsätzen sollten die Fristen bewusst gewählt werden; Anonymisieren und Löschen lassen sich nicht rückgängig machen. Gelöschte Daten bleiben in älteren Sicherungen bis zu deren Ablauf. Einzelheiten: [Aufbewahrungsplan](aufbewahrung.md).
 
-**Passwort vergessen:** Die Antwort ist immer gleich, ob es das Konto gibt oder nicht; Suche und Versand laufen nach der Antwort. Je Absenderadresse sind 20 Anfragen in 15 Minuten erlaubt, je Konto werden höchstens drei Links in 15 Minuten verschickt. Hinter einem Reverse Proxy zählt die Adresse des Benutzers nur mit `FORGA_TRUST_PROXY`, sonst teilen sich alle die Adresse des Proxys. Eine E-Mail-Adresse gehört zu höchstens einem aktiven Benutzer; haben ältere Daten eine Adresse doppelt, setzt sie keines der Konten zurück, dann hilft der Benutzername.
+**Passwort vergessen:** Die Antwort ist immer gleich, ob es das Konto gibt oder nicht; Suche und Versand laufen nach der Antwort. Je Absenderadresse sind 20 Anfragen in 15 Minuten erlaubt, je Konto werden höchstens drei Links in 15 Minuten verschickt (Zähler in der Datenbank, siehe [Datenschutz](datenschutz.md#passwörter-und-anfragebegrenzung-l24)). Hinter einem Reverse Proxy zählt die Adresse des Benutzers nur mit `FORGA_TRUST_PROXY`, sonst teilen sich alle die Adresse des Proxys. Eine E-Mail-Adresse gehört zu höchstens einem aktiven Benutzer; haben ältere Daten eine Adresse doppelt, setzt sie keines der Konten zurück, dann hilft der Benutzername.
 
-**Anmeldesperre:** Nach fünf falschen Passwörtern ist der Benutzername eine Minute gesperrt, aber nur für die Adresse, von der die Versuche kamen; der Inhaber meldet sich von seinem Gerät weiter an. Hinter einem Reverse Proxy braucht das `FORGA_TRUST_PROXY`, sonst sperren Fehlversuche den Benutzernamen für alle.
+**Anmeldesperre:** Nach fünf falschen Passwörtern ist der Benutzername eine Minute gesperrt, aber nur für die Adresse, von der die Versuche kamen; der Inhaber meldet sich von seinem Gerät weiter an. Die Zähler liegen in der Datenbank (nur als Hash) und überstehen einen Neustart. Hinter einem Reverse Proxy braucht das `FORGA_TRUST_PROXY`, sonst sperren Fehlversuche den Benutzernamen für alle.
+
+**Sitzungen:** Ohne Bedienung endet eine Sitzung nach 60 Minuten (Konten mit Verwaltungsrechten) bzw. 8 Stunden; „Angemeldet bleiben“ (14 Tage) gibt es nur für Konten ohne Verwaltungsrechte. Einstellbar unter „Verwaltung → Datenschutz → Einstellungen → Sicherheit“ ([Datenschutz](datenschutz.md#sitzungen-l16)). Auf geteilten Rechnern der Wache trotzdem ein eigenes Benutzerkonto des Betriebssystems mit Bildschirmsperre verwenden.
+
+### Datenbankrolle der Anwendung
+
+Die Anwendung verbindet sich nicht als Superuser: `DATABASE_URL` in `docker/compose.yml` und `docker/compose.stages.yml` nennt die Rolle `forga_app` mit `FORGA_DB_APP_PASSWORD` (bei den Stufen `FORGA_DB_APP_PASSWORD_REAL`, `_TEST`). Sie besitzt die Datenbank `forga` mit allen Schemas und Tabellen und darf Datenbanken anlegen (Wiederherstellung in eine neue Datenbank mit Tausch), ist aber kein Superuser: Sie kann keine Dateien des Servers lesen, keine Programme starten (`COPY … PROGRAM`), keine Erweiterungen oder Funktionen in C anlegen und keine anderen Rollen ändern. Der Superuser `forga` (`POSTGRES_PASSWORD`) bleibt für die Verwaltung (`docker/backup.sh`, Rücktausch von Hand).
+
+- **Neue Installation:** `docker/db/10-app-role.sh` liegt unter `/docker-entrypoint-initdb.d` des Dienstes `db` und legt die Rolle beim ersten Start mit leerem Volume an.
+- **Bestehende Installation** (vor dem Update angelegt): `FORGA_DB_APP_PASSWORD` in `docker/.env` setzen, dann einmal
+
+  ```bash
+  F=docker/compose.yml   # bzw. compose.stages.yml mit db-real und db-test
+  docker compose -f $F up -d db
+  docker compose -f $F exec db sh /docker-entrypoint-initdb.d/10-app-role.sh
+  docker compose -f $F up -d
+  ```
+
+  Das Skript ist wiederholbar: Es legt die Rolle an bzw. setzt ihr Passwort und übergibt Datenbank, Schemas, Tabellen und Sequenzen an `forga_app`.
+- Die Entwicklung (`docker/compose.dev.yml`, `npm run dev`) bleibt beim Benutzer `forga`.
+
+### Datenschutz im Betrieb
+
+f.orga verarbeitet personenbezogene Daten und Gesundheitsdaten der Mitglieder. Was der Betrieb dazu beiträgt (Art. 28 und 32 DSGVO; das [Verzeichnis](datenschutz.md#auftragsverarbeiter-und-betrieb-l25) nennt die technischen Empfänger aus der Konfiguration):
+
+- **Auftragsverarbeiter (Art. 28):** Wer den Server betreibt oder auf ihn zugreifen kann, verarbeitet die Daten im Auftrag der Gemeinde. Mit jedem braucht die Gemeinde einen Vertrag zur Auftragsverarbeitung: Hoster bzw. Rechenzentrum, IT-Dienstleister (Betrieb, Updates, Sicherung), E-Mail-Anbieter (SMTP), Anmeldedienst (OIDC, z. B. Microsoft 365), Betreiber des Sicherungsziels (NAS, Cloud-Speicher) und der Entwickler bzw. Dienstleister, falls er zur Fernwartung zugreift. Das Verzeichnis listet Server, E-Mail-Server, Anmeldedienst und Sicherungsziel automatisch unter „Technische Empfänger und Auftragsverarbeiter“.
+- **Hosting:** Server in der EU, Datenträger verschlüsselt (Festplattenverschlüsselung des Hosts, z. B. LUKS; f.orga verschlüsselt die Datenbank nicht selbst, Entscheidung 5), Zutritt zum Serverraum geregelt, Betriebssystem und Docker aktuell. `docker/.env` (Passwörter, `FORGA_SECRET_KEY`) nur für Administratoren lesbar.
+- **Fernwartung:** nur über einen gesicherten Zugang (VPN oder SSH mit Schlüssel), nur anlassbezogen und dokumentiert (wer, wann, warum); Zugriff auf die Anwendung über eigene Benutzerkonten, nicht über geteilte. „Anmelden als“ ist in f.orga protokolliert und wird dem Benutzer angezeigt.
+- **Protokolle mit IP-Adressen:** f.orga selbst speichert Adressen nur gekürzt (Sitzungen, „Angemeldete Geräte“) bzw. als Hash (Anfragebegrenzung, einen Tag); das Audit-Log enthält bei fehlgeschlagenen Schlüsseln der Infoterminals die Adresse und folgt seiner Frist. Caddy schreibt kein Zugriffsprotokoll. Wer am Reverse Proxy (Caddy, nginx der Gemeinde) oder in der Firewall ein Zugriffsprotokoll einschaltet, legt eine kurze Löschfrist fest (z. B. 7 Tage, `log { output file … { roll_keep_for 168h } }` in Caddy) und nimmt es ins Verzeichnis auf. Die Protokolle der Container (`docker compose logs`) enthalten keine Personendaten außer Fehlermeldungen; ihre Größe lässt sich mit den Logging-Optionen von Docker begrenzen (`max-size`, `max-file`).
+- **Sicherungen:** verschlüsselt (Modul Datensicherung standardmäßig, `docker/backup.sh --encrypt`), eine Kopie außer Haus, Passphrase und `FORGA_SECRET_KEY` getrennt im Passwortsafe; gelöschte Daten bleiben in älteren Sicherungen bis zu deren Ablauf.
+- **Infoterminals:** nicht in öffentlich zugänglichen Räumen aufstellen, Bildschirm nicht von außen einsehbar; bei Verlust des Geräts den Link neu erzeugen oder das Terminal widerrufen.
+- **Folgenabschätzung (Art. 35):** Ob für die Tätigkeiten mit Gesundheitsdaten eine Folgenabschätzung nötig ist, entscheidet der Verantwortliche mit dem DSB; das Verzeichnis exportiert die Angaben dafür („Angaben für die Folgenabschätzung“).
 
 ## Datensicherung
 
@@ -117,7 +149,8 @@ Optional: Unter „Verwaltung → Datensicherung“ richtet ein Administrator mi
 
 - `FORGA_BACKUP_ROOT` (Compose: `/backups`) mit einem Ordner auf dem Host (`FORGA_BACKUP_DIR`, Eigentümer UID 1000) oder, ohne Angabe, dem Volume `forga-backups`; Compose startet also auch ohne `FORGA_BACKUP_DIR`. Solange die Einstellungen nicht gespeichert sind, sichert das Modul nichts und meldet nichts (keine Warnungen, Aufgaben oder E-Mails). Ein NAS wird auf dem Host eingebunden (NFS/SMB), nicht im Container. Der Zielordner in den Einstellungen liegt darunter (Standard `forga`).
 - `FORGA_SECRET_KEY` für die gespeicherte Passphrase (geplante Sicherungen).
-- Die Datenbankrolle `forga` legt für die Wiederherstellung eine neue Datenbank an und benennt Datenbanken um; der Benutzer aus `POSTGRES_USER` darf das. Ohne `CREATEDB` stellt das Modul in die laufende Datenbank in einer Transaktion wieder her.
+- Die Datenbankrolle der Anwendung (`forga_app`, siehe [Datenbankrolle der Anwendung](#datenbankrolle-der-anwendung)) legt für die Wiederherstellung eine neue Datenbank an und benennt Datenbanken um; dafür hat sie `CREATEDB` und besitzt die Datenbank. Ohne `CREATEDB` stellt das Modul in die laufende Datenbank in einer Transaktion wieder her.
+- Vor jeder Wiederherstellung (auch der Probe beim Prüfen) liest das Modul das Inhaltsverzeichnis des Abzugs (`pg_restore --list`) und stellt nur wieder her, wenn es ausschließlich Schemas, Tabellen mit Daten, Sequenzen, Vorgabewerte, Constraints und Indizes in Schemas von f.orga enthält; Funktionen, Trigger, Erweiterungen, Rollen, Rechte oder Systemschemas ergeben `backup.dumpForbidden`. Wiederhergestellt wird mit `--no-owner --no-privileges`.
 
 Eine Sicherung ist eine Datei `forga-<instanz>-JJJJ-MM-TT_HHMM.forgabackup` mit Datenbank (`pg_dump`, alle Schemas), Plugins und einer lesbaren Kopie der Einstellungen ohne Geheimnisse, verschlüsselt mit der Passphrase. Ohne f.orga, z. B. auf einem anderen Rechner mit dem Repository:
 
@@ -156,6 +189,9 @@ docker/backup.sh -f docker/compose.stages.yml -d /srv/backup/forga -k 30 --with-
 | `-d` | Zielordner | `./backup` |
 | `-k` | Anzahl aufbewahrter Sicherungen | `30` |
 | `--with-env` | `docker/.env` mitsichern (Passwörter, `FORGA_SECRET_KEY`) | aus |
+| `--encrypt` | jede Datei beim Schreiben mit `openssl` verschlüsseln (AES-256, Schlüssel aus der Passphrase mit PBKDF2, 600 000 Runden; Dateien `*.enc`), es liegt nie eine unverschlüsselte Kopie im Zielordner. Passphrase (mindestens 12 Zeichen) in `FORGA_BACKUP_PASSPHRASE` oder in der Datei aus `FORGA_BACKUP_PASSPHRASE_FILE` | aus |
+
+Entschlüsseln: `openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -in db-real.dump.enc -out db-real.dump` (fragt nach der Passphrase). Die Passphrase gehört getrennt von den Sicherungen in den Passwortsafe.
 
 **Regelmäßig**, z. B. nächtlich um 2:30 Uhr:
 
@@ -206,4 +242,4 @@ Beim Start spielt der Server fehlende Migrationen ein; ein Abzug aus einer älte
 
 - HTTPS gibt es nur über den optionalen Dienst Caddy oder einen eigenen Reverse Proxy; ohne ihn gehört der Stack nicht ins Internet.
 - Die Datensicherung des Moduls sichert nur in einen Ordner (bzw. ein auf dem Host eingebundenes NAS), nicht direkt in S3 oder WebDAV; `docker/.env` sichert nur `docker/backup.sh` (siehe [Datensicherung](#datensicherung)).
-- Die Sperre nach Fehlversuchen bei der Anmeldung und die Begrenzung von „Passwort vergessen“ liegen im Speicher des Prozesses. Ein Neustart setzt sie zurück.
+- `docker/compose.dev.yml` (Entwicklung) verbindet sich weiter als Superuser `forga`; nur die Compose-Dateien für den Betrieb nutzen `forga_app`.

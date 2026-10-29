@@ -1,3 +1,4 @@
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Inject, NotFoundException, Param, Post, Put, Query, Res } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import type { Response } from 'express';
@@ -16,6 +17,7 @@ import {
   SessionSeries,
   type SessionType,
   SessionTypeInput,
+  type TrainingFeedLinks,
   type TrainingSettings,
 } from '@forga/training-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
@@ -44,6 +46,19 @@ export function toTypeDto(type: SessionTypeEntity): SessionType {
 const icsText = (value: string) => value.replace(/[\\,;]/g, (c) => `\\${c}`).replace(/\n/g, '\\n');
 const toDate = (value: string | null) => (value ? new Date(value) : null);
 const icsTime = (date: Date) => date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+
+/**
+ * Token of the calendar feed of one department, derived from the feed token of the brigade: a member with the address
+ * of his department cannot read the sessions of the other departments. A new feed token changes all of them.
+ */
+export function departmentFeedToken(feedToken: string, departmentId: string): string {
+  return createHmac('sha256', feedToken).update(`department:${departmentId}`).digest('base64url').slice(0, 32);
+}
+
+/** Compares in constant time (both sides hashed to the same length). */
+function sameToken(a: string, b: string): boolean {
+  return timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
+}
 
 @Controller('training')
 export class SessionsController {
@@ -240,12 +255,34 @@ export class SessionsController {
     );
   }
 
-  /** Calendar feed for calendar apps (no login): `/api/training/feed/<token>.ics?departmentId=…`. */
+  /**
+   * Addresses of the calendar feed for the settings page: one for all departments, one per department (with a token of
+   * its own). Only for the managers of the settings, who see the feed token anyway.
+   */
+  @Get('feed-links')
+  async feedLinks(@CurrentUser() user: AuthenticatedUser): Promise<TrainingFeedLinks> {
+    if (!this.settings.isManager(user, 'training.general')) throw user.denied(this.settings.managerPermissions('training.general'));
+    const settings = (await this.settings.get<TrainingSettings>('training.general')) as TrainingSettings;
+    if (!settings.feedToken) return { all: null, departments: [] };
+    const names = await this.sessions.departmentNames();
+    return {
+      all: `/api/training/feed/${settings.feedToken}.ics`,
+      departments: [...names].map(([departmentId, name]) => ({ departmentId, name, path: `/api/training/feed/${departmentFeedToken(settings.feedToken, departmentId)}.ics?departmentId=${departmentId}` })),
+    };
+  }
+
+  /**
+   * Calendar feed for calendar apps (no login): `/api/training/feed/<token>.ics` for all departments, or with the token
+   * of a department `…/<department token>.ics?departmentId=…` for that department only.
+   */
   @Public()
   @Get('feed/:token')
   async feed(@Param('token') token: string, @Query('departmentId') departmentId: string | undefined, @Res() res: Response): Promise<void> {
     const settings = (await this.settings.get<TrainingSettings>('training.general')) as TrainingSettings;
-    if (!settings.feedToken || `${settings.feedToken}.ics` !== token) throw new NotFoundException();
+    const given = token.endsWith('.ics') ? token.slice(0, -4) : '';
+    const brigade = Boolean(settings.feedToken) && sameToken(given, settings.feedToken);
+    const department = Boolean(settings.feedToken && departmentId) && sameToken(given, departmentFeedToken(settings.feedToken, departmentId ?? ''));
+    if (!brigade && !department) throw new NotFoundException();
     const since = new Date(Date.now() - 90 * 86_400_000);
     const sessions = await this.em.fork().find(
       SessionEntity,

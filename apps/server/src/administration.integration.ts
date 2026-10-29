@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MailService, PasswordResetService } from '@forga/core-api';
-import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
+import { setUp, startTestApp, type TestApp, UI, TOKEN_FIELDS } from './testing/test-app';
 
 let test: TestApp;
 let admin: string;
@@ -127,10 +127,10 @@ describe('the last administrator', () => {
 describe('API tokens', () => {
   it('get no administrative scopes and never more than their creator holds', async () => {
     const manager = await login('pfleger');
-    expect((await post('/core/tokens', { name: 'Hintertür', scopes: ['core.users.manage'] }, manager).expect(400)).body.code).toBe('tokens.coreScopes');
-    expect((await post('/core/tokens', { name: 'Hintertür', scopes: ['core.roles.manage'] }).expect(400)).body.code).toBe('tokens.coreScopes');
-    expect((await post('/core/tokens', { name: 'Zu weit', scopes: ['masterdata.persons.read'] }, manager).expect(403)).body.code).toBe('tokens.scopesWider');
-    await post('/core/tokens', { name: 'Alarmfax', scopes: ['incidents.api.create'] }, manager).expect(201);
+    expect((await post('/core/tokens', { ...TOKEN_FIELDS, name: 'Hintertür', scopes: ['core.users.manage'] }, manager).expect(400)).body.code).toBe('tokens.coreScopes');
+    expect((await post('/core/tokens', { ...TOKEN_FIELDS, name: 'Hintertür', scopes: ['core.roles.manage'] }).expect(400)).body.code).toBe('tokens.coreScopes');
+    expect((await post('/core/tokens', { ...TOKEN_FIELDS, name: 'Zu weit', scopes: ['masterdata.persons.read'] }, manager).expect(403)).body.code).toBe('tokens.scopesWider');
+    await post('/core/tokens', { ...TOKEN_FIELDS, name: 'Alarmfax', scopes: ['incidents.api.create'] }, manager).expect(201);
     // The token page lists the permissions with the token permission alone.
     const tokenRole = (await post('/core/roles', { name: 'Tokens', permissions: ['core.tokens.manage'] }).expect(201)).body.id;
     await user('tokenpfleger', [{ roleId: tokenRole }]);
@@ -143,7 +143,7 @@ describe('deactivated modules', () => {
   it('stay closed whatever the case of the path, also for API tokens', async () => {
     const permissions = (await get('/core/permissions')).body as { id: string }[];
     const scope = permissions.find((p) => p.id.startsWith('cost-recovery.'))!.id;
-    const token = (await post('/core/tokens', { name: 'Kostenersatz', scopes: [scope] }).expect(201)).body.token as string;
+    const token = (await post('/core/tokens', { ...TOKEN_FIELDS, name: 'Kostenersatz', scopes: [scope] }).expect(201)).body.token as string;
     const bearer = { Authorization: `Bearer ${token}` };
     expect(Object.keys((await test.http.get('/api/core/session').set(bearer).expect(200)).body.permissions)).toEqual([scope]);
 
@@ -162,7 +162,7 @@ describe('deactivated modules', () => {
     try {
       // Neither holds the manager these permissions, nor would they be "wider" only while the module is off.
       expect((await post('/core/roles', { name: 'Kostenersatz heimlich', permissions: ['cost-recovery.*'] }, manager).expect(403)).body.code).toBe('users.roleWider');
-      expect((await post('/core/tokens', { name: 'Kostenersatz heimlich', scopes: [scope] }, manager).expect(403)).body.code).toBe('tokens.scopesWider');
+      expect((await post('/core/tokens', { ...TOKEN_FIELDS, name: 'Kostenersatz heimlich', scopes: [scope] }, manager).expect(403)).body.code).toBe('tokens.scopesWider');
       // The administrator holds them (`*`) and may prepare a role.
       const role = (await post('/core/roles', { name: 'Kostenersatz später', permissions: ['cost-recovery.*'] }).expect(201)).body.id;
       const target = await user('spaeter', []);

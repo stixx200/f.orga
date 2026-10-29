@@ -9,6 +9,8 @@ const texts: Translations = {
     notFound: 'Diese Seite gibt es nicht.',
     terminals: {
       title: 'Infoterminals',
+      placement: 'Infoterminals zeigen Namen der Mitglieder und Einsätze (ohne Hausnummer). Nicht in öffentlich zugänglichen Räumen aufstellen; den Bildschirm nicht von außen einsehbar anbringen.',
+      blocked: 'gesperrt – neuen Link erzeugen',
       department: 'Abteilung',
       allDepartments: 'Alle Abteilungen',
       showRevoked: 'Widerrufene zeigen',
@@ -83,6 +85,8 @@ const texts: Translations = {
     },
     settings: {
       title: 'Einstellungen Infoterminal',
+      searchAllPersons: 'Namenssuche über alle Personen der Feuerwehr',
+      searchAllPersonsHint: 'Aus: Die Suche am Terminal findet nur Personen der Abteilungen des Terminals und der Abteilungen darunter (empfohlen). Personen mit eingeschränkter Verarbeitung erscheinen nie.',
       windows: 'Zeitfenster und Gerät',
       afterEndMinutes: 'Nachlaufzeit (Minuten)',
       afterEndMinutesHint: 'Eintragen bis so lange nach dem bestätigten Ende eines Berichts bzw. dem geplanten Ende eines Dienstes',
@@ -117,6 +121,8 @@ const texts: Translations = {
     notFound: 'This page does not exist.',
     terminals: {
       title: 'Info terminals',
+      placement: 'Info terminals show names of members and incidents (without house number). Do not place them in publicly accessible rooms; mount the screen so it cannot be seen from outside.',
+      blocked: 'blocked – create a new link',
       department: 'Department',
       allDepartments: 'All departments',
       showRevoked: 'Show revoked',
@@ -191,6 +197,8 @@ const texts: Translations = {
     },
     settings: {
       title: 'Info terminal settings',
+      searchAllPersons: 'Name search over all persons of the brigade',
+      searchAllPersonsHint: 'Off: the search at the terminal finds only persons of the terminal\'s departments and the departments below them (recommended). Persons with restricted processing never appear.',
       windows: 'Time windows and device',
       afterEndMinutes: 'Grace period (minutes)',
       afterEndMinutesHint: 'Booking stays possible this long after the confirmed end of a report or the planned end of a session',

@@ -1,8 +1,8 @@
-import { Button, Checkbox, Code, CopyButton, Group, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Checkbox, Code, CopyButton, Group, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { ApiToken, ApiTokenInput, CreatedApiToken, Permission } from '@forga/core-contracts';
+import { API_TOKEN_MAX_DAYS, API_TOKEN_REMINDER_DAYS, type ApiToken, type ApiTokenInput, type CreatedApiToken, type Permission } from '@forga/core-contracts';
 import { api, formatDate, formatDateTime, send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, Notice, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
 
@@ -14,14 +14,37 @@ function tokenState(token: ApiToken): 'revoked' | 'expired' | 'valid' {
   return 'valid';
 }
 
+/** A day `days` after today as `YYYY-MM-DD` (local date). */
+function dayAfter(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/** Ends within the reminder period (L23). */
+const endsSoon = (token: ApiToken) => Boolean(token.expiresAt) && new Date(token.expiresAt!).getTime() - Date.now() < API_TOKEN_REMINDER_DAYS * 86_400_000;
+
+interface Draft {
+  name: string;
+  recipient: string;
+  purpose: string;
+  scopes: string[];
+  expiresOn: string | null;
+  addresses: string;
+}
+
+const emptyDraft = (): Draft => ({ name: '', recipient: '', purpose: '', scopes: [], expiresOn: dayAfter(365), addresses: '' });
+
 /** API tokens for other systems (e.g. alarm fax parser); the plain token is shown only once. */
 export function TokensPage() {
   const { t, i18n } = useTranslation('shell');
   const localized = useLocalized();
   const { data: tokens = [] } = useQuery({ queryKey: TOKENS_KEY, queryFn: () => api<ApiToken[]>('core/tokens') });
   const { data: permissions = [] } = useQuery({ queryKey: ['core', 'permissions'], queryFn: () => api<Permission[]>('core/permissions') });
-  const [draft, setDraft] = useState<{ name: string; scopes: string[]; expiresOn: string | null }>({ name: '', scopes: [], expiresOn: null });
-  const [today] = useState(() => new Date());
+  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [limits] = useState(() => ({ min: dayAfter(0), max: dayAfter(API_TOKEN_MAX_DAYS) }));
+  // Permissions with personal data of the members: the recipient goes into the register and the access report.
+  const personalData = draft.scopes.some((s) => s.startsWith('masterdata.persons'));
   const [created, setCreated] = useState<CreatedApiToken | null>(null);
   const [revoking, setRevoking] = useState<ApiToken | null>(null);
 
@@ -29,7 +52,7 @@ export function TokensPage() {
     invalidate: [TOKENS_KEY],
     onSuccess: (token) => {
       setCreated(token);
-      setDraft({ name: '', scopes: [], expiresOn: null });
+      setDraft(emptyDraft());
     },
   });
   const revoke = useAction((token: ApiToken) => send('DELETE', `core/tokens/${token.id}`), { invalidate: [TOKENS_KEY], success: t('tokens.revoked') });
@@ -51,6 +74,17 @@ export function TokensPage() {
         columns={[
           { key: 'name', header: t('tokens.name'), render: (token) => <Text fw={700} size="sm">{token.name}<Text span c="dimmed" size="xs"> · {token.prefix}…</Text></Text> },
           {
+            key: 'recipient',
+            header: t('hardening.tokens.recipient'),
+            render: (token) => (
+              <>
+                <Text size="sm">{token.recipient || '–'}</Text>
+                {token.purpose && <Text size="xs" c="dimmed">{token.purpose}</Text>}
+                <Text size="xs" c="dimmed">{token.allowedAddresses.length ? t('hardening.tokens.onlyFrom', { addresses: token.allowedAddresses.join(', ') }) : t('hardening.tokens.anyAddress')}</Text>
+              </>
+            ),
+          },
+          {
             key: 'scopes',
             header: t('tokens.scopes'),
             render: (token) => (
@@ -71,7 +105,14 @@ export function TokensPage() {
             header: t('tokens.expires'),
             render: (token) => {
               const state = tokenState(token);
-              return state === 'valid' ? (token.expiresAt ? formatDate(token.expiresAt, i18n.language) : t('tokens.never')) : <StatusBadge tone="warning">{t(`tokens.${state}`)}</StatusBadge>;
+              if (state !== 'valid') return <StatusBadge tone="warning">{t(`tokens.${state}`)}</StatusBadge>;
+              if (!token.expiresAt) return <StatusBadge tone="warning">{t('hardening.tokens.noExpiry')}</StatusBadge>;
+              return (
+                <Group gap={6}>
+                  {formatDate(token.expiresAt, i18n.language)}
+                  {endsSoon(token) && <StatusBadge tone="warning">{t('hardening.tokens.endsSoon')}</StatusBadge>}
+                </Group>
+              );
             },
           },
           { key: 'lastUsed', header: t('tokens.lastUsed'), render: (token) => formatDateTime(token.lastUsedAt, i18n.language) },
@@ -87,12 +128,23 @@ export function TokensPage() {
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            create.mutate(draft);
+            if (!draft.expiresOn) return;
+            create.mutate({
+              name: draft.name,
+              recipient: draft.recipient,
+              purpose: draft.purpose,
+              scopes: draft.scopes,
+              expiresOn: draft.expiresOn,
+              allowedAddresses: draft.addresses.split(/[\s,;]+/).map((a) => a.trim()).filter(Boolean),
+            });
           }}
         >
           <Stack gap="md">
             <TextInput label={t('tokens.name')} placeholder={t('tokens.namePlaceholder')} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.currentTarget.value })} required />
-            <DateInput label={t('tokens.validUntil')} value={draft.expiresOn} onChange={(value) => setDraft({ ...draft, expiresOn: value })} valueFormat="DD.MM.YYYY" clearable minDate={today} />
+            <TextInput label={t('hardening.tokens.recipient')} description={t('hardening.tokens.recipientHint')} value={draft.recipient} onChange={(e) => setDraft({ ...draft, recipient: e.currentTarget.value })} required minLength={3} maxLength={200} />
+            <Textarea label={t('hardening.tokens.purpose')} description={t('hardening.tokens.purposeHint')} value={draft.purpose} onChange={(e) => setDraft({ ...draft, purpose: e.currentTarget.value })} required minLength={3} maxLength={500} autosize minRows={2} />
+            <DateInput label={t('tokens.validUntil')} description={t('hardening.tokens.validUntilHint', { days: API_TOKEN_MAX_DAYS })} value={draft.expiresOn} onChange={(value) => setDraft({ ...draft, expiresOn: value })} valueFormat="DD.MM.YYYY" required minDate={limits.min} maxDate={limits.max} />
+            <Textarea label={t('hardening.tokens.addresses')} description={t('hardening.tokens.addressesHint')} value={draft.addresses} onChange={(e) => setDraft({ ...draft, addresses: e.currentTarget.value })} autosize minRows={1} placeholder="192.0.2.10, 10.0.0.0/8" />
             <Checkbox.Group label={t('tokens.scopes')} value={draft.scopes} onChange={(scopes) => setDraft({ ...draft, scopes })} required>
               <Stack gap={6} mt={6}>
                 {/* Never for tokens: administration, privileged permissions and those needing the second factor. */}
@@ -101,8 +153,9 @@ export function TokensPage() {
                 ))}
               </Stack>
             </Checkbox.Group>
+            {personalData && <Notice kind="warning">{t('hardening.tokens.personalData')}</Notice>}
             <Group justify="flex-end">
-              <Button type="submit" loading={create.isPending} disabled={!draft.scopes.length}>{t('tokens.create')}</Button>
+              <Button type="submit" loading={create.isPending} disabled={!draft.scopes.length || !draft.expiresOn}>{t('tokens.create')}</Button>
             </Group>
           </Stack>
         </form>

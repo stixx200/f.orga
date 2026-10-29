@@ -28,7 +28,6 @@ import {
   type Language,
   LEGACY_RECIPIENTS_SECTION,
   type LocalizedText,
-  OidcSettings,
   PRIVACY_PERMISSION,
   PrivacyActivities,
   PrivacyContacts,
@@ -38,7 +37,6 @@ import {
   type RegisterActivity,
   RegisterRecipient,
   type RegisterRecipientView,
-  SmtpSettings,
 } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
 import { ModuleStateService } from '../module/modules.js';
@@ -47,6 +45,8 @@ import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { CookiePolicy } from '../security/cookie-policy.js';
 import { CurrentUser, RequirePermissions } from '../security/decorators.js';
 import { ApiToken } from '../security/security.entities.js';
+import { tokenRecipientName } from '../security/token-recipient.js';
+import { ProcessorRegistry } from './processors.js';
 import { brigadeLogoDataUrl } from '../settings/assets.js';
 import { Setting, SettingsService } from '../settings/settings.js';
 import { forgaStage } from '../stage.js';
@@ -62,14 +62,6 @@ interface KnownActivity {
   activity: ProcessingActivity;
   module: { id: string; name: LocalizedText };
 }
-
-const hostOf = (url: string): string => {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-};
 
 /**
  * The register of processing activities (Art. 30 GDPR, L8): composed of the activities of the core and the active
@@ -88,6 +80,7 @@ export class PrivacyRegister implements OnApplicationBootstrap {
     private readonly retention: RetentionTexts,
     private readonly measures: TechnicalMeasureRegistry,
     private readonly audit: Audit,
+    private readonly processorRegistry: ProcessorRegistry,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -161,33 +154,14 @@ export class PrivacyRegister implements OnApplicationBootstrap {
     return tokens.flatMap((token) =>
       [...new Set(token.scopes.map((scope) => scope.slice(0, scope.indexOf('.') > 0 ? scope.indexOf('.') : scope.length)))].map((module) => ({
         module,
-        recipient: { id: `token:${token.id}`, name: { de: `Schnittstelle „${token.name}“`, en: `Interface "${token.name}"` }, note: '', source: 'token' as const },
+        recipient: { id: `token:${token.id}`, name: tokenRecipientName(token), note: token.purpose ?? '', source: 'token' as const },
       })),
     );
   }
 
-  /** SMTP server and OIDC provider from the settings: technical recipients and processors. */
+  /** Technical recipients and processors from the configuration: hosting, e-mail, sign-in and those of the modules. */
   private async processors(): Promise<RegisterRecipientView[]> {
-    const smtp = SmtpSettings.parse((await this.settings.get('smtp')) ?? {});
-    const oidc = OidcSettings.parse((await this.settings.get('oidc')) ?? {});
-    const result: RegisterRecipientView[] = [];
-    if (smtp.host) {
-      result.push({
-        id: 'processor:smtp',
-        name: { de: `E-Mail-Server ${smtp.host} (Versand von Benachrichtigungen)`, en: `E-mail server ${smtp.host} (sending notifications)` },
-        note: '',
-        source: 'processor',
-      });
-    }
-    if (oidc.enabled && oidc.issuer) {
-      result.push({
-        id: 'processor:oidc',
-        name: { de: `Anmeldedienst ${hostOf(oidc.issuer)} (Konto der Gemeinde)`, en: `Sign-in service ${hostOf(oidc.issuer)} (municipal account)` },
-        note: '',
-        source: 'processor',
-      });
-    }
-    return result;
+    return this.processorRegistry.collect(await this.modules.inactiveIds());
   }
 
   private async activitiesWithRecipients(): Promise<{ known: KnownActivity; recipients: RegisterRecipientView[]; record: ActivityRecord }[]> {
@@ -342,20 +316,26 @@ export class PrivacyRegisterController {
     return this.get(req);
   }
 
-  /** The register as PDF (`format=pdf`) or Excel (`format=xlsx`) in the chosen language. */
+  /**
+   * The register as PDF (`format=pdf`) or Excel (`format=xlsx`) in the chosen language. `scope=dpia`: only the
+   * activities with health data, as the basis of a data protection impact assessment (Art. 35, L26).
+   */
   @Get('export/:format')
-  async export(@Param('format') format: string, @Query('language') language: string | undefined, @Req() req: Request, @Res() res: Response): Promise<void> {
+  async export(@Param('format') format: string, @Query('language') language: string | undefined, @Query('scope') scope: string | undefined, @Req() req: Request, @Res() res: Response): Promise<void> {
     if (format !== 'pdf' && format !== 'xlsx') throw new NotFoundException();
     const lang: Language = language === 'en' ? 'en' : 'de';
-    const register = await this.register.register(await this.context(req));
+    const dpia = scope === 'dpia';
+    const full = await this.register.register(await this.context(req));
+    const register = dpia ? { ...full, activities: full.activities.filter((a) => a.health) } : full;
     const brigade = await this.settings.get<BrigadeSettings>('brigade');
     const now = new Date();
     const file =
       format === 'pdf'
-        ? await renderRegisterPdf({ register, language: lang, brigade, logo: await brigadeLogoDataUrl(this.em), now })
-        : await renderRegisterXlsx({ register, language: lang, brigade, now });
-    await this.audit.log('privacy.register-exported', { format, language: lang });
-    const name = `${lang === 'de' ? 'verarbeitungsverzeichnis' : 'register-of-processing'}-${now.toISOString().slice(0, 10)}.${format}`;
+        ? await renderRegisterPdf({ register, language: lang, brigade, logo: await brigadeLogoDataUrl(this.em), now, dpia })
+        : await renderRegisterXlsx({ register, language: lang, brigade, now, dpia });
+    await this.audit.log('privacy.register-exported', { format, language: lang, ...(dpia ? { scope: 'dpia' } : {}) });
+    const base = dpia ? (lang === 'de' ? 'folgenabschaetzung-angaben' : 'dpia-information') : lang === 'de' ? 'verarbeitungsverzeichnis' : 'register-of-processing';
+    const name = `${base}-${now.toISOString().slice(0, 10)}.${format}`;
     res.setHeader('Content-Type', format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
     res.setHeader('Cache-Control', 'no-store');

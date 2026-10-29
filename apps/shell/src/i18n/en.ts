@@ -3,6 +3,7 @@ import { minimisationEn, minimisationAuditEn } from './minimisation';
 import { privacyEn } from './privacy';
 import { breachesEn, registerEn, registerAuditEn } from './register';
 import { transparencyAuditEn, transparencyAuditKeysEn, transparencyEn } from './transparency';
+import { hardeningAuditEn, hardeningAuditKeysEn, hardeningEn } from './hardening';
 import { erasureAuditEn, erasureAuditKeysEn, erasureEn } from './erasure';
 
 /** English texts of the shell; the type keeps the keys in sync with `de.ts`. */
@@ -11,6 +12,7 @@ export const en: typeof de = {
   register: registerEn,
   breaches: breachesEn,
   transparency: transparencyEn,
+  hardening: hardeningEn,
   minimisation: minimisationEn,
   erasure: erasureEn,
   appName: 'f.orga',
@@ -297,7 +299,7 @@ export const en: typeof de = {
     languageHint: 'Applies on every device after login.',
     receiveDigest: 'Weekly e-mail with deadlines',
     password: 'Password',
-    passwordHint: 'At least 10 characters.',
+    passwordHint: 'At least 10 characters; common passwords and your own name are refused. Best use a password manager.',
     newPassword: 'New password',
     newPasswordHint: 'Leave empty to keep the password.',
     roles: 'Roles',
@@ -651,12 +653,14 @@ export const en: typeof de = {
       text: 'Text block',
       channel: 'Channel',
       ...transparencyAuditKeysEn,
+      ...hardeningAuditKeysEn,
       ...erasureAuditKeysEn,
     },
     actions: {
       ...registerAuditEn.actions,
       ...minimisationAuditEn.actions,
       ...transparencyAuditEn,
+      ...hardeningAuditEn,
       ...erasureAuditEn,
       'retention.offered': 'Offered to the archive',
       'retention.exported': 'Export for the archive downloaded',

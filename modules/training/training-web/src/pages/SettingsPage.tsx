@@ -2,11 +2,13 @@ import { ActionIcon, Button, Checkbox, Group, NumberInput, Select, SimpleGrid, S
 import { IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 import type { SessionType, SessionTypeInput, TrainingSettings } from '@forga/training-contracts';
-import { apiUrl, send, useLocalized, useTranslation } from '@forga/web-sdk';
+import { send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { DataTable, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
-import { keys, useDepartments, useTrainingSettings, useTypes } from '../api';
+import { keys, useFeedLinks, useTrainingSettings, useTypes } from '../api';
 
 const SETTINGS_KEY = ['core', 'settings', 'training.general'];
+/** Full address of a feed path below the origin of f.orga. */
+const feed = (path: string) => `${window.location.origin}${path}`;
 const newToken = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 
 function TypeDialog({ type, onClose }: { type?: SessionType; onClose: () => void }) {
@@ -111,10 +113,11 @@ function TypesTab() {
 function GeneralForm({ value }: { value: TrainingSettings }) {
   const { t } = useTranslation('training');
   const { t: common } = useTranslation('common');
-  const { data: departments = [] } = useDepartments();
+  const { data: links } = useFeedLinks();
   const [form, setForm] = useState(value);
-  const save = useAction((v: TrainingSettings) => send('PUT', 'core/settings/training.general', v), { success: t('settingsPage.saved'), invalidate: [SETTINGS_KEY] });
-  const feed = (departmentId?: string) => `${window.location.origin}${apiUrl(`training/feed/${form.feedToken}.ics`)}${departmentId ? `?departmentId=${departmentId}` : ''}`;
+  const save = useAction((v: TrainingSettings) => send('PUT', 'core/settings/training.general', v), { success: t('settingsPage.saved'), invalidate: [SETTINGS_KEY, keys.feedLinks] });
+  // The addresses are computed by the server from the saved token: a new token counts once it is saved.
+  const unsaved = form.feedToken !== value.feedToken;
   return (
     <Stack gap="md">
       <Panel title={t('settingsPage.checkIn')}>
@@ -140,14 +143,15 @@ function GeneralForm({ value }: { value: TrainingSettings }) {
             <Button variant="default" onClick={() => setForm({ ...form, feedToken: newToken() })}>{form.feedToken ? t('settingsPage.feedRenew') : t('settingsPage.feedEnable')}</Button>
             {form.feedToken && <Button variant="default" color="red" onClick={() => setForm({ ...form, feedToken: '' })}>{t('settingsPage.feedDisable')}</Button>}
           </Group>
-          {form.feedToken && (
+          {form.feedToken && unsaved && <Text size="sm">{t('settingsPage.feedUnsaved')}</Text>}
+          {form.feedToken && !unsaved && links?.all && (
             <Stack gap={4}>
               <Text size="sm" fw={700}>{t('settingsPage.feedAll')}</Text>
-              <Text size="xs" ff="monospace" style={{ wordBreak: 'break-all' }}>{feed()}</Text>
-              {departments.map((d) => (
-                <div key={d.id}>
+              <Text size="xs" ff="monospace" style={{ wordBreak: 'break-all' }}>{feed(links.all)}</Text>
+              {links.departments.map((d) => (
+                <div key={d.departmentId}>
                   <Text size="sm" fw={700} mt={4}>{d.name}</Text>
-                  <Text size="xs" ff="monospace" style={{ wordBreak: 'break-all' }}>{feed(d.id)}</Text>
+                  <Text size="xs" ff="monospace" style={{ wordBreak: 'break-all' }}>{feed(d.path)}</Text>
                 </div>
               ))}
             </Stack>

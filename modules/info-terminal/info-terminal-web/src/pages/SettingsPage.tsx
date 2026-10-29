@@ -1,11 +1,11 @@
-import { Button, Group, NumberInput, SimpleGrid, Stack, Text } from '@mantine/core';
+import { Button, Group, NumberInput, SimpleGrid, Stack, Switch, Text } from '@mantine/core';
 import { useState } from 'react';
 import type { InfoTerminalSettings } from '@forga/info-terminal-contracts';
 import { send, useTranslation } from '@forga/web-sdk';
 import { PageHeader, Panel, useAction } from '@forga/web-ui';
 import { SETTINGS_KEY, useSettings } from '../api';
 
-type Field = keyof InfoTerminalSettings;
+type Field = Exclude<keyof InfoTerminalSettings, 'searchAllPersons'>;
 const FIELDS: { key: Field; min: number; max: number }[] = [
   { key: 'afterEndMinutes', min: 0, max: 1440 },
   { key: 'openEndHours', min: 1, max: 48 },
@@ -37,6 +37,12 @@ function SettingsForm({ initial }: { initial: InfoTerminalSettings }) {
             />
           ))}
         </SimpleGrid>
+        <Switch
+          label={t('settings.searchAllPersons')}
+          description={t('settings.searchAllPersonsHint')}
+          checked={form.searchAllPersons}
+          onChange={(e) => setForm((f) => ({ ...f, searchAllPersons: e.currentTarget.checked }))}
+        />
         <Text size="sm" c="dimmed">{t('settings.hint')}</Text>
         <Group justify="flex-end">
           <Button loading={save.isPending} disabled={invalid} onClick={() => save.mutate(form)}>{t('settings.save')}</Button>

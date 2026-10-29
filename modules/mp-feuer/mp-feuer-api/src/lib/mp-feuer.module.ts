@@ -1,7 +1,7 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { AuditReferenceRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, PersonDataRegistry, RetentionRegistry } from '@forga/core-api';
-import { MP_FEUER_MANIFEST, MP_FEUER_READ, MP_FEUER_SETTINGS } from '@forga/mp-feuer-contracts';
+import { MESSAGES_KEEP_DAYS, MP_FEUER_MANIFEST, MP_FEUER_READ, MP_FEUER_SETTINGS } from '@forga/mp-feuer-contracts';
 import { MP_FEUER_MIGRATIONS } from '../migrations/index.js';
 import { registerAuditReferences } from './audit/audit.references.js';
 import { MpFeuerExports } from './exports/export-adapter.js';
@@ -45,6 +45,8 @@ export class MpFeuerModule implements OnModuleInit {
     this.retention.register('mp-feuer.rows', { run: (_settings, dryRun) => this.runs.expireRows(dryRun) });
     // The reports name persons from MP-Feuer: retention category with a default of one year (L29).
     this.runReports.register(this.retention);
+    // Rows with messages and example rows of the reports name persons: 90 days after the run (L28).
+    this.retention.register('mp-feuer.messages', { run: (_settings, dryRun) => this.runs.removeMessages(new Date(Date.now() - MESSAGES_KEEP_DAYS * 86_400_000), dryRun) });
   }
 }
 

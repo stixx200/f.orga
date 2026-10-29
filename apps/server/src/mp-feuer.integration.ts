@@ -520,3 +520,21 @@ describe('MP-Feuer: permissions and module state', () => {
     expect((await get('/mp-feuer/exports').expect(200)).body).toEqual([]);
   });
 });
+
+describe('MP-Feuer: only switched-on fields of the person file (L10, L28)', () => {
+  it('does not take over values of switched-off fields', async () => {
+    await put('/core/settings/masterdata.personFields', { disabled: ['gender', 'phonePrivate'] }).expect(200);
+    const archive = transferZip({ PER_STAMM: [person('P-FELD', '0009', 'Frieda', 'Feldsparsam', { PER_GESCHLECHT_OW: 'W', PER_TEL_PRIV: '07111 123456', PER_MAIL_PRIV: 'frieda@example.org' })] });
+    const run = await mp.upload([[archive, 'MPTRA_01_2026-10-29-080000_Abt._Musterstadt.zip']]);
+    await mp.select(run.id, { archives: { '01': { department: 'Abteilung Musterstadt', unit: null, skip: false } } });
+    await mp.dryRun(run.id);
+    const applied = await mp.apply(run.id);
+    expect(countsOf(applied, 'masterdata.persons')).toMatchObject({ create: 1, error: 0 });
+    const stored: { gender: string; phone_private: string; email: string }[] = await test.app
+      .get(EntityManager)
+      .getConnection()
+      .execute(`select gender, phone_private, email from masterdata.person where last_name = 'Feldsparsam'`);
+    expect(stored).toEqual([{ gender: 'unspecified', phone_private: '', email: 'frieda@example.org' }]);
+    await put('/core/settings/masterdata.personFields', { disabled: [] }).expect(200);
+  });
+});

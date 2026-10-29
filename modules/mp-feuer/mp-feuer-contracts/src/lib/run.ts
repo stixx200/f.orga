@@ -159,8 +159,16 @@ export const RunReport = z.object({
   messages: z.array(ReportMessageGroup),
   /** Mappings of the run kept in the module's list. */
   remembered: z.number(),
+  /**
+   * When the rows with messages (with names from MP-Feuer) were removed: 90 days after the run or with „Umstellung
+   * abgeschlossen“ (L28). The counts stay; `messages` is empty then.
+   */
+  messagesRemovedAt: z.string().nullable(),
 });
 export type RunReport = z.infer<typeof RunReport>;
+
+/** Rows with messages of a run are kept this many days after it ended (L28). */
+export const MESSAGES_KEEP_DAYS = 90;
 
 /**
  * The selection of the last transfer (settings section `mp-feuer.remembered`), saved with each apply and offered again
