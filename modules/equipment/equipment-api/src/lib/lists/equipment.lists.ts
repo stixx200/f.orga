@@ -111,6 +111,7 @@ export class EquipmentLists {
       id: 'equipment.inspections',
       name: { de: 'Prüfhistorie', en: 'Inspection history' },
       permission: READ,
+      personalData: 'names',
       parameters: [{ key: 'from', label: { de: 'Von', en: 'From' }, type: 'date' }, { key: 'to', label: { de: 'Bis', en: 'To' }, type: 'date' }, department],
       schema: Filter,
       orientation: 'landscape',
@@ -130,6 +131,8 @@ export class EquipmentLists {
         const name = (itemId: string, key: string) => items.find((i) => i.id === itemId)?.inspections.find((t) => t.key === key)?.name[language] ?? key;
         return {
           subtitle: `${from} – ${to}`,
+          // Inspectors who are members (others are named by company or user name only).
+          personIds: rows.flatMap((r) => (r.inspectorPersonId ? [r.inspectorPersonId] : [])),
           rows: rows.map((r) => ({ date: r.date, number: r.item.inventoryNumber, name: r.item.name, inspection: name(r.item.id, r.inspectionKey), result: RESULT[r.result][language], by: r.inspectorCompany || r.recordedBy, next: r.nextDueOn ?? null })),
         };
       },
@@ -143,6 +146,7 @@ export class EquipmentLists {
       name: { de: 'Prüfprotokoll', en: 'Inspection report' },
       description: { de: 'Eine Prüfung oder alle Prüfungen eines Tages mit Checkliste, Messwerten und Unterschrift', en: 'One inspection or all inspections of a day with checklist, measurements and signature' },
       permission: READ,
+      personalData: 'names',
       parameters: [{ key: 'date', label: { de: 'Tag', en: 'Day' }, type: 'date' }, department, {
           key: 'inspectionId',
           label: { de: 'Einzelne Prüfung', en: 'Single inspection' },
@@ -187,6 +191,7 @@ export class EquipmentLists {
         const point = (c: { point: string; state: string; value: string }) => `${c.point}: ${c.state === 'ok' ? ok : c.state === 'not-ok' ? notOk : c.value}`;
         return {
           subtitle: params.inspectionId ? (rows[0]?.date ?? '') : date,
+          personIds: [...inspectors.keys()],
           rows: rows.map((r) => ({
             item: `${r.item.inventoryNumber} ${r.item.name}`,
             inspection: name(r.item.id, r.inspectionKey),
@@ -206,6 +211,7 @@ export class EquipmentLists {
       id: 'equipment.defects',
       name: { de: 'Offene Mängel', en: 'Open defects' },
       permission: READ,
+      personalData: 'names',
       parameters: [department],
       schema: Filter,
       columns: [col('date', 'Gemeldet', 'Reported'), col('number', 'Inventar-Nr.', 'Inventory no.'), col('name', 'Gerät', 'Item', 1.5), col('description', 'Mangel', 'Defect', 2.5), col('by', 'Von', 'By')],

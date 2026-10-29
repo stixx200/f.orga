@@ -1,6 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import type { z } from 'zod';
-import type { Language, ListCell, ListColumn, ListInfo, ListOption, ListParameter } from '@forga/core-contracts';
+import { type Language, LIST_PURPOSE_OTHER, type ListCell, type ListColumn, type ListInfo, type ListOption, type ListParameter, type ListPersonalData, type ListPurpose, PURPOSE_REQUIRED_DATA } from '@forga/core-contracts';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { PermissionRegistry } from '../security/permission-registry.js';
 
@@ -25,6 +25,15 @@ export type ListParameterDefinition = ListParameter & {
   choices?: (user: AuthenticatedUser, query: string, language: Language) => Promise<ListOption[]>;
 };
 
+/** A purpose of a list; `permission` (any department) is needed to choose it, e.g. contact details of the members. */
+export type ListPurposeDefinition = ListPurpose & { permission?: string };
+
+/** The purpose "other" offered with every list that needs a purpose. */
+export const OTHER_PURPOSE: ListPurpose = {
+  key: LIST_PURPOSE_OTHER,
+  label: { de: 'Anderer Zweck (bitte angeben)', en: 'Other purpose (please describe)' },
+};
+
 /** A list template a module offers. Rows must respect the user's permissions (e.g. departments). */
 export interface ListDefinition<P = Record<string, unknown>> {
   id: string;
@@ -38,7 +47,26 @@ export interface ListDefinition<P = Record<string, unknown>> {
   columns: ListColumn[];
   signatureColumn?: boolean;
   orientation?: ListInfo['orientation'];
-  rows(user: AuthenticatedUser, params: P, language: Language): Promise<ListContent>;
+  /** Personal data of the list; lists with contact, sensitive or health data are exported only with a purpose. */
+  personalData?: ListPersonalData;
+  /**
+   * Purposes to choose from, each with the columns it needs (L11). The first is the default of the preview. Lists that need
+   * a purpose also offer "other" with a description.
+   */
+  purposes?: ListPurposeDefinition[];
+  /** `purpose`: key of the chosen purpose (`null` if none was chosen; `other` with a description). */
+  rows(user: AuthenticatedUser, params: P, language: Language, purpose: string | null): Promise<ListContent>;
+}
+
+/** Exports of the list need a purpose. */
+export function purposeRequired(definition: Pick<ListDefinition<never>, 'personalData'>): boolean {
+  return definition.personalData !== undefined && PURPOSE_REQUIRED_DATA.includes(definition.personalData);
+}
+
+/** The purposes the user may choose, with "other" when the list needs a purpose. */
+export function purposesFor(definition: Pick<ListDefinition<never>, 'personalData' | 'purposes'>, user: AuthenticatedUser): ListPurposeDefinition[] {
+  const own = (definition.purposes ?? []).filter((p) => !p.permission || user.holds(p.permission));
+  return purposeRequired(definition) ? [...own, OTHER_PURPOSE] : own;
 }
 
 /** Collects the list templates of all modules. Modules register in `onModuleInit`. */
@@ -63,7 +91,10 @@ export class ListRegistry {
     return [...this.lists.values()]
       // Lists with sensitive data are offered without step-up; creating them asks for the second factor.
       .filter(({ definition }) => user.holds(definition.permission))
-      .map(({ module, definition }) => toInfo(module, definition, user.heldGrant(definition.permission) ?? [], this.permissions?.stepUp.has(definition.permission) ?? false));
+      .map(({ module, definition }) => ({
+        ...toInfo(module, definition, user.heldGrant(definition.permission) ?? [], this.permissions?.stepUp.has(definition.permission) ?? false),
+        purposes: purposesFor(definition, user).map(({ permission: _permission, ...purpose }) => purpose),
+      }));
   }
 }
 
@@ -79,5 +110,8 @@ export function toInfo(module: string, definition: ListDefinition<never> | ListD
     orientation: definition.orientation ?? 'portrait',
     departments,
     stepUp,
+    personalData: definition.personalData ?? null,
+    purposes: (definition.purposes ?? []).map(({ permission: _permission, ...purpose }) => purpose),
+    purposeRequired: purposeRequired(definition),
   };
 }

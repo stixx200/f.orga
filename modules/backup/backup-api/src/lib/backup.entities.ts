@@ -33,7 +33,7 @@ export const BackupRunSchema = defineEntity({
     verification: p.json<Verification>().nullable(),
     /** Kept at least until then (safety backups). */
     keepUntil: p.datetime().nullable(),
-    /** Deleted by hand or by the retention; the record is removed a year later. */
+    /** Deleted by hand or by the retention; the record follows the retention category `backup.run-log`. */
     deletedAt: p.datetime().nullable(),
   },
 });

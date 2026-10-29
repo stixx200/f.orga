@@ -7,8 +7,9 @@ import { api, apiUrl, formatDate, formatDateTime, send, useLocalized, useTransla
 import { EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { berlinToday, useActivityOptions, useAssignees, useRecipientOptions, useRequest } from './api';
 import { LiftDialog, RestrictDialog, useRefreshPrivacy } from './dialogs';
+import { DeadlineBadge, Field, requestSubject, STATUS_TONES } from './PrivacyPage';
+import { ThirdPartyRequestPanel } from '../../privacy/ThirdParties';
 import { ErasurePanel } from './ErasurePanel';
-import { DeadlineBadge, Field, STATUS_TONES } from './PrivacyPage';
 import { RequestAccessReports } from '../../privacy/AccessReports';
 import { RequestConsents } from '../../privacy/consents/PersonConsents';
 import { RectificationPanel } from '../../privacy/Rectification';
@@ -29,7 +30,7 @@ function RequestView({ request }: { request: PrivacyRequest }) {
   const { t, i18n } = useTranslation('shell');
   const localized = useLocalized();
   const open = OPEN_REQUEST_STATUSES.includes(request.status);
-  const title = `${t(`privacy.kinds.${request.kind}`)} · ${request.personName ?? t('privacy.requests.unknownPerson')}`;
+  const title = `${t(`privacy.kinds.${request.kind}`)} · ${requestSubject(request, t)}`;
   return (
     <Stack gap="lg">
       <PageHeader
@@ -46,7 +47,13 @@ function RequestView({ request }: { request: PrivacyRequest }) {
         <Stack gap={6}>
           <Field label={t('privacy.detail.received')}>{t('privacy.detail.receivedValue', { date: formatDate(request.receivedOn, i18n.language), channel: t(`privacy.channels.${request.channel}`) })}</Field>
           <Field label={t('privacy.detail.person')}>
-            {request.personName ? <Anchor component={Link} to={`/masterdata/persons/${request.personId}?tab=privacy`}>{request.personName}</Anchor> : t('privacy.requests.unknownPerson')}
+            {request.thirdParty ? (
+              [request.thirdParty.name, request.thirdParty.note].filter(Boolean).join(' – ') + ` (${t('minimisation.requests.thirdParty')})`
+            ) : request.personName ? (
+              <Anchor component={Link} to={`/masterdata/persons/${request.personId}?tab=privacy`}>{request.personName}</Anchor>
+            ) : (
+              t('privacy.requests.unknownPerson')
+            )}
           </Field>
           <Field label={t('privacy.detail.identity')}>
             {request.channel === 'my-area'
@@ -67,15 +74,16 @@ function RequestView({ request }: { request: PrivacyRequest }) {
         </Stack>
       </Panel>
       {request.rectification && <RectificationPanel requestId={request.id} rectification={request.rectification} />}
-      {request.kind === 'consent-withdrawal' && <RequestConsents personId={request.personId} requestId={request.id} open={open} />}
+      {request.kind === 'consent-withdrawal' && request.personId && <RequestConsents personId={request.personId} requestId={request.id} open={open} />}
       <ExtensionPanel request={request} />
       <WorkPanel request={request} />
-      {request.kind === 'erasure' && <ErasurePanel request={request} />}
+      {request.kind === 'erasure' && request.personId && <ErasurePanel request={request} />}
       {['rectification', 'erasure', 'restriction'].includes(request.kind) && <RecipientsPanel request={request} />}
-      {['restriction', 'objection', 'erasure', 'rectification'].includes(request.kind) && <RestrictionPanel request={request} />}
-      {request.kind === 'access' && (
+      {request.personId && ['restriction', 'objection', 'erasure', 'rectification'].includes(request.kind) && <RestrictionPanel request={request} />}
+      {request.kind === 'access' && request.personId && (
         <RequestAccessReports personId={request.personId} requestId={request.id} />
       )}
+      {request.thirdParty && <ThirdPartyRequestPanel request={request} />}
       <ReplyPanel request={request} />
     </Stack>
   );
@@ -330,8 +338,8 @@ function RestrictionPanel({ request }: { request: PrivacyRequest }) {
           <Button variant="default" onClick={() => setDialog('restrict')}>{t('privacy.restriction.restrict')}</Button>
         )}
       </Group>
-      {dialog === 'restrict' && <RestrictDialog personId={request.personId} name={name} requestId={request.id} onClose={() => setDialog(null)} />}
-      {dialog === 'lift' && <LiftDialog personId={request.personId} name={name} onClose={() => setDialog(null)} />}
+      {dialog === 'restrict' && request.personId && <RestrictDialog personId={request.personId} name={name} requestId={request.id} onClose={() => setDialog(null)} />}
+      {dialog === 'lift' && request.personId && <LiftDialog personId={request.personId} name={name} onClose={() => setDialog(null)} />}
     </Panel>
   );
 }

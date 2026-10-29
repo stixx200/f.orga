@@ -1,6 +1,6 @@
 import { type MiddlewareConsumer, Module, type NestModule, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { AuditReferenceRegistry, defineModule, DeadlineRegistry, ProcessorRegistry, TechnicalMeasureRegistry } from '@forga/core-api';
+import { AuditReferenceRegistry, defineModule, DeadlineRegistry, ProcessorRegistry, RetentionRegistry, TechnicalMeasureRegistry } from '@forga/core-api';
 import { BACKUP_MANIFEST, BACKUP_SETTINGS_SECTION } from '@forga/backup-contracts';
 import { BACKUP_MIGRATIONS } from '../migrations/index.js';
 import { registerAuditReferences } from './audit/audit.references.js';
@@ -8,6 +8,7 @@ import { BackupController } from './backup.controller.js';
 import { BackupRestore, BackupRun } from './backup.entities.js';
 import { BackupsService } from './backups/backups.service.js';
 import { BackupOverviewService } from './backups/overview.service.js';
+import { RunLogRetention } from './backups/run-log.retention.js';
 import { BackupScheduler } from './backups/scheduler.js';
 import { Maintenance, MaintenanceMiddleware } from './restore/maintenance.js';
 import { RestoreService } from './restore/restore.service.js';
@@ -17,7 +18,7 @@ import { backupEnvironment } from './runtime/environment.js';
 
 @Module({
   controllers: [BackupController],
-  providers: [PgTools, BackupSettingsService, BackupsService, RestoreService, Maintenance, MaintenanceMiddleware, BackupScheduler, BackupOverviewService],
+  providers: [PgTools, BackupSettingsService, BackupsService, RestoreService, Maintenance, MaintenanceMiddleware, BackupScheduler, BackupOverviewService, RunLogRetention],
 })
 export class BackupModule implements NestModule, OnModuleInit {
   constructor(
@@ -28,6 +29,8 @@ export class BackupModule implements NestModule, OnModuleInit {
     private readonly measures: TechnicalMeasureRegistry,
     private readonly processors: ProcessorRegistry,
     private readonly backupSettings: BackupSettingsService,
+    private readonly retention: RetentionRegistry,
+    private readonly runLog: RunLogRetention,
   ) {}
 
   onModuleInit(): void {
@@ -57,6 +60,8 @@ export class BackupModule implements NestModule, OnModuleInit {
       },
     });
     registerAuditReferences(this.auditReferences, this.em);
+    // Records of deleted and failed backups and of restores name users: retention category, default one year (L29).
+    this.runLog.register(this.retention);
   }
 
   /** Maintenance mode during a restore: every API request except the status of the restore gets 503. */

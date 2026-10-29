@@ -4,7 +4,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { isValidIban, type Person } from '@forga/masterdata-contracts';
 import { useTranslation } from '@forga/web-sdk';
 import { Notice, Panel, StatusBadge } from '@forga/web-ui';
-import { today } from '../api';
+import { today, useDisabledFields } from '../api';
 import type { PersonForm } from './PersonPage';
 
 /** Field error for an IBAN with wrong check digits; empty is allowed. */
@@ -20,9 +20,12 @@ export function MasterDataTab({ person, form, setForm, disabled }: { person: Per
   const { t } = useTranslation('masterdata');
   const { t: common } = useTranslation('common');
   const set = <K extends keyof PersonForm>(key: K, value: PersonForm[K]) => setForm((f) => ({ ...f, [key]: value }));
-  const text = (key: 'salutation' | 'title' | 'firstName' | 'lastName' | 'nickname' | 'street' | 'postalCode' | 'city' | 'phonePrivate' | 'phoneMobile' | 'phoneWork' | 'email', type = 'text', required = false) => (
-    <TextInput label={t(`person.${key}`)} type={type} value={form[key]} onChange={(e) => set(key, e.currentTarget.value)} disabled={disabled} required={required} />
-  );
+  // Fields switched off in the settings „Felder der Personalakte“ (L10) are not shown.
+  const off = useDisabledFields();
+  const text = (key: 'salutation' | 'title' | 'firstName' | 'lastName' | 'nickname' | 'street' | 'postalCode' | 'city' | 'phonePrivate' | 'phoneMobile' | 'phoneWork' | 'email', type = 'text', required = false) =>
+    off.has(key as never) ? null : (
+      <TextInput label={t(`person.${key}`)} type={type} value={form[key]} onChange={(e) => set(key, e.currentTarget.value)} disabled={disabled} required={required} />
+    );
   const sensitiveBadge = <StatusBadge>{t('person.sensitive')}</StatusBadge>;
   const hidden = <Notice kind="info">{t(person.stepUpAvailable ? 'person.sensitiveStepUp' : 'person.sensitiveHidden')}</Notice>;
   const employer = { name: '', street: '', postalCode: '', city: '', phone: '', contact: '', iban: '', lossOfEarningsAssignedFrom: null, ...form.employer };
@@ -32,19 +35,19 @@ export function MasterDataTab({ person, form, setForm, disabled }: { person: Per
     <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
       <Panel title={t('person.sections.person')}>
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          <Select
+          {!off.has('salutation') && <Select
             label={t('person.salutation')}
             data={[{ value: 'Herr', label: t('person.salutations.mr') }, { value: 'Frau', label: t('person.salutations.ms') }, { value: '', label: t('person.salutations.none') }]}
             value={form.salutation}
             onChange={(v) => set('salutation', v ?? '')}
             allowDeselect={false}
             disabled={disabled}
-          />
+          />}
           {text('title')}
           {text('firstName', 'text', true)}
           {text('lastName', 'text', true)}
           {text('nickname')}
-          <Select
+          {!off.has('gender') && <Select
             label={t('person.gender')}
             description={t('person.genderHint')}
             data={(['male', 'female', 'diverse', 'unspecified'] as const).map((g) => ({ value: g, label: t(`gender.${g}`) }))}
@@ -52,7 +55,7 @@ export function MasterDataTab({ person, form, setForm, disabled }: { person: Per
             onChange={(v) => v && set('gender', v as Person['gender'])}
             allowDeselect={false}
             disabled={disabled}
-          />
+          />}
         </SimpleGrid>
       </Panel>
       <Panel title={t('person.sections.contact')}>
@@ -79,11 +82,11 @@ export function MasterDataTab({ person, form, setForm, disabled }: { person: Per
               clearable
               disabled={disabled}
             />
-            <TextInput label={t('person.birthPlace')} value={form.birthPlace ?? ''} onChange={(e) => set('birthPlace', e.currentTarget.value)} disabled={disabled} />
+            {!off.has('birthPlace') && <TextInput label={t('person.birthPlace')} value={form.birthPlace ?? ''} onChange={(e) => set('birthPlace', e.currentTarget.value)} disabled={disabled} />}
           </SimpleGrid>
         )}
       </Panel>
-      <Panel title={t('person.sections.employer')} aside={sensitiveBadge}>
+      {!off.has('employer') && <Panel title={t('person.sections.employer')} aside={sensitiveBadge}>
         {person.sensitiveHidden ? hidden : (
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
             <TextInput label={t('person.employerName')} value={employer.name} onChange={(e) => set('employer', { ...employer, name: e.currentTarget.value })} disabled={disabled} />
@@ -103,23 +106,23 @@ export function MasterDataTab({ person, form, setForm, disabled }: { person: Per
             />
           </SimpleGrid>
         )}
-      </Panel>
-      <Panel title={t('person.sections.bank')} aside={sensitiveBadge}>
+      </Panel>}
+      {!off.has('bank') && <Panel title={t('person.sections.bank')} aside={sensitiveBadge}>
         {person.sensitiveHidden ? hidden : (
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
             <TextInput label={t('person.iban')} value={bank.iban} onChange={(e) => set('bank', { ...bank, iban: e.currentTarget.value })} disabled={disabled} error={ibanError(bank.iban, t('person.invalidIban'))} />
             <TextInput label={t('person.accountHolder')} value={bank.accountHolder} onChange={(e) => set('bank', { ...bank, accountHolder: e.currentTarget.value })} disabled={disabled} />
           </SimpleGrid>
         )}
-      </Panel>
-      <Panel title={t('person.sections.notes')} aside={sensitiveBadge}>
+      </Panel>}
+      {!off.has('notes') && <Panel title={t('person.sections.notes')} aside={sensitiveBadge}>
         {person.sensitiveHidden ? hidden : (
           <>
             <Textarea label={t('person.notes')} description={common('privacy.noHealthData')} value={form.notes} onChange={(e) => set('notes', e.currentTarget.value)} autosize minRows={3} disabled={disabled} />
             <Text size="xs" c="dimmed" mt="xs">{t('person.notesHint')}</Text>
           </>
         )}
-      </Panel>
+      </Panel>}
     </SimpleGrid>
   );
 }

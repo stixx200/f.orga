@@ -5,7 +5,7 @@ import type { Person, SelfContactInput } from '@forga/masterdata-contracts';
 import { ibanError } from '../persons/MasterDataTab';
 import { api, formatDate, send, useTranslation } from '@forga/web-sdk';
 import { Panel, useAction } from '@forga/web-ui';
-import { today as todayDate, useCatalogNames, useDepartments } from '../api';
+import { today as todayDate, useCatalogNames, useDepartments, useDisabledFields } from '../api';
 import { MyDriverLicense } from '../driver-licenses/MyDriverLicense';
 
 const KEY = ['masterdata', 'me'] as const;
@@ -24,9 +24,10 @@ function ContactForm({ person }: { person: Person }) {
     email: person.email,
     bank: person.bank ?? { iban: '', accountHolder: '' },
   });
-  const field = (key: 'street' | 'postalCode' | 'city' | 'phonePrivate' | 'phoneMobile' | 'phoneWork' | 'email', label: string) => (
-    <TextInput label={label} value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: e.currentTarget.value })} />
-  );
+  // Fields switched off in the settings (L10) are neither shown nor stored.
+  const off = useDisabledFields();
+  const field = (key: 'street' | 'postalCode' | 'city' | 'phonePrivate' | 'phoneMobile' | 'phoneWork' | 'email', label: string) =>
+    off.has(key as never) ? null : <TextInput label={label} value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: e.currentTarget.value })} />;
   const save = useAction(() => send<Person>('PUT', 'masterdata/me', form), { success: t('me.saved'), invalidate: [KEY], onSuccess: (p) => setForm((f) => ({ ...f, version: p.version })) });
   return (
     <Stack gap="sm">
@@ -38,8 +39,12 @@ function ContactForm({ person }: { person: Person }) {
         {field('phoneMobile', t('person.phoneMobile'))}
         {field('phoneWork', t('person.phoneWork'))}
         {field('email', t('person.email'))}
-        <TextInput label={t('person.iban')} value={form.bank?.iban ?? ''} onChange={(e) => setForm({ ...form, bank: { iban: e.currentTarget.value, accountHolder: form.bank?.accountHolder ?? '' } })} error={ibanError(form.bank?.iban, t('person.invalidIban'))} />
-        <TextInput label={t('person.accountHolder')} value={form.bank?.accountHolder ?? ''} onChange={(e) => setForm({ ...form, bank: { iban: form.bank?.iban ?? '', accountHolder: e.currentTarget.value } })} />
+        {!off.has('bank') && (
+          <>
+            <TextInput label={t('person.iban')} value={form.bank?.iban ?? ''} onChange={(e) => setForm({ ...form, bank: { iban: e.currentTarget.value, accountHolder: form.bank?.accountHolder ?? '' } })} error={ibanError(form.bank?.iban, t('person.invalidIban'))} />
+            <TextInput label={t('person.accountHolder')} value={form.bank?.accountHolder ?? ''} onChange={(e) => setForm({ ...form, bank: { iban: form.bank?.iban ?? '', accountHolder: e.currentTarget.value } })} />
+          </>
+        )}
       </SimpleGrid>
       <Group justify="space-between">
         <Text size="xs" c="dimmed">{t('me.contactHint')}</Text>

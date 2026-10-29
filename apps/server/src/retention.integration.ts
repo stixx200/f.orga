@@ -98,18 +98,20 @@ beforeAll(async () => {
 afterAll(() => test?.app.close());
 
 describe('retention plan', () => {
-  it('deletes nothing until periods are chosen; only audit log, read log and locked accounts without person have a default', async () => {
+  it('deletes nothing until periods are chosen; only protocols and locked accounts without person have a default', async () => {
     const old = await incident('2010-000001', '2010-03-12');
     ids.old = old.id;
     const categories = (await get('/core/retention/categories').expect(200)).body as { key: string; defaultRule: { action: string; years: number | null } }[];
     expect(categories.map((c) => c.key)).toEqual(
       expect.arrayContaining(['core.audit', 'core.history', 'masterdata.person-core', 'masterdata.person-file', 'masterdata.vehicles-retired', 'incidents.incidents', 'training.sessions', 'equipment.retired', 'cost-recovery.notices', 'compensation.runs']),
     );
-    const defaults: Record<string, string> = { 'core.audit': 'delete', 'core.access-log': 'delete', 'core.locked-accounts': 'anonymize' };
-    for (const c of categories) expect(c.defaultRule.action).toBe(defaults[c.key] ?? 'none');
+    // Protocols and run reports (L29): audit log, read log, records of access reports and data breaches, transfer and backup logs.
+    const protocols = ['core.audit', 'core.access-log', 'core.access-reports', 'core.privacy-breaches', 'mp-feuer.run-reports', 'backup.run-log'];
+    expect(categories.map((c) => c.key)).toEqual(expect.arrayContaining(protocols));
+    for (const c of categories) expect(c.defaultRule.action).toBe(protocols.includes(c.key) ? 'delete' : c.key === 'core.locked-accounts' ? 'anonymize' : 'none');
     expect((await get('/core/settings/privacy')).body).toEqual({ retention: {} });
     const result = await run(false);
-    expect(Object.keys(result.counts).filter((k) => !['core.audit', 'core.access-log', 'core.imports', 'mp-feuer.rows'].includes(k) && result.counts[k] > 0)).toEqual([]);
+    expect(Object.keys(result.counts).filter((k) => ![...protocols, 'core.imports', 'mp-feuer.rows'].includes(k) && result.counts[k] > 0)).toEqual([]);
     expect(await cases()).toEqual([]);
     expect((await get(`/incidents/incidents/${old.id}`).expect(200)).body).toMatchObject({ alarmMessage: 'Brand in Wohnhaus, Anrufer Herr Meier', anonymizedAt: null });
   });

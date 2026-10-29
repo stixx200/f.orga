@@ -6,7 +6,7 @@ import { Link, useNavigate } from 'react-router';
 import { type CreatePersonInput, type Person, type PersonSummary, STATUSES_BY_DEPARTMENT_TYPE } from '@forga/masterdata-contracts';
 import { api, can, send, useSession, useTranslation, withQuery } from '@forga/web-sdk';
 import { ActionBar, Notice, PageHeader, Panel, useAction } from '@forga/web-ui';
-import { ageOn, keys, probationEnd, SENSITIVE, today, useDepartments, useMembershipRules, WRITE } from '../api';
+import { ageOn, keys, probationEnd, SENSITIVE, today, useDepartments, useDisabledFields, useMembershipRules, WRITE } from '../api';
 
 /** New person with primary department and admission; further data follows in the person file. */
 export function PersonCreatePage() {
@@ -17,6 +17,7 @@ export function PersonCreatePage() {
   const { data: departments = [] } = useDepartments();
   const { data: rules } = useMembershipRules();
   const writable = departments.filter((d) => can(session, WRITE, d.id));
+  const off = useDisabledFields();
   const [form, setForm] = useState(() => ({
     firstName: '',
     lastName: '',
@@ -103,13 +104,15 @@ export function PersonCreatePage() {
             <SimpleGrid cols={{ base: 1, sm: 2 }}>
               <TextInput label={t('person.firstName')} value={form.firstName} onChange={(e) => set('firstName', e.currentTarget.value)} required />
               <TextInput label={t('person.lastName')} value={form.lastName} onChange={(e) => set('lastName', e.currentTarget.value)} required />
-              <Select
-                label={t('person.gender')}
-                data={(['male', 'female', 'diverse', 'unspecified'] as const).map((g) => ({ value: g, label: t(`gender.${g}`) }))}
-                value={form.gender}
-                onChange={(v) => v && set('gender', v as Person['gender'])}
-                allowDeselect={false}
-              />
+              {!off.has('gender') && (
+                <Select
+                  label={t('person.gender')}
+                  data={(['male', 'female', 'diverse', 'unspecified'] as const).map((g) => ({ value: g, label: t(`gender.${g}`) }))}
+                  value={form.gender}
+                  onChange={(v) => v && set('gender', v as Person['gender'])}
+                  allowDeselect={false}
+                />
+              )}
               {can(session, SENSITIVE) && <DateInput label={t('person.birthDate')} value={form.birthDate} onChange={(v) => set('birthDate', v)} valueFormat="DD.MM.YYYY" maxDate={today()} clearable error={futureBirth ? t('persons.birthDateInFuture') : undefined} />}
               <TextInput label={t('person.phoneMobile')} type="tel" value={form.phoneMobile} onChange={(e) => set('phoneMobile', e.currentTarget.value)} />
               <TextInput label={t('person.email')} type="email" value={form.email} onChange={(e) => set('email', e.currentTarget.value)} />

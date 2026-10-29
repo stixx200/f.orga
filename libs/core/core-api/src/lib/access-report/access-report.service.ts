@@ -23,6 +23,8 @@ import {
   type MyAccessReport,
   PrivacyRequestInput,
   type ProcessingActivity,
+  ThirdPartyAccessReportCreate,
+  type ThirdPartyRef,
 } from '@forga/core-contracts';
 import { Audit, AuditEntry } from '../audit/audit.js';
 import { AccessLog } from '../privacy/access-log.js';
@@ -49,6 +51,8 @@ import { createDescribeContext, type DescribedAccount } from './describe-context
 import type { DescribeContext, PersonDataSection } from './person-description.js';
 import { sectionEntries } from './person-description.js';
 import { PrivacyDocument } from './privacy-document.entity.js';
+import { ThirdPartyRegistry } from '../privacy/third-party-registry.js';
+import type { PostalAddress } from '../security/organization-directory.js';
 
 const DAY_MS = 86_400_000;
 const unique = (values: string[]) => [...new Set(values.filter(Boolean))];
@@ -89,6 +93,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     private readonly texts: AccessReportTexts,
     private readonly requests: PrivacyRequests,
     private readonly accessLog: AccessLog,
+    private readonly thirdParties: ThirdPartyRegistry,
   ) {}
 
   /**
@@ -243,7 +248,26 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
   /** `requestDate`: day the data subject request came in, if the report answers one. */
   async render(personId: string, language: Language, includeJson: boolean, requestDate: string | null = null): Promise<Buffer> {
     const now = new Date();
-    const { personName, sections, origins, ctx } = await this.collect(personId, language, now);
+    const collected = await this.collect(personId, language, now);
+    const json = includeJson ? Buffer.from(JSON.stringify(await this.exports.person(personId), null, 2), 'utf8') : null;
+    return this.renderCollected(collected, now, await this.organization.postalAddress(personId), requestDate, json);
+  }
+
+  /**
+   * The report about a third party (L14): the sections of the chosen places in the modules, the letter to the name and
+   * address given. There is no protocol of changes and no JSON: the places are parts of records of the brigade.
+   */
+  async renderThirdParty(third: { name: string; address: string; refs: ThirdPartyRef[] }, language: Language, requestDate: string | null = null): Promise<Buffer> {
+    const now = new Date();
+    const ctx = createDescribeContext({ language, asOf: now, personId: '', personName: third.name, ownUserIds: [] });
+    const sections = await this.thirdParties.describe(third.refs, ctx);
+    const [street = '', ...rest] = third.address.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const address: PostalAddress = { salutation: '', title: '', firstName: '', lastName: third.name, street, postalCode: '', city: rest.join(', ') };
+    return this.renderCollected({ personName: third.name, sections, origins: new Map(), ctx }, now, address, requestDate, null);
+  }
+
+  private async renderCollected({ personName, sections, origins, ctx }: Collected, now: Date, address: PostalAddress | null, requestDate: string | null, json: Buffer | null): Promise<Buffer> {
+    const { language } = ctx;
     const activities = this.activities();
     const retention = await this.retentionTexts(ctx);
     const tokens = await this.em.fork().find(ApiToken, { revokedAt: null, $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] }, { orderBy: { name: 'asc' } });
@@ -261,7 +285,6 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
       return { section, info };
     });
     const categories = unique(sections.flatMap((s) => s.categories.map((c) => (s.health ? `${c} (${ctx.t('Gesundheitsdaten', 'health data')})` : c))));
-    const json = includeJson ? Buffer.from(JSON.stringify(await this.exports.person(personId), null, 2), 'utf8') : null;
     return renderAccessReport({
       language,
       now,
@@ -270,7 +293,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
       letterhead: null,
       logo: await brigadeLogoDataUrl(em),
       personName,
-      address: await this.organization.postalAddress(personId),
+      address,
       letter: await this.texts.letter(language, { name: personName, receivedOn: requestDate ?? berlinDate(now) }),
       purposes: unique(described.map((d) => d.info.purpose ?? '')),
       categories,
@@ -310,6 +333,36 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     const document = await this.store(input, user.id, null);
     await this.audit.log('privacy.access-report-created', { personId: input.personId, documentId: document.id, language: input.language, includeJson: input.includeJson, requestId: input.requestId });
     await this.accessLog.record(user, [input.personId], 'core.access-report');
+    this.track(this.generate(document.id, key));
+    return this.dto(document, new Map([[user.id, user.displayName]]));
+  }
+
+  /** Creates the report about a third party in the background (L14). */
+  async createForThirdParty(input: ReturnType<typeof ThirdPartyAccessReportCreate.parse>, user: AuthenticatedUser): Promise<AccessReport> {
+    const key = this.key();
+    if (input.requestId) {
+      // Only an access request of a third party can be answered by such a report.
+      const request = await this.em.fork().findOne(PrivacyRequestEntity, input.requestId);
+      if (!request || !request.thirdParty || request.kind !== 'access') throw new BadRequestException({ code: 'privacy.requestMismatch' });
+    }
+    const em = this.em.fork();
+    const now = new Date();
+    const document = em.create(PrivacyDocument, {
+      kind: 'access-report',
+      personId: null,
+      thirdParty: { name: input.name, address: input.address, refs: input.refs },
+      language: input.language,
+      includeJson: false,
+      status: 'pending',
+      createdAt: now,
+      createdBy: user.id,
+      expiresAt: new Date(now.getTime() + ACCESS_REPORT_DAYS * DAY_MS),
+      requestId: input.requestId,
+    });
+    await em.flush();
+    if (input.requestId) await this.requests.attachAccessReport(input.requestId, document.id);
+    // The name of the third party stays out of the audit log; the places are counted.
+    await this.audit.log('privacy.access-report-created', { thirdParty: true, documentId: document.id, language: input.language, places: input.refs.length, requestId: input.requestId });
     this.track(this.generate(document.id, key));
     return this.dto(document, new Map([[user.id, user.displayName]]));
   }
@@ -376,7 +429,9 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     const document = await em.findOneOrFail(PrivacyDocument, id);
     try {
       const request = document.requestId ? await em.findOne(PrivacyRequestEntity, document.requestId) : null;
-      const pdf = await this.render(document.personId, document.language, document.includeJson, request?.receivedOn ?? null);
+      const pdf = document.thirdParty
+        ? await this.renderThirdParty(document.thirdParty, document.language, request?.receivedOn ?? null)
+        : await this.render(document.personId!, document.language, document.includeJson, request?.receivedOn ?? null);
       document.content = encryptBytes(pdf, key);
       document.size = pdf.length;
       document.status = 'ready';
@@ -389,8 +444,9 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     return document.status === 'ready';
   }
 
-  async list(personId: string): Promise<AccessReport[]> {
-    const documents = await this.em.fork().find(PrivacyDocument, { personId }, { orderBy: { createdAt: 'desc' } });
+  /** Reports about a person, or the reports of a request (also of a third party). */
+  async list(filter: { personId: string } | { requestId: string }): Promise<AccessReport[]> {
+    const documents = await this.em.fork().find(PrivacyDocument, filter, { orderBy: { createdAt: 'desc' } });
     return this.dtos(documents);
   }
 
@@ -410,15 +466,15 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     if (!UUID.test(id)) throw new NotFoundException();
     const em = this.em.fork();
     const document = await em.findOne(PrivacyDocument, id, { populate: ['content'] });
-    if (!document || (by.self && (document.personId !== by.user.personId || document.channel !== 'self-service'))) throw new NotFoundException();
+    if (!document || (by.self && (!document.personId || document.personId !== by.user.personId || document.channel !== 'self-service'))) throw new NotFoundException();
     if (document.deletedAt || document.expiresAt <= new Date()) throw new GoneException({ code: 'privacy.documentExpired' });
     if (document.status !== 'ready' || !document.content) throw new ConflictException({ code: 'privacy.documentNotReady' });
     const pdf = decryptBytes(Buffer.from(document.content), this.key());
     if (!pdf) throw new ConflictException({ code: 'privacy.documentUnreadable' });
     if (by.self && !document.downloadedByPersonAt) document.downloadedByPersonAt = new Date();
     await em.flush();
-    await this.audit.log('privacy.access-report-downloaded', { personId: document.personId, documentId: document.id, by: by.self ? 'person' : 'administration' });
-    if (!by.self) await this.accessLog.record(by.user, [document.personId], 'core.access-report');
+    await this.audit.log('privacy.access-report-downloaded', { ...(document.personId ? { personId: document.personId } : { thirdParty: true }), documentId: document.id, by: by.self ? 'person' : 'administration' });
+    if (!by.self && document.personId) await this.accessLog.record(by.user, [document.personId], 'core.access-report');
     return { document, pdf };
   }
 
@@ -430,13 +486,14 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     if (!document) throw new NotFoundException();
     if (document.deletedAt || document.expiresAt <= new Date()) throw new GoneException({ code: 'privacy.documentExpired' });
     if (document.status !== 'ready') throw new ConflictException({ code: 'privacy.documentNotReady' });
-    const account = input.channel === 'self-service' ? await em.findOne(User, { personId: document.personId, active: true, technical: false }) : null;
+    // A third party has no account: the report goes by post or in person.
+    const account = input.channel === 'self-service' && document.personId ? await em.findOne(User, { personId: document.personId, active: true, technical: false }) : null;
     if (input.channel === 'self-service' && !account) throw new BadRequestException({ code: 'privacy.noAccount' });
     document.channel = input.channel;
     document.handedOverOn = input.date ?? berlinDate();
     document.handedOverBy = user.id;
     await em.flush();
-    await this.audit.log('privacy.access-report-handed-over', { personId: document.personId, documentId: document.id, channel: input.channel });
+    await this.audit.log('privacy.access-report-handed-over', { ...(document.personId ? { personId: document.personId } : { thirdParty: true }), documentId: document.id, channel: input.channel });
     if (input.closeRequest && document.requestId) await this.requests.closeDone(document.requestId, document.handedOverOn);
     if (account?.email) await this.notifyReady(account, document);
     return (await this.dtos([document]))[0];
@@ -484,7 +541,8 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     const expired = Boolean(d.deletedAt) || d.expiresAt <= new Date();
     return {
       id: d.id,
-      personId: d.personId,
+      personId: d.personId ?? null,
+      thirdPartyName: d.thirdParty?.name ?? null,
       language: d.language,
       includeJson: d.includeJson,
       status: expired ? 'expired' : d.status,

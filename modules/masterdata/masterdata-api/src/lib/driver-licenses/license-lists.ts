@@ -62,6 +62,7 @@ export class DriverLicenseLists {
       name: { de: 'Führerscheinkontrollen: Stand', en: 'Driving licence checks: state' },
       description: { de: 'Personen der Zielgruppe mit Klassen, Befristung, letzter Kontrolle und Stand.', en: 'Persons of the target group with classes, expiry, latest check and state.' },
       permission: CHECK,
+      personalData: 'names',
       parameters: [
         departmentParameter,
         { key: 'state', label: { de: 'Stand', en: 'State' }, type: 'select', options: DriverLicenseState.options.map((value) => ({ value, label: STATE_LABELS[value] })) },
@@ -80,10 +81,10 @@ export class DriverLicenseLists {
       orientation: 'landscape',
       rows: async (user, params, language) => {
         const [overview, departments] = await Promise.all([this.licenses.overview(user), this.departments()]);
+        const shown = overview.rows.filter((r) => (!params.departmentId || r.departmentIds.includes(params.departmentId)) && (!params.state || r.state === params.state));
         return {
-          rows: overview.rows
-            .filter((r) => (!params.departmentId || r.departmentIds.includes(params.departmentId)) && (!params.state || r.state === params.state))
-            .map((r) => ({
+          personIds: shown.map((r) => r.personId),
+          rows: shown.map((r) => ({
               name: `${r.lastName}, ${r.firstName}`,
               department: departments.get(r.primaryDepartmentId ?? '') ?? '',
               classes: classesText(r.classes, language),
@@ -108,6 +109,7 @@ export class DriverLicenseLists {
         en: 'All checks in the period with classes and expiry, method, examiner and "original presented". Self-checks appear as such.',
       },
       permission: CHECK,
+      personalData: 'names',
       parameters: [
         { key: 'from', label: { de: 'Von', en: 'From' }, type: 'date' },
         { key: 'to', label: { de: 'Bis', en: 'To' }, type: 'date' },
@@ -140,6 +142,7 @@ export class DriverLicenseLists {
           : [];
         return {
           subtitle: `${from} – ${to}`,
+          personIds: checks.map((c) => c.person.id),
           rows: checks.map((c) => {
             const person = byId.get(c.person.id)!;
             return {

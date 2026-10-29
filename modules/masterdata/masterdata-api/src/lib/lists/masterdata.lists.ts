@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { z } from 'zod';
 import { CONSENTS, type ConsentLookup, type Language, type ListCell, type ListColumn, type LocalizedText } from '@forga/core-contracts';
-import { AccessLog, type AuthenticatedUser, type ListDefinition, SettingsService } from '@forga/core-api';
+import { AccessLog, type AuthenticatedUser, type ListDefinition, type ListPurposeDefinition, SettingsService } from '@forga/core-api';
 import { courseLabel, type MembershipSettings, PersonStatus } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { CourseAttendance, CourseNomination } from '../courses/course.entities.js';
@@ -17,7 +17,8 @@ import {
   SENSITIVE,
   validQualifications,
 } from '../persons/persons.service.js';
-import { today } from '../shared/access.js';
+import { PersonFields } from '../persons/person-fields.js';
+import { LISTS_CONTACT, today } from '../shared/access.js';
 import { ageOn } from '../shared/dates.js';
 
 const col = (key: string, de: string, en: string, width?: number, align?: ListColumn['align']): ListColumn => ({
@@ -29,6 +30,19 @@ const col = (key: string, de: string, en: string, width?: number, align?: ListCo
 
 const NAME = col('name', 'Name', 'Name', 2);
 const DEPARTMENT = col('department', 'Abteilung', 'Department', 1.5);
+const PHONE_COLUMNS = [NAME, DEPARTMENT, col('phoneMobile', 'Mobil', 'Mobile', 1.3), col('phonePrivate', 'Privat', 'Private', 1.3), col('phoneWork', 'Dienstlich', 'Work', 1.3)];
+const COMPLETE_COLUMNS = [
+  col('personnelNumber', 'Pers.-Nr.', 'No.', 0.7),
+  NAME,
+  col('birthDate', 'Geburtsdatum', 'Date of birth'),
+  col('address', 'Anschrift', 'Address', 2.5),
+  col('phoneMobile', 'Mobil', 'Mobile', 1.2),
+  col('email', 'E-Mail', 'E-mail', 1.8),
+  DEPARTMENT,
+  col('rank', 'Dienstgrad', 'Rank', 1.2),
+  col('joinedOn', 'Eintritt', 'Joined'),
+  col('employer', 'Arbeitgeber', 'Employer', 1.5),
+];
 
 const STATUS_LABELS: Record<PersonStatus, LocalizedText> = {
   probation: { de: 'Probezeit', en: 'Probation' },
@@ -52,31 +66,37 @@ const statusParameter = {
  * Purpose of the phone list (decision 9 of the data protection concept): the list of the leaders (persons with a current
  * office) is part of the brigade's task; in the list of the whole department the mobile number needs a consent.
  */
-const PhonePurpose = z.enum(['department', 'leaders']);
-const phonePurposeParameter = {
-  key: 'purpose',
-  label: { de: 'Zweck', en: 'Purpose' },
-  type: 'select' as const,
-  options: [
-    { value: 'department', label: { de: 'Telefonliste der Abteilung (Handynummer nur mit Einwilligung)', en: 'Phone list of the department (mobile number only with consent)' } },
-    { value: 'leaders', label: { de: 'Führungskräfte (Alarmierung, Erreichbarkeit)', en: 'Leaders (alerting, reachability)' } },
-  ],
-};
+const PHONE_PURPOSES: ListPurposeDefinition[] = [
+  { key: 'department', label: { de: 'Telefonliste der Abteilung (Handynummer nur mit Einwilligung)', en: 'Phone list of the department (mobile number only with consent)' } },
+  { key: 'leaders', label: { de: 'Führungskräfte (Alarmierung, Erreichbarkeit)', en: 'Leaders (alerting, reachability)' } },
+];
 
 /** Qualifications that make a person one of the leaders of the phone list. */
 const LEADER_QUALIFICATIONS = new Set(['group-leader', 'platoon-leader', 'unit-leader']);
 
 /** Purpose of the birthday list: internal for the commander, or posting in the station (only persons with consent). */
-const BirthdayPurpose = z.enum(['internal', 'posting']);
-const birthdayPurposeParameter = {
-  key: 'purpose',
-  label: { de: 'Zweck', en: 'Purpose' },
-  type: 'select' as const,
-  options: [
-    { value: 'internal', label: { de: 'intern für den Kommandanten', en: 'internal for the commander' } },
-    { value: 'posting', label: { de: 'Aushang (nur mit Einwilligung)', en: 'Posting (only with consent)' } },
-  ],
-};
+const BIRTHDAY_PURPOSES: ListPurposeDefinition[] = [
+  { key: 'internal', label: { de: 'intern für den Kommandanten', en: 'internal for the commander' } },
+  // The posting shows day and name only: the age is not needed for congratulations.
+  { key: 'posting', label: { de: 'Aushang (nur mit Einwilligung)', en: 'Posting (only with consent)' }, columns: ['birthday', 'name', 'department'] },
+];
+
+/** Members list: an overview without contact details, or with them for contacting (own permission, L11). */
+const MEMBER_PURPOSES: ListPurposeDefinition[] = [
+  { key: 'overview', label: { de: 'Übersicht der Mitglieder (ohne Kontaktdaten)', en: 'Overview of the members (without contact details)' }, columns: ['name', 'department', 'rank', 'status', 'joinedOn'] },
+  { key: 'contact', label: { de: 'Kontaktaufnahme (mit Handynummer und E-Mail)', en: 'Contacting (with mobile number and e-mail)' }, permission: LISTS_CONTACT },
+];
+
+/** Complete data: the whole file for the personnel administration, or an address list. */
+const COMPLETE_PURPOSES: ListPurposeDefinition[] = [
+  { key: 'administration', label: { de: 'Personalverwaltung (alle Spalten)', en: 'Personnel administration (all columns)' } },
+  { key: 'addresses', label: { de: 'Anschriftenliste (z. B. Einladungen)', en: 'Address list (e.g. invitations)' }, columns: ['name', 'address', 'department'] },
+];
+
+/** Age limits: planning of transfers needs name, age and meaning, not the birth date. */
+const AGE_LIMIT_PURPOSES: ListPurposeDefinition[] = [
+  { key: 'planning', label: { de: 'Planung der Übertritte (ohne Geburtsdatum)', en: 'Planning of transfers (without date of birth)' }, columns: ['name', 'age', 'meaning', 'department'] },
+];
 
 /** Read log area of lists with contact or sensitive data (L15). */
 export const LISTS_ACCESS_AREA = 'masterdata.lists';
@@ -112,6 +132,7 @@ export class MasterdataLists {
     private readonly settings: SettingsService,
     private readonly accessLog: AccessLog,
     @Inject(CONSENTS) private readonly consents: ConsentLookup,
+    private readonly fields: PersonFields,
   ) {}
 
   /** Lists with contact or sensitive data are recorded in the read log, per person in the list. */
@@ -166,6 +187,8 @@ export class MasterdataLists {
       id: 'masterdata.members',
       name: { de: 'Mitgliederliste', en: 'Member list' },
       permission: READ,
+      personalData: 'contact',
+      purposes: MEMBER_PURPOSES,
       parameters: [departmentParameter, statusParameter],
       schema: PersonFilter,
       columns: [
@@ -178,10 +201,11 @@ export class MasterdataLists {
         col('email', 'E-Mail', 'E-mail', 2),
       ],
       orientation: 'landscape',
-      rows: async (user, params, language) => {
+      rows: async (user, params, language, purpose) => {
         const { departments, entry } = await this.labels(language);
         const persons = await this.filtered(user, READ, params);
-        await this.logged(user, persons);
+        // Without contact details the list holds no data for the read log.
+        if (purpose !== 'overview') await this.logged(user, persons);
         return {
           personIds: persons.map((p) => p.id),
           rows: persons.map((p) => ({
@@ -203,6 +227,7 @@ export class MasterdataLists {
       id: 'masterdata.signatures',
       name: { de: 'Unterschriftenliste', en: 'Signature list' },
       permission: READ,
+      personalData: 'names',
       parameters: [
         departmentParameter,
         statusParameter,
@@ -229,7 +254,7 @@ export class MasterdataLists {
     };
   }
 
-  private phones(): ListDefinition<PersonFilter & { purpose?: z.infer<typeof PhonePurpose> }> {
+  private phones(): ListDefinition<PersonFilter> {
     return {
       id: 'masterdata.phones',
       name: { de: 'Telefonliste', en: 'Phone list' },
@@ -237,14 +262,18 @@ export class MasterdataLists {
         de: 'Für die Abteilung steht die Handynummer nur bei Personen mit Einwilligung, sonst „über Gruppenführer“; die Liste der Führungskräfte zeigt sie immer.',
         en: 'For the department the mobile number is only shown for persons with consent, otherwise “via group leader”; the list of leaders always shows it.',
       },
-      permission: READ,
-      parameters: [phonePurposeParameter, departmentParameter],
-      schema: PersonFilter.extend({ purpose: PhonePurpose.optional() }),
-      columns: [NAME, DEPARTMENT, col('phoneMobile', 'Mobil', 'Mobile', 1.3), col('phonePrivate', 'Privat', 'Private', 1.3), col('phoneWork', 'Dienstlich', 'Work', 1.3)],
-      rows: async (user, params, language) => {
+      // Contact details of many members: an own permission (L11), not every reader of the files.
+      permission: LISTS_CONTACT,
+      personalData: 'contact',
+      purposes: PHONE_PURPOSES,
+      parameters: [departmentParameter],
+      schema: PersonFilter,
+      columns: PHONE_COLUMNS,
+      rows: async (user, params, language, purpose) => {
         const { departments } = await this.labels(language);
         const day = today();
-        const leaders = params.purpose === 'leaders';
+        const leaders = purpose === 'leaders';
+        const disabled = await this.fields.disabled();
         // Leaders: a current office (commander, wardens …) or a leader qualification (group, platoon, unit leader).
         const persons = (await this.filtered(user, READ, params)).filter(
           (p) => !leaders || p.offices.getItems().some((o) => o.from <= day && (!o.to || o.to >= day)) || validQualifications(p).some((q) => LEADER_QUALIFICATIONS.has(q)),
@@ -255,6 +284,8 @@ export class MasterdataLists {
         return {
           personIds: persons.map((p) => p.id),
           subtitle: leaders ? (language === 'de' ? 'Führungskräfte' : 'Leaders') : undefined,
+          // Switched-off fields of the person file are not listed (L10).
+          columns: PHONE_COLUMNS.filter((c) => !disabled.has(c.key as never)),
           rows: persons.map((p) => ({
             name: name(p),
             department: departments.get(primaryDepartment(p) ?? '') ?? '',
@@ -273,27 +304,20 @@ export class MasterdataLists {
       name: { de: 'Komplettdaten', en: 'Complete data' },
       description: { de: 'Alle Stammdaten je Person, einschließlich sensibler Felder.', en: 'All master data per person, including sensitive fields.' },
       permission: SENSITIVE,
+      personalData: 'sensitive',
+      purposes: COMPLETE_PURPOSES,
       parameters: [departmentParameter, statusParameter],
       schema: PersonFilter,
-      columns: [
-        col('personnelNumber', 'Pers.-Nr.', 'No.', 0.7),
-        NAME,
-        col('birthDate', 'Geburtsdatum', 'Date of birth'),
-        col('address', 'Anschrift', 'Address', 2.5),
-        col('phoneMobile', 'Mobil', 'Mobile', 1.2),
-        col('email', 'E-Mail', 'E-mail', 1.8),
-        DEPARTMENT,
-        col('rank', 'Dienstgrad', 'Rank', 1.2),
-        col('joinedOn', 'Eintritt', 'Joined'),
-        col('employer', 'Arbeitgeber', 'Employer', 1.5),
-      ],
+      columns: COMPLETE_COLUMNS,
       orientation: 'landscape',
       rows: async (user, params, language) => {
         const { departments, entry } = await this.labels(language);
         const persons = await this.filtered(user, SENSITIVE, params);
         await this.logged(user, persons);
+        const disabled = await this.fields.disabled();
         return {
           personIds: persons.map((p) => p.id),
+          columns: COMPLETE_COLUMNS.filter((c) => c.key !== 'employer' || !disabled.has('employer')),
           rows: persons.map((p) => ({
             personnelNumber: p.personnelNumber ?? '',
             name: name(p),
@@ -311,7 +335,7 @@ export class MasterdataLists {
     };
   }
 
-  private birthdays(): ListDefinition<{ from?: string; to?: string; departmentId?: string; purpose?: z.infer<typeof BirthdayPurpose> }> {
+  private birthdays(): ListDefinition<{ from?: string; to?: string; departmentId?: string }> {
     return {
       id: 'masterdata.birthdays',
       name: { de: 'Geburtstage', en: 'Birthdays' },
@@ -320,21 +344,22 @@ export class MasterdataLists {
         en: 'Milestone birthdays are marked. For posting only persons with consent.',
       },
       permission: SENSITIVE,
+      personalData: 'sensitive',
+      purposes: BIRTHDAY_PURPOSES,
       parameters: [
-        birthdayPurposeParameter,
         { key: 'from', label: { de: 'Von', en: 'From' }, type: 'date' },
         { key: 'to', label: { de: 'Bis', en: 'To' }, type: 'date' },
         departmentParameter,
       ],
-      schema: z.object({ from: date.optional(), to: date.optional(), departmentId: z.uuid().optional(), purpose: BirthdayPurpose.optional() }),
+      schema: z.object({ from: date.optional(), to: date.optional(), departmentId: z.uuid().optional() }),
       columns: [col('birthday', 'Geburtstag', 'Birthday'), NAME, col('age', 'Alter', 'Age', 0.6, 'right'), col('milestone', 'Rund', 'Milestone', 0.6), DEPARTMENT],
-      rows: async (user, params, language) => {
+      rows: async (user, params, language, purpose) => {
         const from = params.from ?? today();
         const to = params.to ?? `${from.slice(0, 4)}-12-31`;
         const { departments } = await this.labels(language);
         const all = await this.filtered(user, SENSITIVE, { departmentId: params.departmentId });
         // Posting in the station: only persons who consented (L9); internal use needs none.
-        const consented = params.purpose === 'posting' ? await this.consents.withEffect('masterdata.birthdays-posting', all.map((p) => p.id)) : null;
+        const consented = purpose === 'posting' ? await this.consents.withEffect('masterdata.birthdays-posting', all.map((p) => p.id)) : null;
         const persons = consented ? all.filter((p) => consented.has(p.id)) : all;
         await this.logged(user, persons);
         const rows: Record<string, ListCell>[] = [];
@@ -357,8 +382,8 @@ export class MasterdataLists {
             });
           }
         }
-        const purpose = consented ? (language === 'de' ? ' · Aushang' : ' · posting') : '';
-        return { subtitle: `${from} – ${to}${purpose}`, personIds: [...ids], rows: rows.toSorted((a, b) => String(a['birthday']).localeCompare(String(b['birthday']))) };
+        const posting = consented ? (language === 'de' ? ' · Aushang' : ' · posting') : '';
+        return { subtitle: `${from} – ${to}${posting}`, personIds: [...ids], rows: rows.toSorted((a, b) => String(a['birthday']).localeCompare(String(b['birthday']))) };
       },
     };
   }
@@ -368,6 +393,7 @@ export class MasterdataLists {
       id: 'masterdata.jubilees',
       name: { de: 'Dienstjubiläen', en: 'Service anniversaries' },
       permission: READ,
+      personalData: 'names',
       parameters: [{ key: 'year', label: { de: 'Jahr', en: 'Year' }, type: 'year' }, departmentParameter],
       schema: z.object({ year: z.coerce.number().int().min(1900).max(2200).optional(), departmentId: z.uuid().optional() }),
       columns: [NAME, col('joinedOn', 'Eintritt', 'Joined'), col('years', 'Jahre', 'Years', 0.6, 'right'), DEPARTMENT],
@@ -397,6 +423,7 @@ export class MasterdataLists {
       id: 'masterdata.qualification-matrix',
       name: { de: 'Qualifikationsübersicht', en: 'Qualification matrix' },
       permission: READ,
+      personalData: 'names',
       parameters: [departmentParameter],
       schema: PersonFilter,
       columns: [NAME],
@@ -428,6 +455,7 @@ export class MasterdataLists {
         en: 'Persons with a valid qualification. Fitness with deadlines comes from the respiratory protection module.',
       },
       permission: READ,
+      personalData: 'names',
       parameters: [departmentParameter],
       schema: PersonFilter,
       columns: [NAME, DEPARTMENT, col('acquiredOn', 'Erworben', 'Acquired'), col('validUntil', 'Gültig bis', 'Valid until')],
@@ -458,6 +486,7 @@ export class MasterdataLists {
       id: 'masterdata.probation',
       name: { de: 'Probezeit', en: 'Probation' },
       permission: READ,
+      personalData: 'names',
       parameters: [departmentParameter],
       schema: PersonFilter,
       columns: [NAME, DEPARTMENT, col('joinedOn', 'Eintritt', 'Joined'), col('probationEndsOn', 'Ende Probezeit', 'Probation ends'), col('basicTraining', 'Truppmann Teil 1', 'Basic training', 1, 'center')],
@@ -486,6 +515,8 @@ export class MasterdataLists {
       id: 'masterdata.age-limits',
       name: { de: 'Altersgrenzen', en: 'Age limits' },
       permission: SENSITIVE,
+      personalData: 'sensitive',
+      purposes: AGE_LIMIT_PURPOSES,
       parameters: [{ key: 'year', label: { de: 'Jahr', en: 'Year' }, type: 'year' }, departmentParameter],
       schema: z.object({ year: z.coerce.number().int().min(1900).max(2200).optional(), departmentId: z.uuid().optional() }),
       columns: [NAME, col('birthDate', 'Geburtsdatum', 'Date of birth'), col('age', 'Alter', 'Age', 0.5, 'right'), col('meaning', 'Bedeutung', 'Meaning', 3), DEPARTMENT],
@@ -601,6 +632,7 @@ export class MasterdataLists {
       id: 'masterdata.course-nominations',
       name: { de: 'Lehrgangsvormerkungen', en: 'Course nominations' },
       permission: PLAN,
+      personalData: 'names',
       parameters: [departmentParameter],
       schema: z.object({ departmentId: z.uuid().optional() }),
       columns: [
@@ -627,10 +659,10 @@ export class MasterdataLists {
           registered: { de: 'angemeldet', en: 'registered' },
           confirmed: { de: 'Platz zugesagt', en: 'place confirmed' },
         };
+        const shown = nominations.filter((n) => !params.departmentId || activeMemberships(n.person).some((m) => m.department.id === params.departmentId));
         return {
-          rows: nominations
-            .filter((n) => !params.departmentId || activeMemberships(n.person).some((m) => m.department.id === params.departmentId))
-            .map((n) => ({
+          personIds: shown.map((n) => n.person.id),
+          rows: shown.map((n) => ({
               course: n.course.name[language],
               name: name(n.person),
               department: departments.get(primaryDepartment(n.person) ?? '') ?? '',
@@ -650,6 +682,7 @@ export class MasterdataLists {
       id: 'masterdata.course-year',
       name: { de: 'Lehrgänge im Jahr', en: 'Courses of the year' },
       permission: PLAN,
+      personalData: 'names',
       parameters: [{ key: 'year', label: { de: 'Jahr', en: 'Year' }, type: 'year' }, departmentParameter],
       schema: z.object({ year: z.coerce.number().int().min(1900).max(2200).optional(), departmentId: z.uuid().optional() }),
       columns: [
@@ -671,11 +704,11 @@ export class MasterdataLists {
           { person: visible, startsOn: { $lte: `${year}-12-31` }, $or: [{ endsOn: { $gte: `${year}-01-01` } }, { endsOn: null, startsOn: { $gte: `${year}-01-01` } }] },
           { populate: ['course', 'person.memberships.department'], orderBy: { startsOn: 'asc' } },
         );
+        const shown = attendances.filter((a) => !params.departmentId || a.person.memberships.getItems().some((m) => m.department.id === params.departmentId));
         return {
           subtitle: String(year),
-          rows: attendances
-            .filter((a) => !params.departmentId || a.person.memberships.getItems().some((m) => m.department.id === params.departmentId))
-            .map((a) => ({
+          personIds: shown.map((a) => a.person.id),
+          rows: shown.map((a) => ({
               course: courseLabel(a.course.name[language], a.description),
               startsOn: a.startsOn,
               endsOn: a.endsOn ?? null,

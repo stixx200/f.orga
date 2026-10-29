@@ -70,6 +70,8 @@ export * from './lib/privacy/breach-tools.js';
 export * from './lib/privacy/access-log.js';
 export * from './lib/privacy/consents.js';
 export * from './lib/privacy/rectifications.js';
+export * from './lib/privacy/third-party-registry.js';
+export * from './lib/privacy/privacy-retention.js';
 export * from './lib/security/impersonations.js';
 export * from './lib/security/rate-limits.js';
 export * from './lib/security/addresses.js';

@@ -34,6 +34,9 @@ export class CompensationLists {
       name: { de: 'Abrechnungsübersicht', en: 'Compensation statement' },
       description: { de: 'Posten je Person eines Auszahlungslaufs oder Jahres', en: 'Items per person of a payout run or year' },
       permission: READ,
+      // Names with postal address: an export needs a purpose (L11).
+      personalData: 'contact',
+      purposes: [{ key: 'treasury', label: { de: 'Abrechnung für die Kasse bzw. die Personen', en: 'Statement for the treasury or the persons' } }],
       parameters: [
         {
           key: 'runId',
@@ -74,7 +77,7 @@ export class CompensationLists {
             amount: i.amount === null || i.amount === undefined ? null : Number(i.amount),
           }))
           .toSorted((a, b) => a.name.localeCompare(b.name) || a.date.localeCompare(b.date));
-        return { subtitle: run ? `${run.number}: ${run.from} – ${run.to}` : String(year), rows };
+        return { subtitle: run ? `${run.number}: ${run.from} – ${run.to}` : String(year), personIds: [...people.keys()], rows };
       },
     };
   }
@@ -85,6 +88,7 @@ export class CompensationLists {
       name: { de: 'Jahressummen je Person', en: 'Annual totals per person' },
       description: { de: 'Mit Hinweis auf die steuerfreien Beträge (R 3.12 LStR); keine Steuerberechnung', en: 'With hint on the tax-free amounts; no tax calculation' },
       permission: RUNS,
+      personalData: 'names',
       parameters: [{ key: 'year', label: { de: 'Jahr', en: 'Year' }, type: 'year' }],
       schema: YearParams,
       columns: [
@@ -96,6 +100,7 @@ export class CompensationLists {
         const totals = await this.totals.compute(year);
         return {
           subtitle: String(year),
+          personIds: totals.map((t) => t.personId),
           rows: totals.map((t) => ({
             name: t.name,
             compensation: t.byKind['compensation'] ?? 0,

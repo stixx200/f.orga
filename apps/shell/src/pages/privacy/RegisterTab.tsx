@@ -1,7 +1,7 @@
 import { ActionIcon, Anchor, Button, Group, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import { IconDownload, IconTrash } from '@tabler/icons-react';
 import { type ReactNode, useState } from 'react';
-import type { MeasureTone, ProcessingRegister, RegisterActivity, RegisterRecipient } from '@forga/core-contracts';
+import { type MeasureTone, type ProcessingRegister, type RegisterActivity, type RegisterRecipient, THIRD_PARTY_HINT } from '@forga/core-contracts';
 import { apiUrl, formatDate, formatDateTime, openAfterStepUp, send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, Notice, Panel, StatusBadge, type Tone, useAction } from '@forga/web-ui';
 import { privacyKeys, useRegister } from './api';
@@ -127,6 +127,7 @@ function ActivityCard({ activity }: { activity: RegisterActivity }) {
           <Field label={t('register.fields.categories')}>{activity.categories.map(localized).join('; ') || '–'}</Field>
           <Field label={t('register.fields.special')}>{activity.health ? <StatusBadge tone="warning">{activity.healthNote ? localized(activity.healthNote) : t('register.health')}</StatusBadge> : '–'}</Field>
           {activity.health && <Field label={t('hardening.register.dpia')}>{t('hardening.register.dpiaHint')}</Field>}
+          {activity.thirdParties && <Field label={t('minimisation.register.thirdParties')}>{localized(THIRD_PARTY_HINT)}</Field>}
           <Field label={t('register.fields.recipients')}>
             {fromRegister.length ? fromRegister.map((r) => `${localized(r.name)} (${t(`register.sources.${r.source}`)})`).join('; ') : '–'}
           </Field>

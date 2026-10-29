@@ -1,5 +1,6 @@
 import type { Translations } from '@forga/web-sdk';
 import { audit } from './audit.i18n';
+import { personFields } from './personFields.i18n';
 
 const texts: Translations = {
   de: {
@@ -1486,4 +1487,7 @@ const texts: Translations = {
   },
 };
 
-export const translations: Translations = { de: { ...texts.de, audit: audit.de }, en: { ...texts.en, audit: audit.en } };
+export const translations: Translations = {
+  de: { ...texts.de, audit: audit.de, personFields: personFields.de },
+  en: { ...texts.en, audit: audit.en, personFields: personFields.en },
+};

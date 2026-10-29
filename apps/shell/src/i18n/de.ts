@@ -1,3 +1,4 @@
+import { minimisationDe, minimisationAuditDe } from './minimisation';
 import { privacyDe } from './privacy';
 import { breachesDe, registerDe, registerAuditDe } from './register';
 import { transparencyAuditDe, transparencyAuditKeysDe, transparencyDe } from './transparency';
@@ -11,6 +12,7 @@ export const de = {
   breaches: breachesDe,
   transparency: transparencyDe,
   hardening: hardeningDe,
+  minimisation: minimisationDe,
   erasure: erasureDe,
   appName: 'f.orga',
   loading: 'Wird geladen …',
@@ -561,6 +563,7 @@ export const de = {
     rawId: 'ID: {{id}}',
     keys: {
       ...registerAuditDe.keys,
+      ...minimisationAuditDe.keys,
       factor: 'Faktor',
       recoveryCodesLeft: 'Verbleibende Wiederherstellungscodes',
       during: 'Bei',
@@ -654,6 +657,7 @@ export const de = {
     },
     actions: {
       ...registerAuditDe.actions,
+      ...minimisationAuditDe.actions,
       ...transparencyAuditDe,
       ...hardeningAuditDe,
       ...erasureAuditDe,

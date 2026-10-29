@@ -129,6 +129,9 @@ export class RetentionExport {
         width: key === 'record' ? 3 : key === 'number' || key === 'attachments' ? 0.6 : 1.4,
       })),
       rows,
+      // Offer lists name records, not persons in the sense of the note on lists (L11).
+      personalData: false,
+      purpose: null,
     };
     const context = { data: list, language, brigade, signatureColumn: false, orientation: 'landscape' as const, now, logo };
     files[text.listFile] = await renderPdf(context);

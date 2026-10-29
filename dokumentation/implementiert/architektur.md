@@ -301,7 +301,8 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
   - Parameter (`parameters`, Typen `text`, `date`, `year`, `department`, `select`, `boolean`, `person`, `choice`) mit einem Zod-Schema (`schema`) für die Query-Werte. `person` wählt eine Person über die Namenssuche des Stammdatenmoduls (nur Personen, die der Benutzer sieht), `choice` einen Eintrag, den das Modul mit `choices(user, query, language)` anbietet (z. B. Dienste, Auszahlungsläufe, Beförderungslisten). Beide liefert `GET /api/core/lists/:id/parameters/:key/options?q=…` (`ListOption`: `value`, `label`, optional `description`; höchstens 50); der Wert bleibt die ID.
   - Spalten (`columns`) mit relativer Breite und Ausrichtung
   - optional eine Unterschriftenspalte (`signatureColumn`) und das Querformat (`orientation`)
-  - `rows(user, params, language)`: liefert die Zeilen und darf eigene Spalten (z. B. eine Matrix) und einen Untertitel setzen. Die Zeilen müssen die Rechte des Benutzers beachten.
+  - optional die Art der Personendaten (`personalData`: `names`, `contact`, `sensitive`, `health`) und Zwecke (`purposes`: Schlüssel, Bezeichnung, die Spalten, die der Zweck braucht, und optional ein Recht), siehe [Zweck der Listen](datenschutz.md#zweck-der-listen-und-exporte-l11)
+  - `rows(user, params, language, purpose)`: liefert die Zeilen und darf eigene Spalten (z. B. eine Matrix), einen Untertitel und die genannten Personen (`personIds`) setzen. Die Zeilen müssen die Rechte des Benutzers beachten.
 - **Ausgabe** (`libs/core/core-api/src/lib/lists/`):
   - JSON für die Vorschau
   - PDF (pdfmake), Excel (exceljs), CSV (Semikolon, UTF-8 mit BOM, damit deutsches Excel die Datei richtig öffnet)
@@ -316,7 +317,7 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
 - **Sprache:** Parameter `lang`, sonst die Sprache des Benutzers.
 - **Abteilungen:** `GET /api/core/lists` liefert je Liste `departments`: `brigade` oder die Abteilungen, in denen der Benutzer die Berechtigung der Liste hat. Ein Abteilungsparameter bietet nur diese an („Alle Ihre Abteilungen“ statt „Alle Abteilungen“, wenn er nicht alle sehen darf).
 - **Sicherheit:** pdfmake lädt keine URLs. Lokal erlaubt sind nur die Namen der Standardschriften.
-- Jeder Export steht im Audit-Log (`lists.exported`) mit Format, Zeilenzahl, Parametern und, bei Listen über Personen, den IDs der genannten Personen (`ListContent.personIds`), damit sich bei einer Datenpanne die Betroffenen ermitteln lassen ([Datenpannen](datenschutz.md#datenpannen-l20)).
+- Jeder Export steht im Audit-Log (`lists.exported`) mit Format, Zeilenzahl, Parametern, Zweck (`purpose`, bei „Anderer Zweck“ mit `purposeNote`) und, bei Listen über Personen, den IDs der genannten Personen (`ListContent.personIds`), damit sich bei einer Datenpanne die Betroffenen ermitteln lassen ([Datenpannen](datenschutz.md#datenpannen-l20)). PDF und Excel von Listen mit Personen tragen in der Fußzeile „Personenbezogene Daten – nur für den Dienstgebrauch, nach Gebrauch vernichten“ und unter dem Untertitel den Zweck.
 
 ## Fristen und Aufgaben
 
@@ -537,10 +538,10 @@ Alle Entitäten sind historisiert. Die Kinddatensätze der Person tragen den Elt
 
 | ID | Inhalt | Recht |
 | --- | --- | --- |
-| `masterdata.members` | Mitgliederliste mit Abteilung, Dienstgrad, Status, Eintritt, Kontakt | `masterdata.persons.read` |
+| `masterdata.members` | Mitgliederliste mit Abteilung, Dienstgrad, Status, Eintritt, Kontakt (Zweck „Übersicht“ ohne Kontakt, „Kontaktaufnahme“ mit `masterdata.lists.contact`) | `masterdata.persons.read` |
 | `masterdata.signatures` | Unterschriftenliste mit Anlass und Datum | `masterdata.persons.read` |
-| `masterdata.phones` | Telefonliste | `masterdata.persons.read` |
-| `masterdata.complete` | Komplettdaten einschließlich Geburtsdatum und Arbeitgeber | `masterdata.persons.sensitive` |
+| `masterdata.phones` | Telefonliste (Zweck Abteilung oder Führungskräfte) | `masterdata.lists.contact` |
+| `masterdata.complete` | Komplettdaten einschließlich Geburtsdatum und Arbeitgeber (Zweck Personalverwaltung oder Anschriftenliste) | `masterdata.persons.sensitive` |
 | `masterdata.birthdays` | Geburtstage im Zeitraum, runde markiert | `masterdata.persons.sensitive` |
 | `masterdata.jubilees` | Dienstjubiläen (10, 15, … 70 Jahre) im Jahr | `masterdata.persons.read` |
 | `masterdata.qualification-matrix` | Matrix Person × aktive Qualifikation (Sammeleinträge mit den Beschreibungen) | `masterdata.persons.read` |
@@ -1411,7 +1412,7 @@ Administratoren richten in der Oberfläche eine regelmäßige, verschlüsselte S
 1. Auslöser: Zeitplan (Prüfung jede Minute, `BackupScheduler`; eine verpasste Sicherung wird höchstens 12 Stunden nachgeholt, `FORGA_BACKUP_SCHEDULER=off` schaltet ab), „Jetzt sichern“ (`202`, läuft im Hintergrund) oder Sicherheitssicherung vor einer Wiederherstellung. Höchstens eine Sicherung gleichzeitig: Merker im Prozess (`409 backup.running`) und `pg_try_advisory_xact_lock` in der Datenbank.
 2. Freien Speicher gegen die letzte Sicherung (+20 %) prüfen (`backup.diskFull`), `pg_dump` als Kindprozess in den Strom, Verschlüsselung dahinter, Datei als `.part` (Rechte `0600`), nach `fsync` umbenannt; bei einem Fehler wird die Teildatei gelöscht.
 3. „Nach jeder Sicherung prüfen“ (Standard): erst danach gilt sie als `ok`. Audit `backup.created` bzw. `backup.failed`.
-4. Aufbewahrung: Die neuesten `keepCount` und alle der letzten `keepDays` Tage bleiben, Sicherheitssicherungen zusätzlich 30 Tage (`keepUntil`); nur geplante, manuelle und Sicherheitssicherungen im aktuellen Zielordner. Audit `backup.pruned`. Einträge gelöschter Sicherungen werden nach einem Jahr entfernt.
+4. Aufbewahrung: Die neuesten `keepCount` und alle der letzten `keepDays` Tage bleiben, Sicherheitssicherungen zusätzlich 30 Tage (`keepUntil`); nur geplante, manuelle und Sicherheitssicherungen im aktuellen Zielordner. Audit `backup.pruned`. Einträge gelöschter und fehlgeschlagener Sicherungen und abgeschlossener Wiederherstellungen folgen der Kategorie `backup.run-log` des [Aufbewahrungsplans](aufbewahrung.md) (Standard 1 Jahr).
 5. Fehlschlag (auch wenn eine geplante Sicherung gar nicht starten kann, z. B. Ziel nicht beschreibbar): Aufgabe „Datensicherung fehlgeschlagen“ für `backup.manage` (Fristen-Registry, bis zur nächsten erfolgreichen Sicherung) und E-Mail an Benutzer mit `backup.notify` (Audit `backup.failure-notified`), abschaltbar mit `notify.onFailure`. Ohne erfolgreiche Sicherung seit `staleHours` Aufgabe „Keine aktuelle Datensicherung“ und Warnung auf der Übersicht.
 
 **Liste:** Sie gleicht den Zielordner mit den Einträgen ab. Dateien ohne Eintrag bekommen einen: mit der eigenen `instanceId` als das, was der Kopf sagt (so erscheint z. B. die Sicherheitssicherung nach einer Wiederherstellung wieder), sonst als „fremd“; fremde lassen sich prüfen und wiederherstellen, aber nicht löschen (`backup.foreignNotDeletable`). Einträge ohne Datei zeigen „Datei fehlt“. Dateien, die keine Sicherung sind, bleiben unberührt. **Hochladen** streamt in den Zielordner (Name nur aus Buchstaben, Ziffern, `._-` mit Endung `.forgabackup`, `backup.notABackup` für andere Dateien). **Herunterladen** liefert die Datei, wie sie liegt (Audit `backup.downloaded`).

@@ -77,6 +77,7 @@ export class RespiratoryProtectionLists {
       name: { de: 'Atemschutztauglichkeit', en: 'Respiratory protection fitness' },
       description: { de: 'Alle Geräteträger mit Ampel und Fälligkeit jeder Bedingung', en: 'All wearers with traffic light and due date of each condition' },
       permission: READ,
+      personalData: 'names',
       parameters: [
         department,
         { key: 'color', label: { de: 'Ampel', en: 'Traffic light' }, type: 'select', options: (['green', 'yellow', 'red'] as const).map((c) => ({ value: c, label: COLORS[c] })) },
@@ -98,6 +99,7 @@ export class RespiratoryProtectionLists {
         const statuses = (await this.statuses(user, params.departmentId)).filter((s) => !params.color || s.color === params.color);
         return {
           subtitle: berlinDate(),
+          personIds: statuses.map((s) => s.personId),
           rows: statuses.map((s) => ({
             name: `${s.lastName}, ${s.firstName}`,
             department: s.departmentIds.map((d) => names.get(d) ?? '').join(', '),
@@ -118,6 +120,12 @@ export class RespiratoryProtectionLists {
       id: 'respiratory-protection.examinations-due',
       name: { de: 'Fällige Eignungsuntersuchungen', en: 'Examinations due' },
       permission: EXAMINATIONS,
+      personalData: 'health',
+      purposes: [
+        // Making appointments needs name, department and due date; the date of the last examination stays out.
+        { key: 'appointments', label: { de: 'Termine für die Untersuchung vereinbaren', en: 'Arranging appointments for the examination' }, columns: ['name', 'department', 'due'] },
+        { key: 'overview', label: { de: 'Übersicht für den Atemschutzgerätewart (mit letzter Untersuchung)', en: 'Overview for the breathing apparatus officer (with last examination)' } },
+      ],
       parameters: [{ key: 'from', label: { de: 'Von', en: 'From' }, type: 'date' }, { key: 'to', label: { de: 'Bis', en: 'To' }, type: 'date' }, department],
       schema: PeriodParams,
       columns: [col('name', 'Name', 'Name', 2), col('department', 'Abteilung', 'Department'), col('last', 'Letzte Untersuchung', 'Last examination'), col('due', 'Fällig am', 'Due on')],
@@ -132,6 +140,7 @@ export class RespiratoryProtectionLists {
           .toSorted((a, b) => (a.c!.dueOn ?? '').localeCompare(b.c!.dueOn ?? ''));
         return {
           subtitle: `${from} – ${to}`,
+          personIds: rows.map(({ s }) => s.personId),
           rows: rows.map(({ s, c }) => ({ name: `${s.lastName}, ${s.firstName}`, department: s.departmentIds.map((d) => names.get(d) ?? '').join(', '), last: c!.lastDate, due: c!.dueOn })),
         };
       },
@@ -145,6 +154,8 @@ export class RespiratoryProtectionLists {
       name: { de: 'Atemschutznachweis', en: 'Breathing apparatus record' },
       description: { de: 'Nachweise einer Person mit Bestätigung durch den Kommandanten (FwDV 7)', en: 'Evidence of a person with confirmation by the commander (FwDV 7)' },
       permission: READ,
+      personalData: 'health',
+      purposes: [{ key: 'fwdv7', label: { de: 'Atemschutznachweis nach FwDV 7 (Bestätigung durch den Kommandanten)', en: 'Breathing apparatus record under FwDV 7 (confirmation by the commander)' } }],
       parameters: [{ key: 'personId', label: { de: 'Person', en: 'Person' }, type: 'person', required: true }],
       schema: PersonParams,
       signatureColumn: true,
@@ -155,6 +166,7 @@ export class RespiratoryProtectionLists {
         });
         return {
           subtitle: `${view.status.firstName} ${view.status.lastName}`,
+          personIds: [view.status.personId],
           rows: view.evidence
             .filter((e) => !e.withdrawn)
             .toSorted((a, b) => a.date.localeCompare(b.date))
@@ -174,6 +186,7 @@ export class RespiratoryProtectionLists {
       id: 'respiratory-protection.minutes',
       name: { de: 'Einsatzzeiten unter Atemschutz', en: 'Time under breathing apparatus' },
       permission: READ,
+      personalData: 'names',
       parameters: [{ key: 'year', label: { de: 'Jahr', en: 'Year' }, type: 'year' }, department],
       schema: YearParams,
       columns: [col('name', 'Name', 'Name', 2), col('incidents', 'Einsätze', 'Incidents', 1, 'right'), col('incidentMinutes', 'Minuten Einsatz', 'Minutes incidents', 1, 'right'), col('exerciseMinutes', 'Minuten Übung', 'Minutes exercises', 1, 'right')],
@@ -183,6 +196,7 @@ export class RespiratoryProtectionLists {
         const rows = await this.em.fork().find(EvidenceEntity, { personId: { $in: wearers.map((w) => w.id) }, date: { $gte: `${year}-01-01`, $lte: `${year}-12-31` }, withdrawn: false });
         return {
           subtitle: String(year),
+          personIds: wearers.map((w) => w.id),
           rows: wearers
             .map((w) => {
               const own = rows.filter((r) => r.personId === w.id);
@@ -201,6 +215,7 @@ export class RespiratoryProtectionLists {
       name: { de: 'Planung Übungsstrecke', en: 'Training track planning' },
       description: { de: 'Geräteträger ohne Belastungsübung im laufenden Jahr', en: 'Wearers without stress exercise this year' },
       permission: READ,
+      personalData: 'names',
       parameters: [department],
       schema: DepartmentParams,
       signatureColumn: true,
@@ -209,12 +224,11 @@ export class RespiratoryProtectionLists {
         const year = berlinDate().slice(0, 4);
         const names = await this.departmentNames();
         const statuses = await this.statuses(user, params.departmentId);
+        const shown = statuses.map((s) => ({ s, c: s.conditions.find((c) => c.key === 'stress-exercise') })).filter(({ c }) => !c?.lastDate || c.lastDate < `${year}-01-01`);
         return {
           subtitle: year,
-          rows: statuses
-            .map((s) => ({ s, c: s.conditions.find((c) => c.key === 'stress-exercise') }))
-            .filter(({ c }) => !c?.lastDate || c.lastDate < `${year}-01-01`)
-            .map(({ s, c }) => ({ name: `${s.lastName}, ${s.firstName}`, department: s.departmentIds.map((d) => names.get(d) ?? '').join(', '), last: c?.lastDate ?? null, due: c?.dueOn ?? null })),
+          personIds: shown.map(({ s }) => s.personId),
+          rows: shown.map(({ s, c }) => ({ name: `${s.lastName}, ${s.firstName}`, department: s.departmentIds.map((d) => names.get(d) ?? '').join(', '), last: c?.lastDate ?? null, due: c?.dueOn ?? null })),
         };
       },
     };
@@ -232,6 +246,7 @@ export class RespiratoryProtectionLists {
       name: { de: 'Fehlende Nachweise im laufenden Jahr', en: 'Missing evidence this year' },
       description: { de: 'Geräteträger ohne Unterweisung, Belastungsübung oder Übung/Einsatz seit dem 1. Januar', en: 'Wearers without briefing, stress exercise or exercise/incident since 1 January' },
       permission: READ,
+      personalData: 'names',
       parameters: [department],
       schema: DepartmentParams,
       orientation: 'landscape',
@@ -248,6 +263,7 @@ export class RespiratoryProtectionLists {
         const missing = language === 'de' ? 'fehlt' : 'missing';
         const names = await this.departmentNames();
         const statuses = await this.statuses(user, params.departmentId);
+        const personIds: string[] = [];
         const rows = statuses.flatMap((s) => {
           const cells = yearly.map(([key, column]) => {
             const c = s.conditions.find((x) => x.key === key);
@@ -256,9 +272,10 @@ export class RespiratoryProtectionLists {
             return [column, value, Boolean(c && !(c.lastDate && c.lastDate >= start))] as const;
           });
           if (!cells.some(([, , open]) => open)) return [];
+          personIds.push(s.personId);
           return [{ name: `${s.lastName}, ${s.firstName}`, department: s.departmentIds.map((d) => names.get(d) ?? '').join(', '), ...Object.fromEntries(cells.map(([column, value]) => [column, value])) }];
         });
-        return { subtitle: year, rows };
+        return { subtitle: year, personIds, rows };
       },
     };
   }

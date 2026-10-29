@@ -1,6 +1,13 @@
 import { defineEntity, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import type { AccessReportChannel, AccessReportStatus, Language } from '@forga/core-contracts';
+import type { AccessReportChannel, AccessReportStatus, Language, ThirdPartyRef } from '@forga/core-contracts';
+
+/** The third party of a report: as in the letter, and where its data is stored. */
+export interface StoredThirdParty {
+  name: string;
+  address: string;
+  refs: ThirdPartyRef[];
+}
 
 /**
  * A document of the data protection handling, today the access report (Art. 15 GDPR) as PDF. The file is encrypted with
@@ -16,8 +23,10 @@ export const PrivacyDocumentSchema = defineEntity({
   properties: {
     id: p.uuid().primary().onCreate(() => uuidv7()),
     kind: p.string().$type<'access-report'>().default('access-report'),
-    /** Person in the masterdata module; no foreign key across modules. */
-    personId: p.string(),
+    /** Person in the masterdata module; no foreign key across modules. `null` for a report about a third party. */
+    personId: p.string().nullable(),
+    /** Report about a third party (L14): name and address of the letter, places of the data in the modules. */
+    thirdParty: p.json<StoredThirdParty>().nullable(),
     language: p.string().$type<Language>(),
     includeJson: p.boolean().default(false),
     /** `expired` is derived from `deletedAt`, never stored. */
