@@ -86,6 +86,7 @@
 <div class="reiter" role="tablist" aria-label="Bereiche der Personenakte">
   <a href="../stammdaten/person.html">Stammdaten</a><a href="../stammdaten/person.html">Feuerwehr</a><a href="../stammdaten/person.html">Lehrgänge</a><a href="../stammdaten/person.html">Einsätze</a><a href="../stammdaten/person.html">Historie</a><a class="aktiv" aria-current="page" href="person.html">Datenschutz</a>
 </div>
+<div class="meldung info"><span class="ic">i</span><span>Sensible Daten (Geburtsdatum, Bankverbindung, Bemerkungen, Eignungsuntersuchungen) sind ausgeblendet, bis Sie mit Ihrem zweiten Faktor bestätigen.</span><button type="button" class="knopf klein aktion" data-dialog="d-stepup">Sensible Daten anzeigen …</button></div>
 <div class="stapel-abstand">
 <section class="karte">
   <div class="karte-kopf"><h2>Anfragen der Person</h2><button type="button" class="knopf klein" data-dialog="d-anfrage">Anfrage erfassen …</button></div>
@@ -133,17 +134,26 @@
 <label class="schalter"><input type="checkbox" checked> Identität der Person geprüft (angemeldet in Mein Bereich)</label></div>
     <div class="dialog-fuss"><button class="knopf" value="abbrechen">Abbrechen</button><a class="knopf primaer" href="auskunft-vorschau.html">Auskunft erstellen</a></div>
   </form>
+</dialog><dialog class="dialog" id="d-stepup" aria-labelledby="d-stepup-titel">
+  <form method="dialog">
+    <div class="dialog-kopf"><h2 id="d-stepup-titel">Bitte bestätigen Sie mit Ihrem Code</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dialog-inhalt">
+<p>Sie öffnen sensible Daten (Gesundheitsdaten, sensible Personendaten oder Verwaltung). Geben Sie den Code aus Ihrer Authenticator-App ein. Die Bestätigung gilt 30 Minuten für diese Sitzung.</p>
+<div class="feld"><label for="d4" class="pflicht">Sechsstelliger Code aus der App</label><input id="d4" type="text" inputmode="numeric" autocomplete="one-time-code"></div>
+<p class="meta"><a href="#">Wiederherstellungscode verwenden</a></p></div>
+    <div class="dialog-fuss"><button class="knopf" value="abbrechen">Abbrechen</button><button class="knopf primaer" value="ok">Bestätigen</button></div>
+  </form>
 </dialog><dialog class="dialog" id="d-anfrage" aria-labelledby="d-anfrage-titel">
   <form method="dialog">
     <div class="dialog-kopf"><h2 id="d-anfrage-titel">Anfrage erfassen</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="dialog-inhalt">
 <div class="felder zwei">
-  <div class="feld"><label for="d4" class="pflicht">Art</label><select id="d4"><option>Auskunft</option><option>Berichtigung</option><option>Löschung</option><option>Einschränkung</option><option>Widerspruch</option><option>Widerruf einer Einwilligung</option></select></div>
-  <div class="feld"><label for="d5" class="pflicht">Eingegangen am</label><input id="d5" type="date" value="2026-10-27"></div>
-  <div class="feld"><label for="d6">Weg</label><select id="d6"><option>schriftlich</option><option>E-Mail</option><option>persönlich</option><option>Mein Bereich</option></select></div>
-  <div class="feld"><label for="d7">Frist</label><input id="d7" type="date" value="2026-11-27" disabled><div class="hilfe">Ein Monat ab Eingang, verlängerbar mit Begründung.</div></div>
+  <div class="feld"><label for="d5" class="pflicht">Art</label><select id="d5"><option>Auskunft</option><option>Berichtigung</option><option>Löschung</option><option>Einschränkung</option><option>Widerspruch</option><option>Widerruf einer Einwilligung</option></select></div>
+  <div class="feld"><label for="d6" class="pflicht">Eingegangen am</label><input id="d6" type="date" value="2026-10-27"></div>
+  <div class="feld"><label for="d7">Weg</label><select id="d7"><option>schriftlich</option><option>E-Mail</option><option>persönlich</option><option>Mein Bereich</option></select></div>
+  <div class="feld"><label for="d8">Frist</label><input id="d8" type="date" value="2026-11-27" disabled><div class="hilfe">Ein Monat ab Eingang, verlängerbar mit Begründung.</div></div>
 </div>
-<div class="feld"><label for="d8">Inhalt der Anfrage</label><textarea id="d8" rows="3"></textarea></div>
+<div class="feld"><label for="d9">Inhalt der Anfrage</label><textarea id="d9" rows="3"></textarea></div>
 <label class="schalter"><input type="checkbox"> Identität geprüft</label></div>
     <div class="dialog-fuss"><button class="knopf" value="abbrechen">Abbrechen</button><button class="knopf primaer" value="ok">Anfrage anlegen</button></div>
   </form>
@@ -151,12 +161,12 @@
   <form method="dialog">
     <div class="dialog-kopf"><h2 id="d-einwilligung-titel">Einwilligung erfassen</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="dialog-inhalt">
-<div class="feld"><label for="d9" class="pflicht">Einwilligung</label><select id="d9"><option>Geburtstag im Aushang (Fassung 1)</option><option>Fotos in der Öffentlichkeitsarbeit (Fassung 2)</option></select></div>
+<div class="feld"><label for="d10" class="pflicht">Einwilligung</label><select id="d10"><option>Geburtstag im Aushang (Fassung 1)</option><option>Fotos in der Öffentlichkeitsarbeit (Fassung 2)</option></select></div>
 <div class="felder zwei">
-  <div class="feld"><label for="d10" class="pflicht">Erteilt am</label><input id="d10" type="date" value="2026-10-28"></div>
-  <div class="feld"><label for="d11">Weg</label><select id="d11"><option>schriftlich</option><option>durch Erziehungsberechtigte</option><option>persönlich</option></select></div>
+  <div class="feld"><label for="d11" class="pflicht">Erteilt am</label><input id="d11" type="date" value="2026-10-28"></div>
+  <div class="feld"><label for="d12">Weg</label><select id="d12"><option>schriftlich</option><option>durch Erziehungsberechtigte</option><option>persönlich</option></select></div>
 </div>
-<div class="feld"><label for="d12">Nachweis (Scan der Unterschrift)</label><input id="d12" type="file"></div>
+<div class="feld"><label for="d13">Nachweis (Scan der Unterschrift)</label><input id="d13" type="file"></div>
 <p class="meta">Der Text der gewählten Fassung wird mit der Einwilligung gespeichert.</p></div>
     <div class="dialog-fuss"><button class="knopf" value="abbrechen">Abbrechen</button><button class="knopf primaer" value="ok">Speichern</button></div>
   </form>
@@ -165,8 +175,8 @@
     <div class="dialog-kopf"><h2 id="d-widerruf-titel">Widerruf erfassen?</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="dialog-inhalt">
 <p><strong>Fotos in der Öffentlichkeitsarbeit</strong> gilt ab dem Widerruf nicht mehr. Was bis dahin rechtmäßig veröffentlicht wurde, bleibt davon unberührt (Art. 7 Abs. 3).</p>
-<div class="felder zwei"><div class="feld"><label for="d13" class="pflicht">Widerrufen am</label><input id="d13" type="date" value="2026-10-28"></div>
-<div class="feld"><label for="d14">Weg</label><select id="d14"><option>schriftlich</option><option>E-Mail</option><option>persönlich</option></select></div></div></div>
+<div class="felder zwei"><div class="feld"><label for="d14" class="pflicht">Widerrufen am</label><input id="d14" type="date" value="2026-10-28"></div>
+<div class="feld"><label for="d15">Weg</label><select id="d15"><option>schriftlich</option><option>E-Mail</option><option>persönlich</option></select></div></div></div>
     <div class="dialog-fuss"><button class="knopf" value="abbrechen">Abbrechen</button><button class="knopf primaer" value="ok">Widerruf speichern</button></div>
   </form>
 </dialog><dialog class="dialog gefahr" id="d-einschraenkung" aria-labelledby="d-einschraenkung-titel">
@@ -174,8 +184,8 @@
     <div class="dialog-kopf"><h2 id="d-einschraenkung-titel">Verarbeitung einschränken?</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="dialog-inhalt">
 <p>Tobias Rief erscheint danach nicht mehr in Listen, Suche, Infoterminal, Personalauswahl, Fristen und E-Mails. Lesen können nur noch Benutzer mit „Datenschutz verwalten“.</p>
-<div class="felder zwei"><div class="feld"><label for="d15" class="pflicht">Grund</label><select id="d15"><option>Richtigkeit bestritten (Art. 18 Abs. 1 a)</option><option>Löschung abgelehnt, Aufbewahrungsfrist läuft</option><option>Widerspruch wird geprüft</option></select></div>
-<div class="feld"><label for="d16">Bis</label><input id="d16" type="date"></div></div></div>
+<div class="felder zwei"><div class="feld"><label for="d16" class="pflicht">Grund</label><select id="d16"><option>Richtigkeit bestritten (Art. 18 Abs. 1 a)</option><option>Löschung abgelehnt, Aufbewahrungsfrist läuft</option><option>Widerspruch wird geprüft</option></select></div>
+<div class="feld"><label for="d17">Bis</label><input id="d17" type="date"></div></div></div>
     <div class="dialog-fuss"><button class="knopf" value="abbrechen">Abbrechen</button><button class="knopf primaer" value="ok">Einschränken</button></div>
   </form>
 </dialog>

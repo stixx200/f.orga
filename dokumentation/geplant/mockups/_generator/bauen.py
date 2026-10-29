@@ -51,7 +51,7 @@ GRUPPEN = [
                      ('datenschutz/anfragen.html', 'Betroffenenanfragen'), ('datenschutz/anfrage.html', 'Löschantrag mit Löschprüfung'),
                      ('datenschutz/verzeichnis.html', 'Verzeichnis der Verarbeitungstätigkeiten'), ('datenschutz/einstellungen.html', 'Einstellungen Datenschutz'),
                      ('datenschutz/mein-bereich.html', 'Mein Bereich: Datenschutz'), ('datenschutz/hinweis.html', 'Datenschutzhinweis'),
-                     ('datenschutz/erste-anmeldung.html', 'Hinweis bei der ersten Anmeldung'), ('datenschutz/zwei-faktor.html', 'Zwei-Faktor-Anmeldung einrichten')]),
+                     ('datenschutz/erste-anmeldung.html', 'Hinweis bei der ersten Anmeldung'), ('datenschutz/zwei-faktor.html', 'Zwei-Faktor-Anmeldung einrichten'), ('datenschutz/person.html#d-stepup', 'Step-up: Code beim Öffnen sensibler Daten')]),
 ]
 
 karten = ''.join(

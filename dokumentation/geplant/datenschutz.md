@@ -1,6 +1,6 @@
 # Datenschutz (DSGVO)
 
-Konzept mit Lückenanalyse. Ziel: f.orga liefert der Feuerwehr und der Gemeinde alles, was sie für einen DSGVO-konformen Betrieb brauchen, und macht den datenschutzfreundlichen Weg zum Standard. Mockups (zur Freigabe): `datenschutz/` (siehe [Mockups](mockups/README.md#datenschutz)).
+Konzept mit Lückenanalyse. Ziel: f.orga liefert der Feuerwehr und der Gemeinde alles, was sie für einen DSGVO-konformen Betrieb brauchen, und macht den datenschutzfreundlichen Weg zum Standard. Konzept und Mockups sind **freigegeben** (Mockups: `datenschutz/` siehe [Mockups](mockups/README.md#datenschutz)); die Entscheidungen sind [festgelegt](#entscheidungen).
 
 Der [Aufbewahrungsplan](aufbewahrung.md) und das [Modul Datensicherung](module/backup.md) sind eigene Konzepte; dieses Konzept baut auf ihnen auf.
 
@@ -115,7 +115,7 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 | Nr. | Thema | DSGVO | Priorität |
 | --- | --- | --- | --- |
 | L1 | HTTPS, sichere Cookies, Sicherheitsheader | Art. 32 | kritisch |
-| L2 | Zwei-Faktor-Anmeldung für privilegierte Konten | Art. 32 | kritisch |
+| L2 | Zweiter Faktor beim Öffnen sensibler Daten (Step-up) | Art. 32 | kritisch |
 | L3 | Verständliche Auskunft mit Angaben nach Art. 15 Abs. 1 | Art. 12, 15 | kritisch |
 | L4 | Informationspflichten: Datenschutzhinweis, erste Anmeldung, Information bei Übernahme | Art. 13, 14 | kritisch |
 | L5 | Gesundheitsdaten: Zugriff, Protokoll, Weitergabe per E-Mail | Art. 9, 32 | kritisch |
@@ -151,12 +151,12 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 - **Umsetzung:** Optionaler Dienst `caddy` in `docker/compose.yml` (TLS per Let's Encrypt oder eigenes Zertifikat der Gemeinde), Profil „intern“ mit eigenem Zertifikat. Ist `brigade.publicUrl` eine `https://`-Adresse, gelten `Secure`-Cookies automatisch. Sicherheitsheader global (HSTS nur bei HTTPS, CSP `default-src 'self'` mit den Modul-Frontends, `frame-ancestors 'none'`, `Referrer-Policy: same-origin`, `Permissions-Policy` mit Kamera/NFC nur für `/scan`). Die Einrichtungsliste und eine Plakette in „Einstellungen → Datenschutz → Sicherheit“ warnen, solange die Anwendung über HTTP aufgerufen wird. `/api/docs` nur angemeldet.
 - **Organisatorisch:** Betrieb nur im Netz der Gemeinde oder hinter TLS; Zertifikat und Erneuerung beim IT-Dienstleister.
 
-### L2 Zwei-Faktor-Anmeldung (kritisch)
+### L2 Zweiter Faktor beim Öffnen sensibler Daten (kritisch)
 
 - **Heute:** Nur Passwort oder OIDC. Ein erbeutetes Passwort eines Administrators öffnet alle Daten, auch Vollexport und Impersonation.
-- **Soll:** Für Konten mit weitreichenden Rechten ein zweiter Faktor (Stand der Technik nach Art. 32).
-- **Umsetzung:** TOTP (Authenticator-App) nach RFC 6238 mit zehn Wiederherstellungscodes (je einmal, als Hash gespeichert); Geheimnis mit `FORGA_SECRET_KEY` verschlüsselt. Einrichtung im Profil (Mockup `datenschutz/zwei-faktor.html`). Einstellung `security.mfa`: `off`, `privileged` (Standard nach Einführung: Pflicht für privilegierte Konten nach `isPrivileged` sowie für `masterdata.persons.sensitive`, `respiratory-protection.examinations`, `core.data.export`, `core.privacy.manage`, `backup.manage`) oder `all`. Ohne eingerichteten Faktor führt die Anmeldung zur Einrichtung. Wer per OIDC kommt, gilt als erfüllt, wenn der Anbieter `amr` mit `mfa`/`otp` meldet; sonst wird nachgefragt. Die Benutzerverwaltung kann einen Faktor zurücksetzen (mit Grund, Audit `auth.mfa-reset`), nur bei Benutzern ohne weitere Rechte als der eigene. „Gerät 30 Tage merken“ nur für nicht privilegierte Konten. Später WebAuthn (Passkeys).
-- **Organisatorisch:** Regel festlegen, wer einen zweiten Faktor braucht; Ablauf bei verlorenem Telefon.
+- **Soll:** Ein zweiter Faktor für den Zugriff auf Gesundheitsdaten, sensible Personendaten und die Verwaltung (Stand der Technik nach Art. 32).
+- **Festgelegt: „Nur bei sensiblen Daten“ (Step-up).** Die Anmeldung bleibt wie heute (Passwort oder OIDC). Der zweite Faktor wird erst abgefragt, wenn der Benutzer sensible Daten oder Verwaltungsfunktionen öffnet, und gilt danach **30 Minuten für diese Sitzung**. Wer nie sensible Daten öffnet (die meisten Mitglieder, Mein Bereich), braucht keinen zweiten Faktor. Einzelheiten unter [Step-up](#step-up-zweiter-faktor-bei-sensiblen-daten).
+- **Organisatorisch:** Ablauf bei verlorenem Telefon (Wiederherstellungscodes, Zurücksetzen durch einen Administrator); Benutzer mit sensiblen Rechten richten den Faktor bei der Übergabe ihrer Rolle ein.
 
 ### L3 Verständliche Auskunft (kritisch)
 
@@ -217,7 +217,7 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
     legalBasisHint: LocalizedText }] }
   ```
 
-  Der Core setzt daraus einen **Entwurf** zusammen (Mockup `datenschutz/verzeichnis.html`): eine Tätigkeit je Fachaufgabe (Personalverwaltung, Einsatzdokumentation, Entschädigung, Atemschutzüberwachung, Dienstbetrieb, Kostenersatz, Kleiderkammer, Geräteprüfung, Benutzerkonten und Protokolle), nur für aktive Module. Fristen kommen aus `privacy.retention`, Empfänger zusätzlich aus API-Tokens und SMTP/OIDC-Einstellungen. Die Gemeinde ergänzt je Tätigkeit Rechtsgrundlage, weitere Empfänger, Bemerkungen und „geprüft am/von“ (gespeichert in `privacy.activities`, historisiert). Export als PDF und als Word-kompatibles `.docx` bzw. Excel zum Weiterbearbeiten. Ein Abschnitt **Technische Maßnahmen** beschreibt, was f.orga tut (Rechte, Verschlüsselung, Protokolle, Sicherung) mit dem aktuellen Stand der Einstellungen (z. B. „Zwei-Faktor: Pflicht für privilegierte Konten“, „HTTPS: nein“).
+  Der Core setzt daraus einen **Entwurf** zusammen (Mockup `datenschutz/verzeichnis.html`): eine Tätigkeit je Fachaufgabe (Personalverwaltung, Einsatzdokumentation, Entschädigung, Atemschutzüberwachung, Dienstbetrieb, Kostenersatz, Kleiderkammer, Geräteprüfung, Benutzerkonten und Protokolle), nur für aktive Module. Fristen kommen aus `privacy.retention`, Empfänger zusätzlich aus API-Tokens und SMTP/OIDC-Einstellungen. Die Gemeinde ergänzt je Tätigkeit Rechtsgrundlage, weitere Empfänger, Bemerkungen und „geprüft am/von“ (gespeichert in `privacy.activities`, historisiert). Export als PDF und als Word-kompatibles `.docx` bzw. Excel zum Weiterbearbeiten. Ein Abschnitt **Technische Maßnahmen** beschreibt, was f.orga tut (Rechte, Verschlüsselung, Protokolle, Sicherung) mit dem aktuellen Stand der Einstellungen (z. B. „Zweiter Faktor: bei sensiblen Daten (Step-up)“, „HTTPS: nein“).
 - **Organisatorisch:** Verzeichnis führt der Verantwortliche; der Entwurf ersetzt keine Prüfung.
 
 ### L9 Einwilligungen (wichtig)
@@ -353,6 +353,56 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 - **Heute:** Audit-Log 24 Monate (einstellbar), Historie unbegrenzt; Laufberichte des MP-Feuer-Moduls unbegrenzt.
 - **Umsetzung:** Über den [Aufbewahrungsplan](aufbewahrung.md) (`core.history`, `core.audit`), dazu Leseprotokoll (L15) und Laufberichte (L28). Ausgewogen: Das Protokoll muss lang genug sein, um Missbrauch nachzuweisen, und kurz genug, um nicht selbst ein Datenbestand über das Verhalten der Benutzer zu werden.
 
+## Step-up: zweiter Faktor bei sensiblen Daten
+
+Mockup: `datenschutz/zwei-faktor.html` (Einrichten und Dialog `#d-stepup`), Dialog auch in `datenschutz/person.html#d-stepup`.
+
+### Faktor
+
+- **TOTP** (Authenticator-App, RFC 6238, 6 Ziffern, 30 Sekunden, ±1 Zeitschritt), Geheimnis mit `FORGA_SECRET_KEY` verschlüsselt (`core.user_mfa`, `hidden`, nie in Historie, Vollexport oder Antworten). Ein Code gilt nur einmal (letzter Zeitschritt gespeichert).
+- **Zehn Wiederherstellungscodes**, je einmal gültig, nur als Hash gespeichert, nur bei der Einrichtung sichtbar; neu erzeugen im Profil (mit Step-up).
+- **Einrichten** im Profil oder beim ersten Step-up, wenn noch kein Faktor besteht: aktuelles Passwort (bei OIDC-Benutzern entfällt es), QR-Code, Bestätigung mit einem Code. Die Einrichtung zählt als Step-up. Ohne `FORGA_SECRET_KEY` lässt sich kein Faktor einrichten (`auth.mfaNoSecretKey`); dann sind die Step-up-Bereiche gesperrt und die Einrichtungsliste der Startseite meldet das.
+- **Zurücksetzen durch einen Administrator** (`DELETE /api/core/users/:id/mfa`, Recht `core.users.manage`, selbst mit Step-up, Grund Pflicht, nur für Benutzer ohne weitere Rechte als der eigene, `users.targetWider`): Faktor und Codes werden gelöscht, alle Sitzungen des Benutzers enden, er bekommt eine E-Mail. Audit `auth.mfa-reset`. Den eigenen Faktor setzt niemand über die Benutzerverwaltung zurück.
+- Später zusätzlich WebAuthn (Passkeys) als zweiter Faktor.
+
+### Was den Step-up auslöst
+
+Berechtigungen bekommen im Manifest bzw. in `CORE_PERMISSIONS` das Kennzeichen `stepUp: true`. Jeder Endpunkt, der eine solche Berechtigung prüft, verlangt eine bestätigte Sitzung. Wo eine Seite auch ohne die sensiblen Teile nützlich ist, liefert der Server sie ohne diese Teile und kennzeichnet das (`sensitiveHidden`, `stepUpAvailable`); die Oberfläche zeigt „Sensible Daten anzeigen“.
+
+| Bereich | Berechtigung mit `stepUp` | Verhalten ohne Bestätigung |
+| --- | --- | --- |
+| Atemschutz: Eignungsuntersuchungen (Ergebnis, Einschränkungen, Arzt), Liste „fällige Eignungsuntersuchungen“, Untersuchungen erfassen und importieren | `respiratory-protection.examinations` | Ampel und Fälligkeiten wie ohne das Recht (`redact`); Knopf „Untersuchungen anzeigen“ |
+| Sensible Felder der Person (Geburtsdatum, Geburtsort, Arbeitgeber, Bank, Bemerkung, Austrittsgrund, Ruhezeiten), Listen „Komplettdaten“, „Geburtstage“, „Altersgrenzen“, Benutzer mit Person verknüpfen | `masterdata.persons.sensitive` | Personalakte wie ohne das Recht (`sensitiveHidden`); Knopf „Sensible Daten anzeigen“ |
+| „Verletzt“/„getötet“ im Personal eines Berichts | `incidents.injuries.read` | Zahl ohne Namen („1 eigene Verletzte“) |
+| Überweisungs- und SEPA-Datei, Abrechnungen mit Bankverbindung | `compensation.runs` (nur diese Ausgaben, Endpunkt-Kennzeichen `@StepUp()`) | Lauf und Posten lesbar, Download fragt nach |
+| Datenschutz: Auskunft, Anfragen, Löschung, Einschränkung, Verzeichnis, Einstellungen Datenschutz | `core.privacy.manage` | ganze Seite |
+| Benutzer, Rollen, API-Tokens, Einstellungen des Core, Module und Plugins | `core.users.manage`, `core.roles.manage`, `core.tokens.manage`, `core.settings.manage`, `core.modules.manage` | ganze Seite |
+| Audit-Log und Leseprotokoll | `core.audit.read` | ganze Seite |
+| Vollexport | `core.data.export` | Knopf fragt nach |
+| Anmelden als (Impersonation) | `core.users.impersonate` | Start fragt nach |
+| Datensicherung und Wiederherstellung | `backup.manage` | ganze Seite; die Wiederherstellung verlangt zusätzlich Passphrase und Namen wie im [Konzept](module/backup.md) |
+| Aussonderung | `core.retention.manage` | ganze Seite |
+
+Keinen Step-up brauchen: Einstellungen der Module (`<modul>.settings.manage`, z. B. Entschädigungssätze), Personalakte ohne sensible Felder, Einsatzberichte ohne Verletzte, Listen ohne sensible Daten, Einwilligungen erfassen (`core.privacy.consents`), **Mein Bereich** (eigene Daten einschließlich eigener Untersuchungen und Bankverbindung; die Anmeldung genügt, sonst bräuchte jedes Mitglied einen Faktor) und das **Infoterminal** (nie: es hat keine Sitzung eines Benutzers und liest keine sensiblen Daten).
+
+Die Rollenseite zeigt an jeder Berechtigung mit `stepUp` das Kennzeichen „zweiter Faktor“, die Benutzerliste je Benutzer „Faktor eingerichtet“ bzw. „nötig, nicht eingerichtet“.
+
+### Durchsetzung auf dem Server
+
+- **Sitzung:** `core.session.elevated_until` (Zeitpunkt). `POST /api/core/step-up` (`{ code }` oder `{ recoveryCode }`, Sitzung mit CSRF-Header) setzt es auf jetzt + 30 Minuten. Die Frist verlängert sich nicht durch Aktivität; nach Ablauf fragt der nächste Zugriff erneut. Abmelden, Passwortwechsel, Zurücksetzen des Faktors und Ende der Sitzung beenden die Bestätigung. `POST /api/core/step-up/end` beendet sie vorzeitig („Bestätigung beenden“). `GET /api/core/session` liefert `elevatedUntil` und `mfa: { enrolled }`.
+- **Guard:** `@RequirePermissions` prüft wie heute das Recht; trägt die Berechtigung `stepUp` (oder der Endpunkt `@StepUp()`) und ist `elevatedUntil` nicht in der Zukunft, antwortet der Server `403 auth.stepUpRequired` mit `{ enrolled: boolean }`. Felder mit `stepUp` (sensible Personenfelder, Untersuchungen, Verletzte) behandelt der Lesepfad wie fehlende Rechte, solange die Sitzung nicht bestätigt ist; der Schreibpfad lehnt mit `auth.stepUpRequired` ab, statt Felder still zu ignorieren.
+- **Begrenzung:** 5 falsche Codes je Benutzer in 15 Minuten, danach 15 Minuten gesperrt (`429 auth.stepUpLocked`), Zähler in der Datenbank. Audit `auth.step-up` (Erfolg, Faktor oder Wiederherstellungscode), `auth.step-up-failed`, `auth.mfa-enrolled`, `auth.recovery-codes-renewed`, `auth.mfa-reset`.
+- **Impersonation:** Die Impersonation-Sitzung ist nie bestätigt; Step-up während einer Impersonation prüft den Faktor des **Administrators** und gilt nur für diese Impersonation-Sitzung. Der Start der Impersonation selbst verlangt Step-up.
+- **OIDC:** Die Anmeldung über den Anbieter bleibt ohne zweiten Faktor in f.orga. Meldet der Anbieter im ID-Token `amr` mit `mfa`, `otp` oder `hwk` und ist `auth_time` jünger als 30 Minuten, ist die Sitzung bis `auth_time` + 30 Minuten bestätigt. Danach gilt der Faktor in f.orga; alternativ „Beim Anbieter bestätigen“ (erneute Anmeldung mit `prompt=login` und `max_age=0`), wenn die Einstellung `oidc.stepUpViaProvider` an ist.
+- **API-Tokens:** Ein Token kann keinen zweiten Faktor zeigen. Berechtigungen mit `stepUp` lassen sich keinem Token geben (`tokens.stepUpScope`), wie heute die `core.*`-Rechte. Ausnahme nur, wenn das Manifest die Berechtigung ausdrücklich mit `tokenAllowed: true` freigibt (heute keine). Vorhandene Tokens mit solchen Bereichen wirken nach dem Update für diese Bereiche nicht mehr; die Token-Seite zeigt den Bereich durchgestrichen mit Hinweis. Endpunkte mit Feldern unter `stepUp` liefern Tokens diese Felder nie.
+- **Infoterminal:** Der `TerminalGuard` kennt keinen Step-up; Kiosk-Endpunkte dürfen keine Berechtigung mit `stepUp` prüfen (Startprüfung: Fehler beim Start, wenn ein Kiosk-Endpunkt ein solches Recht verlangt).
+
+### Oberfläche
+
+- Der API-Client im `web-sdk` fängt `auth.stepUpRequired` ab, zeigt den Dialog „Bitte bestätigen Sie mit Ihrem Code“ (Code-Feld mit `autocomplete="one-time-code"`, Link „Wiederherstellungscode verwenden“) und wiederholt danach die Anfrage. Ohne eingerichteten Faktor führt der Dialog zur Einrichtung. Abbrechen lässt die Seite ohne die sensiblen Teile.
+- Solange die Sitzung bestätigt ist, zeigt die Kopfzeile eine Plakette „Bestätigt bis 10:42“ mit „Beenden“.
+- Einstellung `security.stepUpMinutes` gibt es nicht: 30 Minuten sind fest. Die Seite „Sicherheit“ zeigt den Stand (Benutzer mit sensiblen Rechten und eingerichtetem Faktor).
+
 ## Einstellungen „Datenschutz“
 
 Seite „Verwaltung → Datenschutz“ (neu, Recht `core.privacy.manage`; Mockup `datenschutz/einstellungen.html`) mit Reitern:
@@ -363,7 +413,7 @@ Seite „Verwaltung → Datenschutz“ (neu, Recht `core.privacy.manage`; Mockup
 | Texte | Textbausteine (de/en) für Deckblatt der Auskunft, Datenschutzhinweis, Antwortschreiben (Berichtigung, Löschung, Ablehnung, Fristverlängerung), Hinweis bei der ersten Anmeldung; je Baustein „Vorlage“ oder „geprüft am/von“ und Fassung |
 | Einwilligungen | Katalog (L9) |
 | Selbstauskunft | `selfServiceAccess`, Ansprechpartner in Mein Bereich |
-| Sicherheit | Zwei-Faktor-Regel, Leerlauf-Abmeldung, E-Mails ohne Namen, Stand HTTPS und Sicherung (nur Anzeige) |
+| Sicherheit | Zwei-Faktor: Step-up bei sensiblen Daten (festgelegt, nur Anzeige des Stands), Leerlauf-Abmeldung, E-Mails ohne Namen, Stand HTTPS und Sicherung (nur Anzeige) |
 | Aufbewahrung | wie im [Aufbewahrungsplan](aufbewahrung.md) |
 
 Abschnitte in `core.setting`: `privacy` (erweitert), `privacy.contacts`, `privacy.texts`, `privacy.consents`, `privacy.activities`, `security`. Alle historisiert; nur Verwalter lesen sie, der Datenschutzhinweis ist öffentlich.
@@ -377,29 +427,31 @@ Abschnitte in `core.setting`: `privacy` (erweitert), `privacy.contacts`, `privac
 | `incidents.injuries.read` | Abteilung | Verletzte und Getötete im Personal sehen | `commander` |
 | `masterdata.lists.contact` | Abteilung | Listen mit Kontaktdaten ausgeben | `commander`, `department-commander` |
 
-`core.privacy.manage` gilt als privilegiert (`isPrivileged`) und erfordert den zweiten Faktor.
+`core.privacy.manage` gilt als privilegiert (`isPrivileged`) und trägt `stepUp` (siehe [Step-up](#step-up-zweiter-faktor-bei-sensiblen-daten)); ebenso `incidents.injuries.read`.
 
-## Offene Entscheidungen
+## Entscheidungen
 
-1. **Wer bearbeitet Betroffenenanfragen in der Anwendung?** *Empfehlung:* Recht `core.privacy.manage` für Kommandant und eine Person der Gemeindeverwaltung; der DSB bekommt bei Bedarf ein Konto mit Leserecht auf Anfragen und Verzeichnis.
-2. **Zwei-Faktor-Pflicht:** nur privilegierte Konten oder alle? *Empfehlung:* Pflicht für privilegierte und für Konten mit Gesundheits- oder sensiblen Daten; für alle anderen freiwillig.
-3. **Selbstauskunft sofort oder nach Freigabe?** *Empfehlung:* nach Freigabe (`request`), damit die Verwaltung die Frist führt und Rechte Dritter prüft; `instant` nach einem Jahr Erfahrung erwägen.
-4. **Echtdaten im Testsystem:** ganz sperren oder mit Begründung erlauben (Wiederherstellungsprobe nach dem Sicherungskonzept)? *Empfehlung:* Datenübernahme und Personenimport im Testsystem sperren; die Wiederherstellungsprobe einer echten Sicherung nur mit Begründung und mit automatischem Löschen der Testinstanz nach 7 Tagen.
-5. **Feldverschlüsselung** für Untersuchungsergebnisse und Bankverbindungen? *Empfehlung:* nein; Festplattenverschlüsselung des Hosts und verschlüsselte Sicherungen, weil der Schlüssel sonst auf demselben Server läge.
-6. **Leseprotokoll:** Umfang und Frist. *Empfehlung:* nur Gesundheits- und sensible Daten, zusammengefasst je Tag, 12 Monate; Auswertung nur anlassbezogen.
-7. **Verletzte im Bericht:** eigenes Recht oder für alle Leser des Berichts? *Empfehlung:* eigenes Recht `incidents.injuries.read`, Verfasser und Freigeber sehen es immer.
-8. **Entschuldigungsgrund als Auswahl statt Freitext.** *Empfehlung:* ja, Freitext optional.
-9. **Einwilligung oder Aufgabe** für Telefonliste und Geburtstage: *Empfehlung:* Telefonliste der Führungskräfte und Alarmierung als Aufgabe; Handynummer für alle Mitglieder der Abteilung und Geburtstage im Aushang nur mit Einwilligung. Die Entscheidung trifft der Verantwortliche.
-10. **Format des Verzeichnisses:** PDF und Excel oder zusätzlich Word? *Empfehlung:* PDF und Excel; Word nur, wenn die Gemeinde ihr Verzeichnis in Word führt.
+Alle Entscheidungen sind festgelegt (wie empfohlen, Nr. 2 abweichend).
+
+1. **Wer bearbeitet Betroffenenanfragen in der Anwendung?** **Festgelegt:** Recht `core.privacy.manage` für Kommandant und eine Person der Gemeindeverwaltung; der DSB bekommt bei Bedarf ein Konto mit Leserecht auf Anfragen und Verzeichnis.
+2. **Zwei-Faktor:** wann wird der zweite Faktor verlangt? **Festgelegt:** nur beim Öffnen sensibler Daten und Verwaltungsfunktionen (Step-up), danach 30 Minuten je Sitzung; die Anmeldung selbst bleibt ohne zweiten Faktor. API-Tokens bekommen keine Rechte mit Step-up, das Infoterminal braucht nie einen. Siehe [Step-up](#step-up-zweiter-faktor-bei-sensiblen-daten).
+3. **Selbstauskunft sofort oder nach Freigabe?** **Festgelegt:** nach Freigabe (`request`), damit die Verwaltung die Frist führt und Rechte Dritter prüft; `instant` nach einem Jahr Erfahrung erwägen.
+4. **Echtdaten im Testsystem:** ganz sperren oder mit Begründung erlauben (Wiederherstellungsprobe nach dem Sicherungskonzept)? **Festgelegt:** Datenübernahme und Personenimport im Testsystem sperren; die Wiederherstellungsprobe einer echten Sicherung nur mit Begründung und mit automatischem Löschen der Testinstanz nach 7 Tagen.
+5. **Feldverschlüsselung** für Untersuchungsergebnisse und Bankverbindungen? **Festgelegt:** nein; Festplattenverschlüsselung des Hosts und verschlüsselte Sicherungen, weil der Schlüssel sonst auf demselben Server läge.
+6. **Leseprotokoll:** Umfang und Frist. **Festgelegt:** nur Gesundheits- und sensible Daten, zusammengefasst je Tag, 12 Monate; Auswertung nur anlassbezogen.
+7. **Verletzte im Bericht:** eigenes Recht oder für alle Leser des Berichts? **Festgelegt:** eigenes Recht `incidents.injuries.read`, Verfasser und Freigeber sehen es immer.
+8. **Entschuldigungsgrund als Auswahl statt Freitext.** **Festgelegt:** ja, Freitext optional.
+9. **Einwilligung oder Aufgabe** für Telefonliste und Geburtstage: **Festgelegt:** Telefonliste der Führungskräfte und Alarmierung als Aufgabe; Handynummer für alle Mitglieder der Abteilung und Geburtstage im Aushang nur mit Einwilligung. Die Entscheidung trifft der Verantwortliche.
+10. **Format des Verzeichnisses:** PDF und Excel oder zusätzlich Word? **Festgelegt:** PDF und Excel; Word nur, wenn die Gemeinde ihr Verzeichnis in Word führt.
 
 ## Umsetzungsreihenfolge
 
 | Phase | Inhalt | Lücken |
 | --- | --- | --- |
-| 1 – vor dem Echtbetrieb | HTTPS mit Caddy und Sicherheitsheader; `FORGA_STAGE` mit Band im Testsystem und `.gitignore`; Zwei-Faktor für privilegierte Konten; E-Mails ohne Gesundheitsbezug; Verletzte nur mit Recht | L1, L2, L5 (Teil), L6, L18 |
+| 1 – vor dem Echtbetrieb | HTTPS mit Caddy und Sicherheitsheader; `FORGA_STAGE` mit Band im Testsystem und `.gitignore`; Zweiter Faktor als Step-up bei sensiblen Daten; E-Mails ohne Gesundheitsbezug; Verletzte nur mit Recht | L1, L2, L5 (Teil), L6, L18 |
 | 2 – Rechte der Betroffenen | Datenschutzhinweis und erste Anmeldung; Anfragen mit Frist; Auskunft als PDF mit `describePerson` in allen Modulen; Einschränkung | L3, L4, L7 (Anfragen, Einschränkung), L19 |
 | 3 – Nachweise | Verzeichnis aus den Manifesten mit technischen Maßnahmen; Einwilligungen; Berichtigung in Mein Bereich; Leseprotokoll; Impersonation sichtbar | L8, L9, L12, L15, L20 |
 | 4 – Löschen und Minimieren | Löschprüfung je Modul; vollständige Anonymisierung mit Startprüfung; Daten Dritter; abschaltbare Felder; Zweck der Listen; Aufbewahrungsplan | L7 (Löschung), L10, L11, L13, L14, L29 |
 | 5 – Härtung | Sitzungen, Benutzer ohne Person, Infoterminal, API-Tokens, Passwörter, Anhänge, MP-Feuer-Laufberichte, Betriebsanleitung | L16, L17, L21–L28 |
 
-Phase 1 ist klein und senkt das größte Risiko; Phase 2 erfüllt die Pflichten, die jedes Mitglied direkt einfordern kann. Vor Phase 2 werden die Mockups in `mockups/datenschutz/` freigegeben.
+Phase 1 ist klein und senkt das größte Risiko; Phase 2 erfüllt die Pflichten, die jedes Mitglied direkt einfordern kann. Die Mockups in `mockups/datenschutz/` sind freigegeben.

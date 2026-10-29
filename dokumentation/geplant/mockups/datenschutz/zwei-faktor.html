@@ -73,7 +73,7 @@
 <main class="inhalt" id="inhalt">
 <div class="seitenkopf"><div><nav class="brotkrumen" aria-label="Pfad"><span>Profil</span> <span aria-hidden="true">›</span> <span>Zwei-Faktor</span></nav><h1>Zwei-Faktor-Anmeldung einrichten</h1></div></div>
 
-<div class="meldung warnung"><span class="ic">!</span><span><strong>Warnung:</strong> Ihr Konto hat Zugriff auf Gesundheitsdaten. Ein zweiter Faktor ist Pflicht; ohne ihn geht es nach der Anmeldung nur hier weiter.</span></div>
+<div class="meldung info"><span class="ic">i</span><span>Die Anmeldung bleibt wie gewohnt. Den Code fragt f.orga erst ab, wenn Sie sensible Daten oder die Verwaltung öffnen, danach 30 Minuten lang nicht mehr. Ihr Konto hat solche Rechte (Atemschutz: Eignungsuntersuchungen), deshalb richten Sie jetzt einen zweiten Faktor ein.</span></div>
 <div class="raster drei">
 <section class="karte"><h2>1 App verbinden</h2>
   <p class="neben">Mit einer Authenticator-App (z. B. der App Ihres Passwortmanagers) diesen Code scannen.</p>
@@ -93,6 +93,12 @@ T5ZU-I0OP</pre>
   <div class="formular-fuss"><a class="knopf" href="#">Herunterladen</a><a class="knopf primaer" href="../shell/start.html">Fertig</a></div>
 </section>
 </div>
+<section class="karte" style="margin-top:16px">
+  <div class="karte-kopf"><h2>Bestätigung beim Öffnen sensibler Daten</h2><span class="plakette ok">Bestätigt bis 10:42</span></div>
+  <p class="neben">Beispiel: Sie öffnen die Eignungsuntersuchungen einer Person. f.orga fragt nach dem Code und zeigt danach die Daten. Für 30 Minuten fragt es in dieser Sitzung nicht erneut.</p>
+<div class="tabelle-huelle"><table class="stapel"><thead><tr><th scope="col">Bereich</th><th scope="col">Code nötig</th></tr></thead><tbody><tr><td data-label="Bereich"><div class="zelle">Eignungsuntersuchungen, sensible Personendaten, Verletzte im Bericht</div></td><td data-label="Code nötig"><div class="zelle">ja</div></td></tr><tr><td data-label="Bereich"><div class="zelle">Datenschutz, Benutzer, Rollen, API-Tokens, Einstellungen, Audit-Log, Vollexport, Anmelden als, Datensicherung</div></td><td data-label="Code nötig"><div class="zelle">ja</div></td></tr><tr><td data-label="Bereich"><div class="zelle">Mein Bereich, Personalakte ohne sensible Felder, Einsatzberichte, Dienste, Infoterminal</div></td><td data-label="Code nötig"><div class="zelle">nein</div></td></tr></tbody></table></div>
+  <div class="formular-fuss"><button type="button" class="knopf" data-dialog="d-stepup">Dialog ansehen</button><a class="knopf" href="#">Bestätigung beenden</a><a class="knopf" href="#">Wiederherstellungscodes neu erzeugen …</a></div>
+</section>
 </main>
 <footer class="fuss">
   <p>Freiwillige Feuerwehr Musterstadt · Feuerwehrstraße 1 · 12345 Musterstadt</p>
@@ -100,6 +106,15 @@ T5ZU-I0OP</pre>
 </footer>
 </div>
 <div class="menue-schleier" aria-hidden="true"></div>
-
+<dialog class="dialog" id="d-stepup" aria-labelledby="d-stepup-titel">
+  <form method="dialog">
+    <div class="dialog-kopf"><h2 id="d-stepup-titel">Bitte bestätigen Sie mit Ihrem Code</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dialog-inhalt">
+<p>Sie öffnen sensible Daten (Gesundheitsdaten, sensible Personendaten oder Verwaltung). Geben Sie den Code aus Ihrer Authenticator-App ein. Die Bestätigung gilt 30 Minuten für diese Sitzung.</p>
+<div class="feld"><label for="d1" class="pflicht">Sechsstelliger Code aus der App</label><input id="d1" type="text" inputmode="numeric" autocomplete="one-time-code"></div>
+<p class="meta"><a href="#">Wiederherstellungscode verwenden</a></p></div>
+    <div class="dialog-fuss"><button class="knopf" value="abbrechen">Abbrechen</button><button class="knopf primaer" value="ok">Bestätigen</button></div>
+  </form>
+</dialog>
 </body>
 </html>

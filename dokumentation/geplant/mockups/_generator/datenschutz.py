@@ -9,6 +9,14 @@ REITER = [('anfragen.html', 'Anfragen'), ('verzeichnis.html', 'Verzeichnis'), ('
 VORLAGE = '<span class="plakette gelb">Vorlage – mit dem DSB prüfen</span>'
 
 
+def stepup_dialog():
+    """Step-up: zweiter Faktor beim Öffnen sensibler Daten, danach 30 Minuten je Sitzung."""
+    return dialog('d-stepup', 'Bitte bestätigen Sie mit Ihrem Code', '''
+<p>Sie öffnen sensible Daten (Gesundheitsdaten, sensible Personendaten oder Verwaltung). Geben Sie den Code aus Ihrer Authenticator-App ein. Die Bestätigung gilt 30 Minuten für diese Sitzung.</p>
+<div class="feld"><label class="pflicht">Sechsstelliger Code aus der App</label><input type="text" inputmode="numeric" autocomplete="one-time-code"></div>
+<p class="meta"><a href="#">Wiederherstellungscode verwenden</a></p>''', ABBRECHEN + '<button class="knopf primaer" value="ok">Bestätigen</button>')
+
+
 def vseite(pfad, inhalt, *, dialoge='', aktionen='', aktiv=None):
     """Seite unter „Verwaltung → Datenschutz“ mit Reitern zwischen Anfragen, Verzeichnis und Einstellungen."""
     aktiv = aktiv or pfad
@@ -32,6 +40,7 @@ seite(D + 'person.html', 'Tobias Rief', '''
 <div class="reiter" role="tablist" aria-label="Bereiche der Personenakte">
   <a href="{P}stammdaten/person.html">Stammdaten</a><a href="{P}stammdaten/person.html">Feuerwehr</a><a href="{P}stammdaten/person.html">Lehrgänge</a><a href="{P}stammdaten/person.html">Einsätze</a><a href="{P}stammdaten/person.html">Historie</a><a class="aktiv" aria-current="page" href="person.html">Datenschutz</a>
 </div>
+<div class="meldung info"><span class="ic">i</span><span>Sensible Daten (Geburtsdatum, Bankverbindung, Bemerkungen, Eignungsuntersuchungen) sind ausgeblendet, bis Sie mit Ihrem zweiten Faktor bestätigen.</span><button type="button" class="knopf klein aktion" data-dialog="d-stepup">Sensible Daten anzeigen …</button></div>
 <div class="stapel-abstand">
 <section class="karte">
   <div class="karte-kopf"><h2>Anfragen der Person</h2><button type="button" class="knopf klein" data-dialog="d-anfrage">Anfrage erfassen …</button></div>
@@ -81,6 +90,7 @@ seite(D + 'person.html', 'Tobias Rief', '''
 <div class="meldung info" style="margin-top:12px"><span class="ic">i</span><span>Andere Personen erscheinen nicht mit Namen (Art. 15 Abs. 4). Kein Versand per E-Mail: Die Auskunft enthält Gesundheitsdaten.</span></div>
 <label class="schalter"><input type="checkbox" checked> Identität der Person geprüft (angemeldet in Mein Bereich)</label>''',
         ABBRECHEN + '<a class="knopf primaer" href="auskunft-vorschau.html">Auskunft erstellen</a>')
+    + stepup_dialog()
     + dialog('d-anfrage', 'Anfrage erfassen', '''
 <div class="felder zwei">
   <div class="feld"><label class="pflicht">Art</label><select><option>Auskunft</option><option>Berichtigung</option><option>Löschung</option><option>Einschränkung</option><option>Widerspruch</option><option>Widerruf einer Einwilligung</option></select></div>
@@ -299,7 +309,7 @@ vseite('verzeichnis.html', '''
     <dt>Empfänger</dt><dd>Statistikportal (nur Zahlen); Integrierte Leitstelle (API-Token „Alarmfax-Parser Leitstelle“); Kämmerei</dd>
     <dt>Drittland</dt><dd>keine</dd>
     <dt>Löschfrist</dt><dd>3 Jahre, Einsätze mit Besonderheiten 30 Jahre, danach dem Archiv anbieten (Aufbewahrungsplan)</dd>
-    <dt>Technische Maßnahmen</dt><dd>Rechte je Abteilung; Verletzte nur mit eigenem Recht; Historie und Audit-Log; HTTPS: <span class="plakette warn">nein</span>; Zwei-Faktor für privilegierte Konten: ja; Sicherung verschlüsselt: ja</dd>
+    <dt>Technische Maßnahmen</dt><dd>Rechte je Abteilung; Verletzte nur mit eigenem Recht; Historie und Audit-Log; HTTPS: <span class="plakette warn">nein</span>; zweiter Faktor bei sensiblen Daten: ja; Sicherung verschlüsselt: ja</dd>
   </dl>
   <div class="felder zwei" style="margin-top:12px">
     <div class="feld"><label>Rechtsgrundlage (von der Gemeinde)</label><textarea rows="2" placeholder="mit dem DSB festlegen"></textarea></div>
@@ -363,7 +373,7 @@ vseite('einstellungen.html', '''
 <div class="reiter-inhalt" id="e-sicher">
 <div class="raster zwei">
   <section class="karte"><h2>Anmeldung</h2>
-    <div class="feld"><label>Zwei-Faktor-Anmeldung</label><select><option>aus</option><option selected>Pflicht für privilegierte Konten und Gesundheitsdaten</option><option>Pflicht für alle</option></select></div>
+    <dl class="daten"><dt>Zweiter Faktor</dt><dd>beim Öffnen sensibler Daten und der Verwaltung, danach 30 Minuten je Sitzung</dd><dt>Eingerichtet</dt><dd>4 von 6 Benutzern mit sensiblen Rechten</dd></dl>
     <div class="feld"><label>Abmelden bei Inaktivität (privilegierte Konten)</label><select><option>30 Minuten</option><option selected>60 Minuten</option><option>4 Stunden</option></select></div>
     <div class="feld"><label>Abmelden bei Inaktivität (andere)</label><select><option selected>8 Stunden</option><option>14 Tage</option></select></div>
   </section>
@@ -376,7 +386,7 @@ vseite('einstellungen.html', '''
     <dl class="daten">
       <dt>HTTPS</dt><dd><span class="plakette warn">nein – Aufruf über http://</span></dd>
       <dt>Sicherung</dt><dd><span class="plakette ok">verschlüsselt, zuletzt heute 02:30</span></dd>
-      <dt>Zwei-Faktor</dt><dd>4 von 5 privilegierten Konten eingerichtet</dd>
+      <dt>Zweiter Faktor</dt><dd>4 von 6 Benutzern mit sensiblen Rechten eingerichtet</dd>
       <dt>System</dt><dd>Echtsystem</dd>
     </dl>
   </section>
@@ -426,7 +436,7 @@ seite(D + 'mein-bereich.html', 'Mein Bereich', '''
 
 # ---------- Zwei-Faktor ----------
 seite(D + 'zwei-faktor.html', 'Zwei-Faktor-Anmeldung einrichten', '''
-<div class="meldung warnung"><span class="ic">!</span><span><strong>Warnung:</strong> Ihr Konto hat Zugriff auf Gesundheitsdaten. Ein zweiter Faktor ist Pflicht; ohne ihn geht es nach der Anmeldung nur hier weiter.</span></div>
+<div class="meldung info"><span class="ic">i</span><span>Die Anmeldung bleibt wie gewohnt. Den Code fragt f.orga erst ab, wenn Sie sensible Daten oder die Verwaltung öffnen, danach 30 Minuten lang nicht mehr. Ihr Konto hat solche Rechte (Atemschutz: Eignungsuntersuchungen), deshalb richten Sie jetzt einen zweiten Faktor ein.</span></div>
 <div class="raster drei">
 <section class="karte"><h2>1 App verbinden</h2>
   <p class="neben">Mit einer Authenticator-App (z. B. der App Ihres Passwortmanagers) diesen Code scannen.</p>
@@ -445,7 +455,17 @@ DF6G-H1JK  L4ZX-C7VB  NM2Q-W8ER
 T5ZU-I0OP</pre>
   <div class="formular-fuss"><a class="knopf" href="#">Herunterladen</a><a class="knopf primaer" href="{P}shell/start.html">Fertig</a></div>
 </section>
-</div>''', nav='shell/start.html', brot=[('Profil', None), ('Zwei-Faktor', None)])
+</div>
+<section class="karte" style="margin-top:16px">
+  <div class="karte-kopf"><h2>Bestätigung beim Öffnen sensibler Daten</h2><span class="plakette ok">Bestätigt bis 10:42</span></div>
+  <p class="neben">Beispiel: Sie öffnen die Eignungsuntersuchungen einer Person. f.orga fragt nach dem Code und zeigt danach die Daten. Für 30 Minuten fragt es in dieser Sitzung nicht erneut.</p>
+''' + tabelle(['Bereich', 'Code nötig'], [
+    ['Eignungsuntersuchungen, sensible Personendaten, Verletzte im Bericht', 'ja'],
+    ['Datenschutz, Benutzer, Rollen, API-Tokens, Einstellungen, Audit-Log, Vollexport, Anmelden als, Datensicherung', 'ja'],
+    ['Mein Bereich, Personalakte ohne sensible Felder, Einsatzberichte, Dienste, Infoterminal', 'nein'],
+], 'stapel') + '''
+  <div class="formular-fuss"><button type="button" class="knopf" data-dialog="d-stepup">Dialog ansehen</button><a class="knopf" href="#">Bestätigung beenden</a><a class="knopf" href="#">Wiederherstellungscodes neu erzeugen …</a></div>
+</section>''', nav='shell/start.html', brot=[('Profil', None), ('Zwei-Faktor', None)], dialoge=stepup_dialog())
 
 # ---------- Datenschutzhinweis (öffentlich) ----------
 seite(D + 'hinweis.html', 'Datenschutzhinweis', f'''

@@ -124,7 +124,7 @@ Seiten zum [Datenschutzkonzept](../datenschutz.md). Die Seiten der Verwaltung li
 
 | Seite | Inhalt |
 | --- | --- |
-| `datenschutz/person.html` | Personalakte, Reiter „Datenschutz“: Anfragen der Person mit Frist, Einwilligungen mit Widerruf, Information nach Art. 13/14, Einschränkung (`#d-einschraenkung`), erstellte Auskünfte; „Auskunft erstellen“ (`#d-auskunft`), „Anfrage erfassen“ (`#d-anfrage`), „Einwilligung erfassen“ (`#d-einwilligung`) |
+| `datenschutz/person.html` | Personalakte, Reiter „Datenschutz“: sensible Daten ausgeblendet bis zum Step-up (`#d-stepup`), Anfragen der Person mit Frist, Einwilligungen mit Widerruf, Information nach Art. 13/14, Einschränkung (`#d-einschraenkung`), erstellte Auskünfte; „Auskunft erstellen“ (`#d-auskunft`), „Anfrage erfassen“ (`#d-anfrage`), „Einwilligung erfassen“ (`#d-einwilligung`) |
 | `datenschutz/auskunft-vorschau.html` | Beispielseiten der Auskunft als PDF: Deckblatt mit den Angaben nach Art. 15 Abs. 1, Stammdaten, Einsätze ohne Namen anderer, Atemschutz als Gesundheitsdaten, Benutzerkonto und Protokolle; Übergabe vermerken (`#d-uebergabe`) |
 | `datenschutz/anfragen.html` | Betroffenenanfragen mit Frist und Stand, Kennzahlen, Auskunft zu einer anderen Person (Beteiligte, Kostenschuldner, `#d-dritte`), Datenpanne |
 | `datenschutz/anfrage.html` | Löschantrag mit Löschprüfung je Modul (löschen, anonymisieren, einschränken bis), Empfänger informieren, Ausführen mit Namensbestätigung (`#d-loeschen`) |
@@ -133,7 +133,7 @@ Seiten zum [Datenschutzkonzept](../datenschutz.md). Die Seiten der Verwaltung li
 | `datenschutz/mein-bereich.html` | Mein Bereich: eigene Einwilligungen, Auskunft anfordern und herunterladen, Berichtigung beantragen (`#d-berichtigung`), eigene Anfragen, „Anmeldungen als Sie“ |
 | `datenschutz/hinweis.html` | Datenschutzhinweis ohne Anmeldung, aus Textbausteinen und Verzeichnis |
 | `datenschutz/erste-anmeldung.html` | Hinweis bei der ersten Anmeldung mit Kenntnisnahme und freiwilligen Einwilligungen |
-| `datenschutz/zwei-faktor.html` | Zwei-Faktor-Anmeldung einrichten: App verbinden, Code bestätigen, Wiederherstellungscodes |
+| `datenschutz/zwei-faktor.html` | Zweiten Faktor einrichten (App verbinden, Code bestätigen, Wiederherstellungscodes); Bestätigung beim Öffnen sensibler Daten mit Übersicht der Bereiche und Dialog „Bitte bestätigen Sie mit Ihrem Code“ (`#d-stepup`) |
 
 ### Berichtseditor
 
