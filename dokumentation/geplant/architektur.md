@@ -155,6 +155,6 @@ docker compose
 
 - Ein Image für die Anwendung. Es enthält Server, Shell und alle Module des Repositorys.
 - Migrationen laufen beim Start.
-- Sicherung und Wiederherstellung: Modul [Datensicherung](module/backup.md) in der Oberfläche (verschlüsselt, Ordner unter `FORGA_BACKUP_ROOT`), daneben das Skript `docker/backup.sh` auf dem Host.
+- Sicherung und Wiederherstellung: Modul [Datensicherung](../implementiert/architektur.md#modul-datensicherung-backup) in der Oberfläche (verschlüsselt, Ordner unter `FORGA_BACKUP_ROOT`), daneben das Skript `docker/backup.sh` auf dem Host.
 - Dateianhänge (Fotos, PDFs) liegen in einem Volume, nicht in der Datenbank.
 - E-Mail-Versand (Erinnerungen) über SMTP der Gemeinde.

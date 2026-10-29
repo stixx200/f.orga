@@ -23,4 +23,4 @@ Alles in diesem Ordner ist noch nicht umgesetzt. Was fertig ist, steht in [`../i
 | Infoterminal | umgesetzt (offene Punkte) | [infoterminal.md](module/infoterminal.md) |
 | MP-Feuer (`mp-feuer`) | umgesetzt (offene Punkte) | [mp-feuer.md](module/mp-feuer.md) |
 | Führerscheinkontrolle (Stammdaten) | Konzept | [fuehrerscheinkontrolle.md](module/fuehrerscheinkontrolle.md) |
-| Datensicherung | Konzept | [backup.md](module/backup.md) |
+| Datensicherung | umgesetzt (offene Punkte) | [backup.md](module/backup.md) |
