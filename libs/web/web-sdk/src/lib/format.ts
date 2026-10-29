@@ -64,3 +64,18 @@ export function formatLongDate(value: Date | string, language: string): string {
 export function localDate(date: Date = new Date()): string {
   return date.toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
 }
+
+/**
+ * Parses a date typed into a date field (shown as `DD.MM.YYYY`): `21.10.2026`, `1.3.26`, `21/10/2026` or
+ * `2026-10-21`. Returns `YYYY-MM-DD`, or `null` for anything else (no guessing of the month/day order).
+ */
+export function parseDateInput(text: string): string | null {
+  const value = text.trim();
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(value);
+  const local = /^(\d{1,2})[./](\d{1,2})[./](\d{2}|\d{4})$/.exec(value);
+  const [year, month, day] = iso ? [Number(iso[1]), Number(iso[2]), Number(iso[3])] : local ? [Number(local[3].length === 2 ? `20${local[3]}` : local[3]), Number(local[2]), Number(local[1])] : [];
+  if (!year || !month || !day) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}

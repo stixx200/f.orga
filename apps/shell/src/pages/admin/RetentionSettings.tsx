@@ -11,7 +11,7 @@ import {
   RetentionRule,
   retentionRuleKey,
 } from '@forga/core-contracts';
-import { api, can, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
+import { api, can, sameJson, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, Notice, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 
 type Rules = Record<string, RetentionRule>;
@@ -125,7 +125,8 @@ function RetentionForm({ categories, initial }: { categories: RetentionCategory[
   };
 
   const count = (key: string) => preview.data?.counts[key];
-  const changed = JSON.stringify(rules) !== JSON.stringify(initial);
+  // The stored rules come back with their keys in another order (jsonb).
+  const changed = !sameJson(rules, initial);
 
   return (
     <Stack gap="lg">
