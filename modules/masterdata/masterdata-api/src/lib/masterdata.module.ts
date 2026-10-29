@@ -35,6 +35,7 @@ import { GroupsController } from './organization/groups.controller.js';
 import { OrganizationController } from './organization/organization.controller.js';
 import { Department, DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod, Station, Vehicle } from './masterdata.entities.js';
 import { MasterdataData } from './data/masterdata.data.js';
+import { MasterdataDescription } from './data/masterdata.description.js';
 import { MasterdataRetention } from './data/masterdata.retention.js';
 import { OrganizationReferenceRegistry } from './organization/references.js';
 import { PersonHoldingsRegistry } from './persons/holdings.js';
@@ -58,6 +59,7 @@ import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/person
     CareerImport,
     MasterdataLookups,
     MasterdataData,
+    MasterdataDescription,
     MasterdataRetention,
     { provide: PERSON_DIRECTORY, useClass: PersonDirectoryService },
     { provide: ORGANIZATION, useClass: OrganizationService },
@@ -96,6 +98,7 @@ export class MasterdataModule implements OnModuleInit {
     private readonly exports: ExportRegistry,
     private readonly retention: RetentionRegistry,
     private readonly data: MasterdataData,
+    private readonly description: MasterdataDescription,
     private readonly retentionCategories: MasterdataRetention,
     private readonly organization: OrganizationDirectory,
     private readonly auditReferences: AuditReferenceRegistry,
@@ -148,7 +151,11 @@ export class MasterdataModule implements OnModuleInit {
     });
     this.search.register('masterdata', (user, query) => this.data.search(user, query));
     registerAuditReferences(this.auditReferences, this.em);
-    this.exports.register('masterdata', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
+    this.exports.register('masterdata', {
+      all: () => this.data.exportAll(),
+      person: (id) => this.data.exportPerson(id),
+      describePerson: (id, ctx) => this.description.describePerson(id, ctx),
+    });
     this.retentionCategories.register(this.retention);
     this.historyAccess.register('masterdata.person', async (user, id) => {
       const person = await this.em.fork().findOne(Person, id, { populate: ['memberships.department'] });

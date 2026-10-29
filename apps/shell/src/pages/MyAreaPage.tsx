@@ -2,6 +2,7 @@ import { Stack } from '@mantine/core';
 import type { Session } from '@forga/core-contracts';
 import { can, extensionsOf, useLocalized, useTranslation } from '@forga/web-sdk';
 import { EmptyState, PageHeader } from '@forga/web-ui';
+import { MyAccessReports } from '../privacy/AccessReports';
 
 /** Sections of "My area" the user may see (extension point `core.me.sections`). */
 export function mySections(session: Session) {
@@ -16,6 +17,7 @@ export function MyAreaPage({ session }: { session: Session }) {
   return (
     <Stack gap="lg">
       <PageHeader breadcrumbs={[{ label: t('nav.overview') }, { label: t('me.title') }]} title={t('me.title')} subtitle={session.user.displayName} />
+      {session.user.personId && <MyAccessReports />}
       {!session.user.personId ? (
         <EmptyState title={t('me.noPerson')} text={t('me.noPersonText')} />
       ) : sections.length === 0 ? (

@@ -81,6 +81,14 @@ Alle Pfade liegen unter `/api`.
 | `GET` | `/core/export` | `core.data.export` | Module mit Vollexport, einschließlich `core` |
 | `GET` | `/core/export/:module` | `core.data.export` | Vollexport eines Moduls (JSON-Datei); bei `core` Abschnitte und Felder nur für Verwalter nur für diese |
 | `GET` | `/core/export/person/:personId` | `core.data.export` | Auskunft zu einer Person über alle Module (JSON-Datei). Fehler: `data.invalidPersonId` (`400`), `data.unknownPerson` (`404`) |
+| `GET` | `/core/privacy/access-reports/preview?personId=&language=` | `core.data.export` (vorläufig, siehe [Datenschutz](datenschutz.md#auskunft-nach-art-15-als-pdf-l3)) | Bereiche der Auskunft mit Zahl der Einträge (`AccessReportSectionSummary[]`). Fehler: `data.invalidPersonId`, `data.unknownPerson` |
+| `GET` | `/core/privacy/access-reports?personId=` | wie oben | Erstellte Auskünfte der Person (`AccessReport[]`) |
+| `POST` | `/core/privacy/access-reports` | wie oben | Auskunft erstellen (`AccessReportCreate`: `personId`, `language`, `includeJson`, `requestId`); `202` mit `status: pending`, das PDF entsteht im Hintergrund. Fehler: `privacy.noSecretKey` (`503`), `data.unknownPerson` (`404`) |
+| `GET` | `/core/privacy/access-reports/:id` | wie oben | Eine Auskunft (`AccessReport`) |
+| `GET` | `/core/privacy/access-reports/:id/file?inline=1` | wie oben | PDF (entschlüsselt). Fehler: `privacy.documentExpired` (`410`), `privacy.documentNotReady`, `privacy.documentUnreadable` (`409`) |
+| `POST` | `/core/privacy/access-reports/:id/hand-over` | wie oben | Übergabe vermerken (`AccessReportHandOver`: `channel` `self-service`/`in-person`/`post`, `date`); `self-service` stellt in „Mein Bereich“ bereit und benachrichtigt die Person. Fehler: `privacy.noAccount` (`400`), `privacy.documentExpired`, `privacy.documentNotReady` |
+| `GET` | `/core/me/access-reports` | angemeldet | In „Mein Bereich“ bereitgestellte, nicht abgelaufene Auskünfte der eigenen Person (`MyAccessReport[]`) |
+| `GET` | `/core/me/access-reports/:id/file` | angemeldet, eigene Person | PDF herunterladen; andere Auskünfte `404` |
 | `GET` | `/core/retention/categories` | `core.settings.manage` oder `core.retention.manage` | Datenkategorien des Aufbewahrungsplans (`RetentionCategory[]`) |
 | `POST` | `/core/retention/run` | `core.settings.manage` oder `core.retention.manage`; Probelauf mit `settings` nur `core.settings.manage` | Aufbewahrungsregeln anwenden (`RetentionRun`: `dryRun`, nur im Probelauf `settings.retention` mit anderen Regeln). Antwort `RetentionResult` (`counts`, `cases`, `effectiveYears`, `warnings`) |
 | `GET` | `/core/retention/cases` | `core.retention.manage` | Aussonderungsfälle (`RetentionCase[]`) |

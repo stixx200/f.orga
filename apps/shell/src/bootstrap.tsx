@@ -13,8 +13,10 @@ import { addTranslations, useTranslation } from '@forga/web-sdk';
 import { forgaTheme } from '@forga/web-ui';
 import { App } from './App';
 import { shellTranslations } from './i18n';
+import { registerCoreExtensions } from './privacy/extensions';
 
 addTranslations('shell', shellTranslations);
+registerCoreExtensions();
 
 /** Date pickers follow the UI language (month names, first weekday). */
 function LocalizedDates({ children }: { children: ReactNode }) {

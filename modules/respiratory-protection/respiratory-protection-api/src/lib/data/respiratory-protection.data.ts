@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import { berlinDate, type DeadlineInput, type DeadlineProvider, HistoryEntry } from '@forga/core-api';
+import { berlinDate, type DeadlineInput, type DeadlineProvider, type DescribeContext, HistoryEntry, type PersonDataSection } from '@forga/core-api';
 import type { LocalizedText } from '@forga/core-contracts';
 import type { ConditionKey } from '@forga/respiratory-protection-contracts';
 import { EvidenceEntity, StatusEntity } from '../respiratory-protection.entities.js';
@@ -86,6 +86,86 @@ export class RespiratoryProtectionData implements DeadlineProvider {
 
   async exportPerson(personId: string): Promise<Record<string, unknown>> {
     return { evidence: (await this.em.fork().find(EvidenceEntity, { personId }, { orderBy: { date: 'asc' } })).map((e) => wrap(e).toObject()) };
+  }
+
+  /**
+   * Access report: every evidence record of the wearer with validity; examinations with result and restrictions are
+   * health data. Examiner and facility are stored as text (no members of the brigade).
+   */
+  async describePerson(personId: string, ctx: DescribeContext): Promise<PersonDataSection[]> {
+    const evidence = await this.em.fork().find(EvidenceEntity, { personId }, { orderBy: { date: 'desc' } });
+    if (!evidence.length) return [];
+    const kinds: Record<EvidenceEntity['kind'], string> = {
+      examination: ctx.t('Eignungsuntersuchung', 'Medical examination'),
+      'stress-exercise': ctx.t('Belastungsübung', 'Stress exercise'),
+      'training-track': ctx.t('Übungsstrecke', 'Training track'),
+      briefing: ctx.t('Unterweisung', 'Briefing'),
+      exercise: ctx.t('Einsatzübung unter Atemschutz', 'Exercise under breathing apparatus'),
+      incident: ctx.t('Einsatz unter Atemschutz', 'Operation under breathing apparatus'),
+      'chemical-suit': ctx.t('Übung mit Chemikalienschutzanzug', 'Chemical suit exercise'),
+    };
+    const results: Record<string, string> = {
+      'no-concerns': ctx.t('keine Bedenken', 'no concerns'),
+      'no-concerns-limited': ctx.t('keine Bedenken, befristet', 'no concerns, limited in time'),
+      'no-concerns-conditional': ctx.t('keine Bedenken unter Voraussetzungen', 'no concerns under conditions'),
+      concerns: ctx.t('Bedenken', 'concerns'),
+    };
+    const devices: Record<string, string> = {
+      'compressed-air': ctx.t('Pressluftatmer', 'compressed air breathing apparatus'),
+      rebreather: ctx.t('Kreislaufgerät', 'rebreather'),
+      filter: ctx.t('Filtergerät', 'filter device'),
+    };
+    const groups: Record<string, string> = { 'up-to-5kg': ctx.t('Geräte bis 5 kg', 'devices up to 5 kg'), 'over-5kg': ctx.t('Geräte über 5 kg', 'devices over 5 kg') };
+    const sources: Record<string, string> = {
+      manual: ctx.t('erfasst', 'entered'),
+      training: ctx.t('aus einem Dienst', 'from a session'),
+      incidents: ctx.t('aus einem Einsatzbericht', 'from an incident report'),
+      import: ctx.t('Tabellen-Import', 'table import'),
+    };
+    const details = (e: EvidenceEntity) =>
+      [
+        e.result ? results[e.result] : '',
+        e.examinationGroup ? groups[e.examinationGroup] : '',
+        e.restrictions ? ctx.t(`Einschränkungen: ${e.restrictions}`, `restrictions: ${e.restrictions}`) : '',
+        e.examiner ? ctx.t(`Untersucher: ${e.examiner}`, `examiner: ${e.examiner}`) : '',
+        e.facility ? ctx.t(`Einrichtung: ${e.facility}`, `facility: ${e.facility}`) : '',
+        e.device ? devices[e.device] : '',
+        typeof e.kilojoules === 'number' ? `${ctx.number(e.kilojoules)} kJ` : '',
+        e.passed === null || e.passed === undefined ? '' : e.passed ? ctx.t('bestanden', 'passed') : ctx.t('nicht bestanden', 'not passed'),
+        typeof e.minutes === 'number' ? ctx.t(`${ctx.number(e.minutes)} Minuten`, `${ctx.number(e.minutes)} minutes`) : '',
+        e.note,
+        e.withdrawn ? ctx.t('zurückgezogen', 'withdrawn') : '',
+      ]
+        .filter(Boolean)
+        .join(', ') || '–';
+    const years = new Map<string, { count: number; minutes: number }>();
+    for (const e of evidence.filter((x) => x.kind === 'incident' || x.kind === 'exercise')) {
+      const year = e.date.slice(0, 4);
+      const sum = years.get(year) ?? { count: 0, minutes: 0 };
+      sum.count += 1;
+      sum.minutes += e.minutes ?? 0;
+      years.set(year, sum);
+    }
+    return [
+      {
+        key: 'respiratory-protection',
+        title: ctx.t('Atemschutz', 'Breathing apparatus'),
+        activity: 'respiratory-protection.fitness',
+        categories: [ctx.t('Atemschutznachweise', 'Breathing apparatus records'), ctx.t('Eignungsuntersuchungen mit Ergebnis', 'Medical examinations with result')],
+        health: evidence.some((e) => e.kind === 'examination'),
+        blocks: [
+          {
+            kind: 'table',
+            columns: [ctx.t('Datum', 'Date'), ctx.t('Nachweis', 'Record'), ctx.t('Ergebnis und Angaben', 'Result and details'), ctx.t('Gültig bis', 'Valid until'), ctx.t('Herkunft', 'Source')],
+            rows: evidence.map((e) => [ctx.date(e.date), kinds[e.kind], details(e), ctx.date(e.validUntil), sources[e.source] ?? '–']),
+            summary: [...years].map(([year, sum]) =>
+              ctx.t(`${year}: ${sum.count} Einsätze und Übungen unter Atemschutz, ${ctx.number(sum.minutes)} Minuten`, `${year}: ${sum.count} operations and exercises under breathing apparatus, ${ctx.number(sum.minutes)} minutes`),
+            ),
+          },
+        ],
+        records: [{ entity: 'respiratory_protection.evidence', ids: evidence.map((e) => e.id), label: ctx.t('Nachweis', 'Record') }],
+      },
+    ];
   }
 
   /**

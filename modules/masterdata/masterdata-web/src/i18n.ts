@@ -349,7 +349,6 @@ const texts: Translations = {
     person: {
       invalidIban: 'Die IBAN ist ungültig (Prüfziffer stimmt nicht).',
       notFound: 'Diese Person gibt es nicht oder Sie dürfen sie nicht sehen.',
-      dataAccess: 'Auskunft (DSGVO)',
       anonymized: 'Diese Person wurde nach dem Ausscheiden anonymisiert.',
       saved: 'Gespeichert.',
       unsaved: 'Ungespeicherte Änderungen',
@@ -1088,7 +1087,6 @@ const texts: Translations = {
     person: {
       invalidIban: 'The IBAN is invalid (wrong check digits).',
       notFound: 'This person does not exist or you may not see them.',
-      dataAccess: 'Data access (GDPR)',
       anonymized: 'This person was anonymised after leaving.',
       saved: 'Saved.',
       unsaved: 'Unsaved changes',

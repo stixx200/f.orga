@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import { type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, SettingsService, User, wordsWhere } from '@forga/core-api';
+import { type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, type DescribeContext, type PersonDataSection, SettingsService, User, wordsWhere } from '@forga/core-api';
 import { type LocalizedText, normalizeRfid, type SearchHit } from '@forga/core-contracts';
 import { EquipmentSettings } from '@forga/equipment-contracts';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
@@ -9,6 +9,9 @@ import { BREATHING_INSPECT, BREATHING_WRITE, INSPECT, ItemsService, READ, REPORT
 
 /** The item of a defect or an inspection in the data access request. */
 const itemReference = (i: EquipmentItemEntity) => ({ id: i.id, inventoryNumber: i.inventoryNumber, name: i.name });
+
+/** The item in the access report: inventory number and name. */
+const itemLabel = (i: EquipmentItemEntity) => `${i.inventoryNumber} ${i.name}`.trim();
 
 /** Deadlines (inspections, expiry, open defects), search and export of the equipment module. */
 @Injectable()
@@ -154,5 +157,68 @@ export class EquipmentData implements DeadlineProvider {
       reportedDefects: defects.map((d) => ({ ...wrap(d).toObject(), item: itemReference(d.item) })),
       inspections: inspections.map((i) => ({ ...wrap(i).toObject(), item: itemReference(i.item) })),
     };
+  }
+
+  /**
+   * Access report: defects reported by the person's user accounts and inspections the person performed. The items are
+   * named by inventory number and name; who recorded or resolved something is not named.
+   */
+  async describePerson(personId: string, ctx: DescribeContext): Promise<PersonDataSection[]> {
+    const em = this.em.fork();
+    const userIds = [...ctx.ownUserIds];
+    const defects = userIds.length ? await em.find(DefectEntity, { reportedByUserId: { $in: userIds } }, { populate: ['item'], orderBy: { reportedAt: 'desc' } }) : [];
+    const inspections = await em.find(InspectionEntity, { inspectorPersonId: personId }, { populate: ['item'], orderBy: { date: 'desc' } });
+    if (!defects.length && !inspections.length) return [];
+    const types = new Map((await em.find(EquipmentTypeEntity, {})).map((t) => [t.key, t]));
+    const inspectionName = (i: InspectionEntity) => {
+      const list = i.item.inspections ?? (i.item.typeKey ? types.get(i.item.typeKey)?.inspections : undefined) ?? [];
+      const found = list.find((t) => t.key === i.inspectionKey);
+      return found ? ctx.text(found.name) : ctx.t('Prüfung', 'Inspection');
+    };
+    const results: Record<string, string> = { passed: ctx.t('bestanden', 'passed'), 'passed-with-defects': ctx.t('bestanden mit Mängeln', 'passed with defects'), failed: ctx.t('nicht bestanden', 'failed') };
+    const statuses: Record<string, string> = {
+      reported: ctx.t('gemeldet', 'reported'),
+      'in-progress': ctx.t('in Bearbeitung', 'in progress'),
+      fixed: ctx.t('behoben', 'fixed'),
+      retired: ctx.t('Gerät ausgesondert', 'item retired'),
+      withdrawn: ctx.t('zurückgezogen', 'withdrawn'),
+    };
+    const blocks: PersonDataSection['blocks'] = [];
+    if (defects.length) {
+      blocks.push({
+        kind: 'table',
+        title: ctx.t('Von Ihnen gemeldete Mängel', 'Defects you reported'),
+        columns: [ctx.t('Gemeldet', 'Reported'), ctx.t('Gerät', 'Item'), ctx.t('Beschreibung', 'Description'), ctx.t('Stand', 'Status'), ctx.t('Erledigt', 'Resolved')],
+        rows: defects.map((d) => [ctx.date(d.reportedAt), itemLabel(d.item), ctx.value(d.description), statuses[d.status] ?? d.status, ctx.date(d.resolvedAt)]),
+      });
+    }
+    if (inspections.length) {
+      blocks.push({
+        kind: 'table',
+        title: ctx.t('Von Ihnen durchgeführte Prüfungen', 'Inspections you performed'),
+        columns: [ctx.t('Datum', 'Date'), ctx.t('Gerät', 'Item'), ctx.t('Prüfung', 'Inspection'), ctx.t('Ergebnis', 'Result'), ctx.t('Nächste Prüfung', 'Next inspection'), ctx.t('Bemerkung', 'Remark')],
+        rows: inspections.map((i) => [
+          ctx.date(i.date),
+          itemLabel(i.item),
+          inspectionName(i),
+          [results[i.result] ?? i.result, i.cancelled ? ctx.t('storniert', 'cancelled') : '', i.qualificationWarning ? ctx.t('Hinweis: Befähigung fehlte', 'note: qualification missing') : ''].filter(Boolean).join(', '),
+          ctx.date(i.nextDueOn),
+          [i.measurements, i.notes, i.changeReason].filter(Boolean).join('; ') || '–',
+        ]),
+      });
+    }
+    return [
+      {
+        key: 'equipment',
+        title: ctx.t('Geräte', 'Equipment'),
+        activity: 'equipment.inspections',
+        categories: [ctx.t('Mängelmeldungen', 'Defect reports'), ctx.t('Durchgeführte Prüfungen', 'Inspections performed')],
+        blocks,
+        records: [
+          { entity: 'equipment.defect', ids: defects.map((d) => d.id), label: ctx.t('Mangel', 'Defect') },
+          { entity: 'equipment.inspection', ids: inspections.map((i) => i.id), label: ctx.t('Prüfung', 'Inspection') },
+        ],
+      },
+    ];
   }
 }

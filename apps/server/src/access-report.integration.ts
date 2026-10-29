@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EntityManager } from '@mikro-orm/core';
 import { AccessReportService, AuditEntry, ExportRegistry, MailService, PrivacyDocument, sectionTexts, UUID_PATTERN, type PersonDataSection } from '@forga/core-api';
@@ -37,6 +38,9 @@ afterAll(async () => {
 });
 
 const texts = (list: PersonDataSection[]) => sectionTexts(list).join('\n');
+const service = () => test.app.get(AccessReportService);
+const em = () => test.app.get(EntityManager).fork();
+const audits = async (action: string) => (await em().find(AuditEntry, { action }, { orderBy: { timestamp: 'asc' } })).map((a) => a.details);
 
 describe('readable access report', () => {
   it('has a section of every module that stores data about the member', () => {
@@ -68,12 +72,19 @@ describe('readable access report', () => {
     }
   });
 
-  it('contains no IDs and no names of other persons', () => {
+  it('contains no IDs, no names of other persons and nothing a seed forbids', () => {
+    const forbidden = [...OTHER_NAMES, ...[...results.values()].flatMap((r) => r.forbid ?? [])];
     for (const list of [sections, english]) {
       for (const text of sectionTexts(list)) {
         expect(text).not.toMatch(UUID_PATTERN);
-        for (const name of OTHER_NAMES) expect(text, text).not.toContain(name);
+        for (const name of forbidden) expect(text, text).not.toContain(name);
       }
+    }
+  });
+
+  it('marks the sections the seeds expect as health data', () => {
+    for (const [module, result] of results) {
+      if (result.health) expect(sections.filter((s) => s.key === module || s.key.startsWith(`${module}.`)).some((s) => s.health), module).toBe(true);
     }
   });
 
@@ -94,9 +105,6 @@ describe('readable access report', () => {
 });
 
 describe('access report documents', () => {
-  const service = () => test.app.get(AccessReportService);
-  const em = () => test.app.get(EntityManager).fork();
-  const audits = async (action: string) => (await em().find(AuditEntry, { action }, { orderBy: { timestamp: 'asc' } })).map((a) => a.details);
   let id: string;
 
   it('shows the sections with their number of entries before creating', async () => {
@@ -128,6 +136,8 @@ describe('access report documents', () => {
     expect(file.headers['content-type']).toBe('application/pdf');
     expect(file.headers['content-disposition']).not.toContain('Probe');
     expect(pdf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    // To look at the report: ACCESS_REPORT_PDF=<path> writes it there.
+    if (process.env['ACCESS_REPORT_PDF']) writeFileSync(process.env['ACCESS_REPORT_PDF'], pdf);
     expect(pdf.toString('latin1')).toContain('EmbeddedFile');
     expect(await audits('privacy.access-report-created')).toEqual([expect.objectContaining({ personId: fx.ids.person, documentId: id, includeJson: true })]);
     expect(await audits('privacy.access-report-downloaded')).toEqual([expect.objectContaining({ documentId: id, by: 'administration' })]);

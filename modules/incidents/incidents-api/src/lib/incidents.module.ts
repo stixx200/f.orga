@@ -95,7 +95,11 @@ export class IncidentsModule implements OnModuleInit {
     this.catalogReferences.require('incidents', 'qualification', 'breathing-apparatus');
     this.search.register('incidents', (user, query) => this.data.search(user, query));
     registerAuditReferences(this.auditReferences, this.em, this.organization);
-    this.exports.register('incidents', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
+    this.exports.register('incidents', {
+      all: () => this.data.exportAll(),
+      person: (id) => this.data.exportPerson(id),
+      describePerson: (id, ctx) => this.data.describePerson(id, ctx),
+    });
     this.retentionCategory.register(this.retention);
     this.historyAccess.register('incidents.report', async (user, id) => {
       const report = await this.em.fork().findOne(ReportEntity, id);

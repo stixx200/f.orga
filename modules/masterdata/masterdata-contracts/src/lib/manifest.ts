@@ -77,4 +77,25 @@ export const MASTERDATA_MANIFEST = {
     { key: 'administration', permissions: ['masterdata.persons.read', 'masterdata.persons.sensitive'] },
   ],
   frontend: { remote: 'masterdata_web', exposed: './Module' },
+  privacy: {
+    personData: true,
+    activities: [
+      {
+        key: 'masterdata.persons',
+        name: { de: 'Personalverwaltung', en: 'Personnel administration' },
+        purpose: {
+          de: 'Führung der Personalakte der Feuerwehrangehörigen: Mitgliedschaft, Laufbahn, Ausbildung, Ehrungen und Erreichbarkeit',
+          en: 'Keeping the personnel file of the fire brigade members: membership, career, training, honours and contact',
+        },
+        recipients: [{ de: 'Gemeindeverwaltung (Ehrungen, Personalangelegenheiten)', en: 'Municipal administration (honours, personnel matters)' }],
+        retention: ['masterdata.person-core', 'masterdata.person-file'],
+      },
+      {
+        key: 'masterdata.driver-licenses',
+        name: { de: 'Führerscheinkontrolle', en: 'Driving licence checks' },
+        purpose: { de: 'Nachweis der Fahrberechtigung für Einsatzfahrzeuge (Halterpflicht der Gemeinde)', en: 'Evidence of the driving permission for fire service vehicles (duty of the vehicle owner)' },
+        retention: ['masterdata.person-file'],
+      },
+    ],
+  },
 } satisfies ModuleManifest;

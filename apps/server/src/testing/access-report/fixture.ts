@@ -37,6 +37,10 @@ export const OTHER_NAMES = ['Dritter'];
 export interface SeedResult {
   expect: string[];
   sections?: string[];
+  /** Texts that must not appear anywhere in the report, e.g. the street of an incident or involved parties. */
+  forbid?: string[];
+  /** The module's section must be marked as health data. */
+  health?: boolean;
 }
 
 export async function createFixture(test: TestApp, admin: string): Promise<AccessReportFixture> {
@@ -46,6 +50,7 @@ export async function createFixture(test: TestApp, admin: string): Promise<Acces
   await post('/masterdata/catalog/templates/bw', {}).expect(201);
   await post('/incidents/keywords/templates/bw', {}).expect(201);
   await post('/training/types/templates/bw', {}).expect(201);
+  await post('/masterdata/courses/templates/bw', {}).expect(201);
   const department = (await post('/masterdata/departments', { name: 'Abteilung Musterstadt', shortName: 'Musterstadt', type: 'operational' }).expect(201)).body.id as string;
   const vehicle = (await post('/masterdata/vehicles', { designation: 'LF 20', vehicleType: 'lf-20', departmentId: department }).expect(201)).body.id as string;
   const person = (await post('/masterdata/persons', {
@@ -60,7 +65,7 @@ export async function createFixture(test: TestApp, admin: string): Promise<Acces
     memberships: [{ departmentId: department, from: '2010-04-01', primary: true }],
   }).expect(201)).body.id as string;
   const otherPerson = (await post('/masterdata/persons', { firstName: 'Max', lastName: 'Dritter', status: 'active', memberships: [{ departmentId: department, from: '2005-01-01', primary: true }] }).expect(201)).body.id as string;
-  const memberRole = (await post('/core/roles', { name: 'Gruppenführer Test', permissions: ['training.self', 'incidents.reports.read'] }).expect(201)).body.id as string;
+  const memberRole = (await post('/core/roles', { name: 'Gruppenführer Test', permissions: ['training.self', 'incidents.reports.read', 'masterdata.self'] }).expect(201)).body.id as string;
   const commanderRole = (await post('/core/roles', { name: 'Kommandant Test', permissions: ['*'] }).expect(201)).body.id as string;
   const memberUser = (await post('/core/users', {
     username: 'probe',

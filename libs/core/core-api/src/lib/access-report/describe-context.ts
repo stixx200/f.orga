@@ -1,7 +1,13 @@
-import type { EntityManager } from '@mikro-orm/core';
 import type { Language, LocalizedText } from '@forga/core-contracts';
-import { ApiToken, User } from '../security/security.entities.js';
 import type { DescribeContext } from './person-description.js';
+
+/** What the context needs to know about a user account to name it by its function. */
+export interface DescribedAccount {
+  /** Technical users carry API tokens: named by the token („Schnittstelle …“). */
+  technical: boolean;
+  roles: LocalizedText[];
+  tokenName: string | null;
+}
 
 const LOCALE: Record<Language, string> = { de: 'de-DE', en: 'en-GB' };
 const ZONE = 'Europe/Berlin';
@@ -33,29 +39,30 @@ function timeOf(instant: Date): string {
 }
 
 export interface DescribeContextOptions {
-  em: EntityManager;
   language: Language;
   asOf: Date;
   personId: string;
   /** Name of the person, used where the person itself is referenced. */
   personName: string;
   ownUserIds: readonly string[];
-  /** Users linked to other persons, to name them by function. */
-  usersOfPersons?: (personIds: readonly string[]) => Promise<User[]>;
+  /** A user account by ID; `null` if unknown. */
+  account?: (userId: string) => Promise<DescribedAccount | null>;
+  /** The active user account linked to another person, to name the person by function. */
+  accountOfPerson?: (personId: string) => Promise<DescribedAccount | null>;
 }
 
 /** The helpers for `describePerson`: formatting in the language of the report and naming others only by function. */
 export function createDescribeContext(options: DescribeContextOptions): DescribeContext {
-  const { em, language, personId, personName } = options;
+  const { language, personId, personName } = options;
   const own = new Set(options.ownUserIds);
   const t = (de: string, en: string) => (language === 'de' ? de : en);
   const text = (value: LocalizedText) => value[language] || value.de;
   const actors = new Map<string, Promise<string>>();
   const persons = new Map<string, Promise<string>>();
 
-  const functionOf = (user: User | null): string => {
-    if (!user) return t('Benutzer der Feuerwehr', 'user of the brigade');
-    const roles = [...new Set(user.roles.getItems().map((a) => text(a.role.name)))].toSorted((a, b) => a.localeCompare(b, LOCALE[language]));
+  const functionOf = (account: DescribedAccount | null): string => {
+    if (!account) return t('Benutzer der Feuerwehr', 'user of the brigade');
+    const roles = [...new Set(account.roles.map(text))].toSorted((a, b) => a.localeCompare(b, LOCALE[language]));
     return roles.length ? roles.join(', ') : t('Benutzer der Feuerwehr', 'user of the brigade');
   };
 
@@ -111,12 +118,9 @@ export function createDescribeContext(options: DescribeContextOptions): Describe
       let cached = actors.get(userId);
       if (!cached) {
         cached = (async () => {
-          const user = await em.findOne(User, userId, { populate: ['roles.role'] });
-          if (user?.technical) {
-            const token = await em.findOne(ApiToken, { user: user.id }, { orderBy: { createdAt: 'asc' } });
-            return token ? t(`Schnittstelle „${token.name}“`, `interface "${token.name}"`) : t('Schnittstelle', 'interface');
-          }
-          return functionOf(user);
+          const account = options.account ? await options.account(userId) : null;
+          if (account?.technical) return account.tokenName ? t(`Schnittstelle „${account.tokenName}“`, `interface "${account.tokenName}"`) : t('Schnittstelle', 'interface');
+          return functionOf(account);
         })();
         actors.set(userId, cached);
       }
@@ -128,8 +132,8 @@ export function createDescribeContext(options: DescribeContextOptions): Describe
       let cached = persons.get(otherId);
       if (!cached) {
         cached = (async () => {
-          const [user] = options.usersOfPersons ? await options.usersOfPersons([otherId]) : [];
-          return user ? functionOf(user) : t('andere Person', 'another person');
+          const account = options.accountOfPerson ? await options.accountOfPerson(otherId) : null;
+          return account ? functionOf(account) : t('andere Person', 'another person');
         })();
         persons.set(otherId, cached);
       }

@@ -1,6 +1,9 @@
 import type { AccessReportFixture, SeedResult } from './fixture';
 
-/** Data of the module about the member of the access report test. */
+/**
+ * Cost recovery stores no data about members by reference (its notices name the persons liable for the costs, third
+ * parties here); it has no section in the report.
+ */
 export async function seedCostRecovery(fx: AccessReportFixture): Promise<SeedResult> {
   void fx;
   return { expect: [], sections: [] };

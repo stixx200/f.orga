@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager, type FilterQuery, wrap } from '@mikro-orm/core';
 import { z } from 'zod';
 import { type ListColumn, normalizeRfid, type SearchHit } from '@forga/core-contracts';
-import { addBerlinDays, type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, HistoryEntry, type ListDefinition, SettingsService, wordsWhere } from '@forga/core-api';
+import { addBerlinDays, type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, type DescribeContext, HistoryEntry, type ListDefinition, type PersonDataSection, SettingsService, wordsWhere } from '@forga/core-api';
 import { ClothingSettings } from '@forga/clothing-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, ConsumableReceiptEntity, IssueEntity, SizeProfileEntity } from './clothing.entities.js';
@@ -126,6 +126,69 @@ export class ClothingData implements DeadlineProvider {
       heldItems: (await em.find(ClothingItemEntity, { holderId: personId }, { orderBy: { inventoryNumber: 'asc' } })).map((e) => wrap(e).toObject()),
       sizeProfile: (await em.findOne(SizeProfileEntity, { personId }))?.sizes ?? null,
     };
+  }
+
+  /**
+   * Access report: issues and returns (with notes and cancellation reasons), the pieces the person holds now and the
+   * clothing sizes. Who recorded an entry is not named.
+   */
+  async describePerson(personId: string, ctx: DescribeContext): Promise<PersonDataSection[]> {
+    const em = this.em.fork();
+    const issues = await em.find(IssueEntity, { personId }, { orderBy: { date: 'desc', recordedAt: 'desc' } });
+    const held = await em.find(ClothingItemEntity, { holderId: personId }, { orderBy: { inventoryNumber: 'asc' } });
+    const profile = await em.findOne(SizeProfileEntity, { personId });
+    const sizes = Object.entries(profile?.sizes ?? {}).filter(([, size]) => size);
+    if (!issues.length && !held.length && !sizes.length) return [];
+    const names = await this.names();
+    const article = (key: string) => {
+      const name = names.get(key);
+      return name ? ctx.text(name) : ctx.t('Artikel', 'Article');
+    };
+    const blocks: PersonDataSection['blocks'] = [];
+    if (held.length) {
+      blocks.push({
+        kind: 'table',
+        title: ctx.t('Bei Ihnen ausgegebene Stücke', 'Pieces issued to you'),
+        columns: [ctx.t('Artikel', 'Article'), ctx.t('Inventarnummer', 'Inventory number'), ctx.t('Größe', 'Size'), ctx.t('Ausgegeben am', 'Issued on')],
+        rows: held.map((i) => [article(i.articleKey), i.inventoryNumber, ctx.value(i.size), ctx.date(i.issuedOn)]),
+      });
+    }
+    if (issues.length) {
+      blocks.push({
+        kind: 'table',
+        title: ctx.t('Ausgaben und Rücknahmen', 'Issues and returns'),
+        columns: [ctx.t('Datum', 'Date'), ctx.t('Vorgang', 'Action'), ctx.t('Artikel', 'Article'), ctx.t('Inventarnummer', 'Inventory number'), ctx.t('Größe', 'Size'), ctx.t('Menge', 'Quantity'), ctx.t('Bemerkung', 'Remark')],
+        rows: issues.map((e) => [
+          ctx.date(e.date),
+          [
+            e.kind === 'issue' ? ctx.t('Ausgabe', 'issue') : ctx.t('Rücknahme', 'return'),
+            e.kind === 'return' && e.retire ? ctx.t('ausgesondert', 'retired') : '',
+            e.kind === 'return' && e.laundry ? ctx.t('zur Wäsche', 'to the laundry') : '',
+            e.cancelledAt ? ctx.t(`storniert am ${ctx.date(e.cancelledAt)}`, `cancelled on ${ctx.date(e.cancelledAt)}`) : '',
+          ]
+            .filter(Boolean)
+            .join(', '),
+          article(e.articleKey),
+          ctx.value(e.inventoryNumber),
+          ctx.value(e.size),
+          ctx.number(e.quantity),
+          [e.notes, e.cancelReason && ctx.t(`Grund der Stornierung: ${e.cancelReason}`, `reason of the cancellation: ${e.cancelReason}`)].filter(Boolean).join('; ') || '–',
+        ]),
+      });
+    }
+    if (sizes.length) {
+      blocks.push({ kind: 'fields', title: ctx.t('Ihre Größen', 'Your sizes'), rows: sizes.map(([key, size]) => ({ label: article(key), value: size })) });
+    }
+    return [
+      {
+        key: 'clothing',
+        title: ctx.t('Kleiderkammer', 'Clothing store'),
+        activity: 'clothing.issues',
+        categories: [ctx.t('Ausgegebene Schutzausrüstung', 'Issued protective equipment'), ctx.t('Größen', 'Sizes')],
+        blocks,
+        records: profile ? [{ entity: 'clothing.size_profile', ids: [profile.id], label: ctx.t('Größen', 'Sizes') }] : [],
+      },
+    ];
   }
 
   /** Anonymised persons: the size profile is deleted, notes and cancel reasons of their issues are emptied. */

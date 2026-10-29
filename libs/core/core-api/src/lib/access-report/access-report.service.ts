@@ -42,12 +42,14 @@ import { MailService } from '../tasks/mail.service.js';
 import { Notifications } from '../tasks/notifications.js';
 import { renderAccessReport, type SectionInfo } from './access-report.pdf.js';
 import { AccessReportTexts } from './access-report.texts.js';
-import { createDescribeContext } from './describe-context.js';
+import { assertPersonDataComplete } from './completeness.js';
+import { createDescribeContext, type DescribedAccount } from './describe-context.js';
 import type { DescribeContext, PersonDataSection } from './person-description.js';
 import { sectionEntries } from './person-description.js';
 import { PrivacyDocument } from './privacy-document.entity.js';
 
 const DAY_MS = 86_400_000;
+const unique = (values: string[]) => [...new Set(values.filter(Boolean))];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HOUR_MS = 3_600_000;
 /** An import or data transfer that created a record is logged at most this long after the record. */
@@ -107,19 +109,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
 
   /** Modules with `privacy.personData` must offer `describePerson` or `anonymize`; activity keys start with the module ID. */
   assertComplete(): void {
-    const missing: string[] = [];
-    const misnamed: string[] = [];
-    for (const { manifest } of this.options.modules) {
-      const privacy = manifest.privacy;
-      if (!privacy) continue;
-      if (privacy.personData && !this.exports.sources.get(manifest.id)?.describePerson && !this.personData.handlers.has(manifest.id)) missing.push(manifest.id);
-      misnamed.push(...(privacy.activities ?? []).map((a) => a.key).filter((key) => !key.startsWith(`${manifest.id}.`)));
-    }
-    if (missing.length || misnamed.length) {
-      throw new Error(
-        `Personal data: ${missing.join(', ') || '–'} declare personal data but neither describe it (describePerson) nor anonymise it; activities of other modules: ${misnamed.join(', ') || '–'}.`,
-      );
-    }
+    assertPersonDataComplete(this.options.modules, (id) => Boolean(this.exports.sources.get(id)?.describePerson) || this.personData.handlers.has(id));
   }
 
   /** Processing activities of core and modules by key. */
@@ -137,14 +127,20 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     const personName = person ? `${person.firstName} ${person.lastName}`.trim() : '';
     const em = this.em.fork();
     const ownUsers = await em.find(User, { personId });
+    const describe = async (user: User | null): Promise<DescribedAccount | null> => {
+      if (!user) return null;
+      // Technical users without a token (e.g. of an info terminal) are named by their display name, a device name.
+      const token = user.technical ? await em.findOne(ApiToken, { user: user.id }, { orderBy: { createdAt: 'asc' } }) : null;
+      return { technical: user.technical, roles: user.roles.getItems().map((a) => a.role.name), tokenName: token?.name ?? (user.technical ? user.displayName : null) };
+    };
     const ctx = createDescribeContext({
-      em,
       language,
       asOf,
       personId,
       personName,
       ownUserIds: ownUsers.map((u) => u.id),
-      usersOfPersons: (ids) => em.find(User, { personId: { $in: [...ids] }, active: true }, { populate: ['roles.role'] }),
+      account: async (userId) => describe(UUID.test(userId) ? await em.findOne(User, userId, { populate: ['roles.role'] }) : null),
+      accountOfPerson: async (id) => describe(await em.findOne(User, { personId: id, active: true }, { populate: ['roles.role'] })),
     });
     const sections: PersonDataSection[] = [];
     // Order of the tabs of the person file: modules in load order, the user account at the end.
@@ -207,7 +203,9 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
       (a) => a.userId === entry.userId && a.timestamp.getTime() >= entry.timestamp.getTime() - 1000 && a.timestamp.getTime() - entry.timestamp.getTime() <= IMPORT_WINDOW_MS,
     );
     if (imported) {
-      return imported.action === 'mp-feuer.run-applied'
+      // A data transfer from MP-Feuer applies its parts as imports with `source.module: 'mp-feuer'`.
+      const fromMpFeuer = imported.action === 'mp-feuer.run-applied' || (imported.details['source'] as { module?: string } | undefined)?.module === 'mp-feuer';
+      return fromMpFeuer
         ? ctx.t(`Datenübernahme aus MP-Feuer am ${ctx.date(imported.timestamp)}`, `data transfer from MP-Feuer on ${ctx.date(imported.timestamp)}`)
         : ctx.t(`Tabellen-Import am ${ctx.date(imported.timestamp)}`, `table import on ${ctx.date(imported.timestamp)}`);
     }
@@ -238,7 +236,6 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     const tokens = await this.em.fork().find(ApiToken, { revokedAt: null, $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] }, { orderBy: { name: 'asc' } });
     const tokenRecipients = tokens.map((t) => ctx.t(`Schnittstelle „${t.name}“`, `interface "${t.name}"`));
     const em = this.em.fork();
-    const unique = (values: string[]) => [...new Set(values.filter(Boolean))];
     const described = sections.map((section) => {
       const activity = activities.get(section.activity);
       const info: SectionInfo = {
@@ -336,7 +333,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
 
   /** Waits for reports being generated (tests). */
   async idle(): Promise<void> {
-    while (this.running.size) await Promise.all([...this.running]);
+    while (this.running.size) await Promise.all(this.running);
   }
 
   private async generate(id: string, key: Buffer): Promise<void> {

@@ -41,6 +41,7 @@ export class DutyOfficerModule implements OnModuleInit {
     this.exports.register('duty-officer', {
       all: async () => ({ duties: await duties(), ...(await this.evd.exportAll()) }),
       person: async (personId) => ({ duties: await duties({ personId }) }),
+      describePerson: (personId, ctx) => this.dutyRetention.describePerson(personId, ctx),
     });
     this.historyAccess.registerPermission('duty_officer.duty_assignment', DUTY_OFFICER_ROSTER);
     this.historyAccess.registerPermission('duty_officer.incident_exemption', DUTY_OFFICER_READ);

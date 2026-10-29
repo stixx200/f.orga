@@ -7,6 +7,7 @@ import { AttendanceEntity, SessionEntity, SessionTypeEntity } from '../training.
 import { ATTENDANCE, CLOSE, READ, SessionsService } from '../sessions/sessions.service.js';
 
 const DAY = 86_400_000;
+const hours = (a: AttendanceEntity) => ((a.to ?? a.session.endsAt).getTime() - (a.from ?? a.session.startsAt).getTime()) / 3_600_000;
 
 /** Search, export and deadlines of the training module. */
 @Injectable()
@@ -64,7 +65,6 @@ export class TrainingData implements DeadlineProvider {
       other: ctx.t('sonstiges', 'other'),
     };
     const sorted = attendance.toSorted((a, b) => b.session.startsAt.getTime() - a.session.startsAt.getTime());
-    const hours = (a: AttendanceEntity) => ((a.to ?? a.session.endsAt).getTime() - (a.from ?? a.session.startsAt).getTime()) / 3_600_000;
     const years = new Map<string, { present: number; hours: number; total: number }>();
     for (const a of sorted) {
       const year = ctx.date(a.session.startsAt).slice(-4);
