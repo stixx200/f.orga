@@ -12,6 +12,12 @@ const GRID = '#E0D2D0';
 const SIGNATURE_LABEL = { de: 'Unterschrift', en: 'Signature' } as const;
 const PAGE_LABEL = { de: 'Seite', en: 'Page' } as const;
 const CREATED_LABEL = { de: 'Erstellt am', en: 'Created on' } as const;
+const PURPOSE_LABEL = { de: 'Zweck', en: 'Purpose' } as const;
+/** Footer of lists naming persons (L11 of the data protection concept). */
+export const PERSONAL_DATA_NOTICE = {
+  de: 'Personenbezogene Daten – nur für den Dienstgebrauch, nach Gebrauch vernichten',
+  en: 'Personal data – for official use only, destroy after use',
+} as const;
 
 // Helvetica is one of the PDF standard fonts (no embedding) and the fallback named in Stil.md.
 const HELVETICA = { normal: 'Helvetica', bold: 'Helvetica-Bold', italics: 'Helvetica-Oblique', bolditalics: 'Helvetica-BoldOblique' };
@@ -104,7 +110,8 @@ export async function renderXlsx(context: RenderContext): Promise<Buffer> {
   workbook.creator = 'f.orga';
   const sheet = workbook.addWorksheet(data.title.slice(0, 31) || 'Liste', {
     pageSetup: { paperSize: 9, orientation: context.orientation, fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
-    views: [{ state: 'frozen', ySplit: data.subtitle ? 4 : 3 }],
+    views: [{ state: 'frozen', ySplit: (data.subtitle ? 4 : 3) + (data.purpose ? 1 : 0) }],
+    ...(data.personalData ? { headerFooter: { oddFooter: `&L${PERSONAL_DATA_NOTICE[language]}&RSeite &P/&N`.replace('Seite', PAGE_LABEL[language]) } } : {}),
   });
 
   sheet.addRow([data.title]).font = { name: 'Arial', bold: true, size: 14, color: { argb: 'FF8C1D18' } };
@@ -114,6 +121,7 @@ export async function renderXlsx(context: RenderContext): Promise<Buffer> {
     color: { argb: 'FF595959' },
   };
   if (data.subtitle) sheet.addRow([`${CREATED_LABEL[language]} ${timestamp(context.now, language)}`]).font = { name: 'Arial', size: 10, color: { argb: 'FF595959' } };
+  if (data.purpose) sheet.addRow([`${PURPOSE_LABEL[language]}: ${data.purpose}`]).font = { name: 'Arial', size: 10, color: { argb: 'FF595959' } };
 
   const header = sheet.addRow(columns.map((c) => c.label[language].toUpperCase()));
   header.eachCell((cell) => {
@@ -138,6 +146,10 @@ export async function renderXlsx(context: RenderContext): Promise<Buffer> {
     if (context.signatureColumn) excelRow.height = 24;
   });
 
+  if (data.personalData) {
+    sheet.addRow([]);
+    sheet.addRow([PERSONAL_DATA_NOTICE[language]]).font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF595959' } };
+  }
   columns.forEach((c, i) => {
     sheet.getColumn(i + 1).width = Math.round(14 * (c.width ?? 1));
   });
@@ -162,6 +174,8 @@ interface Frame {
   margin: number;
   /** Smaller title, e.g. for long titles naming a person. */
   compactTitle?: boolean;
+  /** Line above the address in the footer, e.g. the note on personal data. */
+  notice?: string;
 }
 
 function pageHeader(frame: Frame): Record<string, unknown> {
@@ -193,7 +207,13 @@ function pageFooter(frame: Frame, page: number, pages: number): Record<string, u
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: frame.width, y2: 0, lineColor: SERVICE_RED, lineWidth: 1 }] },
       {
         columns: [
-          { stack: footerLines(frame.brigade).map((line) => ({ text: line, fontSize: 7, color: META })), width: '*' },
+          {
+            stack: [
+              ...(frame.notice ? [{ text: frame.notice, fontSize: 7, bold: true, color: TEXT }] : []),
+              ...footerLines(frame.brigade).map((line) => ({ text: line, fontSize: 7, color: META })),
+            ],
+            width: '*',
+          },
           {
             stack: [
               { text: `${PAGE_LABEL[frame.language]} ${page}/${pages}`, alignment: 'right', fontSize: 7, color: META },
@@ -276,7 +296,16 @@ export async function renderPdf(context: RenderContext): Promise<Buffer> {
   const { data, language } = context;
   const columns = columnsWithSignature(context);
   const width = context.orientation === 'portrait' ? 515 : 762;
-  const frame: Frame = { brigade: context.brigade, logo: context.logo, title: data.title, language, now: context.now, width, margin: 40 };
+  const frame: Frame = {
+    brigade: context.brigade,
+    logo: context.logo,
+    title: data.title,
+    language,
+    now: context.now,
+    width,
+    margin: 40,
+    ...(data.personalData ? { notice: PERSONAL_DATA_NOTICE[language] } : {}),
+  };
   const cells = data.rows.map((row) => columns.map((c) => (c.key === '__signature' ? ' ' : formatCell(row[c.key] ?? null, language))));
 
   const doc = {
@@ -288,7 +317,8 @@ export async function renderPdf(context: RenderContext): Promise<Buffer> {
     header: () => pageHeader(frame),
     footer: (page: number, pages: number) => pageFooter(frame, page, pages),
     content: [
-      ...(data.subtitle ? [{ text: data.subtitle, color: META, margin: [0, 0, 0, 8] }] : []),
+      ...(data.subtitle ? [{ text: data.subtitle, color: META, margin: [0, 0, 0, data.purpose ? 2 : 8] }] : []),
+      ...(data.purpose ? [{ text: `${PURPOSE_LABEL[language]}: ${data.purpose}`, color: META, margin: [0, 0, 0, 8] }] : []),
       {
         table: {
           headerRows: 1,

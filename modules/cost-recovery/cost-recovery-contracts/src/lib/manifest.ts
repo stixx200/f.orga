@@ -38,6 +38,7 @@ export const COST_RECOVERY_MANIFEST = {
         subjects: [{ de: 'Kostenschuldner (Verursacher, Eigentümer, Halter)', en: 'Debtors (causers, owners, keepers)' }],
         categories: [{ de: 'Name, Anschrift, Einsatz, Personal- und Fahrzeugansätze, Zahlungen und Mahnungen', en: 'Name, address, incident, personnel and vehicle rates, payments and reminders' }],
         legalBasisHint: { de: 'Kostenersatz nach dem FwG und der Kostenersatzsatzung; mit dem DSB festlegen', en: 'Cost recovery under the FwG and the cost recovery statute; decide with the DPO' },
+        thirdParties: true,
       },
     ],
   },

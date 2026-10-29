@@ -42,8 +42,6 @@ export interface Actor {
 
 /** Safety backups before a restore are kept at least this long. */
 const SAFETY_KEEP_DAYS = 30;
-/** Records of deleted backups are removed after a year. */
-const RECORD_KEEP_DAYS = 365;
 const MAX_PLUGINS = 50 * 1024 * 1024;
 
 export function toEntry(run: BackupRun): BackupEntry {
@@ -609,8 +607,7 @@ export class BackupsService {
       run.status = 'deleted';
       run.deletedAt = now;
     }
-    // Records of deleted backups go after a year.
-    await em.nativeDelete(BackupRun, { status: 'deleted', deletedAt: { $lt: new Date(now.getTime() - RECORD_KEEP_DAYS * 86_400_000) } });
+    // Records of deleted backups follow the retention category `backup.run-log` (default one year).
     await em.flush();
     if (pruned.length) await this.audit.log('backup.pruned', { files: pruned.map((r) => r.fileName) }, null);
     return pruned.map((r) => r.fileName!);

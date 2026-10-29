@@ -4,6 +4,7 @@ import { assertNotRestricted, type AuthenticatedUser, wordsWhere } from '@forga/
 import type { ProcessingRestriction } from '@forga/core-contracts';
 import { type Person as PersonDto, type PersonSnapshot, type PersonSummary, readDriverLicense } from '@forga/masterdata-contracts';
 import { today } from '../shared/access.js';
+import { PersonFields } from './person-fields.js';
 import { HonorAward, Membership, Person, PersonQualification, RankAssignment, OfficeAssignment, RestPeriod } from '../masterdata.entities.js';
 
 export const READ = 'masterdata.persons.read';
@@ -76,7 +77,15 @@ const all = (where: FilterQuery<Person> | null) => !!where && Object.keys(where)
 
 @Injectable()
 export class PersonsService {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly fields: PersonFields,
+  ) {}
+
+  /** The person as the UI gets it, without the fields switched off in the settings (L10). */
+  async dto(person: Person, user: AuthenticatedUser, options: { self?: boolean } = {}): Promise<PersonDto> {
+    return this.fields.blank(this.toDto(person, user, options), await this.fields.disabled());
+  }
 
   /**
    * Restricts a query to the persons the user may see with the permission. Persons whose processing is restricted

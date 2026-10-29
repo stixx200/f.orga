@@ -1,4 +1,5 @@
 import type { de } from './de';
+import { minimisationEn, minimisationAuditEn } from './minimisation';
 import { privacyEn } from './privacy';
 import { breachesEn, registerEn, registerAuditEn } from './register';
 import { transparencyAuditEn, transparencyAuditKeysEn, transparencyEn } from './transparency';
@@ -9,6 +10,7 @@ export const en: typeof de = {
   register: registerEn,
   breaches: breachesEn,
   transparency: transparencyEn,
+  minimisation: minimisationEn,
   appName: 'f.orga',
   loading: 'Loading …',
   skipToContent: 'Skip to content',
@@ -558,6 +560,7 @@ export const en: typeof de = {
     rawId: 'ID: {{id}}',
     keys: {
       ...registerAuditEn.keys,
+      ...minimisationAuditEn.keys,
       factor: 'Factor',
       recoveryCodesLeft: 'Recovery codes left',
       during: 'During',
@@ -649,6 +652,7 @@ export const en: typeof de = {
     },
     actions: {
       ...registerAuditEn.actions,
+      ...minimisationAuditEn.actions,
       ...transparencyAuditEn,
       'retention.offered': 'Offered to the archive',
       'retention.exported': 'Export for the archive downloaded',

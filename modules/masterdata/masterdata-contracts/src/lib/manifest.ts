@@ -14,6 +14,11 @@ export const MASTERDATA_MANIFEST = {
     { id: 'masterdata.persons.read', name: { de: 'Personen lesen (Personalakte)', en: 'Read persons (personnel file)' }, scope: 'department' },
     { id: 'masterdata.persons.write', name: { de: 'Personen bearbeiten', en: 'Edit persons' }, scope: 'department' },
     {
+      id: 'masterdata.lists.contact',
+      name: { de: 'Listen mit Kontaktdaten ausgeben (Telefonliste, Mitgliederliste zur Kontaktaufnahme)', en: 'Run lists with contact details (phone list, member list for contacting)' },
+      scope: 'department',
+    },
+    {
       id: 'masterdata.persons.sensitive',
       name: { de: 'Sensible Personendaten', en: 'Sensitive personal data' },
       scope: 'department',
@@ -46,6 +51,7 @@ export const MASTERDATA_MANIFEST = {
     { label: { de: 'Kataloge', en: 'Catalogs' }, path: 'catalogs', permission: 'masterdata.catalogs.manage', icon: 'catalog', section: 'administration' },
     { label: { de: 'Feuerwehrsatzung', en: 'Fire brigade statute' }, path: 'settings', permission: 'masterdata.settings.manage', icon: 'settings', section: 'settings' },
     { label: { de: 'Führerscheinkontrolle', en: 'Driving licence checks' }, path: 'driver-licenses/settings', permission: 'masterdata.settings.manage', icon: 'id', section: 'settings' },
+    { label: { de: 'Felder der Personalakte', en: 'Fields of the person file' }, path: 'settings/person-fields', permission: 'masterdata.settings.manage', icon: 'user', section: 'settings' },
   ],
   roles: [
     { key: 'member', permissions: ['masterdata.self'] },
@@ -63,6 +69,7 @@ export const MASTERDATA_MANIFEST = {
         'masterdata.persons.read',
         'masterdata.persons.write',
         'masterdata.persons.sensitive',
+        'masterdata.lists.contact',
         'masterdata.organization.manage',
         'masterdata.courses.plan',
         'masterdata.licenses.check',

@@ -4,7 +4,7 @@ Je Datenkategorie eine Aufbewahrungsfrist ab einem Ereignis und eine Aktion nach
 
 ## Grundsatz
 
-- **Es wird nichts automatisch gelöscht, bis ein Administrator Fristen und Aktionen wählt.** Standard aller Kategorien ist `none`, außer dem Audit-Log (2 Jahre, löschen) und dem Leseprotokoll (1 Jahr, löschen). Import-Uploads und Datenübernahmen werden wie bisher nach 24 Stunden gelöscht (`core.imports`), die Zeilen alter Läufe des Moduls MP-Feuer nach 7 Tagen (`mp-feuer.rows`); beides hat keine Einstellung.
+- **Es wird nichts automatisch gelöscht, bis ein Administrator Fristen und Aktionen wählt.** Standard aller Kategorien ist `none`, außer den Protokollen ([Datenschutz L29](datenschutz.md#aufbewahrung-der-protokolle-und-laufberichte-l29)): Audit-Log (2 Jahre, löschen), Leseprotokoll (1 Jahr), Nachweise der Auskünfte (3 Jahre), Datenpannen (5 Jahre, mit „Sonderfall prüfen“), Laufberichte von MP-Feuer (1 Jahr) und Protokoll der Datensicherung (1 Jahr). Import-Uploads und Datenübernahmen werden wie bisher nach 24 Stunden gelöscht (`core.imports`), die Zeilen alter Läufe des Moduls MP-Feuer nach 7 Tagen (`mp-feuer.rows`); beides hat keine Einstellung.
 - f.orga liefert keine rechtlich geprüften Werte. Die Vorlage „Kommunaler Aktenplan (Beispiel)“ enthält nur die Fristen, die die Feuerwehr genannt hat; welche Unterlagen archivwürdig sind, entscheidet das Archiv.
 - Anhänge folgen immer ihrem Datensatz: Sie gehen mit in den Export für das Archiv und werden mit dem Datensatz anonymisiert bzw. gelöscht. Abhängige Datensätze (Bericht ohne Einsatz, Prüfung ohne Gerät) werden nie für sich ausgesondert.
 - Anonymisieren und Löschen entfernen auch die Historie der Datensätze, weil sie die früheren Werte enthält.
@@ -19,6 +19,7 @@ Module melden ihre Kategorien beim `RetentionRegistry` an (`registerCategory`): 
 | `masterdata.person-file` | Personalakte Ausgeschiedener: Kontakt, sensible Felder, Führerschein mit Kontrollen, erneuten Vorlagen und Transpondern, Qualifikationen, Lehrgänge, Ehrungen, Ämter, Ruhezeiten; dazu die Daten anderer Module über `PersonDataRegistry` | Austritt | anbieten, anonymisieren, nichts | – | `masterdata` |
 | `masterdata.vehicles-retired` | ausgesonderte Fahrzeuge (Status `retired`) | Außerdienststellung | anbieten, löschen, nichts | – | `masterdata` |
 | `incidents.incidents` | Einsätze mit allen Berichten (Wachbuch), auch EvD-Berichte, mit Anhängen | Alarm | anbieten, anonymisieren, löschen, nichts | `special` „Einsätze mit Besonderheiten“ / übrige | `incidents` |
+| `incidents.involved-parties` | Angaben zu Beteiligten von Einsätzen (Name, Anschrift, Telefon, Kennzeichen, Notizen; die Rolle bleibt), mit Fassungen und Historie ([Daten Dritter](datenschutz.md#daten-dritter-l14)) | Alarm | anonymisieren, nichts | – | `incidents` |
 | `training.sessions` | Dienste mit Anwesenheit und Anhängen (Protokolle) | Beginn | anbieten, löschen, nichts | je Art des Dienstes, nach Bedarf | `training` |
 | `equipment.retired` | ausgesonderte Geräte mit Prüfungen, Mängeln und deren Anhängen | Aussonderung | anbieten, löschen, nichts | – | `equipment` |
 | `cost-recovery.notices` | erledigte Kostenbescheide (bezahlt, aufgehoben, geändert, verworfen) mit Zahlungen und dem erlassenen PDF | Erledigung: Zahlung, Aufhebung, letzte Zahlung | anbieten, löschen, nichts | – | `cost-recovery` |
@@ -26,6 +27,10 @@ Module melden ihre Kategorien beim `RetentionRegistry` an (`registerCategory`): 
 | `core.audit` | Audit-Log (Datenerfassungsprotokoll) | Eintrag | löschen | – | Core |
 | `core.history` | Historie und Versionen; der aktuelle Stand bleibt | Eintrag | löschen, nichts | – | Core |
 | `core.access-log` | Leseprotokoll: Zugriffe auf besonders geschützte Daten je Benutzer, Person, Bereich und Tag ([Datenschutz](datenschutz.md#leseprotokoll)) | Tag des Zugriffs | löschen | – | Core |
+| `core.access-reports` | Nachweise der Auskünfte nach Art. 15 (Erstellung, Übergabe; die Datei selbst geht nach 30 Tagen) | Erstellung | löschen, nichts | – | Core |
+| `core.privacy-breaches` | abgeschlossene Datenpannen mit Historie | Abschluss | anbieten, löschen, nichts | – | Core |
+| `mp-feuer.run-reports` | Laufberichte der Datenübernahme mit den Zeilen mit Meldungen | Ende des Laufs | löschen, nichts | – | `mp-feuer` |
+| `backup.run-log` | Einträge gelöschter und fehlgeschlagener Sicherungen und abgeschlossener Wiederherstellungen | Löschung bzw. Ende | löschen | – | `backup` |
 
 - **Unterarten:** Bei Einsätzen ist jede Unterart eine eigene Zeile (`subtypeMode: 'fixed'`); der Schlüssel der Kategorie gilt für die übrigen Einsätze. Ein Einsatz mit Besonderheiten ohne eigene Regel fällt nicht auf die Regel der übrigen zurück. Bei Diensten kommen Zeilen je Art nur bei Bedarf dazu (`optional`); Dienste einer Art ohne eigene Zeile folgen der Regel der Kategorie („Übrige Dienste“).
 - **Einsätze mit Besonderheiten:** eigene Kräfte verletzt oder getötet, ein Beteiligter in der Rolle „Geschädigter“ oder Tote in der Statistik (Grund „Verletzte oder Tote“), kostenpflichtig („Kostenersatz“), Kat-Einsatz in der Statistik („Kat-Einsatz“), oder am Einsatz das Kennzeichen **„30 Jahre aufbewahren (Sonderfall)“** (`retentionSpecial`, z. B. Großbrand ohne Verletzte). Das Kennzeichen geht vor; die Liste „Aussonderung“ zeigt den Grund.

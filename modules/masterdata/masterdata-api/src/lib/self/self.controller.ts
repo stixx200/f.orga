@@ -3,6 +3,7 @@ import { EntityManager } from '@mikro-orm/core';
 import { assertVersion, type AuthenticatedUser, CurrentUser, RequirePermissions, ZodPipe } from '@forga/core-api';
 import { type Person as PersonDto, SelfContactInput } from '@forga/masterdata-contracts';
 import { Person } from '../masterdata.entities.js';
+import { PersonFields } from '../persons/person-fields.js';
 import { PersonsService } from '../persons/persons.service.js';
 
 const SELF = 'masterdata.self';
@@ -14,6 +15,7 @@ export class SelfController {
   constructor(
     private readonly em: EntityManager,
     private readonly persons: PersonsService,
+    private readonly fields: PersonFields,
   ) {}
 
   private async own(em: EntityManager, user: AuthenticatedUser): Promise<Person> {
@@ -25,7 +27,7 @@ export class SelfController {
   @Get()
   @RequirePermissions(SELF)
   async get(@CurrentUser() user: AuthenticatedUser): Promise<PersonDto> {
-    return this.persons.toDto(await this.own(this.em.fork(), user), user, { self: true });
+    return this.persons.dto(await this.own(this.em.fork(), user), user, { self: true });
   }
 
   @Put()
@@ -34,9 +36,10 @@ export class SelfController {
     const em = this.em.fork();
     const person = await this.own(em, user);
     assertVersion(person, input.version);
-    const { version: _version, bank, ...contact } = input;
+    // Switched-off fields (e.g. phone at work, bank account) are not stored (L10).
+    const { version: _version, bank, ...contact } = this.fields.strip(input, await this.fields.disabled());
     em.assign(person, { ...contact, ...(bank ? { bank } : {}) });
     await em.flush();
-    return this.persons.toDto(person, user, { self: true });
+    return this.persons.dto(person, user, { self: true });
   }
 }

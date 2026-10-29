@@ -115,7 +115,9 @@ export function AccessReportButton({ personId }: { personId: string }) {
 /** Dialog „Übergabe vermerken“: day and way; „in Mein Bereich“ tells the person by e-mail. */
 function HandOverDialog({ report, onClose }: { report: AccessReport; onClose: () => void }) {
   const { t } = useTranslation('shell');
-  const [channel, setChannel] = useState<AccessReportChannel>(report.channel ?? 'self-service');
+  // A third party has no account: no "My area".
+  const channels = report.personId ? CHANNELS : CHANNELS.filter((c) => c !== 'self-service');
+  const [channel, setChannel] = useState<AccessReportChannel>(report.channel ?? channels[0]);
   const [date, setDate] = useState<string | null>(today());
   const [closeRequest, setCloseRequest] = useState(Boolean(report.requestId));
   const handOver = useAction((input: AccessReportHandOver) => send<AccessReport>('POST', `core/privacy/access-reports/${report.id}/hand-over`, input), {
@@ -140,7 +142,7 @@ function HandOverDialog({ report, onClose }: { report: AccessReport; onClose: ()
         <DateInput label={t('accessReport.handedOverOn')} value={date} onChange={(value) => setDate(value)} valueFormat="DD.MM.YYYY" />
         <Radio.Group label={t('accessReport.way')} value={channel} onChange={(value) => setChannel(value as AccessReportChannel)}>
           <Stack gap={6} mt={6}>
-            {CHANNELS.map((c) => <Radio key={c} value={c} label={t(`accessReport.channels.${c}`)} />)}
+            {channels.map((c) => <Radio key={c} value={c} label={t(`accessReport.channels.${c}`)} />)}
           </Stack>
         </Radio.Group>
         {channel === 'self-service' && <Text size="sm" c="dimmed">{t('accessReport.provideHint')}</Text>}
@@ -152,7 +154,7 @@ function HandOverDialog({ report, onClose }: { report: AccessReport; onClose: ()
 
 /** „Erstellte Auskünfte“ in the tab „Datenschutz“ of the person file. */
 /** Access reports with state, view, download and „Übergabe vermerken“. */
-function ReportsTable({ reports }: { reports: AccessReport[] }) {
+export function ReportsTable({ reports }: { reports: AccessReport[] }) {
   const { t, i18n } = useTranslation('shell');
   const [handing, setHanding] = useState<AccessReport | null>(null);
   const state = (r: AccessReport) => {
@@ -223,6 +225,17 @@ export function RequestAccessReports({ personId, requestId }: { personId: string
     </Panel>
   );
 }
+
+/** The reports of a request, also about a third party (L14); `aside` creates one. */
+export function useRequestReports(requestId: string) {
+  return useQuery({
+    queryKey: [...KEY, 'request', requestId],
+    queryFn: () => api<AccessReport[]>(`core/privacy/access-reports?requestId=${requestId}`),
+    refetchInterval: (query) => ((query.state.data ?? []).some((r) => r.status === 'pending') ? 2000 : false),
+  });
+}
+
+export const ACCESS_REPORTS_KEY = KEY;
 
 /** "Mein Bereich": access reports provided to the member, to download after login. */
 export function MyAccessReports() {

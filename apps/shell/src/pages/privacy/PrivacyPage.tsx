@@ -11,6 +11,7 @@ import { InformationDialog, RequestDialog } from './dialogs';
 import { BreachesTab } from './BreachesTab';
 import { PrivacySettings } from './PrivacySettings';
 import { RegisterTab } from './RegisterTab';
+import { ThirdPartyAccessDialog } from '../../privacy/ThirdParties';
 
 type Tab = 'requests' | 'information' | 'register' | 'breaches' | 'settings';
 
@@ -43,6 +44,12 @@ export function PrivacyPage({ tab, session }: { tab: Tab; session: Session }) {
   );
 }
 
+/** Who made the request: the person of the master data, or the third party with "another person" (L14). */
+export function requestSubject(request: PrivacyRequest, t: (key: string) => string): string {
+  if (request.thirdParty) return `${request.thirdParty.name} (${t('minimisation.requests.thirdParty')})`;
+  return request.personName ?? t('privacy.requests.unknownPerson');
+}
+
 /** Badge with the deadline: red when overdue, yellow within 7 days. */
 export function DeadlineBadge({ request }: { request: PrivacyRequest }) {
   const { i18n } = useTranslation('shell');
@@ -57,6 +64,7 @@ function RequestsTab() {
   const navigate = useNavigate();
   const [state, setState] = useState<'open' | 'closed' | 'all'>('open');
   const [creating, setCreating] = useState(false);
+  const [thirdParty, setThirdParty] = useState(false);
   const { data: open = [] } = useRequests('open');
   const { data: requests = [], isLoading } = useRequests(state);
   const { data: restricted = [] } = useRestricted();
@@ -66,7 +74,7 @@ function RequestsTab() {
   return (
     <Stack gap="lg">
       <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }}>
-        <KpiTile value={dueSoon.length} label={t('privacy.requests.kpiDue')} attention={dueSoon.length > 0} hint={dueSoon[0] ? `${t(`privacy.kinds.${dueSoon[0].kind}`)} · ${dueSoon[0].personName ?? ''}` : undefined} />
+        <KpiTile value={dueSoon.length} label={t('privacy.requests.kpiDue')} attention={dueSoon.length > 0} hint={dueSoon[0] ? `${t(`privacy.kinds.${dueSoon[0].kind}`)} · ${requestSubject(dueSoon[0], t)}` : undefined} />
         <KpiTile value={open.length} label={t('privacy.requests.kpiOpen')} hint={oldest ? t('privacy.requests.kpiOldest', { date: formatDate(oldest, i18n.language) }) : undefined} />
         <KpiTile value={restricted.length} label={t('privacy.requests.kpiRestricted')} />
         <KpiTile value={uninformed.length} label={t('privacy.requests.kpiUninformed')} to="/admin/privacy/information" attention={uninformed.length > 0} />
@@ -82,7 +90,10 @@ function RequestsTab() {
             ))}
           </Group>
         </Chip.Group>
-        <Button onClick={() => setCreating(true)}>{t('privacy.requests.create')}</Button>
+        <Group gap="xs">
+          <Button variant="default" onClick={() => setThirdParty(true)}>{t('minimisation.thirdParties.open')}</Button>
+          <Button onClick={() => setCreating(true)}>{t('privacy.requests.create')}</Button>
+        </Group>
       </Group>
       <DataTable
         rows={requests}
@@ -92,7 +103,7 @@ function RequestsTab() {
         empty={isLoading ? null : t('privacy.requests.empty')}
         columns={[
           { key: 'kind', header: t('privacy.requests.columns.kind'), render: (r) => <Anchor component={Link} to={`/admin/privacy/requests/${r.id}`}>{t(`privacy.kinds.${r.kind}`)}</Anchor> },
-          { key: 'person', header: t('privacy.requests.columns.person'), render: (r) => r.personName ?? t('privacy.requests.unknownPerson') },
+          { key: 'person', header: t('privacy.requests.columns.person'), render: (r) => requestSubject(r, t) },
           { key: 'received', header: t('privacy.requests.columns.received'), render: (r) => `${formatDate(r.receivedOn, i18n.language)} · ${t(`privacy.channels.${r.channel}`)}` },
           { key: 'deadline', header: t('privacy.requests.columns.deadline'), render: (r) => <DeadlineBadge request={r} /> },
           { key: 'status', header: t('privacy.requests.columns.status'), render: (r) => <StatusBadge tone={STATUS_TONES[r.status]}>{t(`privacy.statuses.${r.status}`)}</StatusBadge> },
@@ -102,6 +113,7 @@ function RequestsTab() {
       <Text size="xs" c="dimmed">{t('privacy.requests.taskHint')}</Text>
       <RestrictedPanel />
       {creating && <RequestDialog onClose={() => setCreating(false)} onCreated={(r) => navigate(`/admin/privacy/requests/${r.id}`)} />}
+      {thirdParty && <ThirdPartyAccessDialog onClose={() => setThirdParty(false)} />}
     </Stack>
   );
 }

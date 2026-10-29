@@ -263,9 +263,26 @@ export const REPLY_TEXT_OF_KIND: Record<PrivacyRequestKind, PrivacyTextKey> = {
   'consent-withdrawal': 'replyConsentWithdrawal',
 };
 
-/** Records a request (`POST /api/core/privacy/requests`). The deadline is received + 1 month (Art. 12(3)). */
+/**
+ * A third party making a request (L14): a person who is no `Person` of the master data, e.g. a person involved in an
+ * incident or a debtor. `note` tells where the person appears, e.g. "Verursacher Einsatz 2026-104950".
+ */
+export const PrivacyThirdParty = z.object({
+  name: z.string().trim().min(2).max(200),
+  note: z.string().trim().max(500).default(''),
+});
+export type PrivacyThirdParty = z.infer<typeof PrivacyThirdParty>;
+
+/** Kinds of requests a third party can make; restriction and consents concern persons of the master data. */
+export const THIRD_PARTY_REQUEST_KINDS: readonly PrivacyRequestKind[] = ['access', 'rectification', 'erasure', 'objection'];
+
+/**
+ * Records a request (`POST /api/core/privacy/requests`) of a person of the master data (`personId`) or of a third party
+ * (`thirdParty`). The deadline is received + 1 month (Art. 12(3)).
+ */
 export const PrivacyRequestInput = z.object({
-  personId: z.uuid(),
+  personId: z.uuid().nullable().default(null),
+  thirdParty: PrivacyThirdParty.nullable().default(null),
   kind: PrivacyRequestKind,
   receivedOn: isoDate,
   channel: PrivacyRequestChannel,
@@ -281,7 +298,9 @@ export const PrivacyRequestInput = z.object({
   activity: line,
   /** Objection or restriction: restrict the processing of the person right away (until the decision). */
   restrict: z.boolean().default(false),
-});
+})
+  .refine((r) => (r.personId === null) !== (r.thirdParty === null), { message: 'Person or third party', params: { code: 'privacy.subjectRequired' } })
+  .refine((r) => !r.thirdParty || THIRD_PARTY_REQUEST_KINDS.includes(r.kind), { message: 'Kind not for third parties', params: { code: 'privacy.kindNotForThirdParty' } });
 export type PrivacyRequestInput = z.input<typeof PrivacyRequestInput>;
 
 /** Changes the working data of an open request (`PUT /api/core/privacy/requests/:id`). */
@@ -368,7 +387,10 @@ export type RectificationView = z.infer<typeof RectificationView>;
 /** A request as the administration sees it. */
 export const PrivacyRequest = z.object({
   id: z.string(),
-  personId: z.string(),
+  /** `null` for a request of a third party. */
+  personId: z.string().nullable(),
+  /** Request of a third party (L14), else `null`. */
+  thirdParty: PrivacyThirdParty.nullable(),
   /** "Nachname, Vorname"; `null` if the person no longer exists. */
   personName: z.string().nullable(),
   kind: PrivacyRequestKind,

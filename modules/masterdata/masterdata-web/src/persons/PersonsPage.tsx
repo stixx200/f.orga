@@ -120,6 +120,8 @@ export function PersonsPage() {
         )}
       </Group>
       <DataTable<PersonSummary>
+        // The table shows mobile numbers: its Excel export only with the permission for contact lists (L11).
+        exportable={can(session, 'masterdata.lists.contact')}
         rows={rows}
         rowKey={(p) => p.id}
         onRowClick={(p) => !p.restricted && navigate(`/masterdata/persons/${p.id}`)}

@@ -1,4 +1,4 @@
-import { Button, Checkbox, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core';
+import { Button, Checkbox, SegmentedControl, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
@@ -10,6 +10,7 @@ import {
   type PrivacyRequestInput,
   PrivacyRequestKind,
   ProcessingRestrictionReason,
+  THIRD_PARTY_REQUEST_KINDS,
   type ProcessingRestrictionInput,
 } from '@forga/core-contracts';
 import { send, useLocalized, useTranslation } from '@forga/web-sdk';
@@ -29,7 +30,10 @@ export function RequestDialog({ personId, onClose, onCreated }: { personId?: str
   const { t: common } = useTranslation('common');
   const refresh = useRefreshPrivacy();
   const { data: persons = [] } = usePersons();
-  const [value, setValue] = useState<Required<Omit<PrivacyRequestInput, 'language'>> & { language: Language }>({
+  // A request of a person of the master data, or of another person, e.g. a person involved in an incident (L14).
+  const [subject, setSubject] = useState<'person' | 'third-party'>('person');
+  const [thirdParty, setThirdParty] = useState({ name: '', note: '' });
+  const [value, setValue] = useState<Required<Omit<PrivacyRequestInput, 'language' | 'personId' | 'thirdParty'>> & { language: Language; personId: string }>({
     personId: personId ?? '',
     kind: 'access',
     receivedOn: berlinToday(),
@@ -45,7 +49,7 @@ export function RequestDialog({ personId, onClose, onCreated }: { personId?: str
   const { data: activities = [] } = useActivityOptions();
   const localized = useLocalized();
   const set = <K extends keyof typeof value>(key: K, v: (typeof value)[K]) => setValue((current) => ({ ...current, [key]: v }));
-  const create = useAction((input: typeof value) => send<PrivacyRequest>('POST', 'core/privacy/requests', input), {
+  const create = useAction((input: typeof value) => send<PrivacyRequest>('POST', 'core/privacy/requests', subject === 'third-party' ? { ...input, personId: null, thirdParty, restrict: false } : input), {
     success: t('privacy.create.created'),
     onSuccess: async (request) => {
       await refresh();
@@ -53,7 +57,9 @@ export function RequestDialog({ personId, onClose, onCreated }: { personId?: str
       onClose();
     },
   });
-  const canRestrict = value.kind === 'objection' || value.kind === 'restriction';
+  const canRestrict = subject === 'person' && (value.kind === 'objection' || value.kind === 'restriction');
+  const kinds = subject === 'person' ? PrivacyRequestKind.options : THIRD_PARTY_REQUEST_KINDS;
+  const subjectGiven = subject === 'person' ? Boolean(value.personId) : thirdParty.name.trim().length >= 2;
   return (
     <ResponsiveDialog
       opened
@@ -63,13 +69,38 @@ export function RequestDialog({ personId, onClose, onCreated }: { personId?: str
       actions={
         <>
           <Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button>
-          <Button loading={create.isPending} disabled={!value.personId || !value.receivedOn} onClick={() => create.mutate({ ...value, restrict: canRestrict && value.restrict })}>
+          <Button loading={create.isPending} disabled={!subjectGiven || !value.receivedOn} onClick={() => create.mutate({ ...value, restrict: canRestrict && value.restrict })}>
             {t('privacy.create.submit')}
           </Button>
         </>
       }
     >
       {!personId && (
+        <SegmentedControl
+          aria-label={t('minimisation.requests.subject')}
+          value={subject}
+          onChange={(s) => {
+            setSubject(s as typeof subject);
+            if (s === 'third-party' && !THIRD_PARTY_REQUEST_KINDS.includes(value.kind)) set('kind', 'access');
+          }}
+          data={[
+            { value: 'person', label: t('minimisation.requests.subjectPerson') },
+            { value: 'third-party', label: t('minimisation.requests.subjectThirdParty') },
+          ]}
+        />
+      )}
+      {!personId && subject === 'third-party' && (
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <TextInput label={t('minimisation.requests.thirdPartyName')} required value={thirdParty.name} onChange={(e) => setThirdParty({ ...thirdParty, name: e.currentTarget.value })} />
+          <TextInput
+            label={t('minimisation.requests.thirdPartyNote')}
+            placeholder={t('minimisation.requests.thirdPartyNotePlaceholder')}
+            value={thirdParty.note}
+            onChange={(e) => setThirdParty({ ...thirdParty, note: e.currentTarget.value })}
+          />
+        </SimpleGrid>
+      )}
+      {!personId && subject === 'person' && (
         <Select
           label={t('privacy.create.person')}
           placeholder={t('privacy.create.personPlaceholder')}
@@ -85,7 +116,7 @@ export function RequestDialog({ personId, onClose, onCreated }: { personId?: str
           label={t('privacy.create.kind')}
           required
           allowDeselect={false}
-          data={PrivacyRequestKind.options.map((k) => ({ value: k, label: t(`privacy.kinds.${k}`) }))}
+          data={kinds.map((k) => ({ value: k, label: t(`privacy.kinds.${k}`) }))}
           value={value.kind}
           onChange={(k) => k && set('kind', k as PrivacyRequestInput['kind'])}
         />

@@ -48,6 +48,7 @@ export class PromotionsLists {
       name: { de: 'Beförderungsliste', en: 'Promotion list' },
       description: { de: 'Vorschläge einer Liste mit Grundlage und Entscheidung, gesamt oder je Abteilung', en: 'Proposals of a list with basis and decision, in total or per department' },
       permission: READ,
+      personalData: 'names',
       parameters: [
         {
           key: 'listId',
@@ -87,11 +88,11 @@ export class PromotionsLists {
           return state === 'manual' || !rule ? STATE.manual[language] : rule.description[language] || rule.key;
         };
         const department = departments.find((d) => d.id === params.departmentId);
+        const entries = list.entries.filter((e) => !params.departmentId || e.departmentId === params.departmentId);
         return {
           subtitle: [list.title, `${language === 'de' ? 'Stichtag' : 'Reference date'} ${list.referenceDate}`, department?.name].filter(Boolean).join(' · '),
-          rows: list.entries
-            .filter((e) => !params.departmentId || e.departmentId === params.departmentId)
-            .map((e) => ({
+          personIds: entries.map((e) => e.personId),
+          rows: entries.map((e) => ({
               name: `${e.lastName}, ${e.firstName}`,
               department: departments.find((d) => d.id === e.departmentId)?.name ?? '',
               rank: abbreviation(e.rank),
@@ -116,6 +117,7 @@ export class PromotionsLists {
         en: 'Promotions fulfilled or fulfilled soon',
       },
       permission: READ,
+      personalData: 'names',
       parameters: [
         {
           key: 'on',
@@ -140,11 +142,11 @@ export class PromotionsLists {
           const r = ranks.find((x) => x.key === key);
           return r ? String(r.attributes['abbreviation'] || r.name[language]) : (key ?? '');
         };
+        const shown = candidates.filter((c) => c.state === 'fulfilled' || c.state === 'preview');
         return {
           subtitle: on,
-          rows: candidates
-            .filter((c) => c.state === 'fulfilled' || c.state === 'preview')
-            .map((c) => ({
+          personIds: shown.map((c) => c.personId),
+          rows: shown.map((c) => ({
               name: `${c.lastName}, ${c.firstName}`,
               department: departments.find((d) => d.id === c.departmentId)?.name ?? '',
               rank: abbreviation(c.rank),

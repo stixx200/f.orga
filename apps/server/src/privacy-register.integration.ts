@@ -61,7 +61,7 @@ beforeAll(async () => {
 
   const role = async (name: string, permissions: string[]) => (await post('/core/roles', { name, permissions }).expect(201)).body.id as string;
   const privacyRole = await role('Datenschutz', ['core.privacy.manage', 'masterdata.persons.read']);
-  const readerRole = await role('Leser Abteilung', ['masterdata.persons.read']);
+  const readerRole = await role('Leser Abteilung', ['masterdata.persons.read', 'masterdata.lists.contact']);
   await post('/core/users', { username: 'dsb', displayName: 'Datenschutz Verwaltung', email: 'dsb@example.org', password: PASSWORD, roles: [{ roleId: privacyRole, departmentId: null }] }).expect(201);
   readerId = (await post('/core/users', { username: 'leser', displayName: 'Leser Musterstadt', password: PASSWORD, roles: [{ roleId: readerRole, departmentId: ids.musterstadt }] }).expect(201)).body.id;
   privacy = await test.login({ username: 'dsb', password: PASSWORD });
@@ -243,9 +243,9 @@ describe('data breaches (L20)', () => {
 
   it('determines affected persons from a list export, a full export and an account', async () => {
     // The reader exports the phone list of his department: the audit entry names its persons.
-    await get('/core/lists/masterdata.phones/export/xlsx', reader).expect(200);
+    await get('/core/lists/masterdata.phones/export/xlsx?purpose=department', reader).expect(200);
     const exported = (await audit('lists.exported'))[0];
-    expect(exported.details).toMatchObject({ listId: 'masterdata.phones', format: 'xlsx', params: {} });
+    expect(exported.details).toMatchObject({ listId: 'masterdata.phones', format: 'xlsx', params: {}, purpose: 'department' });
     expect((exported.details['personIds'] as string[]).toSorted()).toEqual([ids.tobias, ids.sandra].toSorted());
 
     const sources = (await get(`/core/privacy/breach-tools/sources?from=${today()}&to=${today()}&userId=${readerId}`, privacy).expect(200)).body as BreachSourceEntry[];

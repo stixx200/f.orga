@@ -39,6 +39,7 @@ import { MasterdataDescription } from './data/masterdata.description.js';
 import { MasterdataRetention } from './data/masterdata.retention.js';
 import { OrganizationReferenceRegistry } from './organization/references.js';
 import { PersonHoldingsRegistry } from './persons/holdings.js';
+import { PersonFields, PersonFieldsController } from './persons/person-fields.js';
 import { PERSON_SENSITIVE_AREA, PersonsController } from './persons/persons.controller.js';
 import { LISTS_ACCESS_AREA } from './lists/masterdata.lists.js';
 import { ageOn } from './shared/dates.js';
@@ -53,9 +54,10 @@ import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/person
  */
 @Global()
 @Module({
-  controllers: [CatalogController, OrganizationController, GroupsController, PersonsController, CoursesController, SelfController, DriverLicensesController, PersonPrivacyController],
+  controllers: [CatalogController, OrganizationController, GroupsController, PersonsController, CoursesController, SelfController, DriverLicensesController, PersonPrivacyController, PersonFieldsController],
   providers: [
     CatalogService,
+    PersonFields,
     PersonsService,
     PersonPrivacyService,
     RestrictionDeadlines,

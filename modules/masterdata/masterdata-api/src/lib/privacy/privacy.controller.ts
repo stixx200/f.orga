@@ -81,7 +81,7 @@ export class PersonPrivacyController {
 
   private async dto(id: string, user: AuthenticatedUser): Promise<PersonDto> {
     const person = await this.em.fork().findOneOrFail(Person, id, { populate: POPULATE });
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   @Get('privacy/restricted')

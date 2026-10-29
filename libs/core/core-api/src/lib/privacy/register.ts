@@ -225,6 +225,7 @@ export class PrivacyRegister implements OnApplicationBootstrap {
       health: activity.health,
       healthNote: activity.healthNote ?? null,
       legalBasisHint: activity.legalBasisHint ?? null,
+      thirdParties: activity.thirdParties ?? false,
       recipients,
       retention: retention(activity.retention),
       record,

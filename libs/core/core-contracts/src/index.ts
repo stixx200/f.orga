@@ -17,3 +17,4 @@ export * from './lib/register.js';
 export * from './lib/breaches.js';
 export * from './lib/consents.js';
 export * from './lib/access-log.js';
+export * from './lib/third-parties.js';

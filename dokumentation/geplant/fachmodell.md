@@ -283,6 +283,13 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Empfänger für alle Tätigkeiten | general recipients (`PrivacyActivities.general`, früher Einstellungsabschnitt `privacy.recipients`) |
 | Herkunft eines Empfängers (Modul, Gemeinde, alle Tätigkeiten, API-Token, Konfiguration) | `RecipientSource` (`module`, `municipality`, `general`, `token`, `processor`) |
 | Technische Empfänger, Auftragsverarbeiter | processors (`ProcessingRegister.processors`: E-Mail-Server, Anmeldedienst) |
+| Felder der Personalakte, abgeschaltetes Feld, „Wofür?“ | person fields (Einstellung `masterdata.personFields`, `PersonFieldSettings.disabled`, `OPTIONAL_PERSON_FIELDS`, `PERSON_FIELD_PURPOSES`; Dienst `PersonFields`, `POST /api/masterdata/person-fields/clear`) |
+| Zweck einer Liste, Anderer Zweck, Art der Personendaten einer Liste | list purpose (`ListPurpose`, `ListDefinition.purposes`, `LIST_PURPOSE_OTHER` mit `purposeNote`), `ListDefinition.personalData` (`ListPersonalData`: `names`, `contact`, `sensitive`, `health`), `purposeRequired` |
+| Listen mit Kontaktdaten ausgeben | Recht `masterdata.lists.contact` |
+| Daten Dritter, andere Person (nicht in den Stammdaten), Fundstelle | third party (`ThirdPartyRegistry`, `ThirdPartySource`, `ThirdPartyRef`, `ThirdPartyHit`; Anfrage `PrivacyRequest.thirdParty`; Verzeichnis `ProcessingActivity.thirdParties`) |
+| Auskunft zu einer anderen Person, Löschung bei einer anderen Person | `POST /api/core/privacy/third-parties/access-reports`, `…/erasure` (`ThirdPartyErasureResult`: `anonymized`, `deleted`, `kept`) |
+| Angaben zu Beteiligten (Aufbewahrung) | retention category `incidents.involved-parties` |
+| Nachweise der Auskünfte, Dokumentation der Datenpannen, Laufberichte, Protokoll der Datensicherung (Aufbewahrung) | retention categories `core.access-reports`, `core.privacy-breaches`, `mp-feuer.run-reports`, `backup.run-log` |
 | Technische Maßnahmen | technical measures (`TechnicalMeasure`, `TechnicalMeasureRegistry`, `CoreMeasures`) |
 | Verantwortlicher, Datenschutzbeauftragter, Aufsichtsbehörde | controller, data protection officer, supervisory authority (`privacy.contacts`, `PrivacyContacts`: `controller`, `dpo`, `authority`) |
 | Gesundheitsdaten (besondere Kategorie) | `health: true` an Feldern, Fristarten und Tätigkeiten |

@@ -1,0 +1,43 @@
+/** Texts of the settings „Felder der Personalakte“ (data minimisation, L10). */
+export const personFields = {
+  de: {
+    title: 'Felder der Personalakte',
+    subtitle: 'Optionale Felder abschalten, die die Feuerwehr nicht braucht',
+    intro:
+      'Datenminimierung (Art. 5 Abs. 1 c DSGVO): Speichern Sie nur, was Sie für einen Zweck brauchen. Abgeschaltete Felder erscheinen nicht in der Personalakte, in „Mein Bereich“ und in Listen, werden nicht gespeichert und nicht importiert (auch nicht aus MP-Feuer). Gehen Sie die Liste mit dem Datenschutzbeauftragten durch.',
+    fields: 'Optionale Felder',
+    columns: { field: 'Feld', purpose: 'Wofür?', stored: 'Gespeichert bei', active: 'Aktiv' },
+    persons_one: '1 Person',
+    persons_other: '{{count}} Personen',
+    toggle: '{{field}} verwenden',
+    saved: 'Felder gespeichert',
+    storedHint_one: 'Bei 1 Person sind noch Werte abgeschalteter Felder gespeichert.',
+    storedHint_other: 'Bei bis zu {{count}} Personen sind noch Werte abgeschalteter Felder gespeichert.',
+    clear: 'Gespeicherte Werte löschen …',
+    clearTitle: 'Gespeicherte Werte löschen?',
+    clearText: 'Die Werte dieser abgeschalteten Felder werden bei allen Personen und in der Historie gelöscht. Das lässt sich nicht rückgängig machen; ältere Sicherungen enthalten sie bis zu ihrem Ablauf.',
+    clearItem: '{{field}}: {{count}} Personen',
+    clearSubmit: 'Endgültig löschen',
+    cleared: 'Gespeicherte Werte gelöscht',
+  },
+  en: {
+    title: 'Fields of the person file',
+    subtitle: 'Switch off optional fields the brigade does not need',
+    intro:
+      'Data minimisation (Art. 5(1) c GDPR): store only what you need for a purpose. Switched-off fields do not appear in the person file, in "My area" and in lists, are not stored and not imported (also not from MP-Feuer). Go through the list with the data protection officer.',
+    fields: 'Optional fields',
+    columns: { field: 'Field', purpose: 'What for?', stored: 'Stored for', active: 'Active' },
+    persons_one: '1 person',
+    persons_other: '{{count}} persons',
+    toggle: 'Use {{field}}',
+    saved: 'Fields saved',
+    storedHint_one: 'Values of switched-off fields are still stored for 1 person.',
+    storedHint_other: 'Values of switched-off fields are still stored for up to {{count}} persons.',
+    clear: 'Delete stored values …',
+    clearTitle: 'Delete stored values?',
+    clearText: 'The values of these switched-off fields are deleted for all persons and from the history. This cannot be undone; older backups contain them until they expire.',
+    clearItem: '{{field}}: {{count}} persons',
+    clearSubmit: 'Delete permanently',
+    cleared: 'Stored values deleted',
+  },
+};

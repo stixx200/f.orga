@@ -23,8 +23,10 @@ export const PrivacyRequestSchema = defineEntity({
   indexes: [{ properties: ['personId'] }, { properties: ['status'] }],
   properties: {
     id: p.uuid().primary().onCreate(() => uuidv7()),
-    /** Person in the masterdata module; no foreign key across modules. */
-    personId: p.string(),
+    /** Person in the masterdata module; no foreign key across modules. `null` for a request of a third party. */
+    personId: p.string().nullable(),
+    /** Third party (no person of the master data, L14) making the request: name and where the person appears. */
+    thirdParty: p.json<{ name: string; note: string }>().nullable(),
     kind: p.string().$type<PrivacyRequestKind>(),
     receivedOn: p.string().length(10),
     channel: p.string().$type<PrivacyRequestChannel>(),

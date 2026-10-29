@@ -65,6 +65,7 @@ export class IncidentsLists {
       id: 'incidents.open-reports',
       name: { de: 'Offene Einsatzberichte', en: 'Open incident reports' },
       permission: READ,
+      personalData: 'names',
       parameters: [periodParameters[2]],
       schema: z.object({ departmentId: z.uuid().optional() }),
       columns: [
@@ -86,12 +87,14 @@ export class IncidentsLists {
           { populate: ['incident', 'personnel', 'vehicles', 'involvedParties', 'otherAgencies'], orderBy: { alarmedAt: 'asc' } },
         );
         const rows = [];
+        const authors = new Set<string>();
         // Authors whose processing is restricted (Art. 18) are not named.
         const restricted = await this.directory.restrictedIds(reports.flatMap((r) => (r.authorPersonId ? [r.authorPersonId] : [])));
         for (const report of reports) {
           const context = await this.reports.contextFor(report);
           const findings = await this.reports.findings(em, report, context);
           const author = report.authorPersonId && !restricted.has(report.authorPersonId) ? context.persons.get(report.authorPersonId) : undefined;
+          if (author && report.authorPersonId) authors.add(report.authorPersonId);
           rows.push({
             author: author ? `${author.lastName}, ${author.firstName}` : '–',
             department: ownerName(report, new Map([...context.departments.values()].map((d) => [d.id, d.name])), this.reports.units, language),
@@ -103,7 +106,7 @@ export class IncidentsLists {
             warnings: findings.filter((f) => f.level === 'warning' && !f.acknowledged).length,
           });
         }
-        return { rows: rows.toSorted((a, b) => a.author.localeCompare(b.author)) };
+        return { personIds: [...authors], rows: rows.toSorted((a, b) => a.author.localeCompare(b.author)) };
       },
     };
   }
@@ -203,6 +206,7 @@ export class IncidentsLists {
       id: 'incidents.hours-per-person',
       name: { de: 'Einsatzstunden je Person', en: 'Incident hours per person' },
       permission: READ,
+      personalData: 'names',
       parameters: periodParameters,
       schema: Period,
       columns: [
@@ -220,6 +224,7 @@ export class IncidentsLists {
         for (const line of lines) byPerson.set(line.personId as string, [...(byPerson.get(line.personId as string) ?? []), line]);
         return {
           subtitle: `${p.from} – ${p.to}`,
+          personIds: [...byPerson.keys()],
           rows: [...byPerson.values()]
             .map((list) => ({
               name: list[0].name,

@@ -32,6 +32,11 @@ export const ProcessingActivity = z.object({
   healthNote: LocalizedText.optional(),
   /** Hint for the legal basis the municipality decides on, e.g. "§ 9 FwG (duty to keep records)"; no legal advice. */
   legalBasisHint: LocalizedText.optional(),
+  /**
+   * The activity stores data of third parties who are no persons of the master data (L14), e.g. persons involved in an
+   * incident: the register hints at Art. 14 and at the access report and erasure for "another person".
+   */
+  thirdParties: z.boolean().default(false),
 });
 export type ProcessingActivity = z.infer<typeof ProcessingActivity>;
 
@@ -56,7 +61,7 @@ export const CORE_ACTIVITIES: ProcessingActivity[] = [
       en: 'Access to f.orga, evidence of changes and access (data security)',
     },
     recipients: [],
-    retention: ['core.audit', 'core.history', 'core.access-log'],
+    retention: ['core.audit', 'core.history', 'core.access-log', 'core.access-reports', 'core.privacy-breaches'],
     subjects: [{ de: 'Benutzer von f.orga', en: 'Users of f.orga' }],
     categories: [
       { de: 'Benutzername, Name, E-Mail-Adresse, Rollen und Rechte', en: 'Username, name, e-mail address, roles and permissions' },
@@ -64,6 +69,7 @@ export const CORE_ACTIVITIES: ProcessingActivity[] = [
       { de: 'Audit-Log, Leseprotokoll und Historie der Änderungen', en: 'Audit log, read log and history of changes' },
     ],
     health: false,
+    thirdParties: false,
     legalBasisHint: { de: 'Datensicherheit (Art. 32 DSGVO), Rechenschaftspflicht (Art. 5 Abs. 2 DSGVO)', en: 'Security of processing (Art. 32 GDPR), accountability (Art. 5(2) GDPR)' },
   },
 ];
@@ -100,7 +106,10 @@ export type AccessReportHandOver = z.input<typeof AccessReportHandOver>;
 /** An access report as listed in the person file. */
 export const AccessReport = z.object({
   id: z.uuid(),
-  personId: z.string(),
+  /** `null` for a report about a third party (L14). */
+  personId: z.string().nullable(),
+  /** Name of the third party the report is about, else `null`. */
+  thirdPartyName: z.string().nullable(),
   language: Language,
   includeJson: z.boolean(),
   status: AccessReportStatus,

@@ -13,6 +13,7 @@ import { PersonCreatePage } from './persons/PersonCreatePage';
 import { PersonPage } from './persons/PersonPage';
 import { PersonsPage } from './persons/PersonsPage';
 import { MyData } from './self/MyData';
+import { PersonFieldsPage } from './settings/PersonFieldsPage';
 import { SettingsPage } from './settings/SettingsPage';
 
 /** Pages of the module that follow in a later stage. */
@@ -36,6 +37,7 @@ export default defineWebModule({
     { path: 'courses', element: <CoursePlanningPage /> },
     { path: 'catalogs', element: <CatalogsPage /> },
     { path: 'settings', element: <SettingsPage /> },
+    { path: 'settings/person-fields', element: <PersonFieldsPage /> },
     { path: '*', element: <Pending /> },
   ],
   extensions: {

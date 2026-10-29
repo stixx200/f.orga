@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Group, NumberInput, Select, SimpleGrid, Stack, Textarea, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Group, NumberInput, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import { IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 import { PartyRole } from '@forga/incidents-contracts';
@@ -22,6 +22,8 @@ export function OtherSection({ content, update, disabled }: { content: Content; 
     <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
       <Panel title={t('other.parties')}>
         <Stack gap="sm">
+          {/* Data of third parties (L14): as little as the purposes need. */}
+          {!disabled && <Text size="xs" c="dimmed">{t('other.partiesHint')}</Text>}
           <DataTable
             exportable={false}
             rows={content.involvedParties.map((p, index) => ({ ...p, index }))}

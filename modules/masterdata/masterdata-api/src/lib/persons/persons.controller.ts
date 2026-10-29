@@ -49,6 +49,7 @@ import { requireBrigade, requireDepartment, today } from '../shared/access.js';
 import { addDays, addMonths, ageOn } from '../shared/dates.js';
 import { DepartmentGroup } from '../organization/group.entities.js';
 import { PersonHoldingsRegistry } from './holdings.js';
+import { PersonFields } from './person-fields.js';
 import { activeMemberships, assertNotBeforeBirth, PersonsService, primaryDepartment, READ, recordedDates, SENSITIVE, WRITE } from './persons.service.js';
 
 type ParsedPerson = ReturnType<typeof PersonInput.parse>;
@@ -80,6 +81,7 @@ export class PersonsController {
     private readonly events: DomainEvents,
     private readonly holdings: PersonHoldingsRegistry,
     private readonly accessLog: AccessLog,
+    private readonly fields: PersonFields,
   ) {}
 
   /** With `masterdata.persons.read` the summaries, with only `masterdata.persons.directory` restricted entries. */
@@ -101,7 +103,7 @@ export class PersonsController {
     const person = await this.persons.load(this.em.fork(), id, user, READ);
     // The person file with its sensitive fields is especially protected data: read log (L15).
     if (this.persons.can(user, SENSITIVE, person)) await this.accessLog.record(user, [person.id], PERSON_SENSITIVE_AREA);
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   /** New persons start in probation unless another status is given; the probation end follows the settings. */
@@ -118,7 +120,7 @@ export class PersonsController {
     const { memberships, status, ...fields } = input;
     const start = input.joinedOn ?? memberships.map((m) => m.from).toSorted()[0];
     const rules = await this.membershipRules();
-    const master = this.masterFields(fields, user, null);
+    const master = await this.masterFields(fields, user, null);
     const birthDate = 'birthDate' in master ? (master.birthDate ?? null) : null;
     assertNotBeforeBirth(birthDate, [input.joinedOn, ...memberships.map((m) => m.from)]);
     await this.assertMinimumAge(em, birthDate, memberships, rules);
@@ -132,7 +134,7 @@ export class PersonsController {
     });
     await this.replaceMemberships(em, person, memberships);
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   @Put(':id')
@@ -146,7 +148,7 @@ export class PersonsController {
     const person = await this.persons.load(em, id, user, WRITE);
     assertVersion(person, input.version);
     await this.assertPersonnelNumberFree(em, input.personnelNumber, person.id);
-    const master = this.masterFields(input, user, person);
+    const master = await this.masterFields(input, user, person);
     // A changed birth date must not lie after what the file records, a changed joining date not before the birth.
     // Unchanged values are not checked again, so saving other fields works for older entries.
     const birthDate = 'birthDate' in master ? (master.birthDate ?? null) : (person.birthDate ?? null);
@@ -154,7 +156,7 @@ export class PersonsController {
     if (input.joinedOn !== (person.joinedOn ?? null)) assertNotBeforeBirth(birthDate, [input.joinedOn]);
     em.assign(person, master);
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   /**
@@ -185,7 +187,7 @@ export class PersonsController {
     if (primaryOf(next) !== primaryDepartment(person)) await this.assertStatusFitsDepartment(em, person.status, next);
     await this.replaceMemberships(em, person, next);
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   @Post(':id/qualifications')
@@ -214,7 +216,7 @@ export class PersonsController {
       personId: person.id,
       qualification: input.qualification,
     });
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   @Delete(':id/qualifications/:entryId')
@@ -234,7 +236,7 @@ export class PersonsController {
       personId: person.id,
       qualification: entry.qualification,
     });
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   /**
@@ -255,7 +257,7 @@ export class PersonsController {
     assertNotBeforeBirth(person.birthDate, [input.since]);
     person.ranks.add(em.create(RankAssignment, { person, ...input }));
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   @Delete(':id/ranks/:entryId')
@@ -281,7 +283,7 @@ export class PersonsController {
     assertNotBeforeBirth(person.birthDate, [input.from]);
     person.offices.add(em.create(OfficeAssignment, { person, ...input }));
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   /** Ends an office (sets "until") or corrects it. */
@@ -304,7 +306,7 @@ export class PersonsController {
     assertNotBeforeBirth(person.birthDate, [input.from]);
     em.assign(entry, input);
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   @Post(':id/rest-periods')
@@ -318,7 +320,7 @@ export class PersonsController {
     const person = await this.loadSensitive(em, id, user);
     person.restPeriods.add(em.create(RestPeriod, { person, ...input }));
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   @Put(':id/rest-periods/:entryId')
@@ -335,7 +337,7 @@ export class PersonsController {
     if (!entry) throw new NotFoundException();
     em.assign(entry, input);
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   @Delete(':id/rest-periods/:entryId')
@@ -426,7 +428,7 @@ export class PersonsController {
     assertNotBeforeBirth(person.birthDate, [input.awardedOn]);
     person.honors.add(em.create(HonorAward, { person, ...input }));
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   @Delete(':id/honors/:entryId')
@@ -450,7 +452,7 @@ export class PersonsController {
     person.probationDecidedOn = input.decidedOn;
     person.notes = appendNote(person.notes, `Probezeit / probation → ${input.probationEndsOn}: ${input.reason}`);
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   /** Final admission after the probation (decision of the body named in the settings). */
@@ -478,7 +480,7 @@ export class PersonsController {
     person.probationDecidedOn = input.decidedOn;
     if (input.reason) person.notes = appendNote(person.notes, `Aufnahme / admission ${input.decidedOn}: ${input.reason}`);
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   @Post(':id/status')
@@ -500,7 +502,7 @@ export class PersonsController {
     // The history records the change; the effective date is the day of the request.
     person.status = input.status;
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   /**
@@ -535,7 +537,7 @@ export class PersonsController {
     }
     if (input.reason) person.notes = appendNote(person.notes, `Übernahme in Einsatzabteilung ${input.on}, Probezeit / probation ${input.probationEndsOn ?? '–'}: ${input.reason}`);
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   /** Transfer to the veterans ("Übernahme in die Altersabteilung", fire brigade statute): operational and command memberships end, the rank stays. */
@@ -555,7 +557,7 @@ export class PersonsController {
     person.status = 'veterans';
     if (input.decidedOn) person.notes = appendNote(person.notes, `Übernahme in Altersabteilung ${input.on}, beschlossen / decided ${input.decidedOn}`);
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   /**
@@ -623,7 +625,7 @@ export class PersonsController {
       leftOn: input.leftOn,
       exitReason: input.exitReason,
     });
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   private async removeChild(
@@ -642,14 +644,20 @@ export class PersonsController {
     guard(entry);
     items.remove(entry as never);
     await em.flush();
-    return this.persons.toDto(person, user);
+    return this.persons.dto(person, user);
   }
 
   /**
    * Master fields; sensitive ones are only applied with `masterdata.persons.sensitive`. If the permission waits for the
    * second factor, sending sensitive fields is refused (`auth.stepUpRequired`) instead of silently ignoring them.
    */
-  private masterFields(input: ParsedPerson, user: AuthenticatedUser, existing: Person | null) {
+  /** The fields to store: sensitive ones only with the permission, switched-off ones never (L10). */
+  private async masterFields(input: ParsedPerson, user: AuthenticatedUser, existing: Person | null) {
+    const disabled = await this.fields.disabled();
+    return this.fields.strip(this.allowedFields(this.fields.strip(input, disabled), user, existing), disabled);
+  }
+
+  private allowedFields(input: ParsedPerson, user: AuthenticatedUser, existing: Person | null) {
     const { birthDate, birthPlace, employer, bank, notes, version: _version, ...rest } = input;
     const sensitive = existing
       ? this.persons.can(user, SENSITIVE, existing)

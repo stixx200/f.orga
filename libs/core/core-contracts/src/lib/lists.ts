@@ -31,6 +31,32 @@ export const ListParameter = z.object({
 });
 export type ListParameter = z.input<typeof ListParameter>;
 
+/**
+ * Personal data a list shows (L11 of the data protection concept): `names` (names, functions, dates of the brigade),
+ * `contact` (phone, e-mail, address), `sensitive` (birth data, employer, bank) or `health` (e.g. medical examinations).
+ * Lists with contact, sensitive or health data are exported only with a purpose.
+ */
+export const ListPersonalData = z.enum(['names', 'contact', 'sensitive', 'health']);
+export type ListPersonalData = z.infer<typeof ListPersonalData>;
+
+/** Personal data that needs a purpose for every export. */
+export const PURPOSE_REQUIRED_DATA: readonly ListPersonalData[] = ['contact', 'sensitive', 'health'];
+
+/** The purpose "other": the user describes it in `purposeNote`; the list shows all its columns. */
+export const LIST_PURPOSE_OTHER = 'other';
+
+/**
+ * A purpose a list is run for. `columns` limits the list to the columns the purpose needs (data minimisation); without
+ * them the list shows all its columns.
+ */
+export const ListPurpose = z.object({
+  key: z.string(),
+  label: LocalizedText,
+  description: LocalizedText.optional(),
+  columns: z.array(z.string()).optional(),
+});
+export type ListPurpose = z.infer<typeof ListPurpose>;
+
 /** A list template as the UI sees it in the list overview. */
 export const ListInfo = z.object({
   id: z.string(),
@@ -45,6 +71,12 @@ export const ListInfo = z.object({
   departments: z.union([z.literal('brigade'), z.array(z.string())]),
   /** The list needs a session confirmed with the second factor (its permission has `stepUp`). */
   stepUp: z.boolean().default(false),
+  /** Personal data of the list; `null` = none (e.g. vehicles, counts). */
+  personalData: ListPersonalData.nullable().default(null),
+  /** Purposes the user may choose (only those allowed for the user); the last one is `other` when a purpose is required. */
+  purposes: z.array(ListPurpose).default([]),
+  /** Exports need a purpose (`purpose`, with `purposeNote` for `other`). */
+  purposeRequired: z.boolean().default(false),
 });
 export type ListInfo = z.infer<typeof ListInfo>;
 
@@ -56,6 +88,10 @@ export const ListData = z.object({
   subtitle: z.string().optional(),
   columns: z.array(ListColumn),
   rows: z.array(z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))),
+  /** The list names persons: PDF and Excel carry the note „nur für den Dienstgebrauch, nach Gebrauch vernichten“. */
+  personalData: z.boolean().default(false),
+  /** The chosen purpose as text (label, or the description of `other`); shown on the export. */
+  purpose: z.string().nullable().default(null),
 });
 export type ListData = z.infer<typeof ListData>;
 

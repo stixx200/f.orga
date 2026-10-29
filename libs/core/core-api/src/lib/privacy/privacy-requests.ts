@@ -156,14 +156,15 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
 
   /** Requests as the administration sees them, with person and user names. */
   async toDtos(requests: PrivacyRequestEntity[]): Promise<PrivacyRequest[]> {
-    const persons = new Map(((await this.organization.persons([...new Set(requests.map((r) => r.personId))])) ?? []).map((p) => [p.id, p]));
+    const persons = new Map(((await this.organization.persons([...new Set(requests.flatMap((r) => (r.personId ? [r.personId] : [])))])) ?? []).map((p) => [p.id, p]));
     const userIds = [...new Set(requests.flatMap((r) => [r.assigneeId, r.createdBy, r.rectification?.correctedBy]).filter((id): id is string => Boolean(id)))];
     const users = new Map((userIds.length ? await this.em.fork().find(User, { id: { $in: userIds } }, { fields: ['id', 'displayName'] }) : []).map((u) => [u.id, u.displayName]));
     return requests.map((r) => {
-      const person = persons.get(r.personId);
+      const person = r.personId ? persons.get(r.personId) : undefined;
       return {
         id: r.id,
-        personId: r.personId,
+        personId: r.personId ?? null,
+        thirdParty: r.thirdParty ?? null,
         personName: person ? name(person) : null,
         kind: r.kind,
         receivedOn: r.receivedOn,
@@ -207,14 +208,18 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
 
   /** Records a request; with `restrict` (objection, restriction) the processing of the person is restricted right away. */
   async create(input: ReturnType<typeof PrivacyRequestInput.parse>, createdBy: string | null, rectification: StoredRectification | null = null): Promise<PrivacyRequestEntity> {
-    const known = await this.organization.persons([input.personId]);
-    if (known && !known.length) throw new BadRequestException({ code: 'privacy.personUnknown' });
+    if (input.personId) {
+      const known = await this.organization.persons([input.personId]);
+      if (known && !known.length) throw new BadRequestException({ code: 'privacy.personUnknown' });
+    }
     if (input.receivedOn > berlinDate()) throw new BadRequestException({ code: 'privacy.receivedInFuture' });
-    if (input.restrict && !['objection', 'restriction'].includes(input.kind)) throw new BadRequestException({ code: 'privacy.restrictNotForKind' });
+    // A third party is no person of the master data: there is nothing to restrict there.
+    if (input.restrict && (!input.personId || !['objection', 'restriction'].includes(input.kind))) throw new BadRequestException({ code: 'privacy.restrictNotForKind' });
     await this.assertActivity(input.activityKey);
     const em = this.em.fork();
     const request = em.create(PrivacyRequestEntity, {
       personId: input.personId,
+      thirdParty: input.thirdParty,
       kind: input.kind,
       receivedOn: input.receivedOn,
       channel: input.channel,
@@ -229,8 +234,9 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
       rectification,
     });
     await em.flush();
-    await this.audit.log('privacy.request-created', { requestId: request.id, personId: request.personId, kind: request.kind, channel: request.channel });
-    if (input.restrict) {
+    // The name of a third party is not repeated in the audit log; the request holds it.
+    await this.audit.log('privacy.request-created', { requestId: request.id, ...(request.personId ? { personId: request.personId } : { thirdParty: true }), kind: request.kind, channel: request.channel });
+    if (input.restrict && request.personId) {
       const reason = input.kind === 'objection' ? 'objection-pending' : 'accuracy-contested';
       if (await this.organization.restrictProcessing(request.personId, { reason, until: null, requestId: request.id })) {
         await this.audit.log('privacy.restricted', { personId: request.personId, reason, requestId: request.id });
@@ -452,8 +458,8 @@ export class PrivacyRequestsController {
     const em = this.em.fork();
     const brigade = await this.settings.get<BrigadeSettings>('brigade');
     const [contacts, texts] = await Promise.all([this.notices.contacts(), this.notices.texts()]);
-    const person = (await this.organization.persons([request.personId]))?.[0];
-    const fullName = person ? `${person.firstName} ${person.lastName}` : '';
+    const person = request.personId ? (await this.organization.persons([request.personId]))?.[0] : undefined;
+    const fullName = person ? `${person.firstName} ${person.lastName}` : (request.thirdParty?.name ?? '');
     const kind = KIND_LABELS[request.kind][language];
     const today = berlinDate();
     const values = {

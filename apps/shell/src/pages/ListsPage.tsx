@@ -4,7 +4,7 @@ import { IconFileSpreadsheet, IconFileText, IconFileTypePdf } from '@tabler/icon
 import { useQuery } from '@tanstack/react-query';
 import { Fragment, useState } from 'react';
 import { useDebouncedValue } from '@mantine/hooks';
-import type { ListCell, ListData, ListInfo, ListOption, ListParameter } from '@forga/core-contracts';
+import { LIST_PURPOSE_OTHER, type ListCell, type ListData, type ListInfo, type ListOption, type ListParameter } from '@forga/core-contracts';
 import { api, apiUrl, formatDate, isElevated, openAfterStepUp, useSession, withQuery, useLocalized, useTranslation } from '@forga/web-sdk';
 import { DataTable, EmptyState, Notice, PageHeader, Panel } from '@forga/web-ui';
 import type { LoadedModule } from '../modules';
@@ -104,9 +104,14 @@ function cell(value: ListCell, language: string): string {
 function ListView({ list }: { list: ListInfo }) {
   const { t, i18n } = useTranslation('shell');
   const localized = useLocalized();
-  const [values, setValues] = useState<Values>(() => initialValues(list));
+  const [parameters, setValues] = useState<Values>(() => initialValues(list));
+  // Purpose of the list (L11): the first one is preselected; "other" needs a description.
+  const [purpose, setPurpose] = useState(list.purposes[0]?.key ?? '');
+  const [purposeNote, setPurposeNote] = useState('');
+  const values: Values = { ...parameters, ...(purpose ? { purpose } : {}), ...(purpose === LIST_PURPOSE_OTHER ? { purposeNote } : {}) };
   const [shown, setShown] = useState<Values | null>(null);
-  const missing = list.parameters.filter((p) => p.required && !values[p.key]);
+  const purposeMissing = (list.purposeRequired && !purpose) || (purpose === LIST_PURPOSE_OTHER && purposeNote.trim().length < 3);
+  const missing = [...list.parameters.filter((p) => p.required && !parameters[p.key]), ...(purposeMissing ? [null] : [])];
   const preview = useQuery({
     queryKey: ['core', 'lists', list.id, shown],
     queryFn: () => api<ListData>(withQuery(`core/lists/${list.id}`, shown ?? {})),
@@ -119,6 +124,29 @@ function ListView({ list }: { list: ListInfo }) {
     <Stack gap="lg">
       <Panel title={localized(list.name)}>
         {list.description && <Text size="sm" mb="md">{localized(list.description)}</Text>}
+        {list.purposes.length > 0 && (
+          <SimpleGrid cols={{ base: 1, sm: 2 }} mb="md">
+            <Select
+              label={t('minimisation.lists.purpose')}
+              description={list.purposeRequired ? t('minimisation.lists.purposeRequired') : t('minimisation.lists.columnsOfPurpose')}
+              required={list.purposeRequired}
+              allowDeselect={false}
+              data={list.purposes.map((p) => ({ value: p.key, label: localized(p.label) }))}
+              value={purpose || null}
+              onChange={(v) => setPurpose(v ?? '')}
+            />
+            {purpose === LIST_PURPOSE_OTHER && (
+              <TextInput
+                label={t('minimisation.lists.purposeNote')}
+                placeholder={t('minimisation.lists.purposeNotePlaceholder')}
+                required
+                maxLength={200}
+                value={purposeNote}
+                onChange={(e) => setPurposeNote(e.currentTarget.value)}
+              />
+            )}
+          </SimpleGrid>
+        )}
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -129,7 +157,7 @@ function ListView({ list }: { list: ListInfo }) {
             {list.parameters.length > 0 && (
               <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
                 {list.parameters.map((p) => (
-                  <ParameterField key={p.key} listId={list.id} parameter={p} allowed={list.departments} value={values[p.key] ?? ''} onChange={(value) => setValues((v) => ({ ...v, [p.key]: value }))} />
+                  <ParameterField key={p.key} listId={list.id} parameter={p} allowed={list.departments} value={parameters[p.key] ?? ''} onChange={(value) => setValues((v) => ({ ...v, [p.key]: value }))} />
                 ))}
               </SimpleGrid>
             )}
@@ -161,6 +189,7 @@ function ListView({ list }: { list: ListInfo }) {
       {preview.data && (
         <Panel title={preview.data.title} aside={<Text size="sm" c="dimmed">{t('lists.rows', { count: preview.data.rows.length })}</Text>}>
           {preview.data.subtitle && <Text size="sm" c="dimmed" mb="sm">{preview.data.subtitle}</Text>}
+          {preview.data.purpose && <Text size="sm" c="dimmed" mb="sm">{`${t('minimisation.lists.purpose')}: ${preview.data.purpose}`}</Text>}
           <DataTable
             exportable={false}
             rows={preview.data.rows.map((row, index) => ({ ...row, __index: index }))}
@@ -172,6 +201,7 @@ function ListView({ list }: { list: ListInfo }) {
               render: (row: Record<string, ListCell>) => cell(row[c.key] ?? null, i18n.language),
             }))}
           />
+          {preview.data.personalData && <Text size="xs" c="dimmed" mt="sm">{t('minimisation.lists.personalData')}</Text>}
         </Panel>
       )}
     </Stack>

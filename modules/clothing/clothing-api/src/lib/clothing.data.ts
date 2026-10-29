@@ -217,6 +217,7 @@ export class ClothingData implements DeadlineProvider {
       id: 'clothing.issued',
       name: { de: 'Ausgegebene Schutzausrüstung', en: 'Issued protective equipment' },
       permission: READ,
+      personalData: 'names',
       parameters: [department],
       schema: Filter,
       columns: [col('person', 'Person', 'Person', 2), col('article', 'Artikel', 'Article', 2), col('number', 'Inventar-Nr.', 'Inventory no.'), col('size', 'Größe', 'Size', 0.6), col('issuedOn', 'Ausgegeben', 'Issued')],
@@ -228,6 +229,7 @@ export class ClothingData implements DeadlineProvider {
         const items = issued.filter((i) => !restricted.has(i.holderId!));
         const persons = new Map((await this.directory.snapshots([...new Set(items.map((i) => i.holderId!))])).map((p) => [p.id, `${p.lastName}, ${p.firstName}`]));
         return {
+          personIds: [...persons.keys()],
           rows: items
             .map((i) => ({ person: persons.get(i.holderId ?? '') ?? '', article: names.get(i.articleKey)?.[language] ?? i.articleKey, number: i.inventoryNumber, size: i.size, issuedOn: i.issuedOn }))
             .toSorted((a, b) => a.person.localeCompare(b.person, 'de') || a.article.localeCompare(b.article, 'de')),
@@ -242,6 +244,7 @@ export class ClothingData implements DeadlineProvider {
       id: 'clothing.due',
       name: { de: 'Fällige Wäsche und Prüfungen', en: 'Washing and inspections due' },
       permission: ISSUE,
+      personalData: 'names',
       parameters: [{ key: 'until', label: { de: 'Fällig bis', en: 'Due until' }, type: 'date' }, department],
       schema: Filter,
       columns: [col('due', 'Fällig', 'Due'), col('what', 'Was', 'What', 1.5), col('article', 'Artikel', 'Article', 2), col('number', 'Inventar-Nr.', 'Inventory no.'), col('holder', 'Bei', 'Held by', 2)],
@@ -254,13 +257,14 @@ export class ClothingData implements DeadlineProvider {
         const restricted = await this.directory.restrictedIds(holders);
         const persons = new Map((await this.directory.snapshots(holders)).filter((p) => !restricted.has(p.id)).map((p) => [p.id, `${p.lastName}, ${p.firstName}`]));
         const what = { impregnation: { de: 'Waschen und imprägnieren', en: 'Wash and impregnate' }, inspection: { de: 'Prüfung', en: 'Inspection' } };
+        const dueItems = items.flatMap((i) => [
+          ...(i.impregnationDueOn && i.impregnationDueOn <= until ? [{ due: i.impregnationDueOn, what: what.impregnation[language], i }] : []),
+          ...(i.inspectionDueOn && i.inspectionDueOn <= until ? [{ due: i.inspectionDueOn, what: what.inspection[language], i }] : []),
+        ]);
         return {
           subtitle: `≤ ${until}`,
-          rows: items
-            .flatMap((i) => [
-              ...(i.impregnationDueOn && i.impregnationDueOn <= until ? [{ due: i.impregnationDueOn, what: what.impregnation[language], i }] : []),
-              ...(i.inspectionDueOn && i.inspectionDueOn <= until ? [{ due: i.inspectionDueOn, what: what.inspection[language], i }] : []),
-            ])
+          personIds: [...new Set(dueItems.flatMap(({ i }) => (i.holderId && persons.has(i.holderId) ? [i.holderId] : [])))],
+          rows: dueItems
             .map(({ due, what: w, i }) => ({ due, what: w, article: names.get(i.articleKey)?.[language] ?? i.articleKey, number: i.inventoryNumber, holder: i.holderId ? (persons.get(i.holderId) ?? '') : '' }))
             .toSorted((a, b) => String(a.due).localeCompare(String(b.due))),
         };
