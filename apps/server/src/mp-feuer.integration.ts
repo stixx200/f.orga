@@ -363,6 +363,10 @@ const partsReport = (id: string, dispatchNumber: string) => ({
   EIN_ERLAEUTERUNG: '', EIN_ORT: '', EIN_ORT_STRASSE: '', EIN_ORT_PLZ: '', EIN_ORT_ORT: '', EIN_ORT_ORTSTEIL: '', EIN_ORT_ZUSATZ: '', EIN_ORT_OBJEKT: '', EIN_MERKMAL_ST_GLOBAL: 1,
   EIN_MERKMAL_KO: 0, EIN_ZUSATZ_2: '', EIN_LAGE: '', EIN_VERLAUF: '', EIN_BERICHT: '', EIN_URSACHE: '', EIN_LEITUNG: '', EIN_STATISTIK: '', EIN_RETTUNG_P_S: '', EIN_VERLUSTE_S: '', EIN_RETTUNG_T_S: '',
 });
+/** A report of `partsReport` on another day. */
+const datedReport = (id: string, dispatchNumber: string, begin: string) => ({ ...partsReport(id, dispatchNumber), EIN_ZEIT_V: `${begin} 10:00:00.000`, EIN_ZEIT_B: `${begin} 11:00:00.000` });
+/** Rows of the incident personnel the last dry run or apply counted. */
+const incidentRows = (run: MpFeuerRun) => Object.values(run.datasets.find((d) => d.profile === 'incidents.personnel')!.counts ?? {}).reduce((a, b) => a + b, 0);
 const onlyIncidents = (run: MpFeuerRun) => Object.fromEntries(run.datasets.map((d) => [d.profile, { enabled: d.profile === 'incidents.personnel' }]));
 
 describe('MP-Feuer: background run in parts', () => {
@@ -429,6 +433,34 @@ describe('MP-Feuer: background run in parts', () => {
     expect(countsOf(completed, 'incidents.personnel')).toMatchObject({ create: 6, update: 6, error: 0 });
     expect((await get('/incidents/incidents?from=2025-08-01&to=2025-08-01')).body).toHaveLength(4);
     mp.runs().partSize = 2000;
+  });
+
+  it('takes over only incidents from the chosen date on and remembers the date', async () => {
+    const file: [Buffer, string] = [
+      transferZip({
+        PER_STAMM: [person('P-A', '0001', 'Ada', 'Teil'), person('P-B', '0002', 'Ben', 'Teil')],
+        EIN_STAMM: [datedReport('D1', '1240000011', '2024-12-31'), datedReport('D2', '1250000012', '2025-01-01'), datedReport('D3', '1250000013', '2025-03-15')],
+        EIN_PERS: ['1', '2', '3'].map((n) => crewRow(`DA${n}`, `D${n}`, 'P-A')),
+      }),
+      'MPTRA_05_2026-10-25-074935_Abt._Musterstadt.zip',
+    ];
+    const run = await mp.upload([file]);
+    const incidents = run.datasets.find((d) => d.profile === 'incidents.personnel')!;
+    expect(incidents).toMatchObject({ from: null, fromAvailable: true });
+    expect(run.datasets.find((d) => d.profile === 'masterdata.persons')?.fromAvailable).toBe(false);
+    expect((await put(`/mp-feuer/runs/${run.id}`, { datasets: { 'masterdata.persons': { enabled: false, from: '2025-01-01' } } }).expect(400)).body.code).toBe('mp-feuer.noDateFilter');
+
+    await mp.select(run.id, { datasets: onlyIncidents(run) });
+    const all = await mp.dryRun(run.id);
+    const selected = await mp.select(run.id, { datasets: { 'incidents.personnel': { enabled: true, from: '2025-01-01' } } });
+    expect(selected.dryRunOutdated).toBe(true);
+    const checked = await mp.dryRun(run.id);
+    expect(incidentRows(checked)).toBe((incidentRows(all) * 2) / 3);
+    await mp.apply(run.id);
+    expect((await get('/incidents/incidents?from=2024-12-31&to=2024-12-31')).body).toHaveLength(0);
+    expect((await get('/incidents/incidents?from=2025-01-01&to=2025-03-15')).body).toHaveLength(2);
+    expect((await get('/mp-feuer/remembered').expect(200)).body.datasets['incidents.personnel']).toMatchObject({ from: '2025-01-01' });
+    expect((await mp.upload([file])).datasets.find((d) => d.profile === 'incidents.personnel')?.from).toBe('2025-01-01');
   });
 
   it('marks a run that worked when the server stopped as interrupted', async () => {
