@@ -1,6 +1,6 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { AuditReferenceRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, RetentionRegistry } from '@forga/core-api';
+import { AuditReferenceRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, PersonDataRegistry, RetentionRegistry } from '@forga/core-api';
 import { MP_FEUER_MANIFEST, MP_FEUER_READ, MP_FEUER_SETTINGS } from '@forga/mp-feuer-contracts';
 import { MP_FEUER_MIGRATIONS } from '../migrations/index.js';
 import { registerAuditReferences } from './audit/audit.references.js';
@@ -21,6 +21,7 @@ export class MpFeuerModule implements OnModuleInit {
     private readonly em: EntityManager,
     private readonly exports: ExportRegistry,
     private readonly personData: RunPersonData,
+    private readonly personDataRegistry: PersonDataRegistry,
   ) {}
 
   onModuleInit(): void {
@@ -33,6 +34,11 @@ export class MpFeuerModule implements OnModuleInit {
       all: () => this.personData.all(),
       person: (id) => this.personData.person(id),
       describePerson: (id, ctx) => this.personData.describePerson(id, ctx),
+    });
+    this.personDataRegistry.register('mp-feuer', {
+      anonymize: (ids, ctx) => this.personData.anonymize(ids, ctx),
+      erasure: (id) => this.personData.erasure(id),
+      erase: (id, _areas, ctx) => this.personData.anonymize([id], ctx),
     });
     this.retention.register('mp-feuer.rows', { run: (_settings, dryRun) => this.runs.expireRows(dryRun) });
   }

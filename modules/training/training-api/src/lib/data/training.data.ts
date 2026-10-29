@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { berlinDayEnd, HistoryEntry, wordsWhere } from '@forga/core-api';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import type { AuthenticatedUser, DeadlineInput, DeadlineProvider, DescribeContext, PersonDataSection } from '@forga/core-api';
+import type { AuthenticatedUser, DeadlineInput, DeadlineProvider, DescribeContext, ErasureAreaInput, PersonDataSection } from '@forga/core-api';
 import type { SearchHit } from '@forga/core-contracts';
 import { AttendanceEntity, SessionEntity, SessionTypeEntity } from '../training.entities.js';
 import { ATTENDANCE, CLOSE, READ, SessionsService } from '../sessions/sessions.service.js';
@@ -131,6 +131,24 @@ export class TrainingData implements DeadlineProvider {
     if (!attendances.length) return;
     await em.nativeUpdate(AttendanceEntity, { personId: { $in: [...personIds] } }, { note: '', excuseReason: null });
     await em.nativeDelete(HistoryEntry, { entity: 'training.attendance', entityId: { $in: attendances.map((a) => a.id) } });
+  }
+
+  /**
+   * Erasure check: attendances belong to the record of the session (participation, statistics) and stay, without the
+   * excuses (reason and text).
+   */
+  async erasure(personId: string): Promise<ErasureAreaInput[]> {
+    const count = await this.em.fork().count(AttendanceEntity, { personId });
+    if (!count) return [];
+    return [{
+      key: 'training.attendance',
+      title: { de: 'Dienste', en: 'Sessions' },
+      data: { de: `${count} ${count === 1 ? 'Eintrag in einer Anwesenheitsliste' : 'Einträge in Anwesenheitslisten'}`, en: `${count} ${count === 1 ? 'entry in an attendance list' : 'entries in attendance lists'}` },
+      count,
+      outcome: 'anonymize',
+      keepUntil: null,
+      reason: { de: 'Anwesenheit bleibt im Dienst, ohne Entschuldigungen', en: 'Attendance stays in the session, without excuses' },
+    }];
   }
 
   /** Past sessions without attendance (for those who record it) and held sessions not closed after 14 days. */
