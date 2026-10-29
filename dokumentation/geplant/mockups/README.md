@@ -1,6 +1,6 @@
 # Mockups Release 1
 
-**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben. Zur Freigabe sind die Mockups des Moduls MP-Feuer (`mp-feuer/`) und der Konzepte [Führerscheinkontrolle](../module/fuehrerscheinkontrolle.md) und [Aufbewahrung](../aufbewahrung.md). Die Mockups zum Datenschutz (`datenschutz/`) sind freigegeben.
+**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben, ebenso die der Führerscheinkontrolle (umgesetzt, siehe [Führerscheinkontrolle](../../implementiert/architektur.md#führerscheinkontrolle); „Mein Bereich“ zeigt abweichend von `shell/mein-fuehrerschein.html` nur den Stand, ohne Selbstkontrolle). Zur Freigabe sind die Mockups des Moduls MP-Feuer (`mp-feuer/`) und des Konzepts [Aufbewahrung](../aufbewahrung.md). Die Mockups zum Datenschutz (`datenschutz/`) sind freigegeben.
 
 Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stammdaten und Einsatzberichte, dazu das Modul Infoterminal (Kiosk-Seite je Wache) und das Modul MP-Feuer ([Konzept](../module/mp-feuer.md)). Sie funktionieren nicht und enthalten nur erfundene Daten. Farben, Schrift, Tabellen sowie Kopf- und Fußzeile folgen `Stil.md`.
 

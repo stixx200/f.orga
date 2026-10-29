@@ -6,7 +6,8 @@ export type Screen =
   | { kind: 'overview' }
   | { kind: 'report'; reportId: string }
   | { kind: 'new-incident' }
-  | { kind: 'session'; sessionId: string };
+  | { kind: 'session'; sessionId: string }
+  | { kind: 'driver-license'; code: string | null };
 
 export interface KioskContextValue {
   terminal: KioskTerminal;

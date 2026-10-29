@@ -4,6 +4,9 @@ import { EmptyState } from '@forga/web-ui';
 import { translations } from './i18n';
 import { CatalogsPage } from './catalogs/CatalogsPage';
 import { CoursePlanningPage } from './courses/CoursePlanningPage';
+import { DriverLicensesPage } from './driver-licenses/DriverLicensesPage';
+import { LicensePage } from './driver-licenses/LicensePage';
+import { LicenseSettingsPage } from './driver-licenses/LicenseSettingsPage';
 import { OrganizationPage } from './organization/OrganizationPage';
 import { VehiclesPage } from './organization/VehiclesPage';
 import { PersonCreatePage } from './persons/PersonCreatePage';
@@ -26,6 +29,9 @@ export default defineWebModule({
     { path: 'persons', element: <PersonsPage /> },
     { path: 'persons/new', element: <PersonCreatePage /> },
     { path: 'persons/:id', element: <PersonPage /> },
+    { path: 'persons/:id/driver-license', element: <LicensePage /> },
+    { path: 'driver-licenses', element: <DriverLicensesPage /> },
+    { path: 'driver-licenses/settings', element: <LicenseSettingsPage /> },
     { path: 'vehicles', element: <VehiclesPage /> },
     { path: 'courses', element: <CoursePlanningPage /> },
     { path: 'catalogs', element: <CatalogsPage /> },

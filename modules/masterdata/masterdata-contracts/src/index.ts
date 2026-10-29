@@ -9,6 +9,7 @@ export * from './lib/templates/bw-catalogs.js';
 export * from './lib/course.js';
 export * from './lib/directory.js';
 export * from './lib/person.js';
+export * from './lib/driver-license.js';
 export * from './lib/templates/bw-courses.js';
 export * from './lib/iban.js';
 export * from './lib/group.js';

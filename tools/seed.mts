@@ -1,7 +1,8 @@
 /**
  * Fills a running f.orga instance with demo data through the public API:
  * organization, one user per standard role (department roles linked to fitting persons of Musterstadt), groups, course
- * planning (runs, nominations, targets), bank accounts with made-up IBANs, persons and incidents, protective equipment of the clothing store (imported from generated files in the
+ * planning (runs, nominations, targets), bank accounts with made-up IBANs, driving licences (classes from the import,
+ * checks with the original and a request to present it again), persons and incidents, protective equipment of the clothing store (imported from generated files in the
  * format of the MP-Feuer export `Personal.xlsx` and of the profile `incidents.personnel`), a duty roster calendar and new incidents with the
  * EvD report of the duty officer module.
  *
@@ -197,8 +198,21 @@ function planPersons(): PlannedPerson[] {
 /** Department column as MP-Feuer writes it ("Abt. Musterstadt", "Altersabt. Musterstadt"). */
 const exportName = (d: DepartmentPlan) => (d.type === 'operational' ? `Abt. ${d.shortName}` : d.type === 'veterans' ? `Altersabt. ${d.name.replace(/^Altersabteilung /, '')}` : d.name);
 
+/**
+ * Driving licence as old exports hold it: classes as text and one expiry date. The import gives the date to the
+ * time-limited classes C1, C1E, C and CE ("Befristung prüfen" until the first check). Derived from the row, so the
+ * random numbers of the other data stay the same.
+ */
+function licenseColumns(p: PlannedPerson, index: number): [string, string] {
+  if (p.department.type !== 'operational' || p.status === 'Passiv' || index % 7 === 6) return ['', ''];
+  const classes = ['B', 'B, BE', 'B, BE, C, CE', 'B, C1', 'B, BE, C1, C1E, C, CE'][index % 5];
+  if (!/C/.test(classes)) return [classes, ''];
+  // Expiries from two months ago to five years ahead.
+  return [classes, dateText(new Date(Date.now() + (((index * 151) % 1880) - 60) * 86_400_000))];
+}
+
 async function personsWorkbook(persons: PlannedPerson[]): Promise<Buffer> {
-  const headers = ['Pers.-Nr.', 'Anrede', 'Vorname', 'Nachname', 'Straße', 'PLZ', 'Ort', 'Handy', 'E-Mail', 'Geburtsdatum', 'Eintritt', 'Status', 'Bezeichnung'];
+  const headers = ['Pers.-Nr.', 'Anrede', 'Vorname', 'Nachname', 'Straße', 'PLZ', 'Ort', 'Handy', 'E-Mail', 'Geburtsdatum', 'Eintritt', 'Status', 'Bezeichnung', 'Führerschein', 'Führerschein gültig bis'];
   const rows = persons.map((p, i) => [
     p.personnelNumber,
     p.salutation,
@@ -213,6 +227,7 @@ async function personsWorkbook(persons: PlannedPerson[]): Promise<Buffer> {
     dateText(p.joinedOn),
     p.status,
     exportName(p.department),
+    ...licenseColumns(p, i),
   ]);
   return xlsx(headers, rows);
 }
@@ -477,6 +492,43 @@ async function ensureQualification(person: PersonRef, qualification: string, acq
  * file fits the role: the department commander holds the office, the group leader the qualification; the equipment
  * and breathing apparatus officers hold theirs as well.
  */
+/**
+ * Driving licence checks in Musterstadt: most persons with classes showed the original to the commander (the
+ * classes and expiries of the file are confirmed), one is asked to present it again. Persons with a check are skipped.
+ */
+async function driverLicenses(persons: PersonRef[], accounts: Map<string, PersonRef>, departments: Map<string, string>): Promise<void> {
+  reseed(20261029);
+  const musterstadt = departments.get('Abteilung Musterstadt')!;
+  const examiner = accounts.get('commander') ?? accounts.get('department-commander');
+  if (!examiner) return;
+  type License = { classes: { class: string; expiresOn: string | null }[]; documentExpiresOn: string | null; lastCheckedOn: string | null };
+  const local = persons.filter((p) => p.primaryDepartmentId === musterstadt && ['active', 'probation'].includes(p.status));
+  let requested = false;
+  let checks = 0;
+  for (const [index, person] of local.entries()) {
+    const file = await call<{ driverLicense: License }>('GET', `masterdata/persons/${person.id}`);
+    const license = file.driverLicense;
+    if (!license.classes.length || license.lastCheckedOn) continue;
+    if (index % 4 === 3) continue; // first check still missing
+    // The original shows the expiry; a passed one was renewed for five years at the check.
+    const renewed = license.classes.map((c) => ({ class: c.class, expiresOn: c.expiresOn && c.expiresOn < daysAgo(0) ? isoDate(new Date(Date.now() + 5 * 365 * 86_400_000)) : c.expiresOn }));
+    await call('POST', `masterdata/persons/${person.id}/driver-license/checks`, {
+      checkedOn: daysAgo(between(10, 700)),
+      checkedById: examiner.id,
+      originalPresented: true,
+      classes: renewed,
+      documentExpiresOn: null,
+      note: '',
+    });
+    checks++;
+    if (!requested && index >= 5 && license.classes.some((c) => c.class.startsWith('C'))) {
+      requested = true;
+      await call('POST', `masterdata/persons/${person.id}/driver-license/requests`, { reason: 'Neue Klasse angegeben', dueOn: isoDate(new Date(Date.now() + 14 * 86_400_000)) });
+    }
+  }
+  console.log(`  ${checks} Kontrollen im Original${requested ? ', 1 erneute Vorlage angefordert' : ''}`);
+}
+
 async function users(persons: PersonRef[], departments: Map<string, string>): Promise<Map<string, PersonRef>> {
   const roles = await call<{ id: string; name: { de: string; en: string }; templateKey: string | null }[]>('GET', 'core/roles');
   const accounts = await call<{ username: string; personId: string | null }[]>('GET', 'core/users');
@@ -1163,6 +1215,8 @@ async function main(): Promise<void> {
 
   console.log('Benutzer je Rolle …');
   const accounts = await users(persons, departments);
+  console.log('Führerscheinkontrollen …');
+  await driverLicenses(persons, accounts, departments);
   console.log('Gruppen, Lehrgänge und Bankverbindungen …');
   await groups(persons, departments, accounts);
   await coursePlanning(departments);

@@ -13,10 +13,11 @@ Release 1. Grundlage aller anderen Fachmodule. Modul-ID `masterdata`. Alle Oberf
 - Historie inklusive Kinddatensätze
 - Schnittstellen `PERSON_DIRECTORY` und `ORGANIZATION`, Ereignisse
 - 14 Listenvorlagen (Mitglieder, Unterschriften, Telefon, Komplettdaten, Geburtstage, Jubiläen, Qualifikationsübersicht, Atemschutzgeräteträger, Probezeit, Altersgrenzen, Personalstärke, Fahrzeuge, Lehrgangsvormerkungen, Lehrgänge im Jahr), siehe [implementiert/architektur.md](../../implementiert/architektur.md#modul-stammdaten-masterdata)
-- Fristen zu Probezeit, Grundausbildung, Mindestalter, Altersgrenze, Ende der Jugendfeuerwehr, Führerschein und ablaufenden Qualifikationen
+- Fristen zu Probezeit, Grundausbildung, Mindestalter, Altersgrenze, Ende der Jugendfeuerwehr und ablaufenden Qualifikationen
+- Führerscheinkontrolle, siehe [implementiert/architektur.md](../../implementiert/architektur.md#führerscheinkontrolle); offene Punkte in [fuehrerscheinkontrolle.md](fuehrerscheinkontrolle.md)
 - Importprofil `masterdata.persons` für Personen, auch aus dem MP-Feuer-Export `Personal.xlsx`
 
-**Bereits umgesetzt (Oberfläche):** Organisation, Personen, Person anlegen, Personalakte, Fahrzeuge, Lehrgangsplanung, Kataloge, siehe [implementiert/architektur.md](../../implementiert/architektur.md#oberfläche-stammdaten).
+**Bereits umgesetzt (Oberfläche):** Organisation, Personen, Person anlegen, Personalakte, Führerschein und Führerscheinkontrollen, Fahrzeuge, Lehrgangsplanung, Kataloge, siehe [implementiert/architektur.md](../../implementiert/architektur.md#oberfläche-stammdaten).
 
 **Offen:**
 - Datenblatt der Person als PDF, Spaltenauswahl in der Personenliste, Historie auf der Fahrzeugseite
@@ -77,7 +78,7 @@ Prüffristen des Fahrzeugs (HU, UVV) gehören ins Modul Geräte. Ohne dieses Mod
 | Feuerwehr | Personalnummer, Eintrittsdatum Feuerwehr („Mitglied seit“), Dienstgrad (aktueller Stand, Beförderungen als Liste), Status (Probezeit, aktiv, passiv, Jugend, Altersabteilung, ausgeschieden), Ende der Probezeit, Austrittsdatum und -grund, Kennzeichen Musiker |
 | Mitgliedschaften | Abteilung, von, bis, Stammabteilung ja/nein |
 | Kennzeichen | Atemschutzgeräteträger, Maschinist, … aus dem Qualifikationskatalog, mit Gültigkeit |
-| Führerschein | Klassen mit Befristung je Klasse (u. a. C/CE für die Jahresstatistik), Kontrollen mit Prüfer und Art; siehe [Führerscheinkontrolle](fuehrerscheinkontrolle.md) |
+| Führerschein | Klassen mit Befristung je Klasse (u. a. C/CE für die Jahresstatistik), Kontrollen mit Prüfer und Art (umgesetzt, siehe [Führerscheinkontrolle](../../implementiert/architektur.md#führerscheinkontrolle)) |
 | Bankverbindung | IBAN, Kontoinhaber (für Entschädigungen) |
 | Ehrungen | Ehrung (Katalog), Datum |
 | Bemerkung | Freitext |

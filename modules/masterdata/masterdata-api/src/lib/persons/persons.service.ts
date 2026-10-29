@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { type AuthenticatedUser, wordsWhere } from '@forga/core-api';
-import type { Person as PersonDto, PersonSnapshot, PersonSummary } from '@forga/masterdata-contracts';
+import { type Person as PersonDto, type PersonSnapshot, type PersonSummary, readDriverLicense } from '@forga/masterdata-contracts';
 import { today } from '../shared/access.js';
 import { HonorAward, Membership, Person, PersonQualification, RankAssignment, OfficeAssignment, RestPeriod } from '../masterdata.entities.js';
 
@@ -198,7 +198,7 @@ export class PersonsService {
       gender: person.gender,
       employment: person.employment,
       musician: person.musician,
-      driverLicenseClasses: person.driverLicense?.classes ?? [],
+      driverLicenseClasses: readDriverLicense(person.driverLicense).classes.map((c) => c.class),
     };
   }
 
@@ -227,7 +227,7 @@ export class PersonsService {
       employment: person.employment,
       joinedOn: person.joinedOn ?? null,
       musician: person.musician,
-      driverLicense: person.driverLicense,
+      driverLicense: readDriverLicense(person.driverLicense),
       notes: options.self || !sensitive ? '' : person.notes,
       status: person.status,
       probationEndsOn: person.probationEndsOn ?? null,

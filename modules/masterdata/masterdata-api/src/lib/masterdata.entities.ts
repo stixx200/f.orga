@@ -4,6 +4,9 @@ import type {
   BankAccount,
   DepartmentType,
   DriverLicense,
+  DriverLicenseCheckMethod,
+  DriverLicenseClass,
+  DriverLicenseTokenKind,
   Employer,
   Employment,
   Gender,
@@ -236,3 +239,84 @@ export const RestPeriodSchema = defineEntity({
 });
 export class RestPeriod extends RestPeriodSchema.class {}
 RestPeriodSchema.setClass(RestPeriod);
+
+/**
+ * Proof that a driving licence was presented (or confirmed at a self-check). Never changed, only cancelled with a
+ * reason, so the proof for the municipality stays complete. No copy, photo or licence number is stored.
+ */
+export const DriverLicenseCheckSchema = defineEntity({
+  name: 'DriverLicenseCheck',
+  schema: 'masterdata',
+  tableName: 'driver_license_check',
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv7()),
+    person: () => p.manyToOne(Person).deleteRule('cascade'),
+    checkedOn: p.date(),
+    method: p.string().$type<DriverLicenseCheckMethod>(),
+    /** Examining person; `null` at self-checks and for old data. */
+    checkedBy: () => p.manyToOne(Person).nullable().deleteRule('set null'),
+    originalPresented: p.boolean().default(false),
+    /** Classes found at the check (empty at self-checks). */
+    classes: p.json<DriverLicenseClass[]>(),
+    /** Self-declaration confirmed at a self-check, in the language of the screen. */
+    selfDeclaration: p.text().default(''),
+    terminalId: p.string().nullable(),
+    /** Name of the info terminal of a self-check. */
+    device: p.string().default(''),
+    /** Request to present the licence again that this check settled. */
+    requestId: p.string().nullable(),
+    note: p.text().default(''),
+    recordedAt: p.datetime(),
+    cancelledAt: p.datetime().nullable(),
+    cancelledBy: p.string().nullable(),
+    cancelReason: p.text().nullable(),
+  },
+});
+export class DriverLicenseCheck extends DriverLicenseCheckSchema.class {}
+DriverLicenseCheckSchema.setClass(DriverLicenseCheck);
+
+/** Request to present the licence again for a concrete reason; settled by the next check or withdrawn. */
+export const DriverLicenseRequestSchema = defineEntity({
+  name: 'DriverLicenseRequest',
+  schema: 'masterdata',
+  tableName: 'driver_license_request',
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv7()),
+    person: () => p.manyToOne(Person).deleteRule('cascade'),
+    reason: p.text(),
+    dueOn: p.date(),
+    requestedAt: p.datetime(),
+    /** Display name of the requesting user. */
+    requestedBy: p.string(),
+    completedByCheckId: p.string().nullable(),
+    withdrawnAt: p.datetime().nullable(),
+    withdrawnBy: p.string().nullable(),
+    withdrawReason: p.text().nullable(),
+  },
+});
+export class DriverLicenseRequest extends DriverLicenseRequestSchema.class {}
+DriverLicenseRequestSchema.setClass(DriverLicenseRequest);
+
+/**
+ * NFC or barcode sticker on the licence of a person for self-checks. Only an HMAC of the ID is stored (`codeHash`,
+ * hidden from the history), plus the last characters to recognise the sticker. At most one active sticker per person.
+ */
+export const DriverLicenseTokenSchema = defineEntity({
+  name: 'DriverLicenseToken',
+  schema: 'masterdata',
+  tableName: 'driver_license_token',
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv7()),
+    person: () => p.manyToOne(Person).deleteRule('cascade'),
+    kind: p.string().$type<DriverLicenseTokenKind>(),
+    codeHash: p.string().index().hidden(),
+    suffix: p.string(),
+    registeredAt: p.datetime(),
+    registeredBy: p.string(),
+    revokedAt: p.datetime().nullable(),
+    revokedBy: p.string().nullable(),
+    revokeReason: p.text().nullable(),
+  },
+});
+export class DriverLicenseToken extends DriverLicenseTokenSchema.class {}
+DriverLicenseTokenSchema.setClass(DriverLicenseToken);
