@@ -17,12 +17,13 @@ import { api, can, formatDate, send, useTranslation } from '@forga/web-sdk';
 import { DataTable, Notice, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { RetentionSettings } from '../admin/RetentionSettings';
 import { SecuritySettings } from '../admin/SecuritySettings';
+import { ConsentCatalog } from '../../privacy/consents/ConsentCatalog';
 import { PRIVACY, privacyKeys, useContacts, useNotice, useRecipients, useTexts } from './api';
 
-const TABS = ['contacts', 'texts', 'selfService', 'security', 'retention'] as const;
+const TABS = ['contacts', 'texts', 'consents', 'selfService', 'security', 'retention'] as const;
 type Tab = (typeof TABS)[number];
 
-/** "Verwaltung → Datenschutz → Einstellungen": contacts, text blocks, self-service, security and retention. */
+/** "Verwaltung → Datenschutz → Einstellungen": contacts, text blocks, consents, self-service, security and retention. */
 export function PrivacySettings({ session }: { session: Session }) {
   const { t } = useTranslation('shell');
   const [search, setSearch] = useSearchParams();
@@ -34,10 +35,11 @@ export function PrivacySettings({ session }: { session: Session }) {
   return (
     <Tabs value={tab} onChange={(value) => setSearch(value ? { tab: value } : {}, { replace: true })} keepMounted={false}>
       <Tabs.List mb="lg">
-        {available.map((key) => <Tabs.Tab key={key} value={key}>{t(`privacy.settings.tabs.${key}`)}</Tabs.Tab>)}
+        {available.map((key) => <Tabs.Tab key={key} value={key}>{key === 'consents' ? t('transparency.consents.tab') : t(`privacy.settings.tabs.${key}`)}</Tabs.Tab>)}
       </Tabs.List>
       <Tabs.Panel value="contacts"><ContactsTab /></Tabs.Panel>
       <Tabs.Panel value="texts"><TextsTab /></Tabs.Panel>
+      <Tabs.Panel value="consents"><ConsentCatalog /></Tabs.Panel>
       <Tabs.Panel value="selfService"><SelfServiceTab /></Tabs.Panel>
       <Tabs.Panel value="security">
         <Stack gap="lg" maw={880}>

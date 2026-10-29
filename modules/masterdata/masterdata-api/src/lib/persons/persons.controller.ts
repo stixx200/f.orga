@@ -14,7 +14,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { EntityManager } from '@mikro-orm/core';
-import { assertVersion, type AuthenticatedUser, berlinDate, brigadeLogoDataUrl, type Certificate, CurrentUser, DomainEvents, renderCertificatesPdf, RequirePermissions, SettingsService, ZodPipe } from '@forga/core-api';
+import { AccessLog, assertVersion, type AuthenticatedUser, berlinDate, brigadeLogoDataUrl, type Certificate, CurrentUser, DomainEvents, renderCertificatesPdf, RequirePermissions, SettingsService, ZodPipe } from '@forga/core-api';
 import type { BrigadeSettings } from '@forga/core-contracts';
 import {
   Admission,
@@ -66,6 +66,9 @@ const queryDate = (value: string | undefined, fallback: string) => {
   return result.data;
 };
 
+/** Read log area of the person file with sensitive fields. */
+export const PERSON_SENSITIVE_AREA = 'masterdata.person-sensitive';
+
 @Controller('masterdata/persons')
 @RequirePermissions(READ)
 export class PersonsController {
@@ -76,6 +79,7 @@ export class PersonsController {
     private readonly settings: SettingsService,
     private readonly events: DomainEvents,
     private readonly holdings: PersonHoldingsRegistry,
+    private readonly accessLog: AccessLog,
   ) {}
 
   /** With `masterdata.persons.read` the summaries, with only `masterdata.persons.directory` restricted entries. */
@@ -95,6 +99,8 @@ export class PersonsController {
   @Get(':id')
   async get(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<PersonDto> {
     const person = await this.persons.load(this.em.fork(), id, user, READ);
+    // The person file with its sensitive fields is especially protected data: read log (L15).
+    if (this.persons.can(user, SENSITIVE, person)) await this.accessLog.record(user, [person.id], PERSON_SENSITIVE_AREA);
     return this.persons.toDto(person, user);
   }
 

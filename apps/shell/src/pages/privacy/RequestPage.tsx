@@ -9,6 +9,8 @@ import { berlinToday, useAssignees, useRecipients, useRequest } from './api';
 import { LiftDialog, RestrictDialog, useRefreshPrivacy } from './dialogs';
 import { DeadlineBadge, Field, STATUS_TONES } from './PrivacyPage';
 import { RequestAccessReports } from '../../privacy/AccessReports';
+import { RequestConsents } from '../../privacy/consents/PersonConsents';
+import { RectificationPanel } from '../../privacy/Rectification';
 
 const REPLY_KEYS = PRIVACY_TEXT_KEYS.filter((key) => key.startsWith('reply'));
 
@@ -62,6 +64,8 @@ function RequestView({ request }: { request: PrivacyRequest }) {
           <Text size="xs" c="dimmed">{t('privacy.detail.created', { date: formatDateTime(request.createdAt, i18n.language), name: request.createdByName ?? '–' })}</Text>
         </Stack>
       </Panel>
+      {request.rectification && <RectificationPanel requestId={request.id} rectification={request.rectification} />}
+      {request.kind === 'consent-withdrawal' && <RequestConsents personId={request.personId} requestId={request.id} open={open} />}
       <ExtensionPanel request={request} />
       <WorkPanel request={request} />
       {['rectification', 'erasure', 'restriction'].includes(request.kind) && <RecipientsPanel request={request} />}

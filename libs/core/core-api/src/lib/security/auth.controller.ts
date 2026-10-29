@@ -43,6 +43,7 @@ import { PermissionRegistry } from './permission-registry.js';
 import { Role, RoleAssignment, Session, User } from './security.entities.js';
 import { serverKey } from './server-key.js';
 import { PrivacyNoticeService } from '../privacy/privacy-notice.js';
+import { Impersonations } from './impersonations.js';
 
 @Controller('core')
 export class AuthController {
@@ -57,6 +58,7 @@ export class AuthController {
     private readonly mfa: MfaService,
     private readonly registry: PermissionRegistry,
     private readonly notices: PrivacyNoticeService,
+    private readonly impersonations: Impersonations,
   ) {}
 
   /** Login page data: is a setup needed, the brigade name if known, and the stage of the installation. */
@@ -181,6 +183,7 @@ export class AuthController {
     const own = (req.cookies as Record<string, string> | undefined)?.[SESSION_COOKIE];
     if (!own) throw new ForbiddenException({ code: 'auth.impersonationNeedsSession' });
     const token = await this.auth.impersonate(user, id, input.reason);
+    await this.impersonations.notify(id, user.displayName, input.reason);
     res.cookie(ORIGINAL_SESSION_COOKIE, own, await this.cookieOptions(req));
     await this.setCookie(req, res, token);
     return { ok: true };

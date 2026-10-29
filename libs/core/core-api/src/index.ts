@@ -62,3 +62,7 @@ export * from './lib/privacy/privacy-notice.js';
 export * from './lib/privacy/privacy-requests.js';
 export * from './lib/privacy/privacy-text.js';
 export * from './lib/privacy/restriction.js';
+export * from './lib/privacy/access-log.js';
+export * from './lib/privacy/consents.js';
+export * from './lib/privacy/rectifications.js';
+export * from './lib/security/impersonations.js';

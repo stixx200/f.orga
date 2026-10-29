@@ -6,6 +6,7 @@ import {
   ForbiddenException,
   Get,
   HttpCode,
+  Inject,
   Injectable,
   NotFoundException,
   type OnModuleInit,
@@ -22,6 +23,7 @@ import {
   addMonthsToDate,
   type BrigadeSettings,
   fillPlaceholders,
+  type LocalizedText,
   type Language,
   MyAccessRequestInput,
   type MyPrivacy,
@@ -54,8 +56,9 @@ import { User } from '../security/security.entities.js';
 import { brigadeLogoDataUrl } from '../settings/assets.js';
 import { SettingsService } from '../settings/settings.js';
 import { type DeadlineInput, type DeadlineProvider, DeadlineRegistry } from '../tasks/deadline-registry.js';
+import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
 import { ZodPipe } from '../zod.pipe.js';
-import { PrivacyRequestEntity } from './privacy.entities.js';
+import { PrivacyRequestEntity, type StoredRectification } from './privacy.entities.js';
 import { PrivacyNoticeService } from './privacy-notice.js';
 import { formatDay, KIND_LABELS, lines, pdfParagraphs } from './privacy-text.js';
 
@@ -78,7 +81,27 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
     private readonly audit: Audit,
     private readonly registry: DeadlineRegistry,
     private readonly references: AuditReferenceRegistry,
+    @Inject(FORGA_CORE_OPTIONS) private readonly options: ForgaCoreOptions,
   ) {}
+
+  /** Name of the area of a rectification: the module of the section in "My area", or "Sonstiges". */
+  areaLabel(area: string): LocalizedText {
+    if (area === 'core') return { de: 'Benutzerkonto', en: 'User account' };
+    return this.options.modules.find((m) => m.manifest.id === area)?.manifest.name ?? { de: 'Sonstiges', en: 'Other' };
+  }
+
+  /** The rectification of a request for display, with the name of who marked it as corrected. */
+  rectificationDto(stored: StoredRectification | null | undefined, users: Map<string, string>) {
+    if (!stored) return null;
+    return {
+      area: stored.area,
+      areaLabel: this.areaLabel(stored.area),
+      wrong: stored.wrong,
+      correct: stored.correct,
+      correctedAt: stored.correctedAt ?? null,
+      correctedByName: stored.correctedBy ? (users.get(stored.correctedBy) ?? null) : null,
+    };
+  }
 
   onModuleInit(): void {
     this.registry.register(this);
@@ -132,7 +155,7 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
   /** Requests as the administration sees them, with person and user names. */
   async toDtos(requests: PrivacyRequestEntity[]): Promise<PrivacyRequest[]> {
     const persons = new Map(((await this.organization.persons([...new Set(requests.map((r) => r.personId))])) ?? []).map((p) => [p.id, p]));
-    const userIds = [...new Set(requests.flatMap((r) => [r.assigneeId, r.createdBy]).filter((id): id is string => Boolean(id)))];
+    const userIds = [...new Set(requests.flatMap((r) => [r.assigneeId, r.createdBy, r.rectification?.correctedBy]).filter((id): id is string => Boolean(id)))];
     const users = new Map((userIds.length ? await this.em.fork().find(User, { id: { $in: userIds } }, { fields: ['id', 'displayName'] }) : []).map((u) => [u.id, u.displayName]));
     return requests.map((r) => {
       const person = persons.get(r.personId);
@@ -161,6 +184,7 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
         notes: r.notes,
         recipients: r.recipients ?? [],
         accessReportDocumentId: r.accessReportDocumentId ?? null,
+        rectification: this.rectificationDto(r.rectification, users),
         createdAt: r.createdAt.toISOString(),
         createdByName: r.createdBy ? (users.get(r.createdBy) ?? null) : null,
         version: r.version,
@@ -178,7 +202,7 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
   }
 
   /** Records a request; with `restrict` (objection, restriction) the processing of the person is restricted right away. */
-  async create(input: ReturnType<typeof PrivacyRequestInput.parse>, createdBy: string | null): Promise<PrivacyRequestEntity> {
+  async create(input: ReturnType<typeof PrivacyRequestInput.parse>, createdBy: string | null, rectification: StoredRectification | null = null): Promise<PrivacyRequestEntity> {
     const known = await this.organization.persons([input.personId]);
     if (known && !known.length) throw new BadRequestException({ code: 'privacy.personUnknown' });
     if (input.receivedOn > berlinDate()) throw new BadRequestException({ code: 'privacy.receivedInFuture' });
@@ -196,6 +220,7 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
       activity: input.activity,
       dueOn: addMonthsToDate(input.receivedOn, 1),
       createdBy,
+      rectification,
     });
     await em.flush();
     await this.audit.log('privacy.request-created', { requestId: request.id, personId: request.personId, kind: request.kind, channel: request.channel });
@@ -467,7 +492,15 @@ export class PrivacyRequestsController {
     ]);
     const requests = user.personId ? await em.find(PrivacyRequestEntity, { personId: user.personId }, { orderBy: { receivedOn: 'desc', createdAt: 'desc' } }) : [];
     return {
-      requests: requests.map((r) => ({ id: r.id, kind: r.kind, receivedOn: r.receivedOn, status: r.status, deadline: deadlineOf(r), closedOn: r.closedOn ?? null })),
+      requests: requests.map((r) => ({
+        id: r.id,
+        kind: r.kind,
+        receivedOn: r.receivedOn,
+        status: r.status,
+        deadline: deadlineOf(r),
+        closedOn: r.closedOn ?? null,
+        rectification: r.rectification ? { areaLabel: this.requests.areaLabel(r.rectification.area), wrong: r.rectification.wrong } : null,
+      })),
       selfService: PrivacySelfService.parse(selfService ?? {}),
       dpo: { name: contacts.dpo.name, email: contacts.dpo.email, phone: contacts.dpo.phone },
       notice: { version: current.version, acknowledgedVersion: stored.privacyNoticeVersion ?? null, acknowledgedAt: stored.privacyNoticeAcknowledgedAt?.toISOString() ?? null },

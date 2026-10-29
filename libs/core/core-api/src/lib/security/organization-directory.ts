@@ -57,6 +57,8 @@ export interface OrganizationProvider {
    * Persons whose processing is restricted (Art. 18): they disappear from deadlines, search and e-mails of the core.
    */
   restrictedPersonIds?(): Promise<string[]>;
+  /** Persons from `ids` under 18 today (consents of minors are given by their legal guardians). */
+  minors?(ids: readonly string[]): Promise<string[]>;
   /** Restricts the processing of a person (a request with `restrict`); `false` if the person is unknown. */
   restrictProcessing?(personId: string, restriction: { reason: ProcessingRestrictionReason; until: string | null; requestId: string | null }): Promise<boolean>;
 }
@@ -132,6 +134,12 @@ export class OrganizationDirectory {
   /** Persons whose processing is restricted (Art. 18); empty without a provider. */
   async restrictedPersonIds(): Promise<Set<string>> {
     return new Set(this.provider?.restrictedPersonIds ? await this.provider.restrictedPersonIds() : []);
+  }
+
+  /** Persons from `ids` under 18 today; empty without a provider. */
+  async minors(ids: readonly string[]): Promise<Set<string>> {
+    const valid = ids.filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+    return new Set(this.provider?.minors && valid.length ? await this.provider.minors(valid) : []);
   }
 
   /** Restricts the processing of a person; `false` without a provider or for an unknown person. */

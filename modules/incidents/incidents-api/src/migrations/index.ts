@@ -1,7 +1,7 @@
 import type { MigrationObject } from '@mikro-orm/core';
-import { Migration20261029134911_initial } from './Migration20261029134911_initial.js';
+import { Migration20261029144225_initial } from './Migration20261029144225_initial.js';
 
 // Maintained by `npm run migration:create`.
 export const INCIDENTS_MIGRATIONS: MigrationObject[] = [
-  { name: 'incidents/Migration20261029134911_initial', class: Migration20261029134911_initial },
+  { name: 'incidents/Migration20261029144225_initial', class: Migration20261029144225_initial },
 ];

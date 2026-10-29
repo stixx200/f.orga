@@ -4,6 +4,9 @@ import { can, extensionsOf, useLocalized, useTranslation } from '@forga/web-sdk'
 import { EmptyState, PageHeader } from '@forga/web-ui';
 import { MyAccessReports } from '../privacy/AccessReports';
 import { MyPrivacy } from './privacy/MyPrivacy';
+import { MyConsentsPanel } from '../privacy/consents/MyConsents';
+import { ImpersonationsPanel } from '../privacy/Impersonations';
+import { RectificationButton } from '../privacy/Rectification';
 
 /** Sections of "My area" the user may see (extension point `core.me.sections`). */
 export function mySections(session: Session) {
@@ -28,12 +31,20 @@ export function MyAreaPage({ session }: { session: Session }) {
             return (
               <section key={section.module} aria-label={localized(section.label)}>
                 <Section personId={session.user.personId} />
+                {/* Something wrong in this section? (L12) */}
+                <RectificationButton area={section.module} />
               </section>
             );
           })}
           {/* Data protection (core): request access, own requests. */}
+          <section aria-label={t('transparency.consents.me.title')}>
+            <MyConsentsPanel />
+          </section>
           <section aria-label={t('privacy.me.title')}>
             <MyPrivacy />
+          </section>
+          <section aria-label={t('transparency.impersonations.title')}>
+            <ImpersonationsPanel />
           </section>
         </>
       )}

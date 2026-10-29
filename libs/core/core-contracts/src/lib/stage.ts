@@ -13,6 +13,8 @@ export const SecuritySettings = z.object({
   mailHealthWithoutNames: z.boolean().default(true),
   /** Every deadline of the weekly e-mail only as counts per module. */
   mailAllWithoutNames: z.boolean().default(false),
+  /** Users get an e-mail when an administrator logs in as them ("Anmelden als", L15). */
+  notifyImpersonation: z.boolean().default(true),
 });
 export type SecuritySettings = z.infer<typeof SecuritySettings>;
 

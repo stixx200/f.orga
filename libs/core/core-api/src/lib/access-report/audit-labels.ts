@@ -38,4 +38,8 @@ export const AUDIT_LABELS: Record<string, LocalizedText> = {
   'privacy.access-report-created': { de: 'Auskunft erstellt', en: 'Access report created' },
   'privacy.access-report-downloaded': { de: 'Auskunft heruntergeladen', en: 'Access report downloaded' },
   'privacy.access-report-handed-over': { de: 'Auskunft übergeben', en: 'Access report handed over' },
+  'privacy.consent-given': { de: 'Einwilligung erteilt', en: 'Consent given' },
+  'privacy.consent-withdrawn': { de: 'Einwilligung widerrufen', en: 'Consent withdrawn' },
+  'privacy.rectification-corrected': { de: 'Berichtigung vermerkt', en: 'Rectification recorded' },
+  'privacy.history-redacted': { de: 'Wert in der Historie unkenntlich gemacht', en: 'Value removed from the history' },
 };

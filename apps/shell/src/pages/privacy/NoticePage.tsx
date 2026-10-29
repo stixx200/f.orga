@@ -1,39 +1,13 @@
-import { Alert, Anchor, Box, Button, Center, Checkbox, Group, List, Loader, Paper, Select, Stack, Text, Title } from '@mantine/core';
+import { Alert, Anchor, Box, Button, Center, Checkbox, Group, Loader, Paper, Select, Stack, Text, Title } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import type { FirstLoginNotice, Session } from '@forga/core-contracts';
 import { api, type ApiError, formatDate, SESSION_QUERY_KEY, send, useTranslation } from '@forga/web-sdk';
 import { Panel } from '@forga/web-ui';
 import { LanguageSwitch } from '../../frame/LanguageSwitch';
 import { useNotice } from './api';
-
-/** A text block: paragraphs separated by blank lines, lines starting with `- ` as list. */
-export function TextBlock({ text }: { text: string }) {
-  return (
-    <Stack gap="xs">
-      {text.split(/\n\s*\n/).map((paragraph, index) => {
-        const rows = paragraph.split('\n').filter((row) => row.trim());
-        if (rows.length && rows.every((row) => row.startsWith('- '))) {
-          return (
-            <List key={index} size="sm">
-              {rows.map((row, i) => <List.Item key={i}>{row.slice(2)}</List.Item>)}
-            </List>
-          );
-        }
-        return (
-          <Text key={index} size="sm">
-            {rows.map((row, i) => (
-              <Fragment key={i}>
-                {i > 0 && <br />}
-                {row.startsWith('- ') ? `• ${row.slice(2)}` : row}
-              </Fragment>
-            ))}
-          </Text>
-        );
-      })}
-    </Stack>
-  );
-}
+import { TextBlock } from './TextBlock';
+import { FirstLoginConsents, giveFirstLoginConsents, useMyConsents } from '../../privacy/consents/MyConsents';
 
 /** `/privacy`: the privacy notice, readable without sign-in, with its versions and as PDF. */
 export function NoticePage() {
@@ -82,14 +56,22 @@ export function NoticePage() {
   );
 }
 
-/** At the first sign-in and after a new version: short notice, link to the full text, "Zur Kenntnis genommen". */
+/**
+ * At the first sign-in and after a new version: short notice, link to the full text, "Zur Kenntnis genommen", then the
+ * offered consents (voluntary, one by one; L9).
+ */
 export function FirstLoginPage({ session }: { session: Session }) {
   const { t, i18n } = useTranslation('shell');
   const queryClient = useQueryClient();
   const [checked, setChecked] = useState(false);
+  const [consents, setConsents] = useState<string[]>([]);
   const { data } = useQuery({ queryKey: ['core', 'privacy', 'first-login'], queryFn: () => api<FirstLoginNotice>('core/privacy/notice/first-login') });
+  const offered = useMyConsents(Boolean(session.user.personId));
   const acknowledge = useMutation({
-    mutationFn: () => send('POST', 'core/privacy/notice/acknowledge', { version: data!.version }),
+    mutationFn: async () => {
+      await send('POST', 'core/privacy/notice/acknowledge', { version: data!.version });
+      await giveFirstLoginConsents(offered.data, consents);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY }),
   });
   const logout = useMutation({ mutationFn: () => send('POST', 'core/logout'), onSuccess: () => queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY }) });
@@ -107,6 +89,7 @@ export function FirstLoginPage({ session }: { session: Session }) {
           <Anchor href="/privacy" target="_blank" size="sm">{t('privacy.firstLogin.notice')}</Anchor>
           <Checkbox label={t('privacy.firstLogin.acknowledge', { version: session.privacyNotice.version })} checked={checked} onChange={(e) => setChecked(e.currentTarget.checked)} />
           <Text size="xs" c="dimmed">{t('privacy.firstLogin.hint')}</Text>
+          {session.user.personId && <FirstLoginConsents selected={consents} onChange={setConsents} />}
           {acknowledge.error && <Alert color="brand">{(acknowledge.error as ApiError).translated()}</Alert>}
           <Group justify="space-between">
             <Button variant="subtle" loading={logout.isPending} onClick={() => logout.mutate()}>{t('privacy.firstLogin.logout')}</Button>

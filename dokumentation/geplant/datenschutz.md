@@ -27,19 +27,19 @@ Alle Textvorlagen in f.orga (Auskunft, Datenschutzhinweis, Einwilligungen) sind 
 Umgesetzt ist (siehe [implementiert/architektur.md](../implementiert/architektur.md#daten-suche-vollexport-auskunft-aufbewahrung)):
 
 - **Rechte** je Abteilung, sensible Felder der Person nur mit `masterdata.persons.sensitive`, Untersuchungsergebnisse im Atemschutz nur mit `respiratory-protection.examinations`; Maskierung in der Historie.
-- **Protokolle:** Audit-Log (Anmeldungen, Rechte, Exporte, Importe, Impersonation mit Grund), Historie aller Änderungen.
+- **Protokolle:** Audit-Log (Anmeldungen, Rechte, Exporte, Importe, Impersonation mit Grund), Historie aller Änderungen, Leseprotokoll für besonders geschützte Daten.
 - **Auskunft** als lesbares PDF mit den Angaben nach Art. 15 Abs. 1 aus allen Modulen (`describePerson`), verschlüsselt 30 Tage abgelegt, Übergabe auch in „Mein Bereich“ ([implementiert/datenschutz.md](../implementiert/datenschutz.md#auskunft-nach-art-15-als-pdf-l3)); dazu weiter das JSON `GET /api/core/export/person/:personId` (`data.person-exported`).
 - **Aufbewahrung** ([Aufbewahrungsplan](../implementiert/aufbewahrung.md), Einstellung `privacy.retention`): Frist und Aktion je Datenkategorie (Grunddaten und Personalakte Ausgeschiedener, Einsätze, Dienste, ausgesonderte Geräte und Fahrzeuge, Kostenbescheide, Auszahlungsläufe, Audit-Log, Historie) mit Aussonderung und Anbietung an das Archiv; Standard nichts außer Audit-Log 2 Jahre. Import-Uploads 24 Stunden, Zeilen von MP-Feuer-Läufen 7 Tage. `PersonDataRegistry` mit Beiträgen von Core, Atemschutz, Kleiderkammer, Beförderungen, Diensten, Entschädigungen, Geräten und Einsatzleiter vom Dienst.
 - **Sicherheit:** scrypt, Sitzung 14 Tage als `HttpOnly`-Cookie, CSRF-Header, Anmeldesperre, API-Tokens als Hash mit Bereichen, OIDC, verschlüsselte Geräteschlüssel, zweiter Faktor (TOTP) als Step-up bei sensiblen Daten und Verwaltung ([Datenschutz, umgesetzt](../implementiert/datenschutz.md)).
 - **Phase 1** ([implementiert/datenschutz.md](../implementiert/datenschutz.md)): HTTPS mit Caddy, `Secure`-Cookies bei `https://`-Adresse, Sicherheitsheader, `/api/docs` nur angemeldet (L1); `FORGA_STAGE` mit Band und Sperren im Testsystem (L6); Verletzte im Bericht nur mit `incidents.injuries.read`, Hinweise an Freitexten, Entschuldigungsgrund als Auswahl (L5, Teil); E-Mails mit Gesundheitsbezug ohne Namen (L18, Teil).
 - **Phase 2, Teil 1** ([implementiert/datenschutz.md](../implementiert/datenschutz.md#recht-und-seite-datenschutz)): Recht `core.privacy.manage`, Seite „Verwaltung → Datenschutz“ mit Kontakten, versionierten Textbausteinen, Selbstauskunft, Sicherheit und Aufbewahrung; Datenschutzhinweis `/privacy` mit Fassungen, PDF und Hinweis bei der ersten Anmeldung, „Information erteilt am“ mit Liste und Massenaktion (L4); Betroffenenanfragen mit Frist, Verlängerung, Antwortschreiben und Empfängern nach Art. 19, Einschränkung der Verarbeitung über alle Module (L7 ohne Löschprüfung); Widerspruch (L19); „Auskunft anfordern“ in Mein Bereich.
-- **Mein Bereich:** Kontakt und Bankverbindung selbst ändern, eigene Dienste, Einsätze, Entschädigung, Atemschutz, Schutzausrüstung.
+- **Phase 3, Teil 2** ([implementiert/datenschutz.md](../implementiert/datenschutz.md#einwilligungen-l9)): Katalog der Einwilligungen mit Fassungen und Vorlagen, Einwilligungen an der Person mit Nachweis und Widerruf, Wirkung in Telefonliste und Geburtstagsliste, Mein Bereich und erste Anmeldung (L9); „Berichtigung beantragen“ mit Aufgabe für die Abteilung, Wert in der Historie unkenntlich machen (L12); Leseprotokoll mit eigener Aufbewahrung, „Anmeldungen als Sie“ mit E-Mail (L15).
+- **Mein Bereich:** Kontakt und Bankverbindung selbst ändern, eigene Dienste, Einsätze, Entschädigung, Atemschutz, Schutzausrüstung, Einwilligungen, Berichtigung beantragen, Anmeldungen als Sie.
 
 ## Auskunft nach Art. 15 als PDF
 
-Umgesetzt (siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#auskunft-nach-art-15-als-pdf-l3)): lesbare Auskunft aus allen Modulen (`describePerson`), PDF mit Anschreiben aus Kontakten und Textbausteinen der Einstellungen „Datenschutz“, verschlüsselte Ablage mit Ablauf nach 30 Tagen, Bezug zur Betroffenenanfrage, Übergabe und Herunterladen in „Mein Bereich“, Selbstauskunft `request` und `instant`. Offen sind weitere Inhalte:
+Umgesetzt (siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#auskunft-nach-art-15-als-pdf-l3)): lesbare Auskunft aus allen Modulen (`describePerson`), PDF mit Anschreiben aus Kontakten und Textbausteinen der Einstellungen „Datenschutz“, verschlüsselte Ablage mit Ablauf nach 30 Tagen, Bezug zur Betroffenenanfrage, Übergabe und Herunterladen in „Mein Bereich“, Selbstauskunft `request` und `instant`, Einwilligungen und „Zugriffe auf besonders geschützte Daten“. Offen ist:
 
-- Benutzerkonto: Einwilligungen (L9) und „Zugriffe auf besonders geschützte Daten“ aus dem Leseprotokoll (L15).
 - Herkunft (g) genauer aus der Datenübernahme bzw. dem Import selbst (`ImportSource` am Datensatz statt der Zeitnähe zum Audit-Eintrag).
 
 Die Inhalte von Mein Bereich (eigene Einsätze, Dienste, Entschädigung) sind kein Ersatz für die Auskunft, weil Art. 15 Abs. 1 Angaben verlangt, die dort fehlen.
@@ -60,13 +60,13 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 | L6 | Echtdaten nur im Echtsystem; Test- und Entwicklungsdaten | Art. 5 Abs. 1 f, 32 | kritisch (umgesetzt) |
 | L7 | Betroffenenanfragen mit Frist; Löschung und Einschränkung je Person | Art. 12, 17, 18 | kritisch (Anfragen und Einschränkung umgesetzt) |
 | L8 | Verzeichnis der Verarbeitungstätigkeiten und technische Maßnahmen | Art. 30, 32 | wichtig |
-| L9 | Einwilligungen erfassen, nachweisen, widerrufen (auch Minderjährige) | Art. 6, 7, 8 | wichtig |
+| L9 | Einwilligungen erfassen, nachweisen, widerrufen (auch Minderjährige) | Art. 6, 7, 8 | wichtig (umgesetzt) |
 | L10 | Datenminimierung der Felder und Freitexte | Art. 5 Abs. 1 c, 25 | wichtig |
 | L11 | Zweckbindung der Listen und Exporte | Art. 5 Abs. 1 b, 25 | wichtig |
-| L12 | Berichtigung durch die Person; falsche Werte in der Historie | Art. 16, 19 | wichtig |
+| L12 | Berichtigung durch die Person; falsche Werte in der Historie | Art. 16, 19 | wichtig (umgesetzt) |
 | L13 | Vollständige Anonymisierung über alle Module | Art. 5 Abs. 1 e, 17 | wichtig |
 | L14 | Daten Dritter (Beteiligte, Kostenschuldner, Anrufer) | Art. 14, 15, 17 | wichtig |
-| L15 | Protokollierung von Lesezugriffen; Transparenz der Impersonation | Art. 5 Abs. 2, 32 | wichtig |
+| L15 | Protokollierung von Lesezugriffen; Transparenz der Impersonation | Art. 5 Abs. 2, 32 | wichtig (umgesetzt) |
 | L16 | Sitzungen: Leerlauf-Abmeldung, Geräteübersicht | Art. 32 | wichtig |
 | L17 | Verschlüsselung der Sicherungen und der gespeicherten Daten | Art. 32 | wichtig |
 | L18 | E-Mails: Inhalt der Sammel-E-Mail und Benachrichtigungen | Art. 5 Abs. 1 c, f, 32 | wichtig (teilweise umgesetzt) |
@@ -98,7 +98,7 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 - **Umgesetzt:** lesbare Auskunft als PDF aus allen Modulen mit Anschreiben, verschlüsselter Ablage und Übergabe, siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#auskunft-nach-art-15-als-pdf-l3). Abweichungen vom Konzept: keine eigene Vorschauseite (das PDF lässt sich wegen `frame-ancestors 'none'` nicht einbetten, „Ansehen“ öffnet es im Browser); ein hinterlegter Briefkopf wird nicht verwendet, weil die Kopfzeile jeder Seite die Auskunft benennt; MP-Feuer ordnet Berichtszeilen über den Namen zu (keine Personen-ID).
 - **Soll:** präzise, verständlich, in klarer Sprache (Art. 12 Abs. 1), mit allen Angaben nach Art. 15 Abs. 1 und einer Kopie (Abs. 3), ohne Rechte Dritter zu verletzen (Abs. 4).
-- **Offen:** Einwilligungen und Leseprotokoll in der Auskunft, Herkunft aus dem Datensatz; siehe [Auskunft nach Art. 15 als PDF](#auskunft-nach-art-15-als-pdf).
+- **Offen:** Herkunft aus dem Datensatz; siehe [Auskunft nach Art. 15 als PDF](#auskunft-nach-art-15-als-pdf).
 - **Organisatorisch:** Textbausteine mit dem DSB prüfen; Identität vor der Herausgabe prüfen.
 
 ### L4 Informationspflichten (kritisch)
@@ -107,7 +107,8 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 - **Umgesetzt:** Datenschutzhinweis `/privacy` aus Textbausteinen und Kontakten mit Fassungen und PDF, Hinweis bei der ersten Anmeldung und nach einer neuen Fassung, „Information erteilt am“ an der Person mit Liste und Massenaktion; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#datenschutzhinweis-l4). Abweichung: Der Hinweis bei der ersten Anmeldung erscheint erst, wenn alle Bausteine des Hinweises als geprüft markiert sind, weil eine ungeprüfte Vorlage noch nicht gilt.
 - **Offen:**
   - Zwecke, Rechtsgrundlagen, Empfänger und Fristen je Tätigkeit aus dem Verzeichnis (L8) statt aus dem Baustein `noticeProcessing`.
-  - Die angebotenen Einwilligungen auf der Seite der ersten Anmeldung, freiwillig und einzeln (L9).
+>>>
+
   - Hinweis nach der ersten Übernahme aus MP-Feuer „Mitglieder informieren“ mit Link auf die Liste (L28).
 - **Organisatorisch:** Text abstimmen; Mitglieder bei Aufnahme und nach der Umstellung informieren (Dienstabend, Aushang, Schreiben).
 
@@ -118,7 +119,7 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 - **Umgesetzt:** Verletzte im Bericht nur mit Recht, Hinweise an Freitexten, Entschuldigungsgrund als Auswahl ([implementiert](../implementiert/datenschutz.md#gesundheitsdaten-l5-teil)).
 - **Offen:**
   - Kennzeichen `health` an Feldern und Entitäten im Manifest (`personData.categories`), ausgewertet in Auskunft, Verzeichnis und Leseprotokoll (L15).
-  - Leseprotokoll für Untersuchungen (`respiratory-protection.examination-viewed`) und für die Liste fällige Untersuchungen.
+  - Leseprotokoll für die Liste „fällige Eignungsuntersuchungen“ (die Untersuchungen der Person stehen im Leseprotokoll, siehe L15).
 - **Organisatorisch:** Rechtsgrundlage für Untersuchungsdaten klären; Ärzte liefern nur die Bescheinigung „Bedenken/keine Bedenken“, keine Befunde.
 
 ### L6 Echtdaten nur im Echtsystem (kritisch)
@@ -154,13 +155,8 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L9 Einwilligungen (wichtig)
 
-- **Heute:** Keine. Fotos in Berichten und auf der Website, Geburtstagsliste zum Aushang, Weitergabe der Handynummer an die Abteilung (Telefonliste) oder an Messenger-Gruppen beruhen heute auf stillschweigender Praxis.
-- **Soll:** Wo die Verarbeitung nicht zur Aufgabe der Feuerwehr gehört, braucht es eine freiwillige, nachweisbare, jederzeit widerrufbare Einwilligung (Art. 6 Abs. 1 a, Art. 7). Bei Minderjährigen willigen in der Regel die Erziehungsberechtigten ein (für Dienste der Informationsgesellschaft regelt Art. 8 das Alter; für die Jugendfeuerwehr mit dem DSB klären).
-- **Umsetzung:**
-  - **Katalog der Einwilligungen** in „Einstellungen → Datenschutz“ (Mockup): Schlüssel, Titel und Text (de/en, versioniert), Zweck, wer erteilt (Person, Erziehungsberechtigte bei Minderjährigen), Wirkung in f.orga (`effects`), aktiv. Vorlagen (als Vorlage gekennzeichnet): „Fotos in Öffentlichkeitsarbeit“, „Geburtstag im Aushang“, „Handynummer in der Telefonliste der Abteilung“, „Geburtstagsgruß durch die Feuerwehr“.
-  - **Einwilligung an der Person** (`core.consent`: Person, Schlüssel, Fassung, erteilt am, Weg: schriftlich/Mein Bereich/Erziehungsberechtigte, erfasst von, Nachweis als Anhang, widerrufen am, Weg). Nie löschen, nur widerrufen; die Historie ist der Nachweis.
-  - **Wirkung:** Die Liste „Geburtstage“ mit Zweck „Aushang“ enthält nur Personen mit Einwilligung (Zweck „intern für den Kommandanten“ bleibt ohne); die Telefonliste zeigt die Handynummer nur mit Einwilligung, sonst „über Gruppenführer“. Module fragen `CONSENTS.has(personId, key)`.
-  - In **Mein Bereich** sieht und ändert die Person ihre Einwilligungen selbst (Mockup), außer bei Minderjährigen (dann nur ansehen, Widerruf über die Verwaltung).
+- **Umgesetzt:** Katalog mit Fassungen, Vorlagen und Wirkung, Einwilligung an der Person mit Nachweis und Widerruf (auch über eine Anfrage), Wirkung in Telefonliste und Geburtstagsliste über `CONSENTS`, Mein Bereich und erste Anmeldung, Minderjährige; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#einwilligungen-l9). Abweichungen: Der Katalog nennt die Zahl der Personen mit Einwilligung ohne „von n“; die Telefonliste hat zusätzlich den Zweck „Führungskräfte“ (Amt oder Führungsqualifikation, immer mit Nummer, Entscheidung 9); eine Einwilligung zu einer neuen Fassung löst die alte ab (`superseded_on`) statt sie zu widerrufen.
+- **Offen:** weitere Wirkungen, sobald Module sie brauchen (z. B. Fotos in Berichten); Papierformular „Einwilligung“ als PDF aus dem Katalog.
 - **Organisatorisch:** entscheiden, welche Verarbeitungen eine Einwilligung brauchen und welche auf der Aufgabe beruhen; Texte prüfen; Papierformulare für Mitglieder ohne Konto.
 
 ### L10 Datenminimierung (wichtig)
@@ -174,14 +170,14 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 - **Heute:** Die Telefonliste und die Mitgliederliste mit Kontakt darf jeder mit `masterdata.persons.read` ausgeben (z. B. Gruppenführer); Geburtstage und Komplettdaten brauchen `sensitive`. Exporte stehen im Audit-Log, ohne Zweck. Die Excel-Ausgabe jeder Tabelle (`DataTable`) geht an allen Listen vorbei.
 - **Soll:** Daten nur für festgelegte Zwecke; Ausdrucke verlassen kontrolliert das System.
+- **Umgesetzt (Teil):** Telefonliste und Geburtstage haben einen Parameter „Zweck“ mit der Wirkung der Einwilligungen (L9); Listen mit Kontakt- oder sensiblen Daten stehen im Leseprotokoll (L15).
 - **Umsetzung:** Listen tragen im Manifest einen Zweck und optional eine Einwilligung (L9); Listen mit Kontakt- oder sensiblen Daten bekommen ein eigenes Recht `masterdata.lists.contact` (Standard Kommandant, Abteilungskommandant). Fußzeile von PDF und Excel: „Personenbezogene Daten – nur für den Dienstgebrauch, nach Gebrauch vernichten“. Beim Export von Listen mit Kontakt- oder Gesundheitsdaten Pflichtfeld „Zweck“ (Audit). Excel-Ausgabe der Tabellen nur für Tabellen ohne Kontaktspalten bzw. mit demselben Recht.
 - **Organisatorisch:** Dienstanweisung zum Umgang mit Ausdrucken und Messenger-Gruppen.
 
 ### L12 Berichtigung (wichtig)
 
-- **Heute:** In Mein Bereich lassen sich Kontakt und Bankverbindung ändern; für andere Angaben (Qualifikation fehlt, falsches Eintrittsdatum, falscher Einsatz) gibt es keinen Weg. Ein berichtigter Wert bleibt in der Historie sichtbar.
-- **Soll:** unverzügliche Berichtigung (Art. 16), Mitteilung an Empfänger (Art. 19).
-- **Umsetzung:** „Berichtigung beantragen“ in jedem Abschnitt von Mein Bereich (Mockup): Bereich, was ist falsch, wie richtig, optional Nachweis (PDF/Foto, kein Führerscheinfoto). Es entsteht eine Anfrage mit Frist und eine Aufgabe bei den Zuständigen der Abteilung (`masterdata.persons.write`). „Wert in der Historie unkenntlich machen“ für nachweislich falsche oder unzulässig erfasste Angaben (Recht `core.privacy.manage`, Grund Pflicht; der Eintrag bleibt mit „berichtigt, Wert entfernt am …“).
+- **Umgesetzt:** „Berichtigung beantragen“ in Mein Bereich mit Anfrage, Frist und Aufgabe für die Zuständigen der Abteilung, die die Berichtigung vermerken; „Wert in der Historie unkenntlich machen“ mit Pflichtgrund und Audit; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#berichtigung-l12). Abweichung: „Was ist falsch?“ und „Wie ist es richtig?“ sind zwei Felder statt eines.
+- **Offen:** Mitteilung an Empfänger (Art. 19) aus dem Verzeichnis statt aus der Liste der Einstellungen (wie L7).
 - **Organisatorisch:** wer prüft Anträge; Kämmerei bei geänderter Bankverbindung informieren (Hinweis in der Anfrage).
 
 ### L13 Vollständige Anonymisierung (wichtig)
@@ -200,9 +196,8 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L15 Lesezugriffe und Impersonation (wichtig)
 
-- **Heute:** Das Audit-Log enthält Anmeldungen, Änderungen an Rechten, Exporte, Importe; das Lesen einer Personalakte oder von Untersuchungen wird nicht protokolliert. Impersonation steht im Audit-Log, aber der betroffene Benutzer erfährt nichts.
-- **Soll:** Nachweis, wer auf besonders schützenswerte Daten zugegriffen hat (Rechenschaftspflicht Art. 5 Abs. 2), ohne jeden Klick zu speichern.
-- **Umsetzung:** Leseprotokoll `core.access_log` nur für Daten mit `health` oder `sensitive` (Personalakte mit sensiblen Feldern, Untersuchungen, Auskunft, Vollexport, Listen mit Kontaktdaten): Benutzer, Person, Bereich, Zeitpunkt; zusammengefasst je Benutzer, Person und Tag. Aufbewahrung eigene Frist (Standard 12 Monate). Einsicht mit `core.audit.read`; die betroffene Person sieht in ihrer Auskunft, welche Funktion wann zugegriffen hat. **Impersonation:** Der Benutzer sieht in Mein Bereich bzw. Profil „Anmeldungen als Sie“ mit Datum, Administrator und Grund; Einstellung, ob er eine E-Mail bekommt (Standard an).
+- **Umgesetzt:** Leseprotokoll `core.access_log` (zusammengefasst je Benutzer, Person, Bereich und Tag) mit eigener Aufbewahrung, Einsicht mit `core.audit.read`, Abschnitt in der Auskunft; „Anmeldungen als Sie“ im Profil und in Mein Bereich, E-Mail beim Start mit Einstellung; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#leseprotokoll-und-anmelden-als-l15). Abweichungen: Bereiche sind fest benannt statt aus einem Kennzeichen `health`/`sensitive` im Manifest abgeleitet (L5); während einer Impersonation steht der Administrator als Leser im Protokoll; die Liste der Anmeldungen kommt aus dem Audit-Log und reicht so weit zurück, wie es aufbewahrt wird.
+- **Offen:** weitere Listen mit Gesundheitsdaten im Leseprotokoll (z. B. „fällige Eignungsuntersuchungen“, L5); Bereiche aus dem Kennzeichen `health` im Manifest.
 - **Organisatorisch:** Regel, wann das Leseprotokoll ausgewertet wird (nur anlassbezogen, Beteiligung Personalrat bzw. Feuerwehrausschuss klären).
 
 ### L16 Sitzungen (wichtig)
@@ -283,34 +278,32 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 ### L29 Aufbewahrung von Protokollen (empfohlen)
 
 - **Heute:** Audit-Log 24 Monate (einstellbar), Historie unbegrenzt; Laufberichte des MP-Feuer-Moduls unbegrenzt.
-- **Umsetzung:** Über den [Aufbewahrungsplan](aufbewahrung.md) (`core.history`, `core.audit`), dazu Leseprotokoll (L15) und Laufberichte (L28). Ausgewogen: Das Protokoll muss lang genug sein, um Missbrauch nachzuweisen, und kurz genug, um nicht selbst ein Datenbestand über das Verhalten der Benutzer zu werden.
+- **Umsetzung:** Über den [Aufbewahrungsplan](aufbewahrung.md) (`core.history`, `core.audit` und das Leseprotokoll `core.access-log` sind umgesetzt), dazu Laufberichte (L28). Ausgewogen: Das Protokoll muss lang genug sein, um Missbrauch nachzuweisen, und kurz genug, um nicht selbst ein Datenbestand über das Verhalten der Benutzer zu werden.
 
 ## Step-up: zweiter Faktor bei sensiblen Daten
 
 Umgesetzt (Faktor, Auslöser, Durchsetzung, Oberfläche): siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#zweiter-faktor-bei-sensiblen-daten-step-up). Offen ist:
 
-- **Weitere Bereiche mit `stepUp`**, sobald es sie gibt: das Leseprotokoll unter `core.audit.read`. (`incidents.injuries.read` und `core.privacy.manage` tragen es bereits.) Der Mechanismus ist allgemein: Die Berechtigung bekommt im Manifest `stepUp: true`, Lesepfade mit solchen Feldern prüfen `user.can` (bzw. `needsStepUp` für `stepUpAvailable`), Schreibpfade antworten mit `user.denied(...)`.
+- **Weitere Bereiche mit `stepUp`**, sobald es sie gibt (`incidents.injuries.read`, `core.privacy.manage` und das Leseprotokoll unter `core.audit.read` tragen es bereits). Der Mechanismus ist allgemein: Die Berechtigung bekommt im Manifest `stepUp: true`, Lesepfade mit solchen Feldern prüfen `user.can` (bzw. `needsStepUp` für `stepUpAvailable`), Schreibpfade antworten mit `user.denied(...)`.
 - **Reiter „Sicherheit“** in „Verwaltung → Datenschutz → Einstellungen“ (umgesetzt mit HTTPS, System und E-Mails): Zahl der Benutzer mit sensiblen Rechten und eingerichtetem Faktor, Leerlauf-Abmeldung (L16), Stand der Sicherung.
 - Später zusätzlich **WebAuthn** (Passkeys) als zweiter Faktor.
 
 ## Einstellungen „Datenschutz“
 
-Umgesetzt: Seite „Verwaltung → Datenschutz“ mit den Reitern Anfragen, Information und Einstellungen (Kontakte, Texte, Selbstauskunft, Sicherheit, Aufbewahrung) und den Abschnitten `privacy.contacts`, `privacy.texts`, `privacy.selfServiceAccess`, `privacy.recipients` ([implementiert](../implementiert/datenschutz.md#recht-und-seite-datenschutz)). Offen:
+Umgesetzt: Seite „Verwaltung → Datenschutz“ mit den Reitern Anfragen, Information und Einstellungen (Kontakte, Texte, Einwilligungen, Selbstauskunft, Sicherheit mit „Benutzer bei Anmelden als benachrichtigen“, Aufbewahrung) und den Abschnitten `privacy.contacts`, `privacy.texts`, `privacy.consents`, `privacy.selfServiceAccess`, `privacy.recipients` ([implementiert](../implementiert/datenschutz.md#recht-und-seite-datenschutz)). Offen:
 
 | Reiter | Inhalt |
 | --- | --- |
 | Verzeichnis | Verzeichnis der Verarbeitungstätigkeiten (L8), Abschnitt `privacy.activities` |
-| Einwilligungen | Katalog (L9), Abschnitt `privacy.consents` |
-| Sicherheit | zusätzlich Stand des Step-up (Benutzer mit sensiblen Rechten und eingerichtetem Faktor), Leerlauf-Abmeldung, „Benutzer bei Anmelden als benachrichtigen“, Stand der Sicherung |
+| Sicherheit | zusätzlich Stand des Step-up (Benutzer mit sensiblen Rechten und eingerichtetem Faktor), Leerlauf-Abmeldung, Stand der Sicherung |
 
 ## Rechte und Rollen
 
 | Recht | Bereich | Zweck | Vorlage |
 | --- | --- | --- | --- |
-| `core.privacy.consents` | Abteilung | Einwilligungen von Personen der Abteilung erfassen und widerrufen | `commander`, `department-commander` |
 | `masterdata.lists.contact` | Abteilung | Listen mit Kontaktdaten ausgeben | `commander`, `department-commander` |
 
-`core.privacy.manage` ist umgesetzt (Gesamtwehr, privilegiert, `stepUp`, Vorlage `administrator`; [implementiert](../implementiert/datenschutz.md#recht-und-seite-datenschutz)); es deckt künftig auch Auskünfte, Löschung, Einwilligungen und Verzeichnis ab. Die Vorlage `administration` bekommt es nur auf Wunsch.
+`core.privacy.manage` (Gesamtwehr, privilegiert, `stepUp`, Vorlage `administrator`; [implementiert](../implementiert/datenschutz.md#recht-und-seite-datenschutz)) und `core.privacy.consents` (Abteilung, Vorlagen `commander`, `department-commander`; [implementiert](../implementiert/datenschutz.md#einwilligung-an-der-person)) sind umgesetzt; `core.privacy.manage` deckt künftig auch Löschung und Verzeichnis ab. Die Vorlage `administration` bekommt es nur auf Wunsch.
 
 ## Entscheidungen
 
@@ -333,7 +326,7 @@ Alle Entscheidungen sind festgelegt (wie empfohlen, Nr. 2 abweichend).
 | --- | --- | --- |
 | 1 – vor dem Echtbetrieb | umgesetzt: zweiter Faktor als Step-up, HTTPS mit Caddy und Sicherheitsheader, `FORGA_STAGE` mit Band und Sperren im Testsystem, E-Mails ohne Gesundheitsbezug, Verletzte nur mit Recht (mit `stepUp`) ([implementiert](../implementiert/datenschutz.md)) | L1, L2, L5 (Teil), L6, L18 (Teil) |
 | 2 – Rechte der Betroffenen | umgesetzt: Datenschutzhinweis und erste Anmeldung, Anfragen mit Frist, Einschränkung, Widerspruch, Auskunft als PDF mit `describePerson` in allen Modulen ([implementiert](../implementiert/datenschutz.md#datenschutzhinweis-l4)) | umgesetzt L3, L4, L7 (Anfragen, Einschränkung), L19 |
-| 3 – Nachweise | Verzeichnis aus den Manifesten mit technischen Maßnahmen; Einwilligungen; Berichtigung in Mein Bereich; Leseprotokoll; Impersonation sichtbar | L8, L9, L12, L15, L20 |
+| 3 – Nachweise | umgesetzt: Einwilligungen, Berichtigung in Mein Bereich, Leseprotokoll, Impersonation sichtbar ([implementiert](../implementiert/datenschutz.md#einwilligungen-l9)); offen: Verzeichnis aus den Manifesten mit technischen Maßnahmen, Datenpannen | umgesetzt L9, L12, L15; offen L8, L20 |
 | 4 – Löschen und Minimieren | Löschprüfung je Modul; vollständige Anonymisierung mit Startprüfung; Daten Dritter; abschaltbare Felder; Zweck der Listen; Aufbewahrungsplan | L7 (Löschung), L10, L11, L13, L14, L29 |
 | 5 – Härtung | Sitzungen, Benutzer ohne Person, Infoterminal, API-Tokens, Passwörter, Anhänge, MP-Feuer-Laufberichte, Betriebsanleitung | L16, L17, L21–L28 |
 

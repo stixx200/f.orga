@@ -27,6 +27,7 @@ import {
   retentionRuleKey,
 } from '@forga/core-contracts';
 import { Audit, AuditEntry } from '../audit/audit.js';
+import { AccessLog } from '../privacy/access-log.js';
 import { ExportRegistry, PersonDataRegistry } from '../data/data.js';
 import { HistoryEntry } from '../history/history.entity.js';
 import { berlinDate } from '../imports/parse.js';
@@ -90,6 +91,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     private readonly notifications: Notifications,
     private readonly texts: AccessReportTexts,
     private readonly requests: PrivacyRequests,
+    private readonly accessLog: AccessLog,
   ) {}
 
   /**
@@ -320,6 +322,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     }
     const document = await this.store(input, user.id, null);
     await this.audit.log('privacy.access-report-created', { personId: input.personId, documentId: document.id, language: input.language, includeJson: input.includeJson, requestId: input.requestId });
+    await this.accessLog.record(user, [input.personId], 'core.access-report');
     this.track(this.generate(document.id, key));
     return this.dto(document, new Map([[user.id, user.displayName]]));
   }
@@ -428,6 +431,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     if (by.self && !document.downloadedByPersonAt) document.downloadedByPersonAt = new Date();
     await em.flush();
     await this.audit.log('privacy.access-report-downloaded', { personId: document.personId, documentId: document.id, by: by.self ? 'person' : 'administration' });
+    if (!by.self) await this.accessLog.record(by.user, [document.personId], 'core.access-report');
     return { document, pdf };
   }
 
