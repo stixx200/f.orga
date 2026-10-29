@@ -337,3 +337,14 @@ describe('training sessions: corrections, persons, participation and audit', () 
     expect(entries.some((e) => e.action === 'training.session-closed' && e.details.sessionId === ids.wrong)).toBe(true);
   });
 });
+
+describe('session types created during an import', () => {
+  it('appends a new session type after the existing ones', async () => {
+    const before = (await get('/core/imports/lookups/session-type').expect(200)).body as { key: string }[];
+    const created = await post('/core/imports/lookups/session-type', { key: 'day-loop', name: 'Tagschleife' }).expect(201);
+    expect(created.body).toMatchObject({ key: 'day-loop', name: { de: 'Tagschleife' } });
+    const after = (await get('/core/imports/lookups/session-type').expect(200)).body as { key: string }[];
+    expect(after.map((t) => t.key)).toEqual([...before.map((t) => t.key), 'day-loop']);
+    expect((await post('/core/imports/lookups/session-type', { key: 'day-loop', name: 'Tagschleife' }).expect(409)).body.code).toBe('catalog.keyTaken');
+  });
+});
