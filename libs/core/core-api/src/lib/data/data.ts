@@ -1,28 +1,10 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Injectable,
-  NotFoundException,
-  type OnApplicationBootstrap,
-  type OnModuleDestroy,
-  Param,
-  Post,
-  Query,
-  Res,
-} from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/core';
+import { BadRequestException, Controller, Get, Injectable, NotFoundException, Param, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { type PrivacySettings, type RetentionResult, RetentionRun, type SearchHit } from '@forga/core-contracts';
-import { Audit, AuditEntry } from '../audit/audit.js';
+import type { SearchHit } from '@forga/core-contracts';
+import { Audit } from '../audit/audit.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { OrganizationDirectory } from '../security/organization-directory.js';
 import { CurrentUser, RequirePermissions } from '../security/decorators.js';
-import { SettingsService } from '../settings/settings.js';
-import { IMPORT_EXPIRY_MS, ImportUploadEntity } from '../imports/imports.js';
-import { ZodPipe } from '../zod.pipe.js';
 
 export const EXPORT_PERMISSION = 'core.data.export';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -117,80 +99,12 @@ export class PersonDataRegistry {
   }
 }
 
-// ----- Retention -----
-
-export interface RetentionRule {
-  /** Applies the rule (or only counts when `dryRun`); returns the number of affected records. */
-  run(settings: PrivacySettings, dryRun: boolean): Promise<number>;
-}
-
-/** Deletion and anonymisation rules; the core deletes old audit entries, modules add their own rules. */
-@Injectable()
-export class RetentionRegistry {
-  readonly rules = new Map<string, RetentionRule>();
-
-  register(key: string, rule: RetentionRule): void {
-    this.rules.set(key, rule);
-  }
-}
-
-const DAY_MS = 24 * 60 * 60_000;
-
-@Injectable()
-export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy {
-  private timer?: ReturnType<typeof setInterval>;
-  private first?: ReturnType<typeof setTimeout>;
-
-  constructor(
-    private readonly em: EntityManager,
-    private readonly registry: RetentionRegistry,
-    private readonly settings: SettingsService,
-    private readonly audit: Audit,
-  ) {}
-
-  /**
-   * Runs a minute after the start and then once a day, so it also runs when the server is restarted daily;
-   * switched off with `FORGA_RETENTION_SCHEDULER=off` (tests, or to apply the rules only by hand).
-   * Persons are only anonymised once an administrator has chosen a period (default: never).
-   */
-  onApplicationBootstrap(): void {
-    if (process.env.FORGA_RETENTION_SCHEDULER === 'off') return;
-    this.first = setTimeout(() => void this.run(false).catch(() => undefined), 60_000);
-    this.first.unref();
-    this.timer = setInterval(() => void this.run(false).catch(() => undefined), DAY_MS);
-    this.timer.unref();
-  }
-
-  onModuleDestroy(): void {
-    clearTimeout(this.first);
-    clearInterval(this.timer);
-  }
-
-  /** `overrides` only for dry runs: what would other values affect, before they are saved. */
-  async run(dryRun: boolean, overrides: Partial<PrivacySettings> = {}): Promise<RetentionResult> {
-    const stored = (await this.settings.get<PrivacySettings>('privacy')) as PrivacySettings;
-    const settings: PrivacySettings = dryRun ? { ...stored, ...Object.fromEntries(Object.entries(overrides).filter(([, v]) => v !== undefined)) } : stored;
-    const counts: Record<string, number> = {};
-    const cutoff = new Date();
-    cutoff.setMonth(cutoff.getMonth() - settings.auditRetentionMonths);
-    const em = this.em.fork();
-    counts['core.audit'] = dryRun ? await em.count(AuditEntry, { timestamp: { $lt: cutoff } }) : await em.nativeDelete(AuditEntry, { timestamp: { $lt: cutoff } });
-    // Uploaded import files hold personal data; nobody needs them after a day.
-    const expired = { createdAt: { $lt: new Date(Date.now() - IMPORT_EXPIRY_MS) } };
-    counts['core.imports'] = dryRun ? await em.count(ImportUploadEntity, expired) : await em.nativeDelete(ImportUploadEntity, expired);
-    for (const [key, rule] of this.registry.rules) counts[key] = await rule.run(settings, dryRun);
-    if (!dryRun && Object.values(counts).some((c) => c > 0)) await this.audit.log('privacy.retention-applied', counts, null);
-    return { dryRun, counts };
-  }
-}
-
 @Controller('core')
 export class DataController {
   constructor(
     private readonly search: SearchRegistry,
     private readonly codes: CodeRegistry,
     private readonly exports: ExportRegistry,
-    private readonly retention: RetentionService,
     private readonly audit: Audit,
     private readonly organization: OrganizationDirectory,
   ) {}
@@ -250,13 +164,5 @@ export class DataController {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="forga-auskunft-${personId}.json"`);
     res.send(JSON.stringify({ format: 'forga.person', version: 1, personId, exportedAt: new Date().toISOString(), data }, null, 2));
-  }
-
-  /** Applies the retention rules now; with `dryRun` only counts what would be affected. */
-  @Post('retention/run')
-  @HttpCode(200)
-  @RequirePermissions('core.settings.manage')
-  run(@Body(new ZodPipe(RetentionRun)) input: ReturnType<typeof RetentionRun.parse>): Promise<RetentionResult> {
-    return this.retention.run(input.dryRun, input.settings);
   }
 }

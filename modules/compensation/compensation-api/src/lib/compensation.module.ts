@@ -1,12 +1,13 @@
 import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry } from '@forga/core-api';
+import { AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry, PersonDataRegistry, RetentionRegistry } from '@forga/core-api';
 import { COMPENSATION_MANIFEST, COMPENSATION_SETTINGS, COMPENSATION_STATUTE } from '@forga/compensation-contracts';
 import { CATALOG_REFERENCES, type CatalogReferences } from '@forga/masterdata-contracts';
 import { COMPENSATION_MIGRATIONS } from '../migrations/index.js';
 import { registerAuditReferences } from './audit/audit.references.js';
 import { FunctionHolderEntity, ItemEntity, RunEntity } from './compensation.entities.js';
 import { CompensationData } from './data/compensation.data.js';
+import { CompensationRetention } from './data/compensation.retention.js';
 import { FunctionsController } from './functions/functions.controller.js';
 import { FunctionsService } from './functions/functions.service.js';
 import { ItemsController } from './items/items.controller.js';
@@ -21,7 +22,7 @@ import { RunsService } from './runs/runs.service.js';
 @Global()
 @Module({
   controllers: [ItemsController, RunsController, FunctionsController, PreviewController],
-  providers: [ItemsService, RunsService, FunctionsService, YearTotals, CompensationLists, CompensationData, { provide: COMPENSATION_STATUTE, useExisting: ItemsService }],
+  providers: [ItemsService, RunsService, FunctionsService, YearTotals, CompensationLists, CompensationData, CompensationRetention, { provide: COMPENSATION_STATUTE, useExisting: ItemsService }],
   exports: [COMPENSATION_STATUTE],
 })
 export class CompensationModule implements OnModuleInit {
@@ -36,6 +37,9 @@ export class CompensationModule implements OnModuleInit {
     @Inject(CATALOG_REFERENCES) private readonly catalogReferences: CatalogReferences,
     private readonly auditReferences: AuditReferenceRegistry,
     private readonly em: EntityManager,
+    private readonly retention: RetentionRegistry,
+    private readonly retentionCategory: CompensationRetention,
+    private readonly personData: PersonDataRegistry,
   ) {}
 
   onModuleInit(): void {
@@ -43,6 +47,8 @@ export class CompensationModule implements OnModuleInit {
     for (const definition of this.moduleLists.definitions()) this.lists.register('compensation', definition);
     this.deadlines.register(this.data);
     this.exports.register('compensation', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
+    this.retentionCategory.register(this.retention);
+    this.personData.register('compensation', { anonymize: (ids) => this.retentionCategory.anonymize(ids) });
     // Function allowances paid to the holders of an office (settings) refer to the office catalog.
     this.catalogReferences.register('compensation', async (kind, key) =>
       kind === 'office' ? (await this.items.config()).functionAllowances.filter((a) => a.office === key).length : 0,

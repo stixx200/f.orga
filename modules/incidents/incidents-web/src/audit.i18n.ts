@@ -11,6 +11,7 @@ export const audit = {
       'incidents.incident-deleted': 'Einsatz gelöscht',
       'incidents.unit-report-created': 'Bericht einer Einheit angelegt',
       'incidents.statistics-changed': 'Statistikzugehörigkeit geändert',
+      'incidents.retention-changed': '„30 Jahre aufbewahren (Sonderfall)“ geändert',
       'incidents.statistics-closed': 'Jahresstatistik abgeschlossen',
       'incidents.statistics-reopened': 'Jahresstatistik wieder geöffnet',
       'incidents.statistics-exported': 'Jahresstatistik exportiert',
@@ -29,6 +30,7 @@ export const audit = {
       to: 'Bis',
       lines: 'Zeilen',
       removed: 'Aus der Statistik genommen',
+      retentionSpecial: '30 Jahre aufbewahren (Sonderfall)',
     },
   },
   en: {
@@ -42,6 +44,7 @@ export const audit = {
       'incidents.incident-deleted': 'Incident deleted',
       'incidents.unit-report-created': 'Unit report created',
       'incidents.statistics-changed': 'Statistics membership changed',
+      'incidents.retention-changed': '„Keep for 30 years (special case)“ changed',
       'incidents.statistics-closed': 'Annual statistics closed',
       'incidents.statistics-reopened': 'Annual statistics reopened',
       'incidents.statistics-exported': 'Annual statistics exported',
@@ -60,6 +63,7 @@ export const audit = {
       to: 'To',
       lines: 'Lines',
       removed: 'Removed from statistics',
+      retentionSpecial: 'Keep for 30 years (special case)',
     },
   },
 };

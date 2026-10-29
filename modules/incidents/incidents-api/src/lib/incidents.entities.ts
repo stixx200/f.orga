@@ -56,6 +56,13 @@ export const IncidentSchema = defineEntity({
     notes: p.text().default(''),
     /** Statistics features, once per incident (not per report); `null` until filled in. */
     statistics: p.json<IncidentStatistics>().nullable(),
+    /**
+     * „30 Jahre aufbewahren (Sonderfall)“: the incident counts as incident with special features for the retention plan,
+     * also without injured persons, cost recovery or disaster operation (e.g. a major fire).
+     */
+    retentionSpecial: p.boolean().default(false),
+    /** Set when the incident was anonymised after its retention period; keyword, times and statistics stay. */
+    anonymizedAt: p.datetime().nullable(),
     reports: () => p.oneToMany(ReportEntity).mappedBy('incident'),
     version: p.integer().version(),
   },

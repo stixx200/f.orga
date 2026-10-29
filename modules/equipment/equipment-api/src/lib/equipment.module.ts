@@ -1,12 +1,13 @@
 import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Attachments, AuditReferenceRegistry, CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
+import { Attachments, AuditReferenceRegistry, CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry, RetentionRegistry, SearchRegistry } from '@forga/core-api';
 import { EQUIPMENT_MANIFEST, EQUIPMENT_SETTINGS, EQUIPMENT_USAGE } from '@forga/equipment-contracts';
 import { CATALOG_REFERENCES, type CatalogReferences, ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
 import { EQUIPMENT_MIGRATIONS } from '../migrations/index.js';
 import { registerAuditReferences } from './audit/audit.references.js';
 import { CatalogController } from './catalog/catalog.controller.js';
 import { EquipmentData } from './data/equipment.data.js';
+import { EquipmentRetention } from './data/equipment.retention.js';
 import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, UsageEntity } from './equipment.entities.js';
 import { InventoryImport } from './imports/inventory.import.js';
 import { ItemsController } from './items/items.controller.js';
@@ -17,7 +18,7 @@ import { EquipmentLists } from './lists/equipment.lists.js';
 @Global()
 @Module({
   controllers: [CatalogController, ItemsController],
-  providers: [ItemsService, EquipmentLists, EquipmentData, InventoryImport, { provide: EQUIPMENT_USAGE, useExisting: ItemsService }],
+  providers: [ItemsService, EquipmentLists, EquipmentData, EquipmentRetention, InventoryImport, { provide: EQUIPMENT_USAGE, useExisting: ItemsService }],
   exports: [EQUIPMENT_USAGE],
 })
 export class EquipmentModule implements OnModuleInit {
@@ -38,6 +39,9 @@ export class EquipmentModule implements OnModuleInit {
     @Inject(ORGANIZATION_REFERENCES) private readonly references: OrganizationReferences,
     @Inject(CATALOG_REFERENCES) private readonly catalogReferences: CatalogReferences,
     private readonly auditReferences: AuditReferenceRegistry,
+    private readonly retention: RetentionRegistry,
+    private readonly retentionCategory: EquipmentRetention,
+    private readonly personData: PersonDataRegistry,
   ) {}
 
   onModuleInit(): void {
@@ -48,6 +52,8 @@ export class EquipmentModule implements OnModuleInit {
     this.codes.register('equipment', (user, code) => this.data.code(user, code));
     this.exports.register('equipment', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
     this.imports.register('equipment', this.inventory.profile());
+    this.retentionCategory.register(this.retention);
+    this.personData.register('equipment', { anonymize: (ids) => this.retentionCategory.anonymize(ids) });
     // Inspections by a competent person are checked against these qualifications.
     for (const key of Object.values(INSPECTOR_QUALIFICATIONS)) this.catalogReferences.require('equipment', 'qualification', key);
     this.historyAccess.register('equipment.item', async (user, id) => {

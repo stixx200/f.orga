@@ -11,6 +11,7 @@ export const CORE_PERMISSIONS = [
   { id: 'core.settings.manage', name: { de: 'Einstellungen verwalten', en: 'Manage settings' }, scope: 'brigade' },
   { id: 'core.tokens.manage', name: { de: 'API-Tokens verwalten', en: 'Manage API tokens' }, scope: 'brigade' },
   { id: 'core.audit.read', name: { de: 'Audit-Log lesen', en: 'Read audit log' }, scope: 'brigade' },
+  { id: 'core.retention.manage', name: { de: 'Aussonderung bearbeiten (Archiv anbieten, Fristablauf ausführen)', en: 'Process retention (offer to the archive, execute expiry)' }, scope: 'brigade' },
   { id: 'core.data.export', name: { de: 'Vollexport und Auskunft (DSGVO)', en: 'Full export and data access requests' }, scope: 'brigade' },
 ] as const satisfies readonly Permission[];
 

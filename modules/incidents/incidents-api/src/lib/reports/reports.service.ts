@@ -1047,6 +1047,16 @@ export class ReportsService {
   }
 
   /** Incidents as the API returns them, with the statistics and what the user may do with them; needs `reports`. */
+  /**
+   * „30 Jahre aufbewahren (Sonderfall)“ only lengthens the retention: releasers, holders of `incidents.costs` (the
+   * commander) and the writers of the primary report may set it, also after the release.
+   */
+  mayMarkRetention(user: AuthenticatedUser, reports: readonly ReportEntity[]): boolean {
+    if (user.grant(RELEASE) === 'brigade' || user.can(COSTS)) return true;
+    const owner = reports.find((r) => r.primary) ?? reports.find((r) => r.departmentId) ?? reports[0];
+    return Boolean(owner) && this.canWrite(user, owner);
+  }
+
   async incidentDtos(em: EntityManager, incidents: readonly IncidentEntity[], user: AuthenticatedUser): Promise<Incident[]> {
     if (!incidents.length) return [];
     const [keywords, settings, closed] = await Promise.all([
@@ -1081,6 +1091,9 @@ export class ReportsService {
           !closedYears.has(year) &&
           this.statisticsAccess(user, reports) === 'write' &&
           !(settings.externalLeading === 'mp-feuer' && reports.some((r) => r.managedBy === 'mp-feuer')),
+        retentionSpecial: incident.retentionSpecial,
+        retentionSpecialEditable: this.mayMarkRetention(user, reports),
+        anonymizedAt: incident.anonymizedAt?.toISOString() ?? null,
         reports: reports
           .toSorted((a, b) => Number(b.primary) - Number(a.primary) || a.number.localeCompare(b.number))
           .map((r) => ({

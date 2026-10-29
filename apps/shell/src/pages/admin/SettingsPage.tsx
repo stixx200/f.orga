@@ -2,10 +2,11 @@ import { Anchor, Button, FileButton, Group, NumberInput, PasswordInput, Select, 
 import { IconDownload } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
-import type { BrigadeSettings, OidcSettings, PrivacySettings, ReminderSettings, RetentionResult, SmtpSettings } from '@forga/core-contracts';
+import type { BrigadeSettings, OidcSettings, ReminderSettings, SmtpSettings } from '@forga/core-contracts';
 import { api, can, send, upload as uploadFile, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, Notice, notifySuccess, PageHeader, Panel, useAction } from '@forga/web-ui';
+import { Notice, notifySuccess, PageHeader, Panel, useAction } from '@forga/web-ui';
 import type { LoadedModule } from '../../modules';
+import { RetentionSettings } from './RetentionSettings';
 
 const key = (section: string) => ['core', 'settings', section] as const;
 
@@ -43,21 +44,7 @@ function SectionFormLoaded<T extends object>({ section, initial, children }: { s
 }
 
 const BRIGADE_DEFAULTS: BrigadeSettings = { name: '', street: '', postalCode: '', city: '', phone: '', fax: '', website: '', email: '', municipality: '', population: null, publicUrl: '' };
-const PRIVACY_DEFAULTS: PrivacySettings = { anonymizeLeftAfterYears: null, auditRetentionMonths: 24 };
 const TABS = ['brigade', 'smtp', 'reminders', 'privacy', 'oidc', 'export'];
-
-/** Persons a period would anonymise now (dry run with the chosen value, before saving). */
-function AffectedPersons({ years }: { years: number | null }) {
-  const { t } = useTranslation('shell');
-  const { data } = useQuery({
-    queryKey: ['core', 'retention', 'preview', years],
-    queryFn: () => send<RetentionResult>('POST', 'core/retention/run', { dryRun: true, settings: { anonymizeLeftAfterYears: years } }),
-    enabled: years !== null,
-  });
-  if (years === null || !data) return null;
-  const count = data.counts['masterdata.persons'] ?? 0;
-  return <Notice kind={count > 0 ? 'warning' : 'info'}>{t('settings.privacy.affected', { count })}</Notice>;
-}
 
 /** Warnings and the connection test of the OIDC settings. */
 function OidcChecks({ matchBy }: { matchBy: OidcSettings['matchBy'] }) {
@@ -83,9 +70,7 @@ export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
   const { t } = useTranslation('shell');
   const localized = useLocalized();
   const session = useSession().data;
-  const [confirmRetention, setConfirmRetention] = useState(false);
   const testMail = useAction(() => send<{ to: string }>('POST', 'core/settings/smtp/test'), { onSuccess: (r) => notifySuccess(t('settings.smtp.testSent', { to: r.to })) });
-  const retention = useAction((dryRun: boolean) => send<RetentionResult>('POST', 'core/retention/run', { dryRun }), {});
   const { data: exportModules = [] } = useQuery({ queryKey: ['core', 'export'], queryFn: () => api<string[]>('core/export'), enabled: can(session, 'core.data.export') });
   const moduleName = (id: string) => {
     const module = modules.find((m) => m.info.id === id);
@@ -196,55 +181,7 @@ export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
           </Panel>
         </Tabs.Panel>
         <Tabs.Panel value="privacy">
-          <Panel title={t('settings.privacy.title')} maw={880}>
-            <SectionForm section="privacy" defaults={PRIVACY_DEFAULTS}>
-              {(v, set) => (
-                <>
-                <SimpleGrid cols={{ base: 1, sm: 2 }}>
-                  <Select
-                    label={t('settings.privacy.anonymize')}
-                    description={t('settings.privacy.anonymizeHint')}
-                    data={[{ value: '', label: t('settings.privacy.never') }, ...[5, 10, 15, 20].map((y) => ({ value: String(y), label: t('settings.privacy.years', { count: y }) }))]}
-                    value={v.anonymizeLeftAfterYears === null ? '' : String(v.anonymizeLeftAfterYears)}
-                    onChange={(value) => set('anonymizeLeftAfterYears', value ? Number(value) : null)}
-                    allowDeselect={false}
-                  />
-                  <Select
-                    label={t('settings.privacy.audit')}
-                    data={[12, 24, 60, 120].map((m) => ({ value: String(m), label: t('settings.privacy.months', { count: m }) }))}
-                    value={String(v.auditRetentionMonths)}
-                    onChange={(value) => value && set('auditRetentionMonths', Number(value))}
-                    allowDeselect={false}
-                  />
-                </SimpleGrid>
-                <AffectedPersons years={v.anonymizeLeftAfterYears} />
-                </>
-              )}
-            </SectionForm>
-            <Group mt="md" align="center">
-              <Button variant="default" loading={retention.isPending} onClick={() => retention.mutate(true)}>{t('settings.privacy.preview')}</Button>
-              {retention.data && (
-                <Text size="sm">
-                  {t('settings.privacy.result', { persons: retention.data.counts['masterdata.persons'] ?? 0, audit: retention.data.counts['core.audit'] ?? 0 })}
-                </Text>
-              )}
-              {retention.data?.dryRun && Object.values(retention.data.counts).some((c) => c > 0) && (
-                <Button color="brand" onClick={() => setConfirmRetention(true)}>{t('settings.privacy.apply')}</Button>
-              )}
-            </Group>
-            <Text size="xs" c="dimmed" mt="sm">{t('settings.privacy.daily')}</Text>
-          </Panel>
-          <ConfirmDialog
-            opened={confirmRetention}
-            onClose={() => setConfirmRetention(false)}
-            title={t('settings.privacy.applyTitle')}
-            description={t('settings.privacy.applyText')}
-            confirmLabel={t('settings.privacy.apply')}
-            onConfirm={() => {
-              setConfirmRetention(false);
-              retention.mutate(false);
-            }}
-          />
+          <RetentionSettings />
         </Tabs.Panel>
         <Tabs.Panel value="export">
           <Panel title={t('settings.export.title')} maw={880}>

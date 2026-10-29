@@ -9,7 +9,7 @@ Alles in diesem Ordner ist noch nicht umgesetzt. Was fertig ist, steht in [`../i
 | [fachmodell.md](fachmodell.md) | Begriffe, Organisationsstruktur, Querschnittsthemen (Historie, Erinnerungen, Listen, Import/Export) |
 | [entscheidungen.md](entscheidungen.md) | Getroffene und offene Entscheidungen |
 | [jahresstatistik.md](jahresstatistik.md) | Modulübergreifende Jahresstatistik für das Landesportal |
-| [aufbewahrung.md](aufbewahrung.md) | Aufbewahrungsplan: Fristen je Datenkategorie, Anbietung an das Archiv |
+| [aufbewahrung.md](aufbewahrung.md) | Aufbewahrungsplan: offene Punkte (mit Hauptamt und Archiv zu klären, noch nicht umgesetzt) |
 | [datenschutz.md](datenschutz.md) | Datenschutz (DSGVO): Auskunft als PDF, Betroffenenanfragen, Einwilligungen, Verzeichnis der Verarbeitungstätigkeiten, Lückenanalyse mit Prioritäten |
 | [module/](module/) | Fachkonzept je Modul |
 | [mockups/](mockups/README.md) | Klickbare HTML-Mockups je App, Freigabe vor der Frontend-Umsetzung |

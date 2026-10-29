@@ -78,6 +78,7 @@ export function Sidebar({ modules, session, onNavigate }: { modules: LoadedModul
     can(session, 'core.tokens.manage') && { to: '/admin/tokens', label: t('nav.tokens'), icon: 'tokens' },
     can(session, 'core.settings.manage') && { to: '/admin/settings', label: t('nav.settings'), icon: 'settings' },
     can(session, 'core.audit.read') && { to: '/admin/audit', label: t('nav.audit'), icon: 'audit' },
+    can(session, 'core.retention.manage') && { to: '/admin/retention', label: t('nav.retention'), icon: 'retention' },
     // Global settings of the modules, e.g. catalogs of the master data.
     ...modules.flatMap((m) =>
       m.info.navigation

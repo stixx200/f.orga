@@ -282,7 +282,8 @@ describe('old data, data access request and anonymisation', () => {
     expect(JSON.stringify(access)).not.toMatch(/codeHash|code_hash/);
 
     await post(`/masterdata/persons/${ids.tobias}/leave`, { leftOn: '2005-12-31', exitReason: 'own-request' }).expect(201);
-    await put('/core/settings/privacy', { anonymizeLeftAfterYears: 10, auditRetentionMonths: 24 }).expect(200);
+    // The person file (Personalakte) of the retention plan holds the driving licence with its checks.
+    await put('/core/settings/privacy', { retention: { 'masterdata.person-file': { years: 10, action: 'anonymize' } } }).expect(200);
     await post('/core/retention/run', { dryRun: false }).expect(200);
     for (const table of ['driver_license_check', 'driver_license_request', 'driver_license_token']) {
       expect(await sql(`select id from masterdata.${table} where person_id = ?`, [ids.tobias])).toEqual([]);

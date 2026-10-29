@@ -104,6 +104,21 @@ export class Attachments {
   async removeAll(ownerType: string, ownerId: string): Promise<void> {
     await this.em.fork().nativeDelete(AttachmentEntity, { ownerType, ownerId });
   }
+
+  /** Removes the attachments of several records (e.g. when the retention plan deletes them). */
+  async removeFor(ownerType: string, ownerIds: readonly string[]): Promise<number> {
+    if (!ownerIds.length) return 0;
+    return this.em.fork().nativeDelete(AttachmentEntity, { ownerType, ownerId: { $in: [...ownerIds] } });
+  }
+
+  /** Number of attachments per record. */
+  async count(ownerType: string, ownerIds: readonly string[]): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (!ownerIds.length) return counts;
+    const rows = await this.em.fork().find(AttachmentEntity, { ownerType, ownerId: { $in: [...ownerIds] } }, { fields: ['id', 'ownerId'] });
+    for (const row of rows) counts.set(row.ownerId, (counts.get(row.ownerId) ?? 0) + 1);
+    return counts;
+  }
 }
 
 @Controller('core/attachments')

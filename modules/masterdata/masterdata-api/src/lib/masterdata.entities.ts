@@ -126,6 +126,8 @@ export const PersonSchema = defineEntity({
     notes: p.text().default(''),
     /** Set when the person was anonymised after leaving (data protection). */
     anonymizedAt: p.datetime().nullable(),
+    /** Set when the person file was anonymised (retention plan); name, memberships and ranks may stay longer. */
+    fileAnonymizedAt: p.datetime().nullable(),
     memberships: () => p.oneToMany(Membership).mappedBy('person').orphanRemoval(),
     qualifications: () => p.oneToMany(PersonQualification).mappedBy('person').orphanRemoval(),
     ranks: () => p.oneToMany(RankAssignment).mappedBy('person').orphanRemoval(),

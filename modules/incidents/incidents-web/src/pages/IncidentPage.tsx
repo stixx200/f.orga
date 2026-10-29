@@ -1,9 +1,9 @@
-import { Button, Group, Select, SimpleGrid, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core';
+import { Button, Checkbox, Group, Select, SimpleGrid, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core';
 import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { Incident, ReleaseManyResult, Report } from '@forga/incidents-contracts';
-import { api, apiUrl, can, extensionsOf, formatDateTime, formatMoney, fromLocalInput, send, toLocalInput, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
+import { api, apiUrl, can, extensionsOf, formatDate, formatDateTime, formatMoney, fromLocalInput, send, toLocalInput, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { COSTS, keys, ledByMpFeuer, useDepartments, useIncident, useKeywords, useNames, useReportAccess, useSettings } from '../api';
 import { DepartmentBadge, keywordLabel, locationLabel, notifyReleaseResult, ReportStatusBadge } from '../parts';
@@ -103,6 +103,32 @@ function CostsPanel({ incident, editable }: { incident: Incident; editable: bool
         <Group justify="flex-end">
           <Button loading={save.isPending} disabled={!changed || (form.chargeable && !form.chargeableReason.trim())} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
         </Group>
+      </Stack>
+    </Panel>
+  );
+}
+
+/**
+ * „30 Jahre aufbewahren (Sonderfall)“: keeps the incident like one with special features (retention plan), e.g. a major fire
+ * without injured persons. Saved right away; releasers, the commander and the writers of the primary report change it.
+ */
+function RetentionPanel({ incident }: { incident: Incident }) {
+  const { t, i18n } = useTranslation('incidents');
+  const save = useAction((retentionSpecial: boolean) => send<Incident>('PUT', `incidents/incidents/${incident.id}/retention`, { retentionSpecial, version: incident.version }), {
+    success: t('incident.retentionSaved'),
+    invalidate: [keys.incidents],
+  });
+  return (
+    <Panel title={t('incident.retention')}>
+      <Stack gap="xs">
+        <Checkbox
+          label={t('incident.retentionSpecial')}
+          description={t('incident.retentionSpecialHint')}
+          checked={incident.retentionSpecial}
+          disabled={!incident.retentionSpecialEditable || Boolean(incident.anonymizedAt) || save.isPending}
+          onChange={(e) => save.mutate(e.currentTarget.checked)}
+        />
+        {incident.anonymizedAt && <Notice kind="info">{t('incident.anonymized', { date: formatDate(incident.anonymizedAt, i18n.language) })}</Notice>}
       </Stack>
     </Panel>
   );
@@ -263,6 +289,7 @@ export function IncidentPage() {
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
         {/* Re-mounted with each saved version, so the form starts from the stored values. */}
         <CostsPanel key={incident.version} incident={incident} editable={can(session, COSTS)} />
+        <RetentionPanel incident={incident} />
         {extensionsOf('incidents.incident.sections')
           .filter((e) => !e.permission || can(session, e.permission))
           .map(({ module, component: Section }) => (

@@ -1,6 +1,6 @@
 # Mockups Release 1
 
-**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben, ebenso die der Führerscheinkontrolle (umgesetzt, siehe [Führerscheinkontrolle](../../implementiert/architektur.md#führerscheinkontrolle); „Mein Bereich“ zeigt abweichend von `shell/mein-fuehrerschein.html` nur den Stand, ohne Selbstkontrolle). Zur Freigabe sind die Mockups des Moduls MP-Feuer (`mp-feuer/`) und des Konzepts [Aufbewahrung](../aufbewahrung.md). Die Mockups zum Datenschutz (`datenschutz/`) sind freigegeben.
+**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben, ebenso die der Führerscheinkontrolle (umgesetzt, siehe [Führerscheinkontrolle](../../implementiert/architektur.md#führerscheinkontrolle); „Mein Bereich“ zeigt abweichend von `shell/mein-fuehrerschein.html` nur den Stand, ohne Selbstkontrolle). Die Mockups des [Aufbewahrungsplans](../../implementiert/aufbewahrung.md) (`shell/aufbewahrung.html`, `shell/aussonderung.html`, Karte „Aufbewahrung“ in `einsatzberichte/einsatz.html`) sind freigegeben und umgesetzt. Zur Freigabe sind die Mockups des Moduls MP-Feuer (`mp-feuer/`). Die Mockups zum Datenschutz (`datenschutz/`) sind freigegeben.
 
 Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stammdaten und Einsatzberichte, dazu das Modul Infoterminal (Kiosk-Seite je Wache) und das Modul MP-Feuer ([Konzept](../module/mp-feuer.md)). Sie funktionieren nicht und enthalten nur erfundene Daten. Farben, Schrift, Tabellen sowie Kopf- und Fußzeile folgen `Stil.md`.
 
@@ -68,7 +68,7 @@ Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stam
 | | `stammdaten/listen.html` | Listenvorlagen inkl. Probezeit und Altersgrenzen, Unterschriftenliste mit Sprache der Liste |
 | | `stammdaten/import.html` | Import-Assistent: Spalten zuordnen, Vorschau mit Fehlern |
 | Einsatzberichte | `einsatzberichte/einsaetze.html` | Einsatzliste mit Haupt- und Nebenbericht je Abteilung, Status, Sperre |
-| | `einsatzberichte/einsatz.html` | Einsatz mit Berichtskarten je Abteilung, Hauptbericht hervorgehoben, Hauptbericht wechseln mit Bestätigung, Karte „Statistik“ des Einsatzes mit allen Merkmalen der Landesvorlage |
+| | `einsatzberichte/einsatz.html` | Einsatz mit Berichtskarten je Abteilung, Hauptbericht hervorgehoben, Hauptbericht wechseln mit Bestätigung, Karte „Statistik“ des Einsatzes mit allen Merkmalen der Landesvorlage, Karte „Aufbewahrung“ mit „30 Jahre aufbewahren (Sonderfall)“ |
 | | `einsatzberichte/bericht.html` | Berichtseditor, Nebenbericht Musterstadt, Schritt Personal mit Fehler und Warnung, Versionen mit Wiederherstellen |
 | | `einsatzberichte/bericht-haupt.html` | Berichtseditor, Hauptbericht Weidenhain, Schritt Prüfen ohne Befunde |
 | | `einsatzberichte/pruefung.html` | Prüfliste des Kommandanten, zweistufige Freigabe (Entschädigungsauszahlung, dann Abrechnung), Zurückgeben, Sperre aufheben, leerer Zustand, Auszahlungslauf mit „Probleme vor der Auszahlung“ vor dem Export |
@@ -97,7 +97,7 @@ Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stam
 | | `sicherung/sicherungen.html` | Sicherungen mit Status und Prüfung; Prüfen (`#d-pruefen`) mit Wiederherstellung testen, Herunterladen und Löschen (`#d-mehr`) |
 | | `sicherung/wiederherstellen.html`, `sicherung/wiederherstellung-laeuft.html` | Assistent: Bestätigen mit Name der Feuerwehr und Zahlen, Fortschritt mit Wartungsmodus |
 | | `sicherung/wartung.html` | Wartungsseite für alle anderen Benutzer |
-| Aufbewahrung (Konzept) | `shell/aufbewahrung.html` | Einstellungen → Datenschutz: Frist und Aktion je Datenkategorie, Vorlage „Kommunaler Aktenplan (Beispiel)“ (`#d-vorlage`) |
+| Aufbewahrung | `shell/aufbewahrung.html` | Einstellungen → Datenschutz: Frist und Aktion je Datenkategorie, Vorlage „Kommunaler Aktenplan (Beispiel)“ (`#d-vorlage`) |
 | | `shell/aussonderung.html` | Aussonderung: fällige Datensätze, dem Archiv anbieten (`#d-anbieten`), Entscheidung des Archivs (`#d-entscheidung`), zurückstellen (`#d-zurueck`) |
 
 ### Modul MP-Feuer
@@ -167,7 +167,8 @@ Die Seiten werden mit `python3 _generator/bauen.py` aus den Skripten in `_genera
 | --- | --- |
 | `rahmen.py` | Kopf, Seitenleiste, Fußzeile, Symbole und Bausteine: `tabelle()`, `dialog()`, `leer()` |
 | `shell.py`, `stammdaten.py`, `einsatzberichte.py`, `infoterminal.py`, `mpfeuer.py`, `datenschutz.py` | Seiteninhalte je App; `datenschutz.py` mit Reitern der Verwaltungsseiten (`vseite()`) und eigenen Stilen für die PDF-Vorschau; `infoterminal.py` baut die Kiosk-Seiten mit eigenem Kopf (`tk()`) ohne Seitenleiste, `mpfeuer.py` die Seiten des Moduls MP-Feuer mit Reitern (`mseite()`) |
-| `fuehrerschein.py`, `aufbewahrung.py` | Konzepte zur Freigabe: Führerscheinkontrolle (Stammdaten, Infoterminal, Mein Bereich), Aufbewahrung und Aussonderung |
+| `fuehrerschein.py` | Führerscheinkontrolle (Stammdaten, Infoterminal, Mein Bereich; freigegeben, umgesetzt) |
+| `aufbewahrung.py` | Aufbewahrung und Aussonderung (freigegeben, umgesetzt) |
 | `sicherung.py` | Modul Datensicherung (freigegeben, umgesetzt) |
 | `uebersetzung_datenschutz.py` | Englische Texte der Datenschutz-Seiten, gleiches Format wie `uebersetzung.py` (dort eingebunden) |
 | `uebersetzung.py` | Englische Texte als Zeilen `Deutsch => English`. Zeilen ohne `=>` sind Daten, die gleich bleiben (Namen, Orte, Fahrzeuge, Kataloge). Dazu Muster für wiederkehrende Formen. |
