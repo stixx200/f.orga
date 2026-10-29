@@ -98,17 +98,17 @@ beforeAll(async () => {
 afterAll(() => test?.app.close());
 
 describe('retention plan', () => {
-  it('deletes nothing until periods are chosen; only the audit log has a default', async () => {
+  it('deletes nothing until periods are chosen; only audit log and read log have a default', async () => {
     const old = await incident('2010-000001', '2010-03-12');
     ids.old = old.id;
     const categories = (await get('/core/retention/categories').expect(200)).body as { key: string; defaultRule: { action: string; years: number | null } }[];
     expect(categories.map((c) => c.key)).toEqual(
       expect.arrayContaining(['core.audit', 'core.history', 'masterdata.person-core', 'masterdata.person-file', 'masterdata.vehicles-retired', 'incidents.incidents', 'training.sessions', 'equipment.retired', 'cost-recovery.notices', 'compensation.runs']),
     );
-    for (const c of categories) expect(c.defaultRule.action).toBe(c.key === 'core.audit' ? 'delete' : 'none');
+    for (const c of categories) expect(c.defaultRule.action).toBe(['core.audit', 'core.access-log'].includes(c.key) ? 'delete' : 'none');
     expect((await get('/core/settings/privacy')).body).toEqual({ retention: {} });
     const result = await run(false);
-    expect(Object.keys(result.counts).filter((k) => !['core.audit', 'core.imports', 'mp-feuer.rows'].includes(k) && result.counts[k] > 0)).toEqual([]);
+    expect(Object.keys(result.counts).filter((k) => !['core.audit', 'core.access-log', 'core.imports', 'mp-feuer.rows'].includes(k) && result.counts[k] > 0)).toEqual([]);
     expect(await cases()).toEqual([]);
     expect((await get(`/incidents/incidents/${old.id}`).expect(200)).body).toMatchObject({ alarmMessage: 'Brand in Wohnhaus, Anrufer Herr Meier', anonymizedAt: null });
   });
