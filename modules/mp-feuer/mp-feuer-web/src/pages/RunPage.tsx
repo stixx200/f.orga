@@ -1,4 +1,5 @@
 import { Anchor, Button, Checkbox, Group, List, Progress, Select, Stack, Switch, Text } from '@mantine/core';
+import { DateInput } from '@mantine/dates';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -164,12 +165,13 @@ function DatasetsStep({ run, editable, onBack, onMapping }: { run: MpFeuerRun; e
   const localized = useLocalized();
   const select = useSelect(run.id);
   const [confirmApply, setConfirmApply] = useState(false);
-  const change = useAction((input: { dataset: RunDataset; enabled?: boolean; option?: [string, boolean] }) =>
+  const change = useAction((input: { dataset: RunDataset; enabled?: boolean; option?: [string, boolean]; from?: string | null }) =>
     select({
       datasets: {
         [input.dataset.profile]: {
           enabled: input.enabled ?? input.dataset.enabled,
           options: input.option ? { ...input.dataset.options, [input.option[0]]: input.option[1] } : input.dataset.options,
+          from: input.from === undefined ? input.dataset.from : input.from,
         },
       },
     }),
@@ -210,11 +212,24 @@ function DatasetsStep({ run, editable, onBack, onMapping }: { run: MpFeuerRun; e
               key: 'options',
               header: t('datasets.options'),
               render: (d) =>
-                d.optionInfo.length ? (
+                d.optionInfo.length || d.fromAvailable ? (
                   <Stack gap={4}>
                     {d.optionInfo.map((o) => (
                       <Checkbox key={o.key} size="xs" label={localized(o.label)} checked={d.options[o.key] ?? o.default} disabled={!editable || d.locked} onChange={(e) => change.mutate({ dataset: d, option: [o.key, e.currentTarget.checked] })} />
                     ))}
+                    {d.fromAvailable && (
+                      <DateInput
+                        size="xs"
+                        label={t('datasets.from')}
+                        placeholder={t('datasets.fromHint')}
+                        valueFormat="DD.MM.YYYY"
+                        clearable
+                        value={d.from}
+                        disabled={!editable || d.locked}
+                        onChange={(value) => change.mutate({ dataset: d, from: value || null })}
+                        maw={180}
+                      />
+                    )}
                   </Stack>
                 ) : (
                   '–'

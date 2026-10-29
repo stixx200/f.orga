@@ -64,6 +64,8 @@ export const RunDatasetSchema = defineEntity({
     rows: p.json<TransferRow[]>().nullable().lazy(),
     enabled: p.boolean(),
     options: p.json<Record<string, boolean>>(),
+    /** Only rows from this date on (`YYYY-MM-DD`). */
+    from: p.string().nullable(),
     locked: p.boolean(),
     counts: p.json<ImportCounts>().nullable(),
     /** Rows of the last dry run or apply with messages or errors, with the archive key. */
