@@ -38,9 +38,10 @@ export const DUTY_OFFICER_MANIFEST = {
         de: 'EvD-Berichte schreiben, Einsatzberichte aller Abteilungen und den EvD-Dienstplan lesen',
         en: 'Write duty officer reports, read the incident reports of all departments and the duty officer roster',
       },
-      permissions: [DUTY_OFFICER_READ, DUTY_OFFICER_WRITE, 'incidents.reports.read', 'incidents.self'],
-      // The duty officer leads incidents of every department.
-      permissionsAllDepartments: ['incidents.reports.read'],
+      permissions: [DUTY_OFFICER_READ, DUTY_OFFICER_WRITE, 'incidents.reports.read', 'incidents.self', 'masterdata.persons.directory'],
+      // The duty officer leads incidents of every department; the names (person directory) are those of the roster,
+      // the incident page and the personnel of the EvD report.
+      permissionsAllDepartments: ['incidents.reports.read', 'masterdata.persons.directory'],
     },
     { key: 'administration', permissions: [DUTY_OFFICER_READ, DUTY_OFFICER_ROSTER] },
   ],

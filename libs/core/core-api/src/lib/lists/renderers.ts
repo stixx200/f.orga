@@ -103,12 +103,21 @@ export function renderCsv(context: RenderContext): Buffer {
   return Buffer.from(`﻿${lines.join('\r\n')}\r\n`, 'utf8');
 }
 
+/**
+ * Name of the worksheet from the title of the list: Excel allows at most 31 characters and none of `* ? : \\ / [ ]`
+ * (e.g. „Führerscheinkontrollen: Nachweis …“), and no apostrophe at the start or end.
+ */
+export function sheetName(title: string): string {
+  const name = title.replace(/[*?:\\/[\]]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^'+|'+$/g, '');
+  return name.slice(0, 31).trim() || 'Liste';
+}
+
 export async function renderXlsx(context: RenderContext): Promise<Buffer> {
   const { data, language } = context;
   const columns = columnsWithSignature(context);
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'f.orga';
-  const sheet = workbook.addWorksheet(data.title.slice(0, 31) || 'Liste', {
+  const sheet = workbook.addWorksheet(sheetName(data.title), {
     pageSetup: { paperSize: 9, orientation: context.orientation, fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
     views: [{ state: 'frozen', ySplit: (data.subtitle ? 4 : 3) + (data.purpose ? 1 : 0) }],
     ...(data.personalData ? { headerFooter: { oddFooter: `&L${PERSONAL_DATA_NOTICE[language]}&RSeite &P/&N`.replace('Seite', PAGE_LABEL[language]) } } : {}),

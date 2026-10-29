@@ -15,7 +15,9 @@ function ArticleDialog({ article, onClose }: { article?: Article; onClose: () =>
   const [form, setForm] = useState<Form>(() => (article ? { ...empty, ...article } : empty));
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
   const inventory = form.kind === 'inventory';
-  const save = useAction(() => (article ? send('PUT', `clothing/articles/${article.id}`, form) : send('POST', 'clothing/articles', form)), {
+  // The English name is optional in the form; without it the German one is used (like the other catalogs).
+  const body = () => ({ ...form, name: { de: form.name.de, en: form.name.en.trim() || form.name.de } });
+  const save = useAction(() => (article ? send('PUT', `clothing/articles/${article.id}`, body()) : send('POST', 'clothing/articles', body())), {
     success: t('articles.saved'),
     invalidate: [keys.all],
     onSuccess: onClose,

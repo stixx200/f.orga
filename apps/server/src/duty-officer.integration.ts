@@ -121,6 +121,9 @@ describe('duty roster', () => {
 
     // The duty officers read the roster; group leaders do not, and only the managers change it.
     expect((await get('/duty-officer/roster', officer).expect(200)).body).toHaveLength(1);
+    // They see the names of the persons of all departments (person directory), e.g. who is on duty.
+    const names = (await get('/masterdata/persons', officer).expect(200)).body as { id: string; firstName: string }[];
+    expect(names.map((p) => p.id)).toEqual(expect.arrayContaining([ids.jonas, ids.max, ids.lena]));
     await get('/duty-officer/roster', writer).expect(403);
     await post('/duty-officer/roster', { personId: ids.jonas, kind: 'duty-officer', from: T('00:00', 27), to: T('00:00', 28) }, officer).expect(403);
   });

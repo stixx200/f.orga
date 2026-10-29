@@ -219,7 +219,7 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
   | `breathing-apparatus-officer` | Atemschutzgerätewart | `masterdata.persons.read`, `incidents.reports.read` |
   | `equipment-officer` | Gerätewart | `masterdata.persons.read` |
   | `administration` | Verwaltung / Kasse | Personen lesen und sensible Daten, `incidents.reports.read`, `incidents.compensation.export`, `incidents.statistics`, `duty-officer.read`, `duty-officer.roster.manage` |
-  | `duty-officer` | Einsatzleiter vom Dienst | `duty-officer.read`, `duty-officer.reports.write`, `incidents.reports.read` (in allen Abteilungen), `incidents.self` |
+  | `duty-officer` | Einsatzleiter vom Dienst | `duty-officer.read`, `duty-officer.reports.write`, `incidents.reports.read` und `masterdata.persons.directory` (je in allen Abteilungen), `incidents.self` |
 
 - Rollen haben Name und Beschreibung auf Deutsch und Englisch (`LocalizedText`); die Oberfläche zeigt sie in der Sprache des Benutzers. Ein Name ist in jeder Sprache eindeutig, ohne Groß-/Kleinschreibung (`roles.nameTaken`). Die API nimmt für `name` und `description` auch einen einzelnen Text an, der dann für beide Sprachen gilt.
 - Rollen aus Vorlagen tragen das Feld `templateKey` und die Namen der Vorlage in beiden Sprachen. Jede Vorlage wird höchstens einmal angelegt; ist einer ihrer Namen schon von einer anderen Rolle belegt, wird die Vorlage übersprungen.
@@ -1224,7 +1224,7 @@ Verwaltet die persönliche Schutzausrüstung (PSA). Backend `modules/clothing/cl
 
 Der Einsatzleiter vom Dienst (EvD) hat nach Dienstplan für die ganze Feuerwehr Bereitschaft und schreibt zu jedem Einsatz einen eigenen EvD-Bericht, der keiner Abteilung, sondern der Gesamtwehr gehört. Backend `modules/duty-officer/duty-officer-api`, Oberfläche `duty-officer-web`, Verträge `duty-officer-contracts`. Benötigt `masterdata` und `incidents`, nutzt optional `compensation`.
 
-**Rechte** (alle für die Gesamtwehr): `duty-officer.read` (EvD-Dienst und EvD-Berichte einsehen), `duty-officer.reports.write` (EvD-Berichte schreiben), `duty-officer.reports.manage` (EvD-Berichte vorprüfen, „Kein EvD bei diesem Einsatz“), `duty-officer.roster.manage` (Dienstplan pflegen), `duty-officer.settings.manage`. Rollenvorlage „Einsatzleiter vom Dienst“ (`duty-officer`) mit `duty-officer.read`, `duty-officer.reports.write`, `incidents.reports.read` (in allen Abteilungen) und `incidents.self`; der Kommandant bekommt `duty-officer.*`, Verwaltung / Kasse `duty-officer.read` und `duty-officer.roster.manage`.
+**Rechte** (alle für die Gesamtwehr): `duty-officer.read` (EvD-Dienst und EvD-Berichte einsehen), `duty-officer.reports.write` (EvD-Berichte schreiben), `duty-officer.reports.manage` (EvD-Berichte vorprüfen, „Kein EvD bei diesem Einsatz“), `duty-officer.roster.manage` (Dienstplan pflegen), `duty-officer.settings.manage`. Rollenvorlage „Einsatzleiter vom Dienst“ (`duty-officer`) mit `duty-officer.read`, `duty-officer.reports.write`, `incidents.reports.read` und `masterdata.persons.directory` (je in allen Abteilungen: Namen im Dienstplan, auf der Einsatzseite und im Personal des EvD-Berichts) und `incidents.self`; der Kommandant bekommt `duty-officer.*`, Verwaltung / Kasse `duty-officer.read` und `duty-officer.roster.manage`.
 
 **Entitäten** (Schema `duty_officer`):
 
