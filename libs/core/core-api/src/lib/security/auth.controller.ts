@@ -7,7 +7,6 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
-  Inject,
   Param,
   Post,
   Put,
@@ -28,11 +27,12 @@ import {
   UpdateProfile,
 } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
-import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
+import { forgaStage } from '../stage.js';
 import { SettingsService } from '../settings/settings.js';
 import { ZodPipe } from '../zod.pipe.js';
 import { AuthService, ORIGINAL_SESSION_COOKIE, SESSION_COOKIE, sessionCookieOptions } from './auth.service.js';
 import type { AuthenticatedUser } from './authenticated-user.js';
+import { CookiePolicy } from './cookie-policy.js';
 import { CurrentUser, Public, RequirePermissions } from './decorators.js';
 import { assertEmailFree, sameEmail } from './emails.js';
 import { hashPassword, hashSecret, verifyPassword } from './password.js';
@@ -49,10 +49,10 @@ export class AuthController {
     private readonly audit: Audit,
     private readonly roleTemplates: RoleTemplates,
     private readonly resets: PasswordResetService,
-    @Inject(FORGA_CORE_OPTIONS) private readonly options: ForgaCoreOptions,
+    private readonly cookies: CookiePolicy,
   ) {}
 
-  /** Login page data: is a setup needed, and the brigade name if known. */
+  /** Login page data: is a setup needed, the brigade name if known, and the stage of the installation. */
   @Public()
   @Get('setup')
   async setupState() {
@@ -64,6 +64,8 @@ export class AuthController {
       required: await this.auth.setupRequired(),
       brigadeName: brigade?.name ?? null,
       oidc: oidc?.enabled && oidc.issuer && oidc.clientId && publicUrl ? { label: oidc.buttonLabel } : null,
+      // The test system shows the band "Testsystem – nur Demodaten" on every page, also before the sign-in.
+      stage: forgaStage(),
     };
   }
 
@@ -73,7 +75,7 @@ export class AuthController {
    */
   @Public()
   @Post('setup')
-  async setup(@Body(new ZodPipe(Setup)) input: ReturnType<typeof Setup.parse>, @Res({ passthrough: true }) res: Response) {
+  async setup(@Body(new ZodPipe(Setup)) input: ReturnType<typeof Setup.parse>, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     if (!(await this.auth.setupRequired())) throw new ConflictException({ code: 'setup.done' });
     if (!this.auth.isSetupToken(input.setupToken)) {
       await this.audit.log('setup.invalid-token', {}, null);
@@ -96,7 +98,7 @@ export class AuthController {
     await this.settings.set('brigade', { name: input.brigadeName });
     await this.audit.log('setup.completed', {}, user.id);
 
-    this.setCookie(res, await this.auth.openSession(em, user));
+    await this.setCookie(req, res, await this.auth.openSession(em, user));
     return { ok: true };
   }
 
@@ -107,7 +109,7 @@ export class AuthController {
     const result = await this.auth.login(input.username, input.password, req.ip ?? '');
     if (result === 'locked') throw new HttpException({ code: 'auth.locked' }, HttpStatus.TOO_MANY_REQUESTS);
     if (!result) throw new UnauthorizedException({ code: 'auth.invalidCredentials' });
-    this.setCookie(res, result.token);
+    await this.setCookie(req, res, result.token);
     return { ok: true };
   }
 
@@ -157,8 +159,8 @@ export class AuthController {
     const own = (req.cookies as Record<string, string> | undefined)?.[SESSION_COOKIE];
     if (!own) throw new ForbiddenException({ code: 'auth.impersonationNeedsSession' });
     const token = await this.auth.impersonate(user, id, input.reason);
-    res.cookie(ORIGINAL_SESSION_COOKIE, own, this.cookieOptions());
-    this.setCookie(res, token);
+    res.cookie(ORIGINAL_SESSION_COOKIE, own, await this.cookieOptions(req));
+    await this.setCookie(req, res, token);
     return { ok: true };
   }
 
@@ -168,7 +170,7 @@ export class AuthController {
     const cookies = (req.cookies as Record<string, string> | undefined) ?? {};
     await this.auth.endImpersonation(cookies[SESSION_COOKIE] ?? '', user);
     const original = cookies[ORIGINAL_SESSION_COOKIE];
-    if (original) this.setCookie(res, original);
+    if (original) await this.setCookie(req, res, original);
     else res.clearCookie(SESSION_COOKIE, { path: '/' });
     res.clearCookie(ORIGINAL_SESSION_COOKIE, { path: '/' });
     return { ok: true };
@@ -228,11 +230,12 @@ export class AuthController {
     return { ok: true };
   }
 
-  private cookieOptions() {
-    return sessionCookieOptions(this.options.secureCookies);
+  /** `Secure` with `FORGA_SECURE_COOKIES`, over HTTPS or with an `https://` address of f.orga. */
+  private async cookieOptions(req: Request) {
+    return sessionCookieOptions(await this.cookies.secure(req));
   }
 
-  private setCookie(res: Response, token: string): void {
-    res.cookie(SESSION_COOKIE, token, this.cookieOptions());
+  private async setCookie(req: Request, res: Response, token: string): Promise<void> {
+    res.cookie(SESSION_COOKIE, token, await this.cookieOptions(req));
   }
 }

@@ -80,7 +80,7 @@ export function RestPeriodsPanel({ person, disabled, onChanged }: { person: Pers
               <DateInput label={t('offices.from')} value={draft.from} onChange={(v) => setDraft({ ...draft, from: v })} valueFormat="DD.MM.YYYY" required />
               <DateInput label={t('offices.to')} description={t('restPeriods.toHint')} value={draft.to} onChange={(v) => setDraft({ ...draft, to: v })} valueFormat="DD.MM.YYYY" clearable />
             </Group>
-            <TextInput label={t('entries.notes')} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.currentTarget.value })} />
+            <TextInput label={t('entries.notes')} description={common('privacy.noHealthData')} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.currentTarget.value })} />
           </Stack>
         </ResponsiveDialog>
       )}

@@ -1,7 +1,7 @@
-import { Button, Group, Stack, Text, Textarea } from '@mantine/core';
+import { Button, Group, Radio, Stack, Text, Textarea } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { MySession, MyTraining } from '@forga/training-contracts';
+import { ExcuseReason, type MySession, type MyTraining } from '@forga/training-contracts';
 import { api, formatDateTime, send, useTranslation } from '@forga/web-sdk';
 import { DataTable, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { useTypeName } from '../api';
@@ -11,8 +11,9 @@ const KEY = ['training', 'me'] as const;
 function ExcuseDialog({ session, onClose }: { session: MySession; onClose: () => void }) {
   const { t, i18n } = useTranslation('training');
   const { t: common } = useTranslation('common');
+  const [reason, setReason] = useState<ExcuseReason | null>(session.own?.excuseReason ?? null);
   const [note, setNote] = useState(session.own?.note ?? '');
-  const save = useAction(() => send('PUT', `training/me/sessions/${session.id}/excuse`, { note }), { success: t('me.excused'), invalidate: [KEY], onSuccess: onClose });
+  const save = useAction(() => send('PUT', `training/me/sessions/${session.id}/excuse`, { reason, note }), { success: t('me.excused'), invalidate: [KEY], onSuccess: onClose });
   return (
     <ResponsiveDialog
       opened
@@ -21,12 +22,17 @@ function ExcuseDialog({ session, onClose }: { session: MySession; onClose: () =>
       actions={
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button>
-          <Button loading={save.isPending} onClick={() => save.mutate(undefined)}>{t('me.excuse')}</Button>
+          <Button loading={save.isPending} disabled={!reason} onClick={() => save.mutate(undefined)}>{t('me.excuse')}</Button>
         </Group>
       }
     >
       <Text size="sm">{session.title} · {formatDateTime(session.startsAt, i18n.language)}</Text>
-      <Textarea label={t('me.note')} description={t('me.noteHint')} value={note} onChange={(e) => setNote(e.currentTarget.value)} autosize minRows={2} />
+      <Radio.Group label={t('me.reason')} value={reason} onChange={(value) => setReason(value as ExcuseReason)} required>
+        <Stack gap={6} mt={4}>
+          {ExcuseReason.options.map((r) => <Radio key={r} value={r} label={t(`excuseReasons.${r}`)} />)}
+        </Stack>
+      </Radio.Group>
+      <Textarea label={t('me.note')} description={t('me.noteHint')} value={note} onChange={(e) => setNote(e.currentTarget.value)} autosize minRows={2} maxLength={500} />
     </ResponsiveDialog>
   );
 }
@@ -38,6 +44,7 @@ function OwnStatus({ session }: { session: MySession }) {
   return (
     <>
       <StatusBadge tone={tone}>{t(`attendance.${session.own.status}`)}</StatusBadge>
+      {session.own.excuseReason && <Text size="xs" c="dimmed">{t(`excuseReasons.${session.own.excuseReason}`)}</Text>}
       {session.own.note && <Text size="xs" c="dimmed">{session.own.note}</Text>}
     </>
   );

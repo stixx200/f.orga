@@ -219,6 +219,7 @@ const texts: Translations = {
       noStation: 'Für die Abteilung ist keine Wache hinterlegt.',
       total: 'Summe Entschädigung',
       totalHint: 'Angefangene Stunden × Satz; Bereitschaft pauschal. Ausgezahlt wird nach Freigabe.',
+      injuriesCount: 'Eigene Kräfte: {{injured}} verletzt, {{killed}} getötet (Namen nur für Verfasser, Freigeber und mit Recht).',
     },
     person: {
       place: 'Fahrzeug oder Bereitschaft',
@@ -238,6 +239,7 @@ const texts: Translations = {
       duringWorkingHours: 'Einsatz während der Arbeitszeit beim Dienstherrn',
       damage: 'Selbst zu Schaden gekommen',
       damageOptions: { none: 'nein', injured: 'verletzt', killed: 'tödlich verunglückt' },
+      damageHidden: 'Verletzte und Getötete sehen nur Verfasser, Freigeber und wer das Recht dazu hat.',
       compensation: 'Entschädigung: {{hours}} Stunden × {{rate}} = {{amount}}',
       noRate: 'Für diesen Einsatz ist kein Entschädigungssatz hinterlegt.',
       remove: 'Aus Bericht entfernen',
@@ -835,6 +837,7 @@ const texts: Translations = {
       noStation: 'No station is set up for the department.',
       total: 'Total compensation',
       totalHint: 'Started hours × rate; standby as a flat rate. Paid after release.',
+      injuriesCount: 'Own forces: {{injured}} injured, {{killed}} killed (names only for the author, releasers and with the permission).',
     },
     person: {
       place: 'Vehicle or standby',
@@ -854,6 +857,7 @@ const texts: Translations = {
       duringWorkingHours: 'Operation during working hours with the municipality as employer',
       damage: 'Injured themselves',
       damageOptions: { none: 'no', injured: 'injured', killed: 'killed' },
+      damageHidden: 'Injured and killed are only visible to the author, releasers and those with the permission.',
       compensation: 'Compensation: {{hours}} hours × {{rate}} = {{amount}}',
       noRate: 'There is no compensation rate for this operation.',
       remove: 'Remove from report',

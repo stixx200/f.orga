@@ -54,7 +54,8 @@ export function ImportPage() {
     setUploaded(u);
     setMappings({});
     setUnmatched({});
-    const best = profiles.toSorted((a, b) => fit(b, u) - fit(a, u))[0];
+    // Profiles with personal data are locked on the test system; never suggested there.
+    const best = profiles.filter((p) => !p.lockedInTestStage).toSorted((a, b) => fit(b, u) - fit(a, u))[0];
     if (best) chooseProfile(best.id, u);
     setStep(1);
   };
@@ -182,7 +183,13 @@ export function ImportPage() {
               <Radio.Group value={profileId} onChange={(id) => chooseProfile(id, uploaded)} label={t('imports.profile')}>
                 <Stack gap="sm" mt="xs">
                   {profiles.map((p) => (
-                    <Radio key={p.id} value={p.id} label={<Text fw={700} size="sm">{localized(p.name)}</Text>} description={p.description ? localized(p.description) : undefined} />
+                    <Radio
+                      key={p.id}
+                      value={p.id}
+                      disabled={p.lockedInTestStage}
+                      label={<Text fw={700} size="sm">{localized(p.name)}</Text>}
+                      description={p.lockedInTestStage ? t('imports.lockedInTestStage') : p.description ? localized(p.description) : undefined}
+                    />
                   ))}
                 </Stack>
               </Radio.Group>

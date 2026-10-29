@@ -89,6 +89,8 @@ export const common = {
       noCamera: 'Die Kamera ist hier nicht verfügbar (Browser ohne Barcode-Erkennung oder kein Zugriff). Code mit dem Handscanner oder per Tastatur eingeben.',
     },
     language: { label: 'Sprache', de: 'Deutsch', en: 'English' },
+    /** Hint at free-text fields (data protection concept L5). */
+    privacy: { noHealthData: 'Keine Gesundheitsangaben eintragen.' },
     errors: {
       generic: 'Die Anfrage ist fehlgeschlagen.',
       'attachments.type': 'Nur Fotos (PNG, JPEG, WebP) und PDF bis 10 MB.',
@@ -186,6 +188,7 @@ export const common = {
       'imports.requiredValueMissing': 'Pflichtwert fehlt ({{field}}).',
       'imports.unknownColumn': 'Die Spalte „{{column}}“ gibt es in der Datei nicht.',
       'imports.unknownProfile': 'Diesen Import gibt es nicht oder er ist Ihnen nicht erlaubt.',
+      'imports.lockedInTestStage': 'Im Testsystem gesperrt: Personen werden hier nicht importiert (nur Demodaten).',
       'imports.unknownLookup': 'Für „{{kind}}“ können keine Einträge zugeordnet werden.',
       'imports.mappingNotFound': 'Diese Zuordnung gibt es nicht mehr.',
       'imports.unknownMappingTarget': 'Der für „{{value}}“ gewählte Eintrag existiert nicht mehr. Bitte wählen Sie einen anderen.',
@@ -308,6 +311,7 @@ export const common = {
       noCamera: 'The camera is not available here (browser without barcode detection or no access). Enter the code with the hand scanner or the keyboard.',
     },
     language: { label: 'Language', de: 'Deutsch', en: 'English' },
+    privacy: { noHealthData: 'Do not enter health details.' },
     errors: {
       generic: 'The request failed.',
       'attachments.type': 'Only photos (PNG, JPEG, WebP) and PDF up to 10 MB.',
@@ -405,6 +409,7 @@ export const common = {
       'imports.requiredValueMissing': 'Required value missing ({{field}}).',
       'imports.unknownColumn': 'The column "{{column}}" does not exist in the file.',
       'imports.unknownProfile': 'This import does not exist or you are not allowed to use it.',
+      'imports.lockedInTestStage': 'Locked on the test system: persons are not imported here (demo data only).',
       'imports.unknownLookup': 'Entries cannot be assigned for "{{kind}}".',
       'imports.mappingNotFound': 'This mapping no longer exists.',
       'imports.unknownMappingTarget': 'The entry chosen for "{{value}}" no longer exists. Please choose another one.',

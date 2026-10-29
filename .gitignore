@@ -64,3 +64,15 @@ __pycache__/
 
 # Backups of docker/backup.sh (personal data)
 /backup/
+
+# Real data never goes into the repository (data protection concept L6): local files of the developer, transfer files
+# and tables from MP-Feuer, database dumps and backups. Test data lives in fixtures (see the exceptions).
+local/
+*.xlsx
+!**/fixtures/**/*.xlsx
+!**/__fixtures__/**/*.xlsx
+MPTRA_*.zip
+*.dump
+*.forgabackup
+# Certificates of the Caddy service
+docker/certs/

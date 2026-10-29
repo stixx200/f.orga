@@ -28,6 +28,13 @@ export const INCIDENTS_MANIFEST = {
       name: { de: 'Kosten und Bemerkungen des Einsatzes eintragen', en: 'Enter costs and notes of incidents' },
       scope: 'brigade',
     },
+    // Health data (Art. 9 GDPR): "injured"/"killed" in the personnel of a report. Authors and releasers always see it.
+    // Data protection concept L2: gets the step-up flag (`stepUp: true`) once the permission definition has it.
+    {
+      id: 'incidents.injuries.read',
+      name: { de: 'Verletzte und Getötete im Personal sehen', en: 'See injured and killed in the personnel' },
+      scope: 'department',
+    },
     { id: 'incidents.reports.unlock', name: { de: 'Sperre aufheben', en: 'Unlock reports' }, scope: 'brigade' },
     { id: 'incidents.statistics', name: { de: 'Jahresstatistik', en: 'Annual statistics' }, scope: 'brigade' },
     {

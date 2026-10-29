@@ -3,7 +3,7 @@ import { IconUpload } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { MpFeuerRun } from '@forga/mp-feuer-contracts';
-import { uploadFiles, useCan, useTranslation } from '@forga/web-sdk';
+import { uploadFiles, useCan, useStage, useTranslation } from '@forga/web-sdk';
 import { EmptyState, Notice, Panel, useAction } from '@forga/web-ui';
 import { isRunning, keys, TRANSFER, useRuns } from '../api';
 import { ModulePage } from '../components/ModulePage';
@@ -14,6 +14,8 @@ export function NewRunPage() {
   const { t } = useTranslation('mp-feuer');
   const navigate = useNavigate();
   const mayTransfer = useCan(TRANSFER);
+  // Real data never goes into the test system.
+  const testStage = useStage() === 'test';
   const { data: runs = [] } = useRuns();
   const working = runs.find(isRunning);
   const [files, setFiles] = useState<File[]>([]);
@@ -25,6 +27,13 @@ export function NewRunPage() {
     return (
       <ModulePage tab="transfer">
         <EmptyState title={t('transfer.notAllowed')} />
+      </ModulePage>
+    );
+  }
+  if (testStage) {
+    return (
+      <ModulePage tab="transfer">
+        <Notice kind="warning">{t('errors.mp-feuer.lockedInTestStage')}</Notice>
       </ModulePage>
     );
   }

@@ -144,11 +144,19 @@ describe('respiratory protection', () => {
     const briefing = view.evidence.find((e: { kind: string }) => e.kind === 'briefing');
     await put(`/respiratory-protection/evidence/${briefing.id}`, { personId: ids.jonas, kind: 'briefing', date: daysAgo(400) }, officer).expect(200);
     expect(await color(ids.jonas, officer)).toBe('red');
-    // The officer (brigade-wide) is told by e-mail.
+    // The officer (brigade-wide) is told by e-mail, without the name (health reference, setting `security`).
     const mail = test.app.get(MailService).sent.at(-1)!;
-    expect(mail).toMatchObject({ to: 'agw@example.org', subject: 'Atemschutz: Jonas Test ist nicht mehr einsatzbereit' });
+    expect(mail).toMatchObject({ to: 'agw@example.org', subject: 'Atemschutz: Ein Geräteträger ist nicht mehr einsatzbereit' });
+    expect(mail.text).not.toContain('Jonas');
     await del(`/respiratory-protection/evidence/${briefing.id}`, officer).expect(204);
-    await post('/respiratory-protection/evidence', { personId: ids.jonas, kind: 'briefing', date: daysAgo(10) }, admin).expect(201);
+    const fresh = (await post('/respiratory-protection/evidence', { personId: ids.jonas, kind: 'briefing', date: daysAgo(10) }, admin).expect(201)).body;
+    expect(await color(ids.jonas, officer)).toBe('green');
+    // With the setting switched off the e-mail names the person.
+    await put('/core/settings/security', { mailHealthWithoutNames: false }).expect(200);
+    await put(`/respiratory-protection/evidence/${fresh.id}`, { personId: ids.jonas, kind: 'briefing', date: daysAgo(400) }, officer).expect(200);
+    expect(test.app.get(MailService).sent.at(-1)).toMatchObject({ to: 'agw@example.org', subject: 'Atemschutz: Jonas Test ist nicht mehr einsatzbereit' });
+    await put(`/respiratory-protection/evidence/${fresh.id}`, { personId: ids.jonas, kind: 'briefing', date: daysAgo(10) }, officer).expect(200);
+    await put('/core/settings/security', { mailHealthWithoutNames: true }).expect(200);
     expect(await color(ids.jonas, officer)).toBe('green');
   });
 
@@ -172,7 +180,7 @@ describe('respiratory protection', () => {
     expect(mail.sent).toHaveLength(sent);
     // The next check of the person sends the pending e-mail.
     const briefing = (await post('/respiratory-protection/evidence', { personId: ids.jonas, kind: 'briefing', date: daysAgo(5) }, officer).expect(201)).body;
-    expect(mail.sent.slice(sent)).toEqual([expect.objectContaining({ to: 'agw@example.org', subject: 'Atemschutz: Jonas Test ist nicht mehr einsatzbereit' })]);
+    expect(mail.sent.slice(sent)).toEqual([expect.objectContaining({ to: 'agw@example.org', subject: 'Atemschutz: Ein Geräteträger ist nicht mehr einsatzbereit' })]);
     await del(`/respiratory-protection/evidence/${briefing.id}`, officer).expect(204);
     await del(`/respiratory-protection/evidence/${concerns.id}`, officer).expect(204);
     expect(await color(ids.jonas, officer)).toBe('green');

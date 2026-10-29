@@ -6,6 +6,7 @@
 | --- | --- |
 | `forga` | Ein Node-Prozess: API unter `/api`, Shell unter `/`, Modul-Frontends unter `/modules/<id>/`; dazu die PostgreSQL-17-Clientwerkzeuge (`pg_dump`, `pg_restore`, `psql`) für die Datensicherung. Volumes `forga-plugins` (`/plugins`) und `forga-backups` (`/backups`) |
 | `db` | PostgreSQL 17, Daten im Volume `forga-db` |
+| `caddy` bzw. `caddy-internal` | optional (Profile `https`, `https-internal`): HTTPS vor f.orga, siehe [HTTPS](#https) |
 
 So entsteht das Image aus `docker/Dockerfile`:
 
@@ -20,7 +21,7 @@ cp docker/.env.example docker/.env      # Passwort setzen
 docker compose -f docker/compose.yml up -d --build
 ```
 
-- **Adresse:** Die Anwendung ist danach unter `http://<server>:8080` erreichbar.
+- **Adresse:** Die Anwendung ist danach unter `http://<server>:8080` erreichbar. Im Echtbetrieb gehört HTTPS davor ([HTTPS](#https)); solange sie über `http://` aufgerufen wird, warnen die Einrichtungsliste und „Einstellungen → Sicherheit“.
 - **Migrationen:** Beim Start spielt der Server ausstehende Datenbank-Migrationen ein. Für ein Update genügen ein neues Image und ein Neustart.
 - **Ersteinrichtung:** Beim ersten Aufruf mit leerer Datenbank fragt die Anwendung den Einrichtungsschlüssel, den Namen der Feuerwehr und das erste Administratorkonto (mit E-Mail-Adresse) ab. Der Schlüssel verhindert, dass jemand, der die frische Installation zuerst erreicht, sich zum Administrator macht. Ist `FORGA_SETUP_TOKEN` gesetzt, ist er dessen Wert; sonst erzeugt der Server beim Start einen zufälligen Schlüssel und schreibt ihn ins Protokoll (`docker compose -f docker/compose.yml logs forga`, Zeile „Setup token: …“). Nach einem Neustart gilt ein neuer Schlüssel. Sobald ein Benutzer existiert, ist die Einrichtung gesperrt.
 - **Nach der Einrichtung:** Die Startseite zeigt Administratoren eine Liste, was noch fehlt: Adresse von f.orga, E-Mail-Versand, Abteilungen, Kataloge, die Einstellungen jedes aktiven Moduls und weitere Benutzer. Weitere Benutzer lädt man unter „Verwaltung → Benutzer“ aus der Personalakte ein; dafür müssen Adresse und E-Mail-Versand eingerichtet sein.
@@ -29,17 +30,19 @@ docker compose -f docker/compose.yml up -d --build
 | --- | --- | --- |
 | `POSTGRES_PASSWORD` | Datenbankpasswort, Pflicht | – |
 | `FORGA_PORT` | Port auf dem Host | `8080` |
-| `FORGA_SECURE_COOKIES` | Sitzungs-Cookie nur über HTTPS senden. Auf `true` setzen, sobald f.orga per HTTPS erreichbar ist. | `false` |
+| `FORGA_STAGE` | Art des Systems: `production` (Echtdaten), `test` (nur Demodaten: Band „Testsystem – nur Demodaten“ auf jeder Seite, Datenübernahme aus MP-Feuer und Import von Personen gesperrt, Wiederherstellung einer Sicherung des Echtsystems nur mit Begründung und Löschen nach 7 Tagen) oder `development`. Ein anderer Wert verhindert den Start. Siehe [Datenschutz](datenschutz.md#echt--test--und-entwicklungssystem-l6). | `production` (Image, Compose), ohne Angabe `development` |
+| `FORGA_SECURE_COOKIES` | Cookies auch ohne `https://`-Adresse nur über HTTPS senden. Automatisch, sobald die Adresse von f.orga mit `https://` beginnt oder die Anfrage über HTTPS kam. | `false` |
 | `FORGA_MAIL_TRANSPORT` | `memory`: E-Mails nur im Speicher sammeln statt per SMTP zu senden (Tests, Vorführung) | SMTP |
 | `FORGA_DIGEST_SCHEDULER` | `off`: wöchentliche Sammel-E-Mail nicht automatisch senden | an |
 | `FORGA_RETENTION_SCHEDULER` | `off`: Aufbewahrungsplan (Audit-Log kürzen, Uploads löschen, Fristen je Datenkategorie, neue Fälle der Aussonderung) nicht automatisch anwenden, sondern nur über „Einstellungen → Datenschutz → Jetzt anwenden“ oder „Aussonderung → Liste aktualisieren“. Sonst laufen sie eine Minute nach dem Start und danach täglich. | an |
-| `FORGA_SETUP_TOKEN` | Einrichtungsschlüssel für die Ersteinrichtung. Ohne Angabe erzeugt der Server einen und schreibt ihn ins Protokoll. | zufällig |
+| `FORGA_SETUP_TOKEN` | Einrichtungsschlüssel für die Ersteinrichtung. Ohne Angabe erzeugt der Server einen und schreibt ihn ins Protokoll. Compose reicht ihn an den Container durch. | zufällig |
+| `FORGA_DOMAIN`, `FORGA_TLS`, `FORGA_CERT_DIR` | Nur Compose, Dienst `caddy`: Hostname, Zertifikat (E-Mail-Adresse = Let's Encrypt, `"/certs/forga.crt /certs/forga.key"` = eigenes Zertifikat), Ordner der eigenen Zertifikate (Standard `docker/certs`). Siehe [HTTPS](#https). | – |
 | `FORGA_PLUGIN_DIR` | Plugin-Verzeichnis; im Container das Volume `forga-plugins` unter `/plugins`. Ohne Angabe sind Plugins aus. | `/plugins` (Compose) |
 | `FORGA_PLUGIN_KEYS` | Öffentliche Schlüssel vertrauenswürdiger Plugin-Herausgeber (Base64, kommagetrennt); alternativ die Datei `trusted-keys` im Plugin-Verzeichnis | – |
 | `FORGA_PLUGINS_ALLOW_UNSIGNED` | `true`: auch unsignierte Plugin-Pakete annehmen. Nur für die Entwicklung. | `false` |
-| `FORGA_TRUST_PROXY` | Reverse Proxy vor f.orga, dem `X-Forwarded-For` geglaubt wird (Express `trust proxy`): `true` (jeder), Anzahl der Proxys (z. B. `1`) oder Adressen/Netze, kommagetrennt (z. B. `loopback`, `10.0.0.0/8`). Nur dann gelten Anfragebegrenzung und Anmeldesperre für die Adresse des Benutzers statt für die des Proxys. Nur setzen, wenn wirklich ein Proxy davor steht, sonst kann jeder seine Adresse fälschen. | aus |
-| `FORGA_PUBLIC_URL` | Adresse von f.orga, falls nicht in den Einstellungen (`brigade.publicUrl`); für Links in E-Mails und die Rücksprungadresse der OIDC-Anmeldung. In den Einstellungen nur `https://…` (`http://` nur für `localhost`). | – |
-| `FORGA_SECRET_KEY` | Server-Schlüssel (32 Byte, Base64, z. B. `openssl rand -base64 32`). Verschlüsselt die Geräteschlüssel der Infoterminals (AES-256-GCM), damit sich ihr Link wieder anzeigen lässt, die beim Import gemerkten Kalenderadressen (ohne ihn wird keine Adresse gemerkt) und die Passphrase der Datensicherung. **Pflicht für das Modul Infoterminal und für geplante Sicherungen:** Ohne ihn lässt sich kein Terminal anlegen (`info-terminal.noSecretKey`) und keine Passphrase speichern (`backup.noSecretKey`, dann nur „Jetzt sichern“ mit Eingabe der Passphrase). Wird er geändert, lassen sich vorhandene Links nicht mehr anzeigen (die Geräte arbeiten weiter, bis ein neuer Link erzeugt wird) und die Passphrase muss neu eingegeben werden. Er steht in keiner Sicherung: getrennt im Passwortsafe aufbewahren. Je System ein eigener Wert. | – |
+| `FORGA_TRUST_PROXY` | Reverse Proxy vor f.orga, dem `X-Forwarded-For` und `X-Forwarded-Proto` geglaubt werden (Express `trust proxy`): `true` (jeder), Anzahl der Proxys (z. B. `1`) oder Adressen/Netze, kommagetrennt (z. B. `loopback`, `uniquelocal`, `10.0.0.0/8`). Nur dann gelten Anfragebegrenzung und Anmeldesperre für die Adresse des Benutzers statt für die des Proxys (sonst sperren Fehlversuche einen Benutzernamen für alle), und nur dann erkennt f.orga HTTPS (HSTS, `Secure`-Cookies, Einrichtungsliste). Nur setzen, wenn wirklich ein Proxy davor steht, sonst kann jeder seine Adresse fälschen. Compose reicht ihn an den Container durch. | aus |
+| `FORGA_PUBLIC_URL` | Adresse von f.orga, falls nicht in den Einstellungen (`brigade.publicUrl`); für Links in E-Mails und die Rücksprungadresse der OIDC-Anmeldung. In den Einstellungen nur `https://…` (`http://` nur für `localhost`). Mit `https://` gehen Cookies nur verschlüsselt. Compose reicht sie an den Container durch (bei den Stufen `FORGA_PUBLIC_URL_REAL`, `_TEST`). | – |
+| `FORGA_SECRET_KEY` | Server-Schlüssel (32 Byte, Base64, z. B. `openssl rand -base64 32`). Verschlüsselt die Geräteschlüssel der Infoterminals (AES-256-GCM), damit sich ihr Link wieder anzeigen lässt, die beim Import gemerkten Kalenderadressen (ohne ihn wird keine Adresse gemerkt) und die Passphrase der Datensicherung. Er ist außerdem der Schlüssel des HMAC der Führerschein-Aufkleber (Transponder-Kennungen werden nur als HMAC gespeichert): Nach einer Änderung müssen die Aufkleber neu registriert werden. **Pflicht für das Modul Infoterminal und für geplante Sicherungen:** Ohne ihn lässt sich kein Terminal anlegen (`info-terminal.noSecretKey`) und keine Passphrase speichern (`backup.noSecretKey`, dann nur „Jetzt sichern“ mit Eingabe der Passphrase). Wird er geändert, lassen sich vorhandene Links nicht mehr anzeigen (die Geräte arbeiten weiter, bis ein neuer Link erzeugt wird) und die Passphrase muss neu eingegeben werden. Er steht in keiner Sicherung: getrennt im Passwortsafe aufbewahren. Je System ein eigener Wert. | – |
 | `FORGA_BACKUP_ROOT` | Wurzel der Zielordner der Datensicherung; im Container `/backups` (Compose). Ohne Angabe ist das Modul nur lesbar („nicht eingerichtet“). | `/backups` (Compose) |
 | `FORGA_BACKUP_DIR` | Nur Compose: Ordner auf dem Host, der als `/backups` eingebunden wird (z. B. ein auf dem Host eingebundenes NAS), Eigentümer UID 1000 (`node`). Leer: Docker-Volume `forga-backups`. | Volume |
 | `FORGA_INSTANCE` | Name der Installation in Dateinamen und Sicherungen (`forga-<name>-JJJJ-MM-TT_HHMM.forgabackup`); bei den Stufen `real` und `test` | `forga` |
@@ -49,7 +52,29 @@ docker compose -f docker/compose.yml up -d --build
 | `FORGA_RESTORE_EXIT` | `off`: der Prozess beendet sich nach einer Wiederherstellung nicht selbst (Tests) | an |
 | `FORGA_IMPORT_URL_ALLOW_PRIVATE` | `true`: Kalender beim Import auch von lokalen und privaten Adressen laden (Loopback, `10.…`, `172.16–31.…`, `192.168.…`, `fd…`, Link-Local), z. B. von einem Kalenderserver im eigenen Netz. Sonst lehnt der Server solche Adressen ab (`imports.urlForbidden`), damit niemand über den Import Dienste im internen Netz abfragt. | `false` |
 
-**Echt- und Testsystem nebeneinander** (`docker/compose.stages.yml`): zwei getrennte Instanzen aus demselben Image, jede mit eigener Datenbank und eigenen Volumes. Das Echtsystem ist für echte Daten (z. B. die MP-Feuer-Datenübernahme), das Testsystem für Demodaten. Gewechselt wird über die Adresse; Sitzungen und Daten bleiben getrennt.
+### HTTPS
+
+Passwörter, Sitzungen und Gesundheitsdaten gehören nur verschlüsselt ins Netz (Art. 32 DSGVO). Der optionale Dienst Caddy übernimmt TLS:
+
+```bash
+# docker/.env: FORGA_DOMAIN=forga.feuerwehr-musterstadt.de, FORGA_PUBLIC_URL=https://forga.feuerwehr-musterstadt.de,
+#              FORGA_TRUST_PROXY=uniquelocal, FORGA_PORT=127.0.0.1:8080
+FORGA_TLS=admin@feuerwehr-musterstadt.de docker compose -f docker/compose.yml --profile https up -d          # Let's Encrypt
+FORGA_TLS="/certs/forga.crt /certs/forga.key" docker compose -f docker/compose.yml --profile https up -d   # Zertifikat der Gemeinde in docker/certs
+docker compose -f docker/compose.yml --profile https-internal up -d                                        # interne Zertifizierungsstelle
+```
+
+- **Let's Encrypt** braucht einen öffentlichen Namen und die Ports 80 und 443 aus dem Internet; Caddy erneuert das Zertifikat selbst.
+- **Eigenes Zertifikat** (z. B. vom IT-Dienstleister der Gemeinde): Zertifikat mit Zwischenzertifikaten und Schlüssel in `docker/certs` (oder `FORGA_CERT_DIR`); die Erneuerung bleibt beim IT-Dienstleister.
+- **Intern** (Profil `https-internal`): Caddy stellt das Zertifikat selbst aus. Das Stammzertifikat liegt im Volume `caddy-data` unter `caddy/pki/authorities/local/root.crt` (Container-Pfad `/data/caddy/pki/authorities/local/root.crt`, z. B. mit `docker compose … cp` holen) und wird auf allen Geräten installiert, sonst warnt der Browser.
+- `FORGA_TRUST_PROXY=uniquelocal` lässt f.orga der Adresse und dem Protokoll glauben, die Caddy aus dem Docker-Netz weitergibt; ohne ihn sperren fünf falsche Passwörter einen Benutzernamen für alle und f.orga hält jede Anfrage für HTTP. `FORGA_PORT=127.0.0.1:8080` bindet den direkten Port nur an den Host, damit niemand an Caddy vorbei kommt.
+- Mit `https://` in `FORGA_PUBLIC_URL` (oder „Adresse von f.orga“) gehen Cookies nur verschlüsselt; über HTTPS sendet f.orga HSTS (zwei Jahre). Danach ist f.orga nicht mehr über `http://` zu bedienen.
+- Caddy schreibt kein Zugriffsprotokoll. Wer eines einschaltet (`log` im `docker/Caddyfile`), speichert IP-Adressen und legt eine Löschfrist fest.
+- Ein anderer Reverse Proxy (z. B. nginx der Gemeinde) geht genauso: TLS dort, `X-Forwarded-For` und `X-Forwarded-Proto` setzen, `FORGA_TRUST_PROXY` auf seine Adresse.
+
+### Echt- und Testsystem
+
+**Echt- und Testsystem nebeneinander** (`docker/compose.stages.yml`): zwei getrennte Instanzen aus demselben Image, jede mit eigener Datenbank und eigenen Volumes. Das Echtsystem (`FORGA_STAGE=production`) ist für echte Daten (z. B. die MP-Feuer-Datenübernahme), das Testsystem (`FORGA_STAGE=test`) nur für Demodaten: Es zeigt auf jeder Seite das Band „Testsystem – nur Demodaten“, sperrt die Datenübernahme aus MP-Feuer und den Import von Personen und nimmt eine Sicherung des Echtsystems nur mit Begründung an; deren Daten löscht es nach 7 Tagen vollständig (danach neue Einrichtung). Gewechselt wird über die Adresse; Sitzungen und Daten bleiben getrennt.
 
 ```bash
 cp docker/.env.example docker/.env      # Passwörter und Einrichtungsschlüssel setzen
@@ -57,14 +82,18 @@ docker compose -f docker/compose.stages.yml up -d --build
 FORGA_URL=http://localhost:8081 FORGA_SETUP_TOKEN=<FORGA_SETUP_TOKEN_TEST> npm run seed   # Demodaten ins Testsystem
 ```
 
+`npm run seed` lehnt ein Echtsystem (`FORGA_STAGE=production`) ab. Seine Personen kommen ins Testsystem nur, weil der Import als Demodaten gekennzeichnet ist.
+
 | System | Adresse | Variablen |
 | --- | --- | --- |
-| Echtsystem | `http://<server>:8080` | `POSTGRES_PASSWORD_REAL`, `FORGA_SETUP_TOKEN_REAL`, `FORGA_SECRET_KEY_REAL`, `FORGA_BACKUP_DIR_REAL`, `FORGA_REAL_PORT` |
-| Testsystem | `http://<server>:8081` | `POSTGRES_PASSWORD_TEST`, `FORGA_SETUP_TOKEN_TEST`, `FORGA_SECRET_KEY_TEST`, `FORGA_BACKUP_DIR_TEST`, `FORGA_BACKUP_SCHEDULER_TEST`, `FORGA_TEST_PORT` |
+| Echtsystem | `http://<server>:8080` | `POSTGRES_PASSWORD_REAL`, `FORGA_SETUP_TOKEN_REAL`, `FORGA_SECRET_KEY_REAL`, `FORGA_PUBLIC_URL_REAL`, `FORGA_BACKUP_DIR_REAL`, `FORGA_REAL_PORT`, gemeinsam `FORGA_TRUST_PROXY`; fest `FORGA_STAGE=production` |
+| Testsystem | `http://<server>:8081` | `POSTGRES_PASSWORD_TEST`, `FORGA_SETUP_TOKEN_TEST`, `FORGA_SECRET_KEY_TEST`, `FORGA_PUBLIC_URL_TEST`, `FORGA_BACKUP_DIR_TEST`, `FORGA_BACKUP_SCHEDULER_TEST`, `FORGA_TEST_PORT`, gemeinsam `FORGA_TRUST_PROXY`; fest `FORGA_STAGE=test` |
 
-Jedes System sichert sich selbst in einen eigenen Ordner (`FORGA_BACKUP_DIR_REAL` bzw. `_TEST`, sonst die Volumes `forga_real_backups` und `forga_test_backups`), mit eigener Passphrase und eigenem `FORGA_SECRET_KEY`. Das Testsystem kann eine Sicherung des Echtsystems wiederherstellen (z. B. zum Üben): Datei unter „Sicherungen“ hochladen, mit der Passphrase des Echtsystems.
+Jedes System sichert sich selbst in einen eigenen Ordner (`FORGA_BACKUP_DIR_REAL` bzw. `_TEST`, sonst die Volumes `forga_real_backups` und `forga_test_backups`), mit eigener Passphrase und eigenem `FORGA_SECRET_KEY`. Das Testsystem kann eine Sicherung des Echtsystems wiederherstellen (Wiederherstellungsprobe): Datei unter „Sicherungen“ hochladen, mit der Passphrase des Echtsystems und einer Begründung (Audit-Log). Nach 7 Tagen löscht das Testsystem alle Daten und die hochgeladene Datei und verlangt danach die Einrichtung neu; bis dahin nennt die Übersicht der Datensicherung den Tag.
 
 Die Datei hat den eigenen Projektnamen `forga-stages` und feste Volumenamen (`forga_real_db`, `forga_test_db` …), damit sie nicht mit `docker/compose.dev.yml` im selben Verzeichnis kollidiert. Das Testsystem lässt sich jederzeit neu aufsetzen, ohne das Echtsystem zu berühren: `docker compose -f docker/compose.stages.yml rm -sf forga-test db-test && docker volume rm forga_test_db`, danach `up -d` und erneut `npm run seed`.
+
+### Plugins, E-Mail, Anmeldung
 
 **Plugins:** Ein signiertes Paket wird unter „Verwaltung → Module“ hochgeladen oder als `.tgz` in das Volume `/plugins` gelegt. Es wirkt nach einem Neustart des Containers (`docker compose -f docker/compose.yml restart forga`); Migrationen des Plugins laufen dabei mit. Abgelehnte Pakete heißen danach `*.tgz.rejected`, der Grund steht im Protokoll des Containers.
 
@@ -175,6 +204,6 @@ Beim Start spielt der Server fehlende Migrationen ein; ein Abzug aus einer älte
 
 ## Einschränkungen des aktuellen Stands
 
-- HTTPS ist nicht eingerichtet. Ohne vorgeschalteten Reverse Proxy mit TLS gehört der Stack deshalb nicht ins Internet.
+- HTTPS gibt es nur über den optionalen Dienst Caddy oder einen eigenen Reverse Proxy; ohne ihn gehört der Stack nicht ins Internet.
 - Die Datensicherung des Moduls sichert nur in einen Ordner (bzw. ein auf dem Host eingebundenes NAS), nicht direkt in S3 oder WebDAV; `docker/.env` sichert nur `docker/backup.sh` (siehe [Datensicherung](#datensicherung)).
 - Die Sperre nach Fehlversuchen bei der Anmeldung und die Begrenzung von „Passwort vergessen“ liegen im Speicher des Prozesses. Ein Neustart setzt sie zurück.

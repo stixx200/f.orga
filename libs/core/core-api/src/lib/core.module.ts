@@ -39,6 +39,9 @@ import { AuthController } from './security/auth.controller.js';
 import { OidcController, OidcService } from './security/oidc.js';
 import { PluginsController } from './plugins/plugins.controller.js';
 import { AuthGuard } from './security/auth.guard.js';
+import { CookiePolicy } from './security/cookie-policy.js';
+import { SecurityStatusController } from './security/security-status.js';
+import { assertStage } from './stage.js';
 import { AuthService } from './security/auth.service.js';
 import { OrganizationDirectory } from './security/organization-directory.js';
 import { PermissionRegistry } from './security/permission-registry.js';
@@ -110,6 +113,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
   ) {}
 
   onModuleInit(): void {
+    assertStage();
     this.exports.register('core', { all: (user) => this.coreExport.all(user), person: (id) => this.coreExport.person(id) });
     this.personData.register('core', { anonymize: (ids) => this.coreExport.anonymize(ids) });
     this.historyAccess.registerPermission('core.user', 'core.users.manage');
@@ -151,11 +155,13 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         OidcController,
         PluginsController,
         OnboardingController,
+        SecurityStatusController,
       ],
       providers: [
         { provide: FORGA_CORE_OPTIONS, useValue: { ...options, modules } },
         { provide: APP_GUARD, useClass: AuthGuard },
         AuthService,
+        CookiePolicy,
         OidcService,
         OrganizationDirectory,
         PermissionRegistry,

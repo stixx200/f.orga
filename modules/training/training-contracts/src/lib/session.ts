@@ -116,6 +116,10 @@ export type SessionCopyResult = z.infer<typeof SessionCopyResult>;
 export const AttendanceStatus = z.enum(['present', 'excused', 'absent']);
 export type AttendanceStatus = z.infer<typeof AttendanceStatus>;
 
+/** Reason of an excuse as a choice (no health details in free text; data protection concept L5). */
+export const ExcuseReason = z.enum(['work', 'private', 'sick', 'vacation', 'other']);
+export type ExcuseReason = z.infer<typeof ExcuseReason>;
+
 export const AttendanceInput = z.object({
   personId: z.uuid(),
   status: AttendanceStatus,
@@ -157,7 +161,9 @@ export const Attendance = z.object({
   checkedInVia: z.enum(['qr', 'info-terminal']).nullable(),
   /** `false` after a QR check-in until the attendance list is saved (confirmed). */
   confirmed: z.boolean(),
-  /** Reason given with an excuse in "My area". */
+  /** Reason chosen with an excuse in "My area"; `null` without one (e.g. excused by the group leader). */
+  excuseReason: ExcuseReason.nullable(),
+  /** Optional text given with an excuse in "My area"; only for those who record the attendance, otherwise empty. */
   note: z.string(),
 });
 export type Attendance = z.infer<typeof Attendance>;
@@ -172,7 +178,7 @@ export interface MySession {
   stationId: string | null;
   departmentIds: string[];
   status: SessionStatus;
-  own: { status: AttendanceStatus; note: string } | null;
+  own: { status: AttendanceStatus; excuseReason: ExcuseReason | null; note: string } | null;
 }
 
 export interface MyTraining {
@@ -182,7 +188,8 @@ export interface MyTraining {
   year: { sessions: number; present: number; excused: number };
 }
 
-export const ExcuseInput = z.object({ note: z.string().trim().max(500).default('') });
+/** An excuse in "My area": the reason as a choice, a text only if needed (seen by the group leader). */
+export const ExcuseInput = z.object({ reason: ExcuseReason, note: z.string().trim().max(500).default('') });
 export type ExcuseInput = z.input<typeof ExcuseInput>;
 
 export const Session = z.object({

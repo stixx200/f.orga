@@ -112,14 +112,14 @@ export class SessionsController {
   @RequirePermissions(PLAN)
   async create(@Body(new ZodPipe(SessionInput)) input: Parsed<typeof SessionInput>, @CurrentUser() user: AuthenticatedUser): Promise<Session> {
     const session = await this.sessions.create(user, input);
-    return this.sessions.toDto(session, await this.sessions.overlaps(session));
+    return this.sessions.toDtoFor(user, session, await this.sessions.overlaps(session));
   }
 
   @Post('sessions/series')
   @RequirePermissions(PLAN)
   async series(@Body(new ZodPipe(SessionSeries)) input: Parsed<typeof SessionSeries>, @CurrentUser() user: AuthenticatedUser): Promise<Session[]> {
     const created = await this.sessions.createSeries(user, input.session, input.intervalWeeks, input.until);
-    return created.map((s) => this.sessions.toDto(s, []));
+    return created.map((s) => this.sessions.toDtoFor(user, s, []));
   }
 
   @Post('sessions/copy')
@@ -133,14 +133,14 @@ export class SessionsController {
   @RequirePermissions(READ)
   async get(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Session> {
     const session = await this.sessions.load(this.em.fork(), id, user);
-    return this.sessions.toDto(session, await this.sessions.overlaps(session));
+    return this.sessions.toDtoFor(user, session, await this.sessions.overlaps(session));
   }
 
   @Put('sessions/:id')
   @RequirePermissions(PLAN)
   async update(@Param('id') id: string, @Body(new ZodPipe(SessionInput)) input: Parsed<typeof SessionInput>, @CurrentUser() user: AuthenticatedUser): Promise<Session> {
     const session = await this.sessions.update(user, id, input);
-    return this.sessions.toDto(session, await this.sessions.overlaps(session));
+    return this.sessions.toDtoFor(user, session, await this.sessions.overlaps(session));
   }
 
   @Delete('sessions/:id')
@@ -158,7 +158,7 @@ export class SessionsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<Session> {
     const session = await this.sessions.setAttendance(user, id, input);
-    return this.sessions.toDto(session, await this.sessions.overlaps(session));
+    return this.sessions.toDtoFor(user, session, await this.sessions.overlaps(session));
   }
 
   /** "Discard check-in": removes an unconfirmed QR check-in, e.g. of a wrong person. */
@@ -167,21 +167,21 @@ export class SessionsController {
   @RequirePermissions(ATTENDANCE)
   async discardCheckIn(@Param('id') id: string, @Param('personId') personId: string, @CurrentUser() user: AuthenticatedUser): Promise<Session> {
     const session = await this.sessions.discardCheckIn(user, id, personId);
-    return this.sessions.toDto(session, await this.sessions.overlaps(session));
+    return this.sessions.toDtoFor(user, session, await this.sessions.overlaps(session));
   }
 
   @Post('sessions/:id/close')
   @HttpCode(200)
   @RequirePermissions('training.close')
   async close(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Session> {
-    return this.sessions.toDto(await this.sessions.close(user, id), []);
+    return this.sessions.toDtoFor(user, await this.sessions.close(user, id), []);
   }
 
   @Post('sessions/:id/reopen')
   @HttpCode(200)
   @RequirePermissions('training.close')
   async reopen(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<Session> {
-    return this.sessions.toDto(await this.sessions.reopen(user, id), []);
+    return this.sessions.toDtoFor(user, await this.sessions.reopen(user, id), []);
   }
 
   @Get('sessions/:id/check-in')

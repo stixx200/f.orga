@@ -18,6 +18,7 @@ const age = (birthDate: string) => {
 
 export function MasterDataTab({ person, form, setForm, disabled }: { person: Person; form: PersonForm; setForm: Dispatch<SetStateAction<PersonForm>>; disabled: boolean }) {
   const { t } = useTranslation('masterdata');
+  const { t: common } = useTranslation('common');
   const set = <K extends keyof PersonForm>(key: K, value: PersonForm[K]) => setForm((f) => ({ ...f, [key]: value }));
   const text = (key: 'salutation' | 'title' | 'firstName' | 'lastName' | 'nickname' | 'street' | 'postalCode' | 'city' | 'phonePrivate' | 'phoneMobile' | 'phoneWork' | 'email', type = 'text', required = false) => (
     <TextInput label={t(`person.${key}`)} type={type} value={form[key]} onChange={(e) => set(key, e.currentTarget.value)} disabled={disabled} required={required} />
@@ -114,7 +115,7 @@ export function MasterDataTab({ person, form, setForm, disabled }: { person: Per
       <Panel title={t('person.sections.notes')} aside={sensitiveBadge}>
         {person.sensitiveHidden ? hidden : (
           <>
-            <Textarea label={t('person.notes')} value={form.notes} onChange={(e) => set('notes', e.currentTarget.value)} autosize minRows={3} disabled={disabled} />
+            <Textarea label={t('person.notes')} description={common('privacy.noHealthData')} value={form.notes} onChange={(e) => set('notes', e.currentTarget.value)} autosize minRows={3} disabled={disabled} />
             <Text size="xs" c="dimmed" mt="xs">{t('person.notesHint')}</Text>
           </>
         )}

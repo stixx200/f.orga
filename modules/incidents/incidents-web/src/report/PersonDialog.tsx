@@ -25,7 +25,7 @@ export const placeOf = (target: string): Pick<Personnel, 'vehicleId' | 'standbyS
  * Function, place, times, breathing apparatus and compensation details of one person in the report. Without own
  * times the person follows the vehicle (if it has own times), else the report; one click puts the person on standby.
  */
-export function PersonDialog({ name, entry, targets, standbyStations, compensation, times, vehicles, disabled, onSave, onRemove, onClose }: {
+export function PersonDialog({ name, entry, targets, standbyStations, compensation, times, vehicles, disabled, injuriesHidden = false, onSave, onRemove, onClose }: {
   name: string;
   entry: Personnel;
   targets: Target[];
@@ -35,6 +35,8 @@ export function PersonDialog({ name, entry, targets, standbyStations, compensati
   times: { alarmedAt: string; returnedAt: string };
   vehicles: Content['vehicles'];
   disabled: boolean;
+  /** Health data: "injured"/"killed" only for the author, releasers and `incidents.injuries.read`. */
+  injuriesHidden?: boolean;
   onSave: (entry: Personnel) => void;
   onRemove: () => void;
   onClose: () => void;
@@ -146,15 +148,19 @@ export function PersonDialog({ name, entry, targets, standbyStations, compensati
         )}
         <Switch label={t('person.lossOfEarnings')} checked={draft.lossOfEarnings ?? false} onChange={(e) => set('lossOfEarnings', e.currentTarget.checked)} disabled={disabled} />
         <Switch label={t('person.duringWorkingHours')} checked={draft.duringWorkingHours ?? false} onChange={(e) => set('duringWorkingHours', e.currentTarget.checked)} disabled={disabled} />
-        <Radio.Group
-          label={t('person.damage')}
-          value={damage}
-          onChange={(value) => setDraft((d) => ({ ...d, injured: value === 'injured', killed: value === 'killed' }))}
-        >
-          <Group mt={4}>
-            {(['none', 'injured', 'killed'] as const).map((v) => <Radio key={v} value={v} label={t(`person.damageOptions.${v}`)} disabled={disabled} />)}
-          </Group>
-        </Radio.Group>
+        {injuriesHidden ? (
+          <Text size="sm" c="dimmed">{t('person.damageHidden')}</Text>
+        ) : (
+          <Radio.Group
+            label={t('person.damage')}
+            value={damage}
+            onChange={(value) => setDraft((d) => ({ ...d, injured: value === 'injured', killed: value === 'killed' }))}
+          >
+            <Group mt={4}>
+              {(['none', 'injured', 'killed'] as const).map((v) => <Radio key={v} value={v} label={t(`person.damageOptions.${v}`)} disabled={disabled} />)}
+            </Group>
+          </Radio.Group>
+        )}
         {compensation && (
           <Text size="sm" c="dimmed">
             {compensation.rate === null

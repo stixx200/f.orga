@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { LocalizedText } from './i18n.js';
 import { RetentionRule } from './retention.js';
+import { SecuritySettings } from './stage.js';
 import { ReminderSettings } from './tasks.js';
 
 function isPublicUrl(value: string): boolean {
@@ -88,6 +89,7 @@ export const CORE_SETTINGS = {
   reminders: ReminderSettings,
   privacy: PrivacySettings,
   oidc: OidcSettings,
+  security: SecuritySettings,
 } as const;
 
 /** Fields that are write-only and never leave the server. */
@@ -127,4 +129,5 @@ export const CORE_SETTINGS_ACCESS: Record<string, SettingsAccess> = {
   oidc: { managersOnly: true },
   privacy: { managersOnly: true },
   reminders: { managersOnly: true },
+  security: { managersOnly: true },
 };

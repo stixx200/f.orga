@@ -19,7 +19,8 @@ FROM node:24-alpine
 # pg_dump, pg_restore and psql in the version of the database server (module backup).
 RUN apk add --no-cache postgresql17-client
 WORKDIR /app
-ENV NODE_ENV=production FORGA_WEB_DIR=/app/web PORT=3000
+# Real data unless the container says otherwise (FORGA_STAGE=test for the test system).
+ENV NODE_ENV=production FORGA_WEB_DIR=/app/web PORT=3000 FORGA_STAGE=production
 COPY --from=build /repo/apps/server/dist ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --from=build /web ./web

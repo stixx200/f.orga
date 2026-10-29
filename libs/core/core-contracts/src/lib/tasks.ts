@@ -18,6 +18,8 @@ export const Deadline = z.object({
   group: LocalizedText.optional(),
   /** Page of the app where the task is done, e.g. `/equipment/items/<id>`; without it the shell derives it from the subject type. */
   to: z.string().optional(),
+  /** Health reference (e.g. medical examination required): e-mails only count such deadlines, without names. */
+  health: z.boolean().optional(),
 });
 export type Deadline = z.infer<typeof Deadline>;
 

@@ -35,6 +35,7 @@ import { Audit } from '../audit/audit.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { CurrentUser } from '../security/decorators.js';
 import { decryptSecret, encryptSecret, serverKey } from '../security/server-key.js';
+import { isTestStage } from '../stage.js';
 import { ZodPipe } from '../zod.pipe.js';
 import { ImportMappings } from './import-mappings.js';
 import { ImportRegistry, type ImportRow, type ImportRunOutcome, type RememberedValues } from './import-registry.js';
@@ -108,6 +109,8 @@ export interface RunRowsInput {
   remembered?: RememberedValues;
   /** Further details of the audit entry `imports.applied`, e.g. the file name. */
   audit?: Record<string, unknown>;
+  /** Made-up demo data: allows profiles with personal data on the test system (see `ImportProfile.personData`). */
+  demoData?: boolean;
 }
 
 /** The part of a multer file the import needs. */
@@ -134,12 +137,14 @@ export class ImportService {
     const { user, dryRun, source } = input;
     const profile = this.registry.get(input.profile);
     if (!profile || !user.can(profile.permission)) throw new NotFoundException({ code: 'imports.unknownProfile' });
+    // Real personal data stay out of the test system; only the made-up data of `npm run seed` may come in.
+    if (profile.personData && isTestStage() && !input.demoData) throw new ForbiddenException({ code: 'imports.lockedInTestStage' });
     const options = Object.fromEntries((profile.options ?? []).map((o) => [o.key, input.options?.[o.key] ?? o.default]));
     const remembered = input.mappingList === 'core' ? await this.mappings.remembered() : input.remembered;
     const outcome = await this.registry.run(profile, input.rows, { user, options, dryRun, source, mappings: input.mappings ?? {}, remembered });
     if (!dryRun) {
       if (input.mappingList === 'core') await this.mappings.remember(outcome.used, profile.id, user);
-      await this.audit.log('imports.applied', { profile: profile.id, source, ...input.audit, counts: outcome.result.counts });
+      await this.audit.log('imports.applied', { profile: profile.id, source, ...input.audit, ...(input.demoData ? { demoData: true } : {}), counts: outcome.result.counts });
     }
     return outcome;
   }
@@ -258,6 +263,7 @@ export class ImportService {
       source: { module: 'core' },
       mappingList: 'core',
       audit: { fileName: upload.fileName },
+      demoData: request.demoData,
     });
     if (!dryRun) await em.nativeDelete(ImportUploadEntity, { id: upload.id });
     return result;

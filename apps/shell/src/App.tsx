@@ -1,10 +1,9 @@
-import type { LocalizedText } from '@forga/core-contracts';
 import { Alert, Loader } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useMemo } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import type { Session } from '@forga/core-contracts';
-import { api, ApiError, can, currentLanguage, setLanguage, useMaintenance, useSession, useTranslation } from '@forga/web-sdk';
+import { ApiError, can, currentLanguage, setLanguage, useMaintenance, useSession, useSetupState, useTranslation } from '@forga/web-sdk';
 import { EmptyState } from '@forga/web-ui';
 import { LoginPage } from './auth/LoginPage';
 import { MaintenancePage } from './auth/MaintenancePage';
@@ -12,6 +11,7 @@ import { ConfirmEmailPage } from './auth/ConfirmEmailPage';
 import { ResetPasswordPage } from './auth/ResetPasswordPage';
 import { SetupPage } from './auth/SetupPage';
 import { AppFrame } from './frame/AppFrame';
+import { StageBand } from './frame/StageBand';
 import { moduleSettings } from './frame/Sidebar';
 import { KIOSK_PATHS, type LoadedModule, loadKiosk, loadModules } from './modules';
 import { AuditPage } from './pages/admin/AuditPage';
@@ -99,6 +99,15 @@ function KioskPage({ path }: { path: string }) {
 }
 
 export function App() {
+  return (
+    <>
+      <StageBand />
+      <Pages />
+    </>
+  );
+}
+
+function Pages() {
   const kiosk = KIOSK_PATHS.find((path) => window.location.pathname === `/${path}` || window.location.pathname.startsWith(`/${path}/`));
   // While a backup is being restored every request answers `503 maintenance`.
   const maintenance = useMaintenance();
@@ -111,10 +120,7 @@ export function App() {
 
 function Main() {
   const { t } = useTranslation('shell');
-  const setup = useQuery({
-    queryKey: ['core', 'setup'],
-    queryFn: () => api<{ required: boolean; brigadeName: string | null; oidc: { label: LocalizedText } | null }>('core/setup'),
-  });
+  const setup = useSetupState();
   const session = useSession();
 
   if (setup.error || session.error) {

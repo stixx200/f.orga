@@ -265,6 +265,10 @@ export function PersonnelSection({ content, report, update, disabled, findings }
       </SimpleGrid>
       <Panel title={t('personnel.total')} aside={<Text fw={700} c="brand">{t('report.personnelSummary', { count: report.personnel.length, amount: formatMoney(report.compensationTotal, i18n.language) })}</Text>}>
         <Text size="sm" c="dimmed">{t('personnel.totalHint')}</Text>
+        {/* Without the permission only the number of injured own forces, no names (health data). */}
+        {report.injuries.hidden && report.injuries.injured + report.injuries.killed > 0 && (
+          <Text size="sm" mt="xs">{t('personnel.injuriesCount', { injured: report.injuries.injured, killed: report.injuries.killed })}</Text>
+        )}
       </Panel>
       {editingEntry && editing !== null && (
         <PersonDialog
@@ -277,6 +281,7 @@ export function PersonnelSection({ content, report, update, disabled, findings }
           times={content.times}
           vehicles={content.vehicles}
           disabled={disabled}
+          injuriesHidden={report.injuries.hidden}
           onClose={() => setEditing(null)}
           onRemove={() => {
             update((c) => ({ ...c, personnel: c.personnel.filter((_, i) => i !== editing) }));

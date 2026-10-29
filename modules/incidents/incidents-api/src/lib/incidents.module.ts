@@ -99,7 +99,9 @@ export class IncidentsModule implements OnModuleInit {
     this.retentionCategory.register(this.retention);
     this.historyAccess.register('incidents.report', async (user, id) => {
       const report = await this.em.fork().findOne(ReportEntity, id);
-      return { allowed: Boolean(report) && this.reports.canRead(user, report!) };
+      if (!report || !this.reports.canRead(user, report)) return { allowed: false };
+      // Health data: "injured"/"killed" of the personnel only for those who see them in the report.
+      return { allowed: true, hiddenFields: this.reports.canSeeInjuries(user, report) ? [] : ['incidents.report_personnel.injured', 'incidents.report_personnel.killed'] };
     });
     // Photos, alarm fax and sketches of a report: readable like the report, added and removed while it may be edited.
     const report = (id: string) => this.em.fork().findOne(ReportEntity, id);

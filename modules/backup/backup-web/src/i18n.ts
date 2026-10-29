@@ -19,6 +19,7 @@ const texts: Translations = {
       started: 'Sicherung gestartet.',
     },
     overview: {
+      realData: 'Testsystem mit Echtdaten aus dem Echtsystem (Begründung: „{{reason}}“, {{user}}). Am {{date}} werden alle Daten dieses Testsystems gelöscht; danach ist eine neue Einrichtung nötig.',
       title: 'Datensicherung',
       last: 'Letzte Sicherung',
       lastHint: '{{date}} · {{size}}',
@@ -185,6 +186,9 @@ const texts: Translations = {
       script: 'Für eine Sicherung des ganzen Servers (Echt- und Testsystem, .env) gibt es weiterhin das Skript docker/backup.sh auf dem Host.',
     },
     restore: {
+      realData: 'Diese Sicherung stammt aus dem Echtsystem. Echtdaten gehören nicht ins Testsystem: nur mit Begründung (z. B. Wiederherstellungsprobe), und nach {{days}} Tagen werden alle Daten dieses Testsystems gelöscht.',
+      realDataReason: 'Begründung',
+      realDataReasonHint: 'Steht im Audit-Log; mindestens {{min}} Zeichen.',
       title: 'Wiederherstellen',
       steps: { choose: 'Sicherung wählen', check: 'Prüfen', confirm: 'Bestätigen', run: 'Wiederherstellen' },
       stepOf: 'Schritt {{step}} von 4: {{name}}',
@@ -257,6 +261,7 @@ const texts: Translations = {
       'backup.newerVersion': 'Die Sicherung stammt von einer neueren f.orga-Version ({{version}}). Aktualisieren Sie zuerst f.orga.',
       'backup.missingModules': 'In der Sicherung sind Module, die hier fehlen: {{modules}}',
       'backup.confirmNameMismatch': 'Der Name der Feuerwehr stimmt nicht.',
+      'backup.realDataReasonRequired': 'Bitte begründen, warum Echtdaten ins Testsystem kommen (mindestens {{min}} Zeichen).',
       'backup.restoreFailed': 'Das Einspielen der Sicherung ist fehlgeschlagen.',
       'backup.restoreRunning': 'Es läuft bereits eine Wiederherstellung.',
       'backup.restoreNotFound': 'Diese Wiederherstellung ist nicht bekannt.',
@@ -297,6 +302,7 @@ const texts: Translations = {
       started: 'Backup started.',
     },
     overview: {
+      realData: 'Test system with real data from the production system (reason: "{{reason}}", {{user}}). On {{date}} all data of this test system is deleted; a new setup is needed afterwards.',
       title: 'Backup',
       last: 'Last backup',
       lastHint: '{{date}} · {{size}}',
@@ -463,6 +469,9 @@ const texts: Translations = {
       script: 'For a backup of the whole server (real and test system, .env) there is still the script docker/backup.sh on the host.',
     },
     restore: {
+      realData: 'This backup comes from the production system. Real data does not belong in the test system: only with a reason (e.g. a restore test), and after {{days}} days all data of this test system is deleted.',
+      realDataReason: 'Reason',
+      realDataReasonHint: 'Recorded in the audit log; at least {{min}} characters.',
       title: 'Restore',
       steps: { choose: 'Choose backup', check: 'Check', confirm: 'Confirm', run: 'Restore' },
       stepOf: 'Step {{step}} of 4: {{name}}',
@@ -535,6 +544,7 @@ const texts: Translations = {
       'backup.newerVersion': 'The backup comes from a newer version of f.orga ({{version}}). Update f.orga first.',
       'backup.missingModules': 'The backup contains modules missing here: {{modules}}',
       'backup.confirmNameMismatch': 'The name of the brigade does not match.',
+      'backup.realDataReasonRequired': 'Please give a reason why real data goes into the test system (at least {{min}} characters).',
       'backup.restoreFailed': 'Restoring the backup failed.',
       'backup.restoreRunning': 'A restore is already running.',
       'backup.restoreNotFound': 'This restore is not known.',

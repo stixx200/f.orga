@@ -141,7 +141,9 @@ export function AttendanceTab({ session, editable }: { session: Session; editabl
             key: 'name',
             header: t('attendance.person'),
             render: (r) => {
-              const note = session.attendance.find((a) => a.personId === r.personId)?.note;
+              const row = session.attendance.find((a) => a.personId === r.personId);
+              const note = row?.note;
+              const reason = row?.excuseReason;
               return (
                 <>
                   <Text fw={700} size="sm">{name(r.personId)}</Text>
@@ -151,6 +153,7 @@ export function AttendanceTab({ session, editable }: { session: Session; editabl
                       {editable && <Button size="compact-xs" variant="subtle" color="red" onClick={() => setDiscarding(r.personId)}>{t('attendance.discard')}</Button>}
                     </Group>
                   )}
+                  {reason && <Text size="xs" c="dimmed">{t('attendance.excuseReason', { reason: t(`excuseReasons.${reason}`) })}</Text>}
                   {note && <Text size="xs" c="dimmed">{t('attendance.excuseNote', { note })}</Text>}
                 </>
               );

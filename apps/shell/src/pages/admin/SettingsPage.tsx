@@ -7,6 +7,7 @@ import { api, can, send, upload as uploadFile, useLocalized, useSession, useTran
 import { Notice, notifySuccess, PageHeader, Panel, useAction } from '@forga/web-ui';
 import type { LoadedModule } from '../../modules';
 import { RetentionSettings } from './RetentionSettings';
+import { SecuritySettings } from './SecuritySettings';
 
 const key = (section: string) => ['core', 'settings', section] as const;
 
@@ -44,7 +45,7 @@ function SectionFormLoaded<T extends object>({ section, initial, children }: { s
 }
 
 const BRIGADE_DEFAULTS: BrigadeSettings = { name: '', street: '', postalCode: '', city: '', phone: '', fax: '', website: '', email: '', municipality: '', population: null, publicUrl: '' };
-const TABS = ['brigade', 'smtp', 'reminders', 'privacy', 'oidc', 'export'];
+const TABS = ['brigade', 'smtp', 'reminders', 'privacy', 'security', 'oidc', 'export'];
 
 /** Warnings and the connection test of the OIDC settings. */
 function OidcChecks({ matchBy }: { matchBy: OidcSettings['matchBy'] }) {
@@ -90,6 +91,7 @@ export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
           <Tabs.Tab value="smtp">{t('settings.tabs.smtp')}</Tabs.Tab>
           <Tabs.Tab value="reminders">{t('settings.tabs.reminders')}</Tabs.Tab>
           <Tabs.Tab value="privacy">{t('settings.tabs.privacy')}</Tabs.Tab>
+          <Tabs.Tab value="security">{t('settings.tabs.security')}</Tabs.Tab>
           <Tabs.Tab value="oidc">{t('settings.tabs.oidc')}</Tabs.Tab>
           {can(session, 'core.data.export') && <Tabs.Tab value="export">{t('settings.tabs.export')}</Tabs.Tab>}
         </Tabs.List>
@@ -133,6 +135,8 @@ export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
                     <PasswordInput label={t('settings.smtp.password')} description={t('settings.smtp.passwordHint')} value={v.password ?? ''} onChange={(e) => set('password', e.currentTarget.value)} autoComplete="new-password" />
                   </SimpleGrid>
                   <Switch label={t('settings.smtp.starttls')} checked={v.starttls} onChange={(e) => set('starttls', e.currentTarget.checked)} />
+                  {/* Port 465 encrypts from the start (SMTPS); otherwise only STARTTLS does. */}
+                  {v.host && !v.starttls && v.port !== 465 && <Notice kind="warning">{t('settings.smtp.noTls')}</Notice>}
                 </>
               )}
             </SectionForm>
@@ -182,6 +186,9 @@ export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
         </Tabs.Panel>
         <Tabs.Panel value="privacy">
           <RetentionSettings />
+        </Tabs.Panel>
+        <Tabs.Panel value="security">
+          <SecuritySettings />
         </Tabs.Panel>
         <Tabs.Panel value="export">
           <Panel title={t('settings.export.title')} maw={880}>

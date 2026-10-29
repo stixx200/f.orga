@@ -1,4 +1,5 @@
-import { Controller, ForbiddenException, Get, Inject } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Inject, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { EntityManager } from '@mikro-orm/core';
 import type { BrigadeSettings, OnboardingItem, SmtpSettings } from '@forga/core-contracts';
 import { ModuleStateService } from '../module/modules.js';
@@ -7,10 +8,11 @@ import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { CurrentUser } from '../security/decorators.js';
 import { OrganizationDirectory } from '../security/organization-directory.js';
 import { User } from '../security/security.entities.js';
+import { forgaStage } from '../stage.js';
 import { Setting, SettingsService } from './settings.js';
 
 /**
- * What an administrator still has to set up on a new installation: public address, e-mail, departments, catalogs,
+ * What an administrator still has to set up on a new installation: HTTPS, public address, e-mail, departments, catalogs,
  * the settings of each active module (statute values such as compensation rates) and further users.
  */
 @Controller('core/onboarding')
@@ -24,7 +26,7 @@ export class OnboardingController {
   ) {}
 
   @Get()
-  async items(@CurrentUser() user: AuthenticatedUser): Promise<OnboardingItem[]> {
+  async items(@CurrentUser() user: AuthenticatedUser, @Req() req: Request): Promise<OnboardingItem[]> {
     if (!user.can('core.settings.manage') && !user.can('core.users.manage')) {
       throw new ForbiddenException({ code: 'auth.forbidden', permissions: ['core.settings.manage', 'core.users.manage'] });
     }
@@ -35,6 +37,9 @@ export class OnboardingController {
       { key: 'publicUrl', done: Boolean(brigade?.publicUrl || process.env.FORGA_PUBLIC_URL), to: '/admin/settings' },
       { key: 'smtp', done: process.env.FORGA_MAIL_TRANSPORT === 'memory' || Boolean(smtp?.host && smtp.sender), to: '/admin/settings?tab=smtp' },
     ];
+    // Passwords, sessions and health data only encrypted: warns while f.orga is opened over plain HTTP (not on the
+    // developer's machine). Behind a TLS proxy this needs `FORGA_TRUST_PROXY`, so the request counts as HTTPS.
+    if (forgaStage() !== 'development') items.unshift({ key: 'https', done: req.secure, to: '/admin/settings?tab=security' });
     const inactive = await this.modules.inactiveIds();
     if (this.organization.available && !inactive.has('masterdata')) {
       items.push({ key: 'departments', done: (await this.organization.departments()).length > 0, to: '/masterdata/organization' });

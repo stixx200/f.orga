@@ -5,7 +5,7 @@ import { join, resolve as resolvePath } from 'node:path';
 import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MailService } from '@forga/core-api';
-import { BackupScheduler, newHeader, writeBackupFile } from '@forga/backup-api';
+import { BackupScheduler, newHeader, RestoreService, writeBackupFile } from '@forga/backup-api';
 import { type TestApp, setUp, startTestApp, UI } from './testing/test-app';
 import { TEST_DATABASE_URL } from './testing/test-database';
 
@@ -353,5 +353,51 @@ describe('backup', { timeout: 120_000 }, () => {
     await del(`/backup/previous-databases/${before}`).expect(204);
     expect(psql(`select count(*) from pg_database where datname like '${database}_before_%' or datname like '${database}_restore_%'`)).toBe('0');
     expect(readdirSync(join(root, 'forga')).filter((f) => f.endsWith('.part'))).toEqual([]);
+  });
+
+  it('restores real data into the test system only with a reason and deletes all data after 7 days', async () => {
+    // A backup of the real system …
+    process.env.FORGA_STAGE = 'production';
+    const real = await backupNow({ verify: false });
+    expect(real.status).toBe('ok');
+    // … restored in the test system.
+    process.env.FORGA_STAGE = 'test';
+    try {
+      expect((await post('/backup/restore/check', { backupId: real.id, passphrase: PASSPHRASE }).expect(200)).body.realData).toBe(true);
+      const restore = (body: object) => post('/backup/restore', { backupId: real.id, passphrase: PASSPHRASE, confirmName: BRIGADE, usersInformed: true, ...body });
+      expect((await restore({}).expect(400)).body.code).toBe('backup.realDataReasonRequired');
+      expect((await restore({ realDataReason: 'kurz' }).expect(400)).body.code).toBe('backup.realDataReasonRequired');
+      const reason = 'Wiederherstellungsprobe nach dem Sicherungskonzept';
+      const token = (await restore({ realDataReason: reason }).expect(202)).body.token as string;
+      let phase = 'running';
+      for (let i = 0; i < 600 && phase === 'running'; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        phase = (await test.http.get(`/api/backup/restore/status?token=${token}`).expect(200)).body.phase;
+      }
+      expect(phase).toBe('restarting');
+      await test.app.close();
+      test = await startTestApp({}, { keepDatabase: true });
+      admin = await test.login();
+      const status = (await get('/backup/status').expect(200)).body;
+      expect(status.realData).toMatchObject({ reason });
+      const days = (new Date(status.realData.deleteAt).getTime() - Date.now()) / 86_400_000;
+      expect(days).toBeGreaterThan(6.9);
+      expect(days).toBeLessThanOrEqual(7);
+      const audit = (await get('/core/audit?action=backup.restored').expect(200)).body as { details: { realDataReason?: string } }[];
+      expect(audit[0].details.realDataReason).toBe(reason);
+      for (const name of psql(`select datname from pg_database where datname like '${database}_before_%'`).split('\n').filter(Boolean)) await del(`/backup/previous-databases/${name}`).expect(204);
+
+      // After 7 days everything goes, also the uploaded backup of the real system; the next start asks for the setup.
+      const restores = test.app.get(RestoreService);
+      expect(await restores.deleteExpiredRealData(new Date())).toBe(false);
+      expect(existsSync(join(root, 'forga', real.fileName!))).toBe(true);
+      expect(await restores.deleteExpiredRealData(new Date(Date.now() + 8 * 86_400_000))).toBe(true);
+      expect(existsSync(join(root, 'forga', real.fileName!))).toBe(false);
+      await test.app.close();
+      test = await startTestApp({}, { keepDatabase: true });
+      expect((await test.http.get('/api/core/setup').expect(200)).body).toMatchObject({ required: true, stage: 'test' });
+    } finally {
+      delete process.env.FORGA_STAGE;
+    }
   });
 });

@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, type OnApplicationBootstrap } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Audit, Session, SettingsService } from '@forga/core-api';
+import { rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { Audit, isTestStage, Session, SettingsService } from '@forga/core-api';
 import type { BrigadeSettings } from '@forga/core-contracts';
 import { FORGA_VERSION } from '@forga/core-contracts';
-import type { RestoreCheck, RestoreProgress, RestoreStep } from '@forga/backup-contracts';
+import { type BackupManifest, REAL_DATA_DAYS, REAL_DATA_REASON_MIN, type RestoreCheck, type RestoreProgress, type RestoreStep } from '@forga/backup-contracts';
 import { BackupRestore, BackupRun } from '../backup.entities.js';
 import { type Actor, BackupsService, httpError, toEntry } from '../backups/backups.service.js';
 import { stampedDatabase, stampOf } from '../backups/database.js';
@@ -64,9 +66,22 @@ export class RestoreService implements OnApplicationBootstrap {
       const finished = this.withStep({ ...state, phase: 'done' }, 'restart', 'done');
       // Sessions of the backup belong to the old state: everybody signs in again.
       await em.nativeDelete(Session, {});
-      em.create(BackupRestore, this.record(finished));
+      const record = em.create(BackupRestore, this.record(finished));
+      // Real data in the test system: deleted after 7 days (see `deleteExpiredRealData`).
+      if (state.realDataReason) record.realDataUntil = new Date(record.finishedAt!.getTime() + REAL_DATA_DAYS * 86_400_000);
       await em.flush();
-      await this.audit.log('backup.restored', { fileName: state.fileName, backupCreatedAt: state.backupCreatedAt, safetyFileName: state.safetyFileName, previousDatabase: state.previousDatabase, method: state.method }, state.userId);
+      await this.audit.log(
+        'backup.restored',
+        {
+          fileName: state.fileName,
+          backupCreatedAt: state.backupCreatedAt,
+          safetyFileName: state.safetyFileName,
+          previousDatabase: state.previousDatabase,
+          method: state.method,
+          ...(state.realDataReason ? { realDataReason: state.realDataReason, realDataUntil: record.realDataUntil!.toISOString() } : {}),
+        },
+        state.userId,
+      );
       this.maintenance.finish(finished);
       this.logger.log(`Restored the backup ${state.fileName}`);
       return;
@@ -110,6 +125,8 @@ export class RestoreService implements OnApplicationBootstrap {
       errorCode: state.error,
       errorDetail: state.errorDetail,
       previousDatabase: state.previousDatabase,
+      realDataReason: state.realDataReason ?? null,
+      realDataUntil: null,
     };
   }
 
@@ -141,11 +158,22 @@ export class RestoreService implements OnApplicationBootstrap {
       runningVersion: FORGA_VERSION,
       brigadeName: await this.brigadeName(),
       restoreMethod: await this.method(),
+      realData: await this.isRealData(manifest),
     };
   }
 
+  /**
+   * On the test system: is the backup one of the real system? Backups of older versions name no stage; one of another
+   * installation counts as real data then.
+   */
+  async isRealData(manifest: Pick<BackupManifest, 'stage' | 'instanceId'>): Promise<boolean> {
+    if (!isTestStage()) return false;
+    if (manifest.stage) return manifest.stage === 'production';
+    return manifest.instanceId !== (await this.settings.instanceId());
+  }
+
   /** Starts the restore after all checks; returns the token for the status page. */
-  async start(input: { backupId: string; passphrase: string; confirmName: string }, actor: Actor): Promise<{ token: string }> {
+  async start(input: { backupId: string; passphrase: string; confirmName: string; realDataReason?: string }, actor: Actor): Promise<{ token: string }> {
     if (this.maintenance.current) throw new ConflictException({ code: 'backup.restoreRunning' });
     if (this.backups.isRunning) throw new ConflictException({ code: 'backup.running' });
     const run = await this.backups.find(input.backupId);
@@ -157,6 +185,10 @@ export class RestoreService implements OnApplicationBootstrap {
     const compatibility = this.backups.compatibility(manifest);
     if (compatibility.newer) throw new BadRequestException({ code: 'backup.newerVersion', version: manifest.appVersion });
     if (compatibility.missingModules.length) throw new BadRequestException({ code: 'backup.missingModules', modules: compatibility.missingModules });
+    // Real data in the test system only with a reason (decision 4 of the data protection concept).
+    const realData = await this.isRealData(manifest);
+    const realDataReason = realData ? (input.realDataReason ?? '').trim() : '';
+    if (realData && realDataReason.length < REAL_DATA_REASON_MIN) throw new BadRequestException({ code: 'backup.realDataReasonRequired', min: REAL_DATA_REASON_MIN });
     const loaded = await this.settings.load();
     // The safety backup uses the stored passphrase; without one (no server key) the one entered.
     const safetyPassphrase = loaded.settings.encryption ? this.settings.passphraseOf(loaded) ?? passphrase : null;
@@ -174,6 +206,7 @@ export class RestoreService implements OnApplicationBootstrap {
       userName: actor.displayName,
       method: await this.method(),
       previousDatabase: null,
+      realDataReason: realData ? realDataReason : null,
       phase: 'running',
       steps: STEPS.map((step) => ({ step, state: 'waiting', detail: null })),
       backupCreatedAt: manifest.createdAt,
@@ -183,7 +216,11 @@ export class RestoreService implements OnApplicationBootstrap {
       consoleCommands: null,
     };
     this.maintenance.save(state);
-    await this.audit.log('backup.restore-started', { backupId: run.id, fileName: run.fileName, backupCreatedAt: manifest.createdAt, method: state.method }, actor.id);
+    await this.audit.log(
+      'backup.restore-started',
+      { backupId: run.id, fileName: run.fileName, backupCreatedAt: manifest.createdAt, method: state.method, ...(realData ? { realDataReason } : {}) },
+      actor.id,
+    );
     // After the answer: the page polls the status with the token.
     setImmediate(() => {
       this.run(state, path, passphrase, safetyPassphrase, actor).catch((error: unknown) => this.logger.error('Restore failed', error instanceof Error ? error.stack : String(error)));
@@ -352,6 +389,35 @@ export class RestoreService implements OnApplicationBootstrap {
       const at = stampOf(datname, database, 'restore') ?? stampOf(datname, database, 'restoretest');
       if (at && now.getTime() - at.getTime() > 24 * 3_600_000) await this.pg.sql([`drop database if exists ${quoteIdent(datname)} with (force)`]).catch(() => undefined);
     }
+  }
+
+  /** Test system with restored real data: reason and day of deletion, for the overview. */
+  async realDataStatus(): Promise<{ reason: string; deleteAt: string; userName: string | null } | null> {
+    if (!isTestStage()) return null;
+    const latest = await this.em.fork().findOne(BackupRestore, { realDataUntil: { $ne: null }, phase: 'done' }, { orderBy: { realDataUntil: 'desc' } });
+    return latest ? { reason: latest.realDataReason ?? '', deleteAt: latest.realDataUntil!.toISOString(), userName: latest.userName ?? null } : null;
+  }
+
+  /**
+   * Test system: 7 days after real data was restored, all data is deleted. The uploaded backup of the real system is
+   * removed, every schema of f.orga is dropped and the process ends; at the restart the migrations create an empty
+   * database and f.orga asks for the setup again. Returns whether it deleted.
+   */
+  async deleteExpiredRealData(now = new Date()): Promise<boolean> {
+    if (!isTestStage() || this.maintenance.current) return false;
+    const em = this.em.fork();
+    const expired = await em.find(BackupRestore, { realDataUntil: { $ne: null, $lte: now }, phase: 'done' });
+    if (!expired.length) return false;
+    // The file of the restored backup (its record in the restored database still says "running").
+    const target = await this.backups.target().catch(() => null);
+    for (const restore of expired) {
+      if (target && restore.fileName && !/[\\/]/.test(restore.fileName)) await rm(join(target, restore.fileName), { force: true });
+    }
+    this.logger.warn(`Test system: deleting all data ${REAL_DATA_DAYS} days after real data was restored (${expired.map((r) => r.fileName).join(', ')})`);
+    const schemas = [...new Set([...this.em.getMetadata().getAll().values()].flatMap((meta) => (meta.schema && meta.schema !== '*' ? [meta.schema] : [])))];
+    await em.getConnection().execute(`drop schema if exists ${schemas.map(quoteIdent).join(', ')} cascade; drop table if exists forga_migrations`);
+    if (backupEnvironment.exitAfterRestore()) setTimeout(() => process.exit(0), 1000).unref();
+    return true;
   }
 
   /** The latest restores, for the overview. */

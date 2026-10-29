@@ -1,6 +1,7 @@
-import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import type { Deadline, Language, ReminderSettings } from '@forga/core-contracts';
+import { type BrigadeSettings, type Deadline, type Language, type LocalizedText, type ReminderSettings, SecuritySettings } from '@forga/core-contracts';
+import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
 import { Audit, AuditEntry } from '../audit/audit.js';
 import { AuthService } from '../security/auth.service.js';
 import { User } from '../security/security.entities.js';
@@ -19,6 +20,9 @@ const TEXT = {
     stage: { overdue: 'überfällig', due: 'fällig', upcoming: 'bald fällig' },
     footer: 'Diese E-Mail kommt wöchentlich. Abbestellen im Benutzerprofil.',
     greeting: 'Hallo',
+    /** Deadlines without names: "3 Fristen im Atemschutz, davon 1 überfällig – in f.orga ansehen". */
+    counted: (n: number, area: string, overdue: number) =>
+      `${n} ${n === 1 ? 'Frist' : 'Fristen'} im Bereich ${area}${overdue ? `, davon ${overdue} überfällig` : ''} – in f.orga ansehen`,
   },
   en: {
     subject: (n: number) => `f.orga: ${n} deadline(s)`,
@@ -26,6 +30,8 @@ const TEXT = {
     stage: { overdue: 'overdue', due: 'due', upcoming: 'upcoming' },
     footer: 'This e-mail is sent weekly. Unsubscribe in your user profile.',
     greeting: 'Hello',
+    counted: (n: number, area: string, overdue: number) =>
+      `${n} ${n === 1 ? 'deadline' : 'deadlines'} in ${area}${overdue ? `, ${overdue} of them overdue` : ''} – see f.orga`,
   },
 } as const;
 
@@ -66,6 +72,7 @@ export class DigestService implements OnApplicationBootstrap, OnApplicationShutd
     private readonly mail: MailService,
     private readonly settings: SettingsService,
     private readonly audit: Audit,
+    @Inject(FORGA_CORE_OPTIONS) private readonly options: ForgaCoreOptions,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -112,13 +119,16 @@ export class DigestService implements OnApplicationBootstrap, OnApplicationShutd
     );
     let sent = 0;
     let failed = 0;
+    const security = SecuritySettings.parse((await this.settings.get('security')) ?? {});
+    const brigade = await this.settings.get<BrigadeSettings>('brigade');
+    const link = (brigade?.publicUrl || process.env.FORGA_PUBLIC_URL || '').replace(/\/$/, '');
     for (const user of users) {
       if (already.has(user.id) && !options.resend) continue;
       const authenticated = await this.auth.load(em, user, 'session');
       const deadlines = await this.deadlines.forUser(authenticated, asOf);
       if (!deadlines.length || !user.email) continue;
       try {
-        await this.mail.send({ to: user.email, ...this.compose(user.displayName, user.language, deadlines) });
+        await this.mail.send({ to: user.email, ...this.compose(user.displayName, user.language, deadlines, security, link) });
         await this.audit.log(MAIL_ACTION, { asOf, userId: user.id }, null);
         sent++;
       } catch (error) {
@@ -130,16 +140,42 @@ export class DigestService implements OnApplicationBootstrap, OnApplicationShutd
     return sent;
   }
 
-  private compose(name: string, language: Language, deadlines: Deadline[]): { subject: string; text: string } {
+  /** Name of the area of a deadline in the e-mail: the module's name. */
+  private areaName(module: string, language: Language): string {
+    const manifest = this.options.modules.find((m) => m.manifest.id === module)?.manifest;
+    return (manifest?.name as LocalizedText | undefined)?.[language] ?? module;
+  }
+
+  /**
+   * Deadlines with a health reference (setting `mailHealthWithoutNames`, on by default) or all of them
+   * (`mailAllWithoutNames`) appear only as counts per area, without names; the rest one per line.
+   */
+  private compose(name: string, language: Language, deadlines: Deadline[], security: SecuritySettings, link: string): { subject: string; text: string } {
     const t = TEXT[language];
+    const anonymous = (d: Deadline) => security.mailAllWithoutNames || (security.mailHealthWithoutNames && Boolean(d.health));
+    const named = deadlines.filter((d) => !anonymous(d));
+    const counted = new Map<string, Deadline[]>();
+    for (const d of deadlines.filter(anonymous)) counted.set(d.module, [...(counted.get(d.module) ?? []), d]);
+    const counts = [...counted].map(([module, list]) => `- ${t.counted(list.length, this.areaName(module, language), list.filter((d) => d.stage === 'overdue').length)}`);
     const line = (d: Deadline, indent = '') => `${indent}- ${formatDate(d.dueOn, language)} (${t.stage[d.stage]}): ${d.title[language]} – ${d.subject.label}`;
     // Deadlines with a group (e.g. items by category and vehicle) follow under their heading.
     const groups = new Map<string, Deadline[]>();
-    for (const d of deadlines.filter((x) => x.group)) groups.set(d.group![language], [...(groups.get(d.group![language]) ?? []), d]);
+    for (const d of named.filter((x) => x.group)) groups.set(d.group![language], [...(groups.get(d.group![language]) ?? []), d]);
     const grouped = [...groups].toSorted(([a], [b]) => a.localeCompare(b, language)).flatMap(([heading, list]) => ['', `${heading}:`, ...list.map((d) => line(d, '  '))]);
     return {
       subject: t.subject(deadlines.length),
-      text: [`${t.greeting} ${name},`, '', t.intro, '', ...deadlines.filter((d) => !d.group).map((d) => line(d)), ...grouped, '', t.footer].join('\n'),
+      text: [
+        `${t.greeting} ${name},`,
+        '',
+        t.intro,
+        '',
+        ...named.filter((d) => !d.group).map((d) => line(d)),
+        ...counts,
+        ...(counts.length && /^https?:\/\//.test(link) ? [`  ${link}/`] : []),
+        ...grouped,
+        '',
+        t.footer,
+      ].join('\n'),
     };
   }
 }

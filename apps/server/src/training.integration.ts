@@ -227,7 +227,7 @@ describe('training sessions: corrections, persons, participation and audit', () 
 
   it('discards a wrong QR check-in; an excuse sent before stays', async () => {
     ids.wrong = (await post('/training/sessions', { type: 'exercise', title: 'Falscher Check-in', startsAt: at(-10), endsAt: at(110), departmentIds: [ids.musterstadt] }).expect(201)).body.id;
-    await put(`/training/me/sessions/${ids.wrong}/excuse`, { note: 'Urlaub' }, leader).expect(200);
+    await put(`/training/me/sessions/${ids.wrong}/excuse`, { reason: 'vacation', note: 'Urlaub' }, leader).expect(200);
     const code = (await get(`/training/sessions/${ids.wrong}/check-in`, leader).expect(200)).body.code as string;
     await post('/training/check-in', { code }, leader).expect(200);
     expect(row((await get(`/training/sessions/${ids.wrong}`)).body, ids.max)).toMatchObject({ status: 'present', confirmed: false });

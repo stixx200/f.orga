@@ -44,16 +44,16 @@ export class HistoryController {
       parentEntity: e.parentEntity ?? null,
       parentId: e.parentId ?? null,
       action: e.action,
-      // Hidden are fields of the record itself and whole child records named by their history name (e.g. `masterdata.rest_period`).
-      changes:
-        (e.entity === entity || hidden.has(e.entity)) && hidden.size
-          ? Object.fromEntries(
-              Object.entries(e.changes).map(([field, change]) => [
-                field,
-                hidden.has(field) || hidden.has(e.entity) ? { old: null, new: null, hidden: true } : change,
-              ]),
-            )
-          : e.changes,
+      // Hidden are fields of the record itself, whole child records named by their history name (e.g.
+      // `masterdata.rest_period`) and single fields of child records (e.g. `incidents.report_personnel.injured`).
+      changes: hidden.size
+        ? Object.fromEntries(
+            Object.entries(e.changes).map(([field, change]) => [
+              field,
+              (e.entity === entity && hidden.has(field)) || hidden.has(e.entity) || hidden.has(`${e.entity}.${field}`) ? { old: null, new: null, hidden: true } : change,
+            ]),
+          )
+        : e.changes,
       userId: e.userId ?? null,
       userName: e.userId ? (names.get(e.userId) ?? null) : null,
       impersonatorName: e.impersonatorId ? (names.get(e.impersonatorId) ?? null) : null,

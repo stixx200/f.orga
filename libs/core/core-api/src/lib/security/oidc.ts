@@ -6,7 +6,6 @@ import {
   ForbiddenException,
   Get,
   HttpCode,
-  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -20,10 +19,10 @@ import type { Request, Response } from 'express';
 import * as client from 'openid-client';
 import type { BrigadeSettings, Grant, OidcSettings } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
-import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
 import { SettingsService } from '../settings/settings.js';
 import { AuthService, SESSION_COOKIE, sessionCookieOptions } from './auth.service.js';
 import type { AuthenticatedUser } from './authenticated-user.js';
+import { CookiePolicy } from './cookie-policy.js';
 import { CurrentUser, Public, RequirePermissions } from './decorators.js';
 import { generateSecret } from './password.js';
 import { User } from './security.entities.js';
@@ -201,17 +200,17 @@ export class OidcController {
     private readonly auth: AuthService,
     private readonly em: EntityManager,
     private readonly audit: Audit,
-    @Inject(FORGA_CORE_OPTIONS) private readonly options: ForgaCoreOptions,
+    private readonly cookies: CookiePolicy,
   ) {}
 
   /** Redirects to the provider. */
   @Public()
   @Get('oidc/start')
-  async start(@Res() res: Response): Promise<void> {
+  async start(@Req() req: Request, @Res() res: Response): Promise<void> {
     const started = await this.oidc.start().catch((error: unknown) => (error instanceof OidcDiscoveryError ? ('discovery' as const) : null));
     if (started === 'discovery') return res.redirect(302, '/?oidcError=auth.oidcDiscoveryFailed');
     if (!started) return res.redirect(302, '/?oidcError=auth.oidcDisabled');
-    this.setPending(res, started.id);
+    await this.setPending(req, res, started.id);
     res.redirect(302, started.url);
   }
 
@@ -221,13 +220,13 @@ export class OidcController {
    */
   @Post('oidc/link')
   @HttpCode(200)
-  async link(@CurrentUser() user: AuthenticatedUser, @Res({ passthrough: true }) res: Response): Promise<{ url: string }> {
+  async link(@CurrentUser() user: AuthenticatedUser, @Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<{ url: string }> {
     if (user.via !== 'session' || user.impersonator) throw new ForbiddenException({ code: 'auth.impersonationNotAllowed' });
     const started = await this.oidc.start(user.id).catch((error: unknown) => {
       throw error instanceof OidcDiscoveryError ? new BadGatewayException({ code: 'auth.oidcDiscoveryFailed' }) : error;
     });
     if (!started) throw new BadRequestException({ code: 'auth.oidcDisabled' });
-    this.setPending(res, started.id);
+    await this.setPending(req, res, started.id);
     return { url: started.url };
   }
 
@@ -239,8 +238,8 @@ export class OidcController {
     return this.oidc.test();
   }
 
-  private setPending(res: Response, id: string): void {
-    res.cookie(PENDING_COOKIE, id, { httpOnly: true, sameSite: 'lax', secure: this.options.secureCookies, path: '/api/core/oidc', maxAge: PENDING_MS });
+  private async setPending(req: Request, res: Response, id: string): Promise<void> {
+    res.cookie(PENDING_COOKIE, id, { httpOnly: true, sameSite: 'lax', secure: await this.cookies.secure(req), path: '/api/core/oidc', maxAge: PENDING_MS });
   }
 
   /** The provider returns here; on success the session cookie is set and the app opens. */
@@ -261,7 +260,7 @@ export class OidcController {
     }
     const em = this.em.fork();
     const user = await em.findOneOrFail(User, result.user.id);
-    res.cookie(SESSION_COOKIE, await this.auth.openSession(em, user), sessionCookieOptions(this.options.secureCookies));
+    res.cookie(SESSION_COOKIE, await this.auth.openSession(em, user), sessionCookieOptions(await this.cookies.secure(req)));
     await this.audit.log('auth.login', { via: 'oidc' }, user.id);
     res.redirect(302, '/');
   }

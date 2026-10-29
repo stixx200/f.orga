@@ -7,7 +7,8 @@
  * EvD report of the duty officer module.
  *
  * All persons and incidents are made up; a fixed random seed keeps them identical between runs, so running
- * the script again only updates what changed.
+ * the script again only updates what changed. A production system (`FORGA_STAGE=production`) is refused; the test
+ * system takes the persons only because the import is marked as demo data.
  *
  *   npm run seed
  *   npm run seed -- --only clothing      (only the clothing store, into an instance with persons)
@@ -68,7 +69,8 @@ async function importFile(fileName: string, content: Buffer | string, profile: s
   const form = new FormData();
   form.append('file', new Blob([content]), fileName);
   const upload = await call<{ id: string; suggestions: Record<string, Record<string, string>> }>('POST', 'core/imports', form);
-  const result = await call<ImportResult>('POST', `core/imports/${upload.id}/apply`, { profile, mapping: upload.suggestions[profile], options });
+  // Made-up demo data: the test system (FORGA_STAGE=test) accepts persons only with this mark.
+  const result = await call<ImportResult>('POST', `core/imports/${upload.id}/apply`, { profile, mapping: upload.suggestions[profile], options, demoData: true });
   const errors = result.rows.filter((r) => r.action === 'error');
   console.log(`  ${fileName} → ${profile}: ${JSON.stringify(result.counts)}`);
   for (const error of errors.slice(0, 5)) console.log(`    Zeile ${error.row} ${error.label}: ${error.messages.map((m) => m.code).join(', ')}`);
@@ -381,7 +383,9 @@ function dutyCalendar(officers: PersonRef[]): string {
 // --- steps --------------------------------------------------------------------------------------
 
 async function login(): Promise<void> {
-  const setup = await call<{ required: boolean }>('GET', 'core/setup');
+  const setup = await call<{ required: boolean; stage?: string }>('GET', 'core/setup');
+  // Demo data never goes into a production system (FORGA_STAGE=production, the default of the Docker image).
+  if (setup.stage === 'production') throw new Error(`${BASE} ist ein Echtsystem (FORGA_STAGE=production): Demodaten nur ins Testsystem oder die Entwicklung.`);
   if (setup.required) {
     // The development server reads the same token from `apps/server/.env`.
     const setupToken = process.env['FORGA_SETUP_TOKEN'] ?? /^FORGA_SETUP_TOKEN=(.+)$/m.exec(readFileSync('apps/server/.env', 'utf8'))?.[1]?.trim();
