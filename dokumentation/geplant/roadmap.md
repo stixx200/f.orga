@@ -116,3 +116,11 @@ Umgesetzt, siehe [Modul MP-Feuer](../implementiert/architektur.md#modul-mp-feuer
 ## Infoterminal
 
 Umgesetzt, siehe [Modul Infoterminal](../implementiert/architektur.md#modul-infoterminal-info-terminal) nach den freigegebenen Mockups (`mockups/infoterminal/`, Karte an der Wache in `stammdaten/organisation.html`). Offen sind nur die Punkte in [module/infoterminal.md](module/infoterminal.md).
+
+## Konzepte zur Freigabe
+
+Konzept und Mockups liegen vor; umgesetzt wird nach Freigabe der Mockups und Klärung der offenen Entscheidungen im jeweiligen Konzept.
+
+- **Führerscheinkontrolle** ([Konzept](module/fuehrerscheinkontrolle.md)): Befristung je Klasse, Kontrollen mit Historie und Nachweis für die Gemeinde, anlassbezogene Fristen (optional regelmäßig), erneute Vorlage, Selbstkontrolle mit Transponder am Infoterminal und in „Mein Bereich“.
+- **Datensicherung** ([Konzept](module/backup.md)): Modul `backup` mit verschlüsselter, geplanter Sicherung in einen Ordner auf dem Server, Prüfen, Wiederherstellung in der Oberfläche mit Wartungsmodus. Voraussetzung: PostgreSQL-Clientwerkzeuge im Image, Volume `/backups`.
+- **Aufbewahrungsplan** ([Konzept](aufbewahrung.md)): Fristen je Datenkategorie, Vorlage „Kommunaler Aktenplan (Beispiel)“, Aussonderung mit Anbietung an das Archiv.

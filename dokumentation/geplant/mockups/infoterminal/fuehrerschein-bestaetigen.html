@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Führerschein kontrollieren · f.orga</title>
+<link rel="stylesheet" href="../assets/mockup.css">
+<script src="../assets/i18n.js" defer></script>
+<script src="../assets/mockup.js" defer></script>
+</head>
+<body>
+<div class="tk"><div class="mockup-hinweis">Mockup · nicht funktionsfähig · <a href="../index.html">Übersicht aller Mockups</a></div><header class="tk-kopf"><a class="tk-heim" href="start.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Zurück zur Übersicht</span></a><img src="../assets/logo.svg" alt="Wappen"><div class="tk-wache"><span class="kicker">Infoterminal · Freiwillige Feuerwehr Musterstadt</span><strong>Feuerwehrhaus Musterstadt</strong></div><span class="tk-uhr" translate="no">14:32</span><div class="sprache" role="group" aria-label="Sprache">
+  <button type="button" data-sprache="de" aria-pressed="true" lang="de" title="Deutsch">DE</button><button type="button" data-sprache="en" aria-pressed="false" lang="en" title="English">EN</button>
+</div></header><main class="tk-inhalt" id="inhalt">
+<div class="tk-titel"><h1>Tobias Rief</h1><span class="meta">Abt. Musterstadt</span></div>
+<section class="tk-abschnitt">
+  <h2>Ihr Führerschein</h2>
+  <dl class="daten"><dt>Klassen</dt><dd>B, BE, C1, C1E, C, CE</dd><dt>C, CE gültig bis</dt><dd>16.04.2031</dd><dt>Letzte Kontrolle</dt><dd>16.04.2026 · Original vorgelegt</dd></dl>
+</section>
+<section class="tk-abschnitt">
+  <h2>Selbsterklärung</h2>
+  <label class="schalter"><input type="checkbox"> Mein Führerschein ist gültig. Gegen mich besteht kein Fahrverbot und keine Entziehung der Fahrerlaubnis.</label>
+  <p class="meta" style="margin:8px 0 0">Ansicht im Modus „Zusätzlich regelmäßig“ mit Selbstkontrolle. Gilt als Selbstkontrolle mit Transponder. Im Original vorzeigen spätestens bis 16.04.2027.</p>
+</section>
+<div class="tk-leiste"><a class="knopf" href="start.html">Das bin ich nicht</a><button type="button" class="knopf primaer gross" data-dialog="d-kontrolliert">Bestätigen</button></div>
+</main><footer class="fuss">
+  <p>Freiwillige Feuerwehr Musterstadt · Feuerwehrstraße 1 · 12345 Musterstadt</p>
+  <p>Telefon 01234/5678-0 · Fax 01234/5678-99 · www.feuerwehr-musterstadt.example</p>
+</footer></div>
+<dialog class="dialog" id="d-kontrolliert" aria-labelledby="d-kontrolliert-titel">
+  <form method="dialog">
+    <div class="dialog-kopf"><h2 id="d-kontrolliert-titel">Führerschein kontrolliert</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dialog-inhalt">
+<div class="tk-erfolg"><div class="haken" aria-hidden="true">✓</div>
+<p><strong>Tobias Rief</strong><br>Selbstkontrolle am 28.10.2026 um 14:32</p>
+<p class="meta">Nächste Kontrolle fällig am 28.04.2027. Zurück zur Übersicht in 10 s.</p></div></div>
+    <div class="dialog-fuss"><a class="knopf primaer" href="start.html">Fertig</a></div>
+  </form>
+</dialog><dialog class="dialog" id="d-unbekannt" aria-labelledby="d-unbekannt-titel">
+  <form method="dialog">
+    <div class="dialog-kopf"><h2 id="d-unbekannt-titel">Nicht registriert</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dialog-inhalt">
+<div class="tk-zentriert" style="margin:8px auto"><p>Dieser Führerschein ist nicht registriert. Bitte beim Kommandanten im Original vorzeigen.</p></div></div>
+    <div class="dialog-fuss"><a class="knopf primaer" href="start.html">Zurück zur Übersicht</a></div>
+  </form>
+</dialog>
+</body>
+</html>
