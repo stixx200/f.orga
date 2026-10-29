@@ -1,6 +1,7 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import {
+  ACCESS_LOG_RETENTION,
   ACCESS_REPORT_DAYS,
   type LocalizedText,
   OidcSettings,
@@ -134,6 +135,15 @@ export class CoreMeasures implements OnModuleInit {
           en: `Audit log (logins, permissions, exports, imports, impersonation) and history of all changes; ${retention(['core.audit', 'core.history']).en}`,
         },
         tone: 'info',
+      },
+      {
+        key: 'core.access-log',
+        title: { de: 'Leseprotokoll', en: 'Read log' },
+        value: {
+          de: `Lesezugriffe auf Gesundheits- und andere besonders geschützte Daten je Benutzer, Person und Tag, ohne Inhalt; ${retention([ACCESS_LOG_RETENTION]).de}; betroffene Benutzer sehen „Anmeldungen als Sie“`,
+          en: `Read accesses to health and other especially protected data per user, person and day, without content; ${retention([ACCESS_LOG_RETENTION]).en}; users see "logins as you"`,
+        },
+        tone: 'ok',
       },
       {
         key: 'core.encryption',

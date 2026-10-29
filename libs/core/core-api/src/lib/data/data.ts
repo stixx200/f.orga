@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import type { SearchHit } from '@forga/core-contracts';
 import type { DescribeContext, PersonDataSection } from '../access-report/person-description.js';
 import { Audit } from '../audit/audit.js';
+import { AccessLog } from '../privacy/access-log.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { OrganizationDirectory } from '../security/organization-directory.js';
 import { CurrentUser, RequirePermissions } from '../security/decorators.js';
@@ -126,6 +127,7 @@ export class DataController {
     private readonly exports: ExportRegistry,
     private readonly audit: Audit,
     private readonly organization: OrganizationDirectory,
+    private readonly accessLog: AccessLog,
   ) {}
 
   @Get('search')
@@ -162,6 +164,7 @@ export class DataController {
     const exportedAt = new Date();
     const body = { format: 'forga.export', version: 1, module, exportedAt: exportedAt.toISOString(), data: await source.all(user) };
     await this.audit.log('data.exported', { module });
+    await this.accessLog.record(user, [null], 'core.export');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="forga-${module}-${exportedAt.toISOString().slice(0, 10)}.json"`);
     res.send(JSON.stringify(body, null, 2));
@@ -170,13 +173,14 @@ export class DataController {
   /** Everything stored about a person across all modules (data access request). */
   @Get('export/person/:personId')
   @RequirePermissions(EXPORT_PERMISSION)
-  async person(@Param('personId') personId: string, @Res() res: Response): Promise<void> {
+  async person(@Param('personId') personId: string, @CurrentUser() user: AuthenticatedUser, @Res() res: Response): Promise<void> {
     if (!UUID.test(personId)) throw new BadRequestException({ code: 'data.invalidPersonId' });
     // Without the master data module persons cannot be checked; the modules answer for the ID as given.
     const known = await this.organization.persons([personId]);
     if (known && !known.length) throw new NotFoundException({ code: 'data.unknownPerson' });
     const body = await this.exports.person(personId);
     await this.audit.log('data.person-exported', { personId });
+    await this.accessLog.record(user, [personId], 'core.export');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="forga-auskunft-${personId}.json"`);
     res.send(JSON.stringify(body, null, 2));

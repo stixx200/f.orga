@@ -1,7 +1,7 @@
 import { type DynamicModule, type MiddlewareConsumer, Module, type NestModule, type OnModuleInit } from '@nestjs/common';
 import { APP_GUARD, DiscoveryModule } from '@nestjs/core';
 import { Migrator } from '@mikro-orm/migrations';
-import { PRIVACY_PERMISSION, RETENTION_PERMISSION } from '@forga/core-contracts';
+import { CONSENTS, CONSENTS_PERMISSION, PRIVACY_PERMISSION, RETENTION_PERMISSION } from '@forga/core-contracts';
 import { CORE_MIGRATIONS } from '../migrations/index.js';
 import { AccessReportsController, MyAccessReportsController } from './access-report/access-report.controller.js';
 import { AccessReportService } from './access-report/access-report.service.js';
@@ -21,6 +21,10 @@ import { CoreMeasures, TechnicalMeasureRegistry } from './privacy/technical-meas
 import { PrivacyNoticeController, PrivacyNoticeService } from './privacy/privacy-notice.js';
 import { PrivacyAssignees, PrivacyRequests, PrivacyRequestsController } from './privacy/privacy-requests.js';
 import { PrivacyTextsController } from './privacy/privacy-texts.js';
+import { AccessLog, AccessLogController, AccessLogEntity } from './privacy/access-log.js';
+import { ConsentEntity, ConsentsController, ConsentService } from './privacy/consents.js';
+import { Rectifications, RectificationsController } from './privacy/rectifications.js';
+import { Impersonations, ImpersonationsController } from './security/impersonations.js';
 import { CORE_HISTORIZED, HistoryAccessRegistry } from './history/history-access.js';
 import { HistoryController } from './history/history.controller.js';
 import { ImportRegistry } from './imports/import-registry.js';
@@ -93,6 +97,8 @@ export const CORE_ENTITIES: EntityDefinition[] = [
   PrivacyRequestEntity,
   PrivacyNoticeEntity,
   PrivacyBreachEntity,
+  ConsentEntity,
+  AccessLogEntity,
 ];
 
 function className(entity: EntityDefinition): string {
@@ -133,6 +139,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
     private readonly personData: PersonDataRegistry,
     private readonly imports: ImportRegistry,
     private readonly settings: SettingsService,
+    private readonly consents: ConsentService,
   ) {}
 
   onModuleInit(): void {
@@ -163,6 +170,11 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
     this.historyAccess.registerPermission('core.privacy_request', PRIVACY_PERMISSION);
     this.historyAccess.registerPermission('core.privacy_notice', PRIVACY_PERMISSION);
     this.historyAccess.registerPermission('core.privacy_breach', PRIVACY_PERMISSION);
+    // Consents: data protection, or recording consents for a department of the person.
+    this.historyAccess.register('core.consent', async (user, id) => {
+      const consent = await this.consents.find(id);
+      return { allowed: consent !== null && (user.can(PRIVACY_PERMISSION) || (user.grant(CONSENTS_PERMISSION) !== null && (await this.consents.mayRecord(user, consent.personId)))) };
+    });
   }
 
   static forRoot(options: ForgaCoreOptions): DynamicModule {
@@ -202,6 +214,10 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         PrivacyRegisterController,
         PrivacyBreachesController,
         BreachToolsController,
+        ConsentsController,
+        RectificationsController,
+        AccessLogController,
+        ImpersonationsController,
       ],
       providers: [
         { provide: FORGA_CORE_OPTIONS, useValue: { ...options, modules } },
@@ -254,11 +270,19 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         PrivacyBreaches,
         ProtocolRegistry,
         BreachTools,
+        ConsentService,
+        { provide: CONSENTS, useExisting: ConsentService },
+        Rectifications,
+        AccessLog,
+        Impersonations,
       ],
       exports: [
         TechnicalMeasureRegistry,
         ProtocolRegistry,
         PrivacyRegister,
+        AccessLog,
+        ConsentService,
+        CONSENTS,
         PrivacyNoticeService,
         PrivacyRequests,
         FORGA_CORE_OPTIONS,

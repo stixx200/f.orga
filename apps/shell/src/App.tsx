@@ -32,6 +32,7 @@ import { FirstLoginPage, NoticePage } from './pages/privacy/NoticePage';
 import { PrivacyPage } from './pages/privacy/PrivacyPage';
 import { BreachPage } from './pages/privacy/BreachPage';
 import { RequestPage } from './pages/privacy/RequestPage';
+import { RectificationPage } from './privacy/Rectification';
 
 function NotFound() {
   const { t } = useTranslation('shell');
@@ -58,6 +59,7 @@ function Router({ modules, session }: { modules: LoadedModule[]; session: Sessio
             { path: 'lists', element: <ListsPage modules={modules} /> },
             { path: 'scan', element: <ScanPage /> },
             { path: 'import', element: <ImportPage /> },
+            { path: 'privacy/rectifications/:id', element: <RectificationPage /> },
             { path: 'admin/users', element: <Guard session={session} permission="core.users.manage"><UsersPage /></Guard> },
             { path: 'admin/roles', element: <Guard session={session} permission="core.roles.manage"><RolesPage modules={modules} /></Guard> },
             {

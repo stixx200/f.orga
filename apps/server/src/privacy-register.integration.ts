@@ -119,6 +119,7 @@ describe('register of processing activities (L8)', () => {
     expect(measure('core.step-up')?.value.de).toMatch(/Step-up|FORGA_SECRET_KEY/);
     expect(measure('core.mail')?.value.de).toContain('mail.example.org');
     expect(measure('core.protocols')?.value.de).toContain('Audit-Log: 2 Jahre nach Eintrag');
+    expect(measure('core.access-log')?.value.de).toContain('Leseprotokoll: 1 Jahr nach');
     // The backup module without a folder: not set up.
     expect(measure('backup.state')).toMatchObject({ tone: 'warning', value: { de: 'nicht eingerichtet' } });
     await put('/core/modules/backup', { active: false }).expect(200);
@@ -293,7 +294,7 @@ describe('data breaches (L20)', () => {
   it('exports the protocols of a period and a user', async () => {
     const xlsx = await binary(`/core/privacy/breach-tools/protocols.xlsx?from=${today()}&to=${today()}&userId=${readerId}&breachId=${breach.id}`).expect(200);
     expect((xlsx.body as Buffer).subarray(0, 2).toString()).toBe('PK');
-    expect((await get('/core/privacy/breach-tools/protocols', privacy).expect(200)).body).toEqual([{ key: 'core.audit', title: { de: 'Audit-Log', en: 'Audit log' } }]);
+    expect(((await get('/core/privacy/breach-tools/protocols', privacy).expect(200)).body as { key: string }[]).map((p) => p.key)).toEqual(['core.audit', 'core.access-log']);
     await get('/core/privacy/breach-tools/protocols.xlsx?from=x&to=y', privacy).expect(400);
     expect((await audit('privacy.breach-protocol-exported'))[0].details).toEqual({ from: today(), to: today(), targetId: readerId, breachId: breach.id });
   });

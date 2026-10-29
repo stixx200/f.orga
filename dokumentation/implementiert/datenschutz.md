@@ -1,6 +1,6 @@
 # Datenschutz (umgesetzter Stand)
 
-Was vom [Datenschutzkonzept](../geplant/datenschutz.md) im Code existiert: Phase 1 (L1, L2, L5 teilweise, L6, L18 teilweise), aus Phase 2 Datenschutzhinweis und Information (L4), Betroffenenanfragen mit Frist und Einschränkung der Verarbeitung (L7 ohne Löschprüfung) sowie Widerspruch (L19) und die Auskunft als PDF (L3), aus Phase 3 das Verzeichnis der Verarbeitungstätigkeiten mit technischen Maßnahmen (L8) und die Datenpannen (L20). Offene Punkte stehen dort. Weitere umgesetzte Bausteine: Rechte je Abteilung, sensible Felder, Historie und Audit-Log ([Architektur](architektur.md#sicherheit)), Auskunft als JSON und Aufbewahrungsplan ([Aufbewahrung](aufbewahrung.md)).
+Was vom [Datenschutzkonzept](../geplant/datenschutz.md) im Code existiert: Phase 1 (L1, L2, L5 teilweise, L6, L18 teilweise), aus Phase 2 Datenschutzhinweis und Information (L4), Betroffenenanfragen mit Frist und Einschränkung der Verarbeitung (L7 ohne Löschprüfung) sowie Widerspruch (L19) und die Auskunft als PDF (L3), aus Phase 3 Verzeichnis der Verarbeitungstätigkeiten mit technischen Maßnahmen (L8), Einwilligungen (L9), Berichtigung (L12), Leseprotokoll und Transparenz der Impersonation (L15) sowie Datenpannen (L20). Offene Punkte stehen dort. Weitere umgesetzte Bausteine: Rechte je Abteilung, sensible Felder, Historie und Audit-Log ([Architektur](architektur.md#sicherheit)), Auskunft als JSON und Aufbewahrungsplan ([Aufbewahrung](aufbewahrung.md)).
 
 ## Zweiter Faktor bei sensiblen Daten (Step-up)
 
@@ -26,7 +26,7 @@ Berechtigungen tragen im Manifest bzw. in `CORE_PERMISSIONS` das Kennzeichen `st
 | Sensible Felder der Person (Geburtsdatum, Geburtsort, Arbeitgeber, Bank, Bemerkung, Austrittsgrund, Ruhezeiten), Listen „Komplettdaten“, „Geburtstage“, „Altersgrenzen“ | `masterdata.persons.sensitive` | Personalakte wie ohne das Recht (`sensitiveHidden`, dazu `stepUpAvailable`); Knopf „Sensible Daten anzeigen …“. Senden sensibler Felder (auch im Personenimport) wird mit `auth.stepUpRequired` abgelehnt statt still ignoriert |
 | Überweisungs- und SEPA-Datei, Abrechnungen mit Bankverbindung | Endpunkt-Kennzeichen `@StepUp()` an `transfer.xml`, `transfer.csv`, `statements.pdf` der Auszahlungsläufe | Lauf und Posten lesbar, der Download fragt nach |
 | Benutzer, Rollen, API-Tokens, Einstellungen des Core, Module und Plugins | `core.users.manage`, `core.roles.manage`, `core.tokens.manage`, `core.settings.manage`, `core.modules.manage` | ganze Seite |
-| Audit-Log | `core.audit.read` | ganze Seite |
+| Audit-Log und Leseprotokoll | `core.audit.read` | ganze Seite |
 | Vollexport und Auskunft je Person | `core.data.export` | Knopf fragt nach |
 | Anmelden als (Impersonation) | `core.users.impersonate` | Start fragt nach |
 | Datensicherung und Wiederherstellung | `backup.manage` | ganze Seite |
@@ -96,7 +96,9 @@ Erstellen, Ansehen, Herunterladen und Übergeben verlangen `core.privacy.manage`
 | Kleiderkammer (`clothing`, Tätigkeit `clothing.issues`) | gehaltene Stücke, Ausgaben und Rücknahmen mit Notiz und Stornogrund, Größen |
 | Einsatzleiter vom Dienst (`duty-officer`, Tätigkeit `duty-officer.roster`) | Dienste im Dienstplan mit Zeitraum, Tagen, Entschädigung, Notiz und Summen je Jahr; EvD-Berichte stehen bei den Einsätzen |
 | MP-Feuer (`mp-feuer`, Tätigkeit `mp-feuer.transfer`) | Zeilen der Laufberichte, deren Bezeichnung den Namen der Person trägt (Lauf, Bereich, Zeile, Aktion, Zahl der Hinweise), und die Zahl noch nicht gelöschter Zeilen aus Transferdateien; die Zuordnung geht über den Namen, weil die Zeilen keine Personen-ID tragen. Das Modul ist dafür auch im Vollexport (Läufe mit Zählern und Berichtszeilen, ohne Rohzeilen) |
-| Benutzerkonto (`core.account`, Tätigkeit `core.accounts`) | Benutzername, angezeigter Name, E-Mail, Sprache, wöchentliche E-Mail, aktiv, letzte Anmeldung, Gemeinde-Konto, zweiter Faktor, Rollen mit Abteilung, aktuelle Sitzungen (Impersonation mit Funktion und Grund), API-Tokens, Audit-Einträge des Kontos (Vorgang lesbar, Vorgänge der Module als „Vorgang: Modulname“, ohne Details) |
+| Benutzerkonto (`core.account`, Tätigkeit `core.accounts`) | Benutzername, angezeigter Name, E-Mail, Sprache, wöchentliche E-Mail, aktiv, letzte Anmeldung, Gemeinde-Konto, zweiter Faktor, Rollen mit Abteilung, aktuelle Sitzungen (Impersonation mit Funktion und Grund), API-Tokens, Audit-Einträge des Kontos einschließlich der Anmeldungen als die Person (Vorgang lesbar, Vorgänge der Module als „Vorgang: Modulname“, ohne Details) |
+| Einwilligungen (`core.consents`, Tätigkeit `core.accounts`) | Einwilligung, Fassung, erteilt mit Weg, erfasst von (Funktion), Stand mit Widerruf bzw. neuer Fassung; nur wenn es Einwilligungen gibt |
+| Zugriffe auf besonders geschützte Daten (`core.access-log`, Tätigkeit `core.accounts`) | aus dem Leseprotokoll: Tag, Funktion des Lesers, Bereich, Zahl der Zugriffe |
 | Änderungen an Ihren Daten (`core.protocol`) | Historie der `records` aller Bereiche: Zeitpunkt, Bereich, Änderung („Mitgliedschaft angelegt“), durch (Funktion bzw. „Sie selbst“) |
 
 Kein Abschnitt: **Kostenersatz** (speichert keine Daten über Mitglieder; Bescheide nennen nur den Anzeigenamen des ausstellenden Benutzers als Text), **Infoterminal** (Eintragungen stehen als Anwesenheit im Dienst bzw. im Personal des Berichts; das Modul selbst speichert nur Geräte), **Datensicherung** (Kopien der ganzen Datenbank mit eigener Aufbewahrung; Sicherung und Wiederherstellung stehen im Audit-Log des Kontos).
@@ -136,6 +138,104 @@ Einstellung `privacy.selfServiceAccess.mode`:
 ### Tests
 
 `apps/server/src/access-report.integration.ts` mit Daten je Modul aus `apps/server/src/testing/access-report/*.ts`: Eine erfundene Person mit Daten in allen Modulen bekommt eine Auskunft; jeder Bereich kommt vor, keine UUID im Text, der Name einer zweiten Person und die vom Seed verbotenen Texte (Straße des Einsatzes, Geschädigte) fehlen, Gesundheitsdaten sind gekennzeichnet, eigene Änderungen heißen „Sie selbst“, die anderer die Funktion; dazu Erstellen im Hintergrund, verschlüsselte Ablage, Download, Übergabe in Mein Bereich mit E-Mail ohne Inhalt, Ablauf nach 30 Tagen, fehlender Schlüssel und Audit. `ACCESS_REPORT_MODULES=incidents,training` beschränkt den Test auf einzelne Module, `ACCESS_REPORT_PDF=<Datei>` schreibt das erzeugte PDF zum Ansehen. Dazu Bezug zur Anfrage mit „Anfrage damit erledigt“, Anschreiben aus Kontakten und Textbausteinen, Selbstauskunft `instant` mit Grenze je Tag. Unit-Tests: Startprüfung, Formate des Kontexts, Verschlüsselung (`access-report.spec.ts`).
+
+## Einwilligungen (L9)
+
+Wo eine Verarbeitung nicht zur Aufgabe der Feuerwehr gehört, braucht sie eine freiwillige, nachweisbare und jederzeit widerrufbare Einwilligung (Art. 6 Abs. 1 a, Art. 7, Art. 8 DSGVO). Mockups `datenschutz/einstellungen.html` (Katalog), `person.html` (Einwilligungen der Person), `mein-bereich.html`, `erste-anmeldung.html`.
+
+### Katalog
+
+Einstellungsabschnitt `privacy.consents` (`PrivacyConsents`, je Eintrag `ConsentDefinition`; Verwalter `core.privacy.manage`, nur über die eigenen Endpunkte, `PUT /api/core/settings/privacy.consents` antwortet `400 settings.dedicatedEndpoint`; historisiert wie alle Einstellungen):
+
+| Feld | Bedeutung |
+| --- | --- |
+| `key` | Schlüssel aus Kleinbuchstaben, Ziffern und Bindestrichen, nicht änderbar (`privacy.consentKeyInvalid`) |
+| `title`, `text`, `purpose` | Titel, Text und Zweck in Deutsch und Englisch |
+| `givenBy` | `person` oder `person-or-guardians` (bei Minderjährigen die Erziehungsberechtigten) |
+| `effects` | Wirkung in f.orga (`CONSENT_EFFECTS`): `masterdata.phone-list-mobile` (Telefonliste zeigt die Handynummer), `masterdata.birthdays-posting` (Liste „Geburtstage“ mit Zweck Aushang); leer = nur Nachweis |
+| `active` | wird angeboten und kann erfasst werden; bestehende Einwilligungen inaktiver Einträge gelten weiter, bis sie widerrufen werden |
+| `version`, `changedAt`, `changedBy`, `reviewedAt`, `reviewedBy` | Fassung und Prüfung wie bei den Textbausteinen |
+
+- **Fassung:** Ein geänderter Titel, Text oder Zweck erhöht `version` und macht den Eintrag wieder zur Vorlage. Bestehende Einwilligungen behalten ihre Fassung, bis die Person neu einwilligt; Wirkung, „Erteilt durch“ und „aktiv“ ändern die Fassung nicht.
+- **Gilt:** Ein Eintrag wird angeboten (erste Anmeldung, Mein Bereich) und kann erfasst werden, wenn er aktiv und als geprüft markiert ist (`consentApplies`); eine ungeprüfte Vorlage gilt noch nicht (`400 privacy.consentNotApplicable`).
+- **Vorlagen** (`CONSENT_TEMPLATES`, „Vorlagen einfügen“, beginnen mit „[Vorlage]“): „Fotos in der Öffentlichkeitsarbeit“ (Person oder Erziehungsberechtigte, ohne Wirkung), „Geburtstag im Aushang“ (`masterdata.birthdays-posting`), „Handynummer in der Telefonliste der Abteilung“ (`masterdata.phone-list-mobile`), „Geburtstagsgruß durch die Feuerwehr“ (ohne Wirkung).
+- **Entfernen** nur, solange niemand eingewilligt hat (`409 privacy.consentInUse`), sonst deaktivieren.
+- Endpunkte (`core.privacy.manage`): `GET /api/core/privacy/consents` (`ConsentCatalog` mit Zahl der Personen mit gültiger Einwilligung je Eintrag und den Wirkungen), `POST …/consents/templates`, `PUT …/consents/:key` (`ConsentDefinitionInput` mit `version` des gespeicherten Eintrags; veraltet `409 conflict.stale`), `POST …/consents/:key/review` (`{ version }`), `DELETE …/consents/:key`. Audit `privacy.consent-templates-inserted`, `privacy.consent-definition-changed`, `privacy.consent-definition-reviewed`, `privacy.consent-definition-removed`.
+- Oberfläche: Reiter „Einwilligungen“ unter „Verwaltung → Datenschutz → Einstellungen“ (`?tab=consents`): Warnung bei Vorlagen, Tabelle mit Wirkung, Erteilt durch, Fassung, Zahl der Personen und Stand (Vorlage/geprüft, inaktiv), „Vorlagen einfügen“, „Einwilligung anlegen“, darunter der gewählte Eintrag mit beiden Sprachen, Wirkung, aktiv, „Als geprüft markieren …“ und „Entfernen“. Abweichung vom Mockup: die Spalte „Erteilt“ nennt die Zahl der Personen ohne „von 118“, weil der Core die Zahl der Mitglieder nicht kennt.
+
+### Einwilligung an der Person
+
+Tabelle `core.consent` (`ConsentEntity`, historisiert; die Historie ist der Nachweis): Person, Schlüssel, Fassung (`definition_version`) mit Titel und Text dieser Fassung, erteilt am, Weg (`ConsentWay`: `written` schriftlich, `in-person` persönlich, `guardians` durch Erziehungsberechtigte, `my-area` Mein Bereich, `first-login` erste Anmeldung), erfasst von, widerrufen am, Weg des Widerrufs (`ConsentWithdrawalWay`: `written`, `email`, `in-person`, `my-area`, `request` über eine Anfrage), widerrufen von, Anfrage, `superseded_on` (die Person hat einer neueren Fassung zugestimmt). Einwilligungen werden **nie gelöscht**, nur widerrufen bzw. durch eine neue Fassung abgelöst; gültig ist eine Einwilligung ohne Widerruf und ohne Ablösung. Der Nachweis (Scan der Unterschrift) ist ein Anhang (`core.consent`).
+
+- **Recht** `core.privacy.consents` („Einwilligungen von Personen erfassen und widerrufen“, Abteilung, ohne Step-up; Rollenvorlagen `commander`, `department-commander`) für Personen der Abteilung; `core.privacy.manage` für alle. Ohne Recht `403 auth.forbidden` (mit wartendem `core.privacy.manage` `auth.stepUpRequired`).
+- `GET /api/core/privacy/persons/:personId/consents` (`PersonConsents`: Einwilligungen mit Nachweisen, erfassbare Einträge, `minor`), `POST …/persons/:personId/consents` (`ConsentRecordInput`: Eintrag, erteilt am, Weg `written`/`in-person`/`guardians`; nicht in der Zukunft `privacy.consentInFuture`; dieselbe Fassung schon erteilt `409 privacy.consentGiven`; Minderjährige bei „Person oder Erziehungsberechtigte“ nur mit Weg `guardians`, sonst `400 privacy.consentGuardiansRequired`), `POST /api/core/privacy/given-consents/:id/withdraw` (`ConsentWithdrawalInput`: Tag, Weg, optional `requestId`; schon widerrufen `409 privacy.consentWithdrawn`, vor der Einwilligung `privacy.withdrawnBeforeGiven`). Audit `privacy.consent-given` und `privacy.consent-withdrawn` (Person, Schlüssel, Fassung, Weg).
+- **Minderjährig** (unter 18 am heutigen Tag) bestimmt die Stammdaten über `OrganizationProvider.minors`.
+- **Widerruf über eine Anfrage:** Hat die Anfrage die Art „Widerruf einer Einwilligung“, zeigt ihre Seite die gültigen Einwilligungen der Person mit „Widerruf erfassen …“. Der Widerruf mit `requestId` (nur `core.privacy.manage`, nur eine offene Anfrage dieser Art derselben Person, sonst `400 privacy.requestMismatch`) setzt den Weg `request` und erledigt die Anfrage mit dem Tag des Widerrufs.
+- Oberfläche: Abschnitt „Einwilligungen“ im Reiter „Datenschutz“ der Personalakte (zwischen Anfragen und Auskünften) mit Fassung, Weg, erfasst von, Nachweisen, Stand (erteilt, widerrufen, neue Fassung erteilt), „Einwilligung erfassen …“ (Einwilligung mit Fassung, erteilt am, Weg, Nachweis) und „Widerruf erfassen …“. Der Reiter erscheint auch mit `core.privacy.consents` allein (`anyPermission` am Erweiterungspunkt); dann zeigt er nur die Einwilligungen.
+
+### Wirkung
+
+Module fragen den Core über den Vertrag `CONSENTS` (`ConsentLookup` aus `@forga/core-contracts`, vom Core als `ConsentService` bereitgestellt): `has(personId, key)` und `withEffect(effect, personIds)`. Es zählt jede gültige Einwilligung eines Eintrags mit der Wirkung, auch einer älteren Fassung oder eines inaktiven Eintrags.
+
+| Liste (Stammdaten) | Parameter „Zweck“ | Wirkung |
+| --- | --- | --- |
+| Telefonliste `masterdata.phones` | `department` (Standard, Telefonliste der Abteilung) | Handynummer nur mit Einwilligung, sonst „über Gruppenführer“ (leer, wenn keine Nummer gespeichert ist) |
+| | `leaders` (Führungskräfte: Personen mit einem laufenden Amt oder der Qualifikation Gruppen-, Zug- oder Verbandsführer) | alle Nummern, weil die Erreichbarkeit der Führungskräfte zur Aufgabe gehört (Entscheidung 9 des Konzepts) |
+| Geburtstage `masterdata.birthdays` | `internal` (Standard, intern für den Kommandanten) | alle Personen |
+| | `posting` (Aushang) | nur Personen mit Einwilligung; Untertitel „· Aushang“ |
+
+Die übrigen Telefonnummern (privat, dienstlich) und die Mitgliederliste bleiben unverändert.
+
+### Mein Bereich und erste Anmeldung
+
+- **Meine Einwilligungen** (`GET /api/core/privacy/me/consents`, `MyConsents`): die geltenden Einträge und die eigenen Einwilligungen, je mit Schalter, „erteilt …“ bzw. „widerrufen …“ und „Text lesen“. `PUT /api/core/privacy/me/consents/:key` (`MyConsentInput`: `given`, `version` der angebotenen Fassung, sonst `409 conflict.stale`; `firstLogin`) erteilt mit Weg `my-area` bzw. `first-login` oder widerruft sofort (Weg `my-area`). Gibt es eine neue Fassung, bittet Mein Bereich um erneute Zustimmung; bis dahin gilt die alte weiter. Nicht während einer Impersonation und nicht mit API-Tokens (`403 privacy.ownConsentOnly`). **Minderjährige** sehen ihre Einwilligungen nur (`403 privacy.consentMinor`); die Erziehungsberechtigten willigen schriftlich ein, ein Widerruf geht über die Feuerwehr.
+- **Erste Anmeldung:** Nach dem Hinweis „Bevor Sie beginnen“ bietet die Seite die geltenden, noch nicht erteilten Einwilligungen an („Freiwillige Einwilligungen“, einzeln, nichts vorausgewählt, mit „Text lesen“); „Weiter“ nimmt den Hinweis zur Kenntnis und speichert danach die gewählten Einwilligungen mit `firstLogin`. Minderjährigen wird nichts angeboten. Die Seite erscheint wie bisher nur, wenn der Hinweis fällig ist.
+
+### Auskunft und Export
+
+Die Auskunft (`describePerson` des Core) hat den Abschnitt „Einwilligungen“ (`core.consents`: Einwilligung, Fassung, erteilt mit Weg, erfasst von als Funktion, Stand mit Widerruf bzw. neuer Fassung; Änderungen im Protokoll), der Export je Person (`GET /api/core/export/person/:personId`) im Teil `core` die Liste `consents` mit Fassung, Text und Widerruf. Die Anonymisierung lässt Einwilligungen als Nachweis stehen (sie nennen nur die Person-ID und den Text der Fassung).
+
+## Berichtigung (L12)
+
+**„Berichtigung beantragen …“** in Mein Bereich: unter jedem Abschnitt eines Moduls (Bereich vorgewählt) und im Abschnitt „Datenschutz“ (Mockup `mein-bereich.html`, `#d-berichtigung`). Dialog: Bereich (Abschnitte der Module, „Benutzerkonto“, „Sonstiges“), „Was ist falsch?“, „Wie ist es richtig?“, Nachweis (PDF oder Foto, optional, mit dem Hinweis „Bitte keine Kopie des Führerscheins“). Abweichung vom Mockup: zwei Felder statt eines, damit die Zuständigen beides getrennt sehen.
+
+- `POST /api/core/privacy/me/rectifications` (`MyRectificationInput`: `area` = Modul-ID, `core` oder `other`, `wrong`, `correct`) legt eine Anfrage der Art `rectification` an (Weg Mein Bereich, Identität durch die Anmeldung geprüft, Frist eingegangen + 1 Monat, Sprache des Benutzers, `rectification` mit Bereich, falsch, richtig) und antwortet mit ihrer ID; der Nachweis wird danach als Anhang `core.privacy-request` hochgeladen (lesen: die Person selbst, `core.privacy.manage`, die Zuständigen; hinzufügen: die Person, solange die Anfrage offen ist, und `core.privacy.manage`). Nicht während einer Impersonation (`403 privacy.ownRequestOnly`), ohne verknüpfte Person `400 privacy.noPerson`.
+- **Aufgaben:** Wie jede Anfrage eine Aufgabe „Datenschutzanfrage beantworten“ für `core.privacy.manage`; dazu die Aufgabe „Berichtigung prüfen: <Bereich>“ (`privacy-rectification`, ohne Namen) für alle mit `masterdata.persons.write` in einer Abteilung der Person, mit Link auf `/privacy/rectifications/:id`. Die Aufgabe entfällt nicht bei einer Einschränkung der Person.
+- **Seite „Berichtigung prüfen“** (`GET /api/core/privacy/rectifications/:id`, `RectificationView`, für die Zuständigen und `core.privacy.manage`, sonst `404`): Person mit Link auf die Personalakte, Eingang, Frist, falsch, richtig, Nachweis, „Als berichtigt vermerken“ (`POST …/rectifications/:id/corrected`, schon vermerkt `409 privacy.alreadyCorrected`; Audit `privacy.rectification-corrected`). Danach endet deren Aufgabe; die Anfrage bleibt beim Datenschutz, der antwortet und sie abschließt.
+- Die Seite der Anfrage zeigt den Abschnitt „Berichtigung“ mit Stand („noch nicht berichtigt“ bzw. „berichtigt am … von …“), Nachweis und dem Hinweis auf die Kämmerei bei geänderter Bankverbindung; „Meine Anfragen“ in Mein Bereich zeigt „Berichtigung: <was falsch ist> (<Bereich>)“. Auskunft als JSON und Anonymisierung behandeln `rectification` wie den Inhalt der Anfrage.
+
+**„Wert in der Historie unkenntlich machen“** für nachweislich falsche oder unzulässig erfasste Angaben: `POST /api/core/history/entries/:id/redact` (`HistoryRedactionInput`: Feld, `side` `old` oder `new`, Grund mindestens 10 Zeichen) mit `core.privacy.manage` (Step-up) und Leserecht auf die Historie des Datensatzes. Der Wert wird im Eintrag durch `null` ersetzt, `core.history.redactions` vermerkt Zeitpunkt, Benutzer und Grund je Feld und Seite; die Historie liefert dafür `redactedOld` bzw. `redactedNew` und zeigt „berichtigt, Wert entfernt am …“. Fehler: `history.unknownField`, `history.nothingToRedact` (leerer Wert), `409 history.alreadyRedacted`. Audit `privacy.history-redacted` mit Datensatz, Feld, Seite und Grund, nie mit dem Wert. In jeder Historie (`HistoryTimeline`) steht dafür bei bestätigter Sitzung mit `core.privacy.manage` „Unkenntlich machen …“ an jedem Wert.
+
+## Leseprotokoll und Anmelden als (L15)
+
+### Leseprotokoll
+
+Tabelle `core.access_log` (`AccessLogEntity`): Benutzer, Person (`null` = alle Personen, z. B. Vollexport), Bereich, Tag (Europe/Berlin), Zahl, erster und letzter Zugriff; eine Zeile je Benutzer, Person, Bereich und Tag (`insert … on conflict` zählt hoch). Protokolliert wird nur das Lesen besonders geschützter Daten, nie der Inhalt:
+
+| Bereich | Wann |
+| --- | --- |
+| `masterdata.person-sensitive` „Personalakte mit sensiblen Feldern“ | `GET /api/masterdata/persons/:id`, wenn der Leser die sensiblen Felder sieht |
+| `respiratory-protection.examinations` „Eignungsuntersuchungen (Gesundheitsdaten)“ | Atemschutz der Person, wenn Untersuchungen dabei sind und der Leser sie sehen darf |
+| `core.access-report` „Auskunft nach Art. 15“ | Erstellen und Herunterladen durch die Verwaltung |
+| `core.export` „Vollexport bzw. Auskunft als JSON“ | Vollexport eines Moduls (Person „alle“) und JSON je Person |
+| `masterdata.lists` „Listen mit Kontakt- oder sensiblen Daten“ | Mitgliederliste, Telefonliste, Komplettdaten, Geburtstage, Altersgrenzen: je Person der Liste, auch in der Vorschau |
+
+- Eigene Daten werden nicht protokolliert. Während einer Impersonation ist der Administrator der Leser. Ein Fehler beim Schreiben hält die Anfrage nicht auf (nur Server-Log).
+- **Dienst** `AccessLog` (aus `@forga/core-api`): `record(user, personIds, area)`, `registerArea(key, label)` für Module, `query({ from, to, userId, personId, area, limit })` und `forPerson(personId)` für andere Funktionen (z. B. die Hilfen bei Datenpannen).
+- **Einsicht** mit `core.audit.read` (Step-up): `GET /api/core/access-log` (`AccessLogEntry[]`, neueste zuerst, höchstens 2000) und `GET /api/core/access-log/filters`; Seite „Verwaltung → Audit-Log“, Reiter „Leseprotokoll“ (`/admin/audit?tab=access`) mit Zeitraum, Benutzer, Bereich und Person.
+- **Aufbewahrung:** eigene Kategorie `core.access-log` „Leseprotokoll“ im Aufbewahrungsplan (Standard 1 Jahr = 12 Monate, löschen; nach dem letzten Zugriff des Tages), auch in der Tätigkeit `core.accounts`.
+- **Auskunft:** Abschnitt „Zugriffe auf besonders geschützte Daten“ (`core.access-log`): Tag, Funktion des Lesers (nie der Name), Bereich, Zahl; im Export je Person im Teil `core` die Liste `accessLog`.
+
+### Anmelden als
+
+- Der Grund war schon Pflicht (mindestens 3 Zeichen).
+- **E-Mail an den Benutzer** beim Start, wenn er eine Adresse hat und die Einstellung `security.notifyImpersonation` an ist (Standard; „Verwaltung → Datenschutz → Einstellungen → Sicherheit → E-Mails“, Schalter „Benutzer bei „Anmelden als“ benachrichtigen“): Administrator und Grund, Hinweis auf Mein Profil; Versandfehler halten nichts auf.
+- **„Anmeldungen als Sie“** im Profil und in Mein Bereich (`GET /api/core/me/impersonations`, `MyImpersonation`): Beginn und Ende (Ende der Impersonation bzw. nach höchstens einer Stunde), Administrator, Grund; aus dem Audit-Log (`auth.impersonation-started`/`-ended`), also so lange, wie das Audit-Log aufbewahrt wird.
+- In der Auskunft stehen die Anmeldungen als die Person im Protokoll des Kontos.
+
+### Tests
+
+`apps/server/src/consents.integration.ts`: Recht und Vorlagen, Katalog mit Fassungen und Prüfung, Erfassen in der eigenen Abteilung mit Nachweis, Minderjährige und Erziehungsberechtigte, Mein Bereich und erste Anmeldung, Impersonation, Wirkung in Telefonliste (Abteilung, Führungskräfte) und Geburtstagsliste (Aushang), Widerruf über eine Anfrage, neue Fassung, Auskunft und Export; Berichtigung mit Frist, Aufgabe der Abteilung, Nachweis, Vermerk und Fehlerfällen; Wert in der Historie unkenntlich machen; Leseprotokoll für Personalakte, Listen, Exporte und Untersuchungen mit Recht, Step-up, Aufbewahrung und Auskunft; E-Mail und Liste „Anmeldungen als Sie“ mit Einstellung.
 
 ## HTTPS und Sicherheitsheader (L1)
 
@@ -210,6 +310,7 @@ Einstellung `security` (nur Verwalter lesen sie: `core.settings.manage` oder `co
 | --- | --- | --- |
 | `mailHealthWithoutNames` | Fristen und Benachrichtigungen mit Gesundheitsbezug ohne Namen | an |
 | `mailAllWithoutNames` | alle Fristen der wöchentlichen E-Mail ohne Namen | aus |
+| `notifyImpersonation` | Benutzer bei „Anmelden als“ per E-Mail benachrichtigen ([L15](#anmelden-als)) | an |
 
 - Fristen tragen `health: true`, wenn sie etwas über die Gesundheit sagen; heute „Eignungsuntersuchung erforderlich“ des Atemschutzes (für die Verantwortlichen, nicht die eigene Frist des Geräteträgers).
 - Die wöchentliche E-Mail nennt solche Fristen nur gezählt je Bereich: „3 Fristen im Bereich Atemschutz, davon 1 überfällig – in f.orga ansehen“, mit Link auf f.orga, wenn die Adresse bekannt ist. Die übrigen Fristen stehen wie bisher einzeln mit Namen. Glocke und Startseite in f.orga zeigen alle Fristen mit Namen.
@@ -218,7 +319,7 @@ Einstellung `security` (nur Verwalter lesen sie: `core.settings.manage` oder `co
 
 ## Recht und Seite „Datenschutz“
 
-**Recht `core.privacy.manage`** („Datenschutz verwalten“): Gesamtwehr, `privileged` (nie für API-Tokens), `stepUp`. Rollenvorlage: `administrator` über `*`; andere Rollen (Kommandant, eine Person der Gemeindeverwaltung, DSB) bekommen es bei Bedarf. `core.privacy.consents` gibt es noch nicht (Einwilligungen, Phase 3).
+**Recht `core.privacy.manage`** („Datenschutz verwalten“): Gesamtwehr, `privileged` (nie für API-Tokens), `stepUp`. Rollenvorlage: `administrator` über `*`; andere Rollen (Kommandant, eine Person der Gemeindeverwaltung, DSB) bekommen es bei Bedarf. Einwilligungen von Personen der Abteilung erfasst `core.privacy.consents` (siehe [Einwilligungen](#einwilligungen-l9)).
 
 **Seite „Verwaltung → Datenschutz“** (Menüpunkt mit `core.privacy.manage` oder `core.settings.manage`) mit den Reitern:
 
@@ -229,9 +330,9 @@ Einstellung `security` (nur Verwalter lesen sie: `core.settings.manage` oder `co
 | Information | `/admin/privacy/information` | `core.privacy.manage` | siehe [Information nach Art. 13/14](#information-nach-art-1314) |
 | Verzeichnis | `/admin/privacy/register` | `core.privacy.manage` | siehe [Verzeichnis der Verarbeitungstätigkeiten](#verzeichnis-der-verarbeitungstätigkeiten-l8) |
 | Datenpannen, Datenpanne | `/admin/privacy/breaches`, `/admin/privacy/breaches/:id` | `core.privacy.manage` | siehe [Datenpannen](#datenpannen-l20) |
-| Einstellungen | `/admin/privacy/settings?tab=` | je Reiter | Kontakte, Texte, Selbstauskunft (`core.privacy.manage`); Sicherheit, Aufbewahrung (`core.privacy.manage` oder `core.settings.manage`) |
+| Einstellungen | `/admin/privacy/settings?tab=` | je Reiter | Kontakte, Texte, Einwilligungen, Selbstauskunft (`core.privacy.manage`); Sicherheit, Aufbewahrung (`core.privacy.manage` oder `core.settings.manage`) |
 
-Die Reiter „Datenschutz“ (Aufbewahrungsfristen) und „Sicherheit“ der Seite „Einstellungen“ sind hierher gezogen; alte Links (`/admin/settings?tab=privacy`, `?tab=security`) leiten weiter. Der Reiter „Einwilligungen“ (L9) fehlt noch.
+Die Reiter „Datenschutz“ (Aufbewahrungsfristen) und „Sicherheit“ der Seite „Einstellungen“ sind hierher gezogen; alte Links (`/admin/settings?tab=privacy`, `?tab=security`) leiten weiter.
 
 **Einstellungsabschnitte** (`core.setting`, historisiert; lesen und ändern nur ihre Verwalter, `SettingsAccess.managers`):
 
@@ -241,6 +342,7 @@ Die Reiter „Datenschutz“ (Aufbewahrungsfristen) und „Sicherheit“ der Sei
 | `privacy.texts` | `PrivacyTexts`, `PrivacyTextBlock` | `core.privacy.manage`, nur über die eigenen Endpunkte (`PUT /api/core/settings/privacy.texts` antwortet `400 settings.dedicatedEndpoint`) | Textbausteine, siehe unten |
 | `privacy.selfServiceAccess` | `PrivacySelfService` | `core.privacy.manage` | `mode` `request` (Standard) oder `instant`; `contact` (Ansprechpartner in Mein Bereich) |
 | `privacy.activities` | `PrivacyActivities`, `ActivityRecord` | `core.privacy.manage`, nur über die eigenen Endpunkte (`settings.dedicatedEndpoint`) | Ergänzungen der Gemeinde je Verarbeitungstätigkeit und Empfänger für alle Tätigkeiten, siehe [Verzeichnis](#verzeichnis-der-verarbeitungstätigkeiten-l8) |
+| `privacy.consents` | `PrivacyConsents`, `ConsentDefinition` | `core.privacy.manage`, nur über die eigenen Endpunkte | Katalog der Einwilligungen, siehe [Einwilligungen](#einwilligungen-l9) |
 | `privacy` (Aufbewahrung), `security` | wie bisher | `core.settings.manage` oder `core.privacy.manage` | |
 
 **Textbausteine** (`privacy.texts`; je Baustein `text: { de, en }`, `version`, `changedAt`, `changedBy`, `reviewedAt`, `reviewedBy`; `PRIVACY_TEXT_BLOCKS` nennt Verwendung und Platzhalter):
@@ -269,7 +371,7 @@ Die Reiter „Datenschutz“ (Aufbewahrungsfristen) und „Sicherheit“ der Sei
 - Seite `/privacy` mit Fassung und Datum, früheren Fassungen zur Auswahl, Hinweis „Vorlage – noch nicht mit dem Datenschutzbeauftragten geprüft“ und „Als PDF“. Links in der Fußzeile jeder Seite, auf der Anmeldeseite, in Mein Bereich und in den Einstellungen.
 - `GET /api/core/privacy/notice?version=` (`PrivacyNotice` mit `versions`; unbekannte Fassung `404 privacy.noticeUnknown`), `GET /api/core/privacy/notice.pdf?language=&version=` (Briefkopf bzw. Wappen; für den Aushang und als Beilage zur Aufnahme).
 
-**Hinweis bei der ersten Anmeldung und nach einer neuen Fassung** (Mockup `erste-anmeldung.html`, ohne die Einwilligungen von L9): Die Sitzung meldet `privacyNotice: { version, acknowledgedVersion, due }`. Ist `due`, zeigt die Shell vor allen Seiten „Bevor Sie beginnen“ mit dem Baustein `firstLogin` (`GET /api/core/privacy/notice/first-login`), Link auf den vollständigen Hinweis, dem Haken „Datenschutzhinweis (Fassung n) zur Kenntnis genommen“ und „Weiter“ (oder „Abmelden“). `POST /api/core/privacy/notice/acknowledge` (`{ version }`) speichert Fassung und Zeitpunkt am Benutzer (`core.user.privacy_notice_version`, `privacy_notice_acknowledged_at`; Historie des Benutzers, Audit `privacy.notice-acknowledged`). Das ist keine Einwilligung.
+**Hinweis bei der ersten Anmeldung und nach einer neuen Fassung** (Mockup `erste-anmeldung.html`; die angebotenen Einwilligungen siehe [Einwilligungen](#mein-bereich-und-erste-anmeldung)): Die Sitzung meldet `privacyNotice: { version, acknowledgedVersion, due }`. Ist `due`, zeigt die Shell vor allen Seiten „Bevor Sie beginnen“ mit dem Baustein `firstLogin` (`GET /api/core/privacy/notice/first-login`), Link auf den vollständigen Hinweis, dem Haken „Datenschutzhinweis (Fassung n) zur Kenntnis genommen“ und „Weiter“ (oder „Abmelden“). `POST /api/core/privacy/notice/acknowledge` (`{ version }`) speichert Fassung und Zeitpunkt am Benutzer (`core.user.privacy_notice_version`, `privacy_notice_acknowledged_at`; Historie des Benutzers, Audit `privacy.notice-acknowledged`). Das ist keine Einwilligung.
 - `due` gilt erst, wenn alle Bausteine des Hinweises geprüft sind (`template: false`): Eine ungeprüfte Vorlage gilt noch nicht und wird niemandem zur Kenntnis vorgelegt. Danach fragt jede neue Fassung erneut.
 - Nicht während einer Impersonation (`due: false`, Bestätigen `403 privacy.acknowledgeOwnOnly`), nicht für technische Benutzer und API-Tokens. Eine inzwischen veraltete Fassung antwortet `409 privacy.noticeOutdated`.
 
@@ -332,9 +434,9 @@ Die Auskunft als JSON (`GET /api/core/export/person/:personId`) enthält die Anf
 | `GET` | `/core/privacy/notice`, `/core/privacy/notice.pdf` | ohne Anmeldung: Datenschutzhinweis |
 | `GET`, `POST` | `/core/privacy/notice/first-login`, `/core/privacy/notice/acknowledge` | angemeldet: Hinweis bei der ersten Anmeldung |
 
-**Mein Bereich** (Abschnitt „Datenschutz“ für jeden Benutzer mit verknüpfter Person; der Menüpunkt „Mein Bereich“ erscheint deshalb immer, wenn eine Person verknüpft ist): „Auskunft anfordern …“ (Sprache; legt eine Anfrage mit Weg „Mein Bereich“ an, Identität durch die Anmeldung geprüft; gesperrt, solange eine Auskunft offen ist), „Meine Anfragen“ mit Stand und Frist, Link auf den Datenschutzhinweis mit der zur Kenntnis genommenen Fassung, Ansprechpartner und DSB. Mit `privacy.selfServiceAccess.mode = instant` heißt der Knopf „Auskunft jetzt erstellen …“: Die Person erzeugt ihre Auskunft sofort selbst (siehe [Selbstauskunft](#selbstauskunft-in-mein-bereich)).
+**Mein Bereich** (Abschnitte „Meine Einwilligungen“, „Datenschutz“ und „Anmeldungen als Sie“ für jeden Benutzer mit verknüpfter Person; der Menüpunkt „Mein Bereich“ erscheint deshalb immer, wenn eine Person verknüpft ist): „Auskunft anfordern …“, „Berichtigung beantragen …“ (Sprache; legt eine Anfrage mit Weg „Mein Bereich“ an, Identität durch die Anmeldung geprüft; gesperrt, solange eine Auskunft offen ist), „Meine Anfragen“ mit Stand und Frist, Link auf den Datenschutzhinweis mit der zur Kenntnis genommenen Fassung, Ansprechpartner und DSB. Mit `privacy.selfServiceAccess.mode = instant` heißt der Knopf „Auskunft jetzt erstellen …“: Die Person erzeugt ihre Auskunft sofort selbst (siehe [Selbstauskunft](#selbstauskunft-in-mein-bereich)).
 
-**Reiter „Datenschutz“ der Personalakte** (`/masterdata/persons/:id?tab=privacy`; die Shell trägt ihn über den Erweiterungspunkt `masterdata.person.tab` bei, Recht `core.privacy.manage`, ohne Step-up „Datenschutz anzeigen …“): „Anfragen der Person“ mit „Anfrage erfassen …“, „Information und Einschränkung“ (Datenschutzhinweis zur Kenntnis genommen bzw. kein Benutzerkonto, Information nach Art. 13/14, Verarbeitung) mit „Information vermerken …“ und „Verarbeitung einschränken …“ bzw. „Einschränkung aufheben …“.
+**Reiter „Datenschutz“ der Personalakte** (`/masterdata/persons/:id?tab=privacy`; die Shell trägt ihn über den Erweiterungspunkt `masterdata.person.tab` bei, Recht `core.privacy.manage` oder `core.privacy.consents`, ohne Step-up „Datenschutz anzeigen …“): „Anfragen der Person“ mit „Anfrage erfassen …“, „Einwilligungen“, „Information und Einschränkung“ (Datenschutzhinweis zur Kenntnis genommen bzw. kein Benutzerkonto, Information nach Art. 13/14, Verarbeitung) mit „Information vermerken …“ und „Verarbeitung einschränken …“ bzw. „Einschränkung aufheben …“.
 
 ## Einschränkung der Verarbeitung (Art. 18)
 
@@ -377,7 +479,7 @@ Reiter „Verzeichnis“ der Seite „Verwaltung → Datenschutz“ (`/admin/pri
 - **Empfänger** (`RegisterRecipientView` mit `source`): aus dem Manifest (`module`), gültige API-Tokens mit Rechten des Moduls als „Schnittstelle „Name““ (`token`), von der Gemeinde ergänzte (`municipality`). E-Mail-Server und Anmeldedienst (OIDC) aus den Einstellungen sind technische Empfänger bzw. Auftragsverarbeiter (`processors`, `processor`) und stehen bei `core.accounts`.
 - **Empfänger für alle Tätigkeiten** (`general`), z. B. die Stadtkasse.
 - **Kostenersatz** hat eine Tätigkeit `cost-recovery.notices` (Kostenschuldner), aber keine Personendaten im Sinne der Auskunft (`personData: false`).
-- **Technische Maßnahmen** (`TechnicalMeasure`: Titel, Stand, `tone` `ok`/`warning`/`info`) mit dem Stand beim Aufruf: Rechte je Abteilung (Zahl der Rollen und Benutzer), zweiter Faktor (Step-up; wie viele Benutzer mit Rechten unter Step-up ihn eingerichtet haben; Warnung ohne `FORGA_SECRET_KEY`), HTTPS (aus Sicht der Anfrage und der Adresse wie `GET /api/core/security/status`, „nein – Aufruf über http://“ als Warnung), Anmeldung (scrypt, Sperre, OIDC), Protokolle mit ihren Fristen, Verschlüsselung (Auskünfte, Faktor), E-Mails (Server, TLS, ohne Namen bei Gesundheitsbezug), System (Echt-, Testsystem, Entwicklung); das Modul Datensicherung meldet „nicht eingerichtet“ bzw. Zeitplan, Verschlüsselung und letzte erfolgreiche Sicherung (`backup.state`). Weitere Quellen melden sich am `TechnicalMeasureRegistry` an (`register({ module, measures(context) })`, Kontext wie `SecurityStatus`); Maßnahmen inaktiver Module fallen weg.
+- **Technische Maßnahmen** (`TechnicalMeasure`: Titel, Stand, `tone` `ok`/`warning`/`info`) mit dem Stand beim Aufruf: Rechte je Abteilung (Zahl der Rollen und Benutzer), zweiter Faktor (Step-up; wie viele Benutzer mit Rechten unter Step-up ihn eingerichtet haben; Warnung ohne `FORGA_SECRET_KEY`), HTTPS (aus Sicht der Anfrage und der Adresse wie `GET /api/core/security/status`, „nein – Aufruf über http://“ als Warnung), Anmeldung (scrypt, Sperre, OIDC), Protokolle mit ihren Fristen, Leseprotokoll mit seiner Frist, Verschlüsselung (Auskünfte, Faktor), E-Mails (Server, TLS, ohne Namen bei Gesundheitsbezug), System (Echt-, Testsystem, Entwicklung); das Modul Datensicherung meldet „nicht eingerichtet“ bzw. Zeitplan, Verschlüsselung und letzte erfolgreiche Sicherung (`backup.state`). Weitere Quellen melden sich am `TechnicalMeasureRegistry` an (`register({ module, measures(context) })`, Kontext wie `SecurityStatus`); Maßnahmen inaktiver Module fallen weg.
 
 **Ergänzungen der Gemeinde** (Einstellungsabschnitt `privacy.activities`, `PrivacyActivities`; historisiert wie jede Einstellung, Historie unter `core.setting`):
 
@@ -433,7 +535,7 @@ Reiter „Datenpannen“ (`/admin/privacy/breaches`) und Seite einer Datenpanne 
 
 **Hilfen** (`/api/core/privacy/breach-tools`):
 
-- **Protokolle exportieren** (`GET protocols.xlsx?from=&to=&userId=&breachId=&language=`): je Protokoll ein Blatt für den Zeitraum (Tage in Europe/Berlin) und optional einen Benutzer (auch als Administrator bei „Anmelden als“); heute das Audit-Log mit Zeitpunkt, Benutzer, „Angemeldet als durch“, Vorgang lesbar und als Code, Details; höchstens 50 000 Zeilen je Protokoll. Weitere Protokolle (Leseprotokoll) melden sich am `ProtocolRegistry` an (`ProtocolSource`: `key`, `title`, `columns`, `rows(filter, language)`); `GET protocols` nennt sie. Audit `privacy.breach-protocol-exported`. `GET accounts` liefert alle Konten zur Auswahl (auch technische und gesperrte).
+- **Protokolle exportieren** (`GET protocols.xlsx?from=&to=&userId=&breachId=&language=`): je Protokoll ein Blatt für den Zeitraum (Tage in Europe/Berlin) und optional einen Benutzer (auch als Administrator bei „Anmelden als“); das Audit-Log mit Zeitpunkt, Benutzer, „Angemeldet als durch“, Vorgang lesbar und als Code, Details (höchstens 50 000 Zeilen) und das Leseprotokoll (`AccessLog.query`: Tag, Benutzer, Person bzw. „alle Personen“, Bereich, Zugriffe, erster und letzter Zugriff; höchstens 2000 Zeilen). Weitere Protokolle melden sich am `ProtocolRegistry` an (`ProtocolSource`: `key`, `title`, `columns`, `rows(filter, language)`); `GET protocols` nennt sie. Audit `privacy.breach-protocol-exported`. `GET accounts` liefert alle Konten zur Auswahl (auch technische und gesperrte).
 - **Betroffene Personen ermitteln** (`GET sources?from=&to=&userId=` listet die Audit-Einträge `lists.exported`, `data.exported`, `data.person-exported`, `privacy.access-report-created`, `privacy.access-report-downloaded` mit lesbarem Namen und Zahl der Personen; `POST affected` mit `{ source: 'audit', auditId }` oder `{ source: 'account', userId }`, Ergebnis `AffectedPersons`):
   - **Liste exportiert:** Das Audit `lists.exported` enthält die Parameter (`params`) und die IDs der genannten Personen (`personIds`), wenn die Liste sie liefert (`ListContent.personIds`; Stammdaten: Mitglieder, Unterschriften, Telefon, Komplettdaten, Geburtstage, Dienstjubiläen, Qualifikationen, Atemschutzgeräteträger, Probezeit, Altersgrenzen). Ergebnis mit dem Stand des Exports (`basis: recorded`). Die Audit-Seite zeigt `personIds` nur als Zahl.
   - **Auskunft, Auskunft als JSON:** die Person des Eintrags.

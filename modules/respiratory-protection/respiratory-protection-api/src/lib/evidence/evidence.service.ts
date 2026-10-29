@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, type OnApplicationBootstrap, type OnModuleDestroy, type OnModuleInit, Optional } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { assertNotRestricted, type AuthenticatedUser, berlinDate, DomainEvents, Notifications, SettingsService } from '@forga/core-api';
+import { AccessLog, assertNotRestricted, type AuthenticatedUser, berlinDate, DomainEvents, Notifications, SettingsService } from '@forga/core-api';
 import { SecuritySettings } from '@forga/core-contracts';
 import { INCIDENTS_EVENTS, INCIDENTS_LOOKUP, type IncidentsLookup, type ReportReleasedEvent, type ReportUnlockedEvent } from '@forga/incidents-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory, type PersonSnapshot } from '@forga/masterdata-contracts';
@@ -31,6 +31,8 @@ import { isWearer, redact } from './visibility.js';
 export const READ = 'respiratory-protection.read';
 export const EVIDENCE = 'respiratory-protection.evidence';
 export const EXAMINATIONS = 'respiratory-protection.examinations';
+/** Read log area of the examinations of a person. */
+export const EXAMINATIONS_ACCESS_AREA = 'respiratory-protection.examinations';
 export const SELF = 'respiratory-protection.self';
 export const NOTIFY = 'respiratory-protection.notify';
 
@@ -95,10 +97,12 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     private readonly events: DomainEvents,
     private readonly notifications: Notifications,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
+    private readonly accessLog: AccessLog,
     @Optional() @Inject(INCIDENTS_LOOKUP) private readonly incidents?: IncidentsLookup,
   ) {}
 
   onModuleInit(): void {
+    this.accessLog.registerArea(EXAMINATIONS_ACCESS_AREA, { de: 'Eignungsuntersuchungen (Gesundheitsdaten)', en: 'Medical examinations (health data)' });
     this.events.subscribe<SessionClosedEvent>(TRAINING_EVENTS.sessionClosed, (e) => this.fromTraining(e));
     this.events.subscribe<SessionReopenedEvent>(TRAINING_EVENTS.sessionReopened, (e) => this.replace('training', e.sessionId, []));
     this.events.subscribe<ReportReleasedEvent>(INCIDENTS_EVENTS.reportReleased, (e) => this.fromIncident(e));
@@ -204,6 +208,8 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     const [status] = await this.visibleStatuses(user, [person]);
     const rows = await this.em.fork().find(EvidenceEntity, { personId }, { orderBy: { date: 'desc' } });
     const examinations = this.can(user, EXAMINATIONS, person);
+    // Examinations are health data: read log (L15).
+    if (examinations && rows.some((e) => e.kind === 'examination')) await this.accessLog.record(user, [personId], EXAMINATIONS_ACCESS_AREA);
     return {
       status,
       evidence: rows.filter((e) => e.kind !== 'examination' || examinations).map(toEvidenceDto),

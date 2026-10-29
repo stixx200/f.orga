@@ -21,6 +21,11 @@ export const CORE_PERMISSIONS = [
     privileged: true,
     stepUp: true,
   },
+  {
+    id: 'core.privacy.consents',
+    name: { de: 'Einwilligungen von Personen erfassen und widerrufen', en: 'Record and withdraw consents of persons' },
+    scope: 'department',
+  },
 ] as const satisfies readonly Permission[];
 
 /**
@@ -38,12 +43,13 @@ export const CORE_ROLE_TEMPLATES: RoleTemplate[] = [
     key: 'commander',
     name: { de: 'Kommandant', en: 'Commander' },
     description: { de: 'Fachlich alles, Berichte freigeben', en: 'All business functions, release reports' },
-    permissions: ['core.audit.read'],
+    permissions: ['core.audit.read', 'core.privacy.consents'],
   },
   {
     key: 'department-commander',
     name: { de: 'Abteilungskommandant', en: 'Department commander' },
     description: { de: 'Personen und Berichte der Abteilung', en: 'Persons and reports of the department' },
+    permissions: ['core.privacy.consents'],
   },
   {
     key: 'group-leader',

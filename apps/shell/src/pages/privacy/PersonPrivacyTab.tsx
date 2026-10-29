@@ -3,9 +3,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import type { PrivacyInformation, ProcessingRestriction } from '@forga/core-contracts';
-import { api, formatDate, formatDateTime, unlocked, useSession, useTranslation } from '@forga/web-sdk';
+import { api, can, formatDate, formatDateTime, unlocked, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, Notice, Panel, StatusBadge, StepUpButton } from '@forga/web-ui';
 import { AccessReportsPanel } from '../../privacy/AccessReports';
+import { PersonConsentsPanel } from '../../privacy/consents/PersonConsents';
 import { PRIVACY, usePersonPrivacy } from './api';
 import { InformationDialog, LiftDialog, RequestDialog, RestrictDialog } from './dialogs';
 import { DeadlineBadge, Field, STATUS_TONES } from './PrivacyPage';
@@ -19,13 +20,19 @@ interface PersonPrivacyFields {
 
 /**
  * Tab „Datenschutz“ of the person file (extension point `masterdata.person.tab`, contributed by the shell): requests of
- * the person, privacy notice and information, restriction of processing.
+ * the person, consents, privacy notice and information, restriction of processing. Who only records consents
+ * (`core.privacy.consents`) sees the consents.
  */
 export function PersonPrivacyTab({ personId }: { personId: string }) {
   const { t } = useTranslation('shell');
   const session = useSession().data;
   if (!unlocked(session, PRIVACY)) {
-    return <Notice kind="info" action={<StepUpButton>{t('privacy.person.stepUpButton')}</StepUpButton>}>{t('privacy.person.stepUp')}</Notice>;
+    return (
+      <Stack gap="lg">
+        {can(session, PRIVACY) && <Notice kind="info" action={<StepUpButton>{t('privacy.person.stepUpButton')}</StepUpButton>}>{t('privacy.person.stepUp')}</Notice>}
+        {can(session, 'core.privacy.consents') && <PersonConsentsPanel personId={personId} />}
+      </Stack>
+    );
   }
   return <PersonPrivacyDetails personId={personId} />;
 }
@@ -57,6 +64,7 @@ function PersonPrivacyDetails({ personId }: { personId: string }) {
           <Text size="xs" c="dimmed">{t('privacy.person.deadlineHint')}</Text>
         </Stack>
       </Panel>
+      <PersonConsentsPanel personId={personId} />
       <AccessReportsPanel personId={personId} />
       <Panel title={t('privacy.person.info')}>
         <Stack gap="xs">

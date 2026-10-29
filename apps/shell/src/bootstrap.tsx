@@ -17,11 +17,12 @@ import { registerCoreExtensions } from './privacy/extensions';
 import { PersonPrivacyTab } from './pages/privacy/PersonPrivacyTab';
 
 addTranslations('shell', shellTranslations);
-// Tab „Datenschutz“ of the person file (`?tab=privacy`): requests, information and restriction of processing.
+// Tab „Datenschutz“ of the person file (`?tab=privacy`): requests, consents, information and restriction of processing.
 registerExtensions('privacy', {
   'masterdata.person.tab': {
     label: { de: 'Datenschutz', en: 'Data protection' },
-    permission: 'core.privacy.manage',
+    // Data protection, or recording consents for the department (L9).
+    anyPermission: ['core.privacy.manage', 'core.privacy.consents'],
     order: 900,
     component: PersonPrivacyTab as ComponentType<Record<string, unknown>>,
   },

@@ -329,6 +329,42 @@ export const PrivacyRecipientsNotified = z.object({
 });
 export type PrivacyRecipientsNotified = z.infer<typeof PrivacyRecipientsNotified>;
 
+/**
+ * Rectification asked for in "My area" (L12): area (module of the section, `other`), what is wrong and how it is right.
+ * Holders of `masterdata.persons.write` of the person's department check it (task) and mark it as corrected.
+ */
+export const Rectification = z.object({
+  area: z.string(),
+  /** Name of the area (module name, "Sonstiges"). */
+  areaLabel: LocalizedText,
+  wrong: z.string(),
+  correct: z.string(),
+  correctedAt: z.string().nullable(),
+  correctedByName: z.string().nullable(),
+});
+export type Rectification = z.infer<typeof Rectification>;
+
+/** "Berichtigung beantragen" in "My area" (`POST /api/core/privacy/me/rectifications`); a proof is uploaded as attachment. */
+export const MyRectificationInput = z.object({
+  /** Module ID of the section or `other`. */
+  area: z.string().regex(/^[a-z][a-z0-9-]{0,59}$/),
+  wrong: z.string().trim().min(1).max(2000),
+  correct: z.string().trim().min(1).max(2000),
+});
+export type MyRectificationInput = z.infer<typeof MyRectificationInput>;
+
+/** A rectification for the persons responsible for the person's data (`GET /api/core/privacy/rectifications/:id`). */
+export const RectificationView = z.object({
+  id: z.string(),
+  personId: z.string(),
+  personName: z.string().nullable(),
+  receivedOn: z.string(),
+  deadline: z.string(),
+  status: PrivacyRequestStatus,
+  rectification: Rectification,
+});
+export type RectificationView = z.infer<typeof RectificationView>;
+
 /** A request as the administration sees it. */
 export const PrivacyRequest = z.object({
   id: z.string(),
@@ -366,6 +402,8 @@ export const PrivacyRequest = z.object({
    * Access report (Art. 15) created for the request; filled by the feature "Auskunft als PDF" (`core.privacy_document`).
    */
   accessReportDocumentId: z.string().nullable(),
+  /** Rectification asked for in "My area" (L12). */
+  rectification: Rectification.nullable(),
   createdAt: z.string(),
   createdByName: z.string().nullable(),
   version: z.number().int(),
@@ -380,6 +418,8 @@ export const MyPrivacyRequest = z.object({
   status: PrivacyRequestStatus,
   deadline: z.string(),
   closedOn: z.string().nullable(),
+  /** Rectification: area and what is wrong. */
+  rectification: z.object({ areaLabel: LocalizedText, wrong: z.string() }).nullable(),
 });
 export type MyPrivacyRequest = z.infer<typeof MyPrivacyRequest>;
 

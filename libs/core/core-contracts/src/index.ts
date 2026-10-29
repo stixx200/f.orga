@@ -15,3 +15,5 @@ export * from './lib/access-report.js';
 export * from './lib/privacy.js';
 export * from './lib/register.js';
 export * from './lib/breaches.js';
+export * from './lib/consents.js';
+export * from './lib/access-log.js';

@@ -2,6 +2,16 @@ import { defineEntity, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
 import type { BreachNotificationVia, BreachRisk, BreachStatus, Language, PrivacyNoticeSection, PrivacyRequestChannel, PrivacyRequestKind, PrivacyRequestStatus } from '@forga/core-contracts';
 
+/** Rectification of a request as stored. */
+export interface StoredRectification {
+  area: string;
+  wrong: string;
+  correct: string;
+  correctedAt: string | null;
+  /** User who marked it as corrected; no foreign key. */
+  correctedBy: string | null;
+}
+
 /**
  * A request of a data subject (Art. 15–21): access, rectification, erasure, restriction, objection or withdrawal of a
  * consent, with the deadline of Art. 12(3). Historized; readable only with `core.privacy.manage`.
@@ -41,6 +51,8 @@ export const PrivacyRequestSchema = defineEntity({
     recipients: p.json<{ id: string; name: string; notifiedOn: string }[]>().defaultRaw("'[]'::jsonb").onCreate(() => []),
     /** Access report created for the request (feature "Auskunft als PDF"). */
     accessReportDocumentId: p.string().nullable(),
+    /** Rectification asked for in "My area" (L12): area, what is wrong, how it is right, marked as corrected. */
+    rectification: p.json<StoredRectification>().nullable(),
     createdAt: p.datetime().onCreate(() => new Date()),
     createdBy: p.string().nullable(),
     version: p.integer().version(),

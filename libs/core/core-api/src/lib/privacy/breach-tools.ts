@@ -26,6 +26,7 @@ import { OrganizationDirectory } from '../security/organization-directory.js';
 import { hashSecret } from '../security/password.js';
 import { ApiToken, Session, User } from '../security/security.entities.js';
 import { ZodPipe } from '../zod.pipe.js';
+import { AccessLog } from './access-log.js';
 import { berlinDateTime } from './breaches.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -42,7 +43,7 @@ export interface ProtocolFilter {
 
 /**
  * A protocol that can be exported for a period and a user to investigate a data breach, one sheet per protocol: the
- * audit log of the core; the read log registers itself the same way.
+ * audit log and the read log of the core; further protocols register the same way.
  */
 export interface ProtocolSource {
   key: string;
@@ -82,6 +83,7 @@ export class BreachTools implements OnModuleInit {
     private readonly auth: AuthService,
     private readonly lists: ListRegistry,
     private readonly audit: Audit,
+    private readonly accessLog: AccessLog,
   ) {}
 
   onModuleInit(): void {
@@ -98,6 +100,30 @@ export class BreachTools implements OnModuleInit {
       ],
       widths: [18, 22, 22, 34, 30, 80],
       rows: (filter, language) => this.auditRows(filter, language),
+    });
+    this.protocols.register({
+      key: 'core.access-log',
+      title: { de: 'Leseprotokoll', en: 'Read log' },
+      columns: [
+        { de: 'Tag', en: 'Day' },
+        { de: 'Benutzer', en: 'User' },
+        { de: 'Person', en: 'Person' },
+        { de: 'Bereich', en: 'Area' },
+        { de: 'Zugriffe', en: 'Accesses' },
+        { de: 'Erster Zugriff', en: 'First access' },
+        { de: 'Letzter Zugriff', en: 'Last access' },
+      ],
+      widths: [12, 22, 24, 30, 10, 18, 18],
+      rows: async (filter, language) =>
+        (await this.accessLog.query({ from: filter.from, to: filter.to, userId: filter.userId ?? undefined, limit: 2000 })).map((e) => [
+          e.day,
+          e.userName ?? e.userId,
+          e.personId ? (e.personName ?? e.personId) : language === 'de' ? 'alle Personen' : 'all persons',
+          e.areaLabel[language],
+          e.count,
+          berlinDateTime(new Date(e.firstAt), language),
+          berlinDateTime(new Date(e.lastAt), language),
+        ]),
     });
   }
 

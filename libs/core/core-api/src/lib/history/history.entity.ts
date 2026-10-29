@@ -20,8 +20,19 @@ export const HistoryEntrySchema = defineEntity({
     /** Administrator who acted as `userId` (impersonation). */
     impersonatorId: p.string().nullable(),
     timestamp: p.datetime(),
+    /**
+     * Values removed as wrong or unlawfully recorded ("Wert in der Historie unkenntlich machen", L12), per field and side:
+     * when, by whom (user ID) and why. The value itself is replaced by `null` in `changes`.
+     */
+    redactions: p.json<Record<string, Partial<Record<'old' | 'new', HistoryRedaction>>>>().nullable(),
   },
 });
+
+export interface HistoryRedaction {
+  at: string;
+  by: string;
+  reason: string;
+}
 
 export class HistoryEntry extends HistoryEntrySchema.class {}
 HistoryEntrySchema.setClass(HistoryEntry);

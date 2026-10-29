@@ -49,4 +49,8 @@ export const AUDIT_LABELS: Record<string, LocalizedText> = {
   'privacy.breach-contacts-exported': { de: 'Kontaktliste zur Benachrichtigung exportiert', en: 'Contact list for the notification exported' },
   'privacy.breach-affected-determined': { de: 'Betroffene Personen ermittelt', en: 'Affected persons determined' },
   'privacy.breach-lockdown': { de: 'Alle Sitzungen beendet und alle API-Tokens widerrufen', en: 'All sessions ended and all API tokens revoked' },
+  'privacy.consent-given': { de: 'Einwilligung erteilt', en: 'Consent given' },
+  'privacy.consent-withdrawn': { de: 'Einwilligung widerrufen', en: 'Consent withdrawn' },
+  'privacy.rectification-corrected': { de: 'Berichtigung vermerkt', en: 'Rectification recorded' },
+  'privacy.history-redacted': { de: 'Wert in der Historie unkenntlich gemacht', en: 'Value removed from the history' },
 };

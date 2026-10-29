@@ -264,7 +264,14 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Löschprüfung | erasure check (`PersonDataHandler.erasure`) |
 | Einschränkung der Verarbeitung, eingeschränkte Person | processing restriction (`masterdata.person.restricted_at`, `restriction_reason`, `restricted_until`, `restriction_request_id`; `Person.processingRestriction`, `ProcessingRestriction`, `RestrictedPerson`; `PERSON_DIRECTORY.isRestricted`, `restrictedIds`; `assertNotRestricted`, `refuseRestricted`; Fehlercode `privacy.processingRestricted`) |
 | Grund der Einschränkung (Richtigkeit bestritten, unrechtmäßig, Rechtsansprüche, Widerspruch wird geprüft, Aufbewahrungsfrist läuft) | `ProcessingRestrictionReason` (`accuracy-contested`, `unlawful-processing`, `legal-claims`, `objection-pending`, `retention`) |
-| Einwilligung, Fassung, Widerruf | consent (`core.consent`, `CONSENTS`, Einstellungsabschnitt `privacy.consents`), `version`, `withdrawnAt` |
+| Einwilligung, Fassung, Widerruf | consent (`core.consent`, `ConsentEntity`, `PersonConsent`; Fassung `definition_version`, `withdrawn_on`, `withdrawn_via`; neue Fassung erteilt `superseded_on`) |
+| Katalog der Einwilligungen, Vorlage, Wirkung in f.orga | consent catalog (Einstellungsabschnitt `privacy.consents`, `ConsentDefinition`, `CONSENT_TEMPLATES`), effect (`CONSENT_EFFECTS`, Vertrag `CONSENTS` mit `has`, `withEffect`) |
+| Erteilt durch (Person, Erziehungsberechtigte), Weg der Einwilligung | `givenBy` (`person`, `person-or-guardians`), `ConsentWay` (`written`, `in-person`, `guardians`, `my-area`, `first-login`), `ConsentWithdrawalWay` |
+| Einwilligungen erfassen und widerrufen | Recht `core.privacy.consents` |
+| Minderjährig (unter 18) | minor (`OrganizationProvider.minors`, `PersonConsents.minor`, `MyConsents.minor`) |
+| Berichtigung beantragen, als berichtigt vermerken | rectification (`POST /api/core/privacy/me/rectifications`, `PrivacyRequest.rectification`, `RectificationView`, Aufgabe `privacy-rectification`, Audit `privacy.rectification-corrected`) |
+| Wert in der Historie unkenntlich machen („berichtigt, Wert entfernt am …“) | history redaction (`POST /api/core/history/entries/:id/redact`, `core.history.redactions`, `redactedOld`, `redactedNew`) |
+| Anmeldungen als Sie, Benutzer bei „Anmelden als“ benachrichtigen | impersonations (`GET /api/core/me/impersonations`, `MyImpersonation`, Einstellung `security.notifyImpersonation`) |
 | Textbaustein (Vorlage / geprüft, Fassung) | text block (`privacy.texts`, `PrivacyTexts`, `PrivacyTextBlock`: `version`, `reviewedAt`, `reviewedBy`; Vorlagen `PRIVACY_TEXT_TEMPLATES`, Platzhalter `fillPlaceholders`) |
 | Datenschutzhinweis, Fassung | privacy notice, version (Seite `/privacy`, `core.privacy_notice`, `PrivacyNotice`, `composeNotice`) |
 | Hinweis bei der ersten Anmeldung, „Zur Kenntnis genommen“ | first-login notice, acknowledgement (`Session.privacyNotice.due`, `core.user.privacy_notice_version`, `privacy_notice_acknowledged_at`, `POST /api/core/privacy/notice/acknowledge`) |
@@ -279,7 +286,7 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Technische Maßnahmen | technical measures (`TechnicalMeasure`, `TechnicalMeasureRegistry`, `CoreMeasures`) |
 | Verantwortlicher, Datenschutzbeauftragter, Aufsichtsbehörde | controller, data protection officer, supervisory authority (`privacy.contacts`, `PrivacyContacts`: `controller`, `dpo`, `authority`) |
 | Gesundheitsdaten (besondere Kategorie) | `health: true` an Feldern, Fristarten und Tätigkeiten |
-| Leseprotokoll | access log (`core.access_log`) |
+| Leseprotokoll, Bereich des Leseprotokolls | access log (`core.access_log`, `AccessLog` mit `record`, `query`, `registerArea`; Aufbewahrungskategorie `core.access-log`) |
 | Zweiter Faktor, Einrichten, Wiederherstellungscode | MFA, TOTP, enrolment, recovery code (`core.user_mfa`, `MfaService`, `/api/core/mfa/…`) |
 | Bestätigung mit dem zweiten Faktor beim Öffnen sensibler Daten (30 Minuten je Sitzung) | step-up (`POST /api/core/step-up`, `core.session.elevated_until`, `elevatedUntil`, Kennzeichen `stepUp` an Berechtigungen, `@StepUp()`, Fehlercode `auth.stepUpRequired`) |
 | Recht, das auf die Bestätigung wartet | `locked` an `AuthenticatedUser` (`holds`, `needsStepUp`, `denied`), `stepUpPermissions` der Sitzung |

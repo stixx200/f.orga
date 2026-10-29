@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { z } from 'zod';
-import type { Language, ListCell, ListColumn, LocalizedText } from '@forga/core-contracts';
-import { type AuthenticatedUser, type ListDefinition, SettingsService } from '@forga/core-api';
+import { CONSENTS, type ConsentLookup, type Language, type ListCell, type ListColumn, type LocalizedText } from '@forga/core-contracts';
+import { AccessLog, type AuthenticatedUser, type ListDefinition, SettingsService } from '@forga/core-api';
 import { courseLabel, type MembershipSettings, PersonStatus } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { CourseAttendance, CourseNomination } from '../courses/course.entities.js';
@@ -48,6 +48,39 @@ const statusParameter = {
 };
 
 
+/**
+ * Purpose of the phone list (decision 9 of the data protection concept): the list of the leaders (persons with a current
+ * office) is part of the brigade's task; in the list of the whole department the mobile number needs a consent.
+ */
+const PhonePurpose = z.enum(['department', 'leaders']);
+const phonePurposeParameter = {
+  key: 'purpose',
+  label: { de: 'Zweck', en: 'Purpose' },
+  type: 'select' as const,
+  options: [
+    { value: 'department', label: { de: 'Telefonliste der Abteilung (Handynummer nur mit Einwilligung)', en: 'Phone list of the department (mobile number only with consent)' } },
+    { value: 'leaders', label: { de: 'Führungskräfte (Alarmierung, Erreichbarkeit)', en: 'Leaders (alerting, reachability)' } },
+  ],
+};
+
+/** Qualifications that make a person one of the leaders of the phone list. */
+const LEADER_QUALIFICATIONS = new Set(['group-leader', 'platoon-leader', 'unit-leader']);
+
+/** Purpose of the birthday list: internal for the commander, or posting in the station (only persons with consent). */
+const BirthdayPurpose = z.enum(['internal', 'posting']);
+const birthdayPurposeParameter = {
+  key: 'purpose',
+  label: { de: 'Zweck', en: 'Purpose' },
+  type: 'select' as const,
+  options: [
+    { value: 'internal', label: { de: 'intern für den Kommandanten', en: 'internal for the commander' } },
+    { value: 'posting', label: { de: 'Aushang (nur mit Einwilligung)', en: 'Posting (only with consent)' } },
+  ],
+};
+
+/** Read log area of lists with contact or sensitive data (L15). */
+export const LISTS_ACCESS_AREA = 'masterdata.lists';
+
 const date = z.iso.date();
 const PersonFilter = z.object({ departmentId: z.uuid().optional(), status: PersonStatus.optional() });
 type PersonFilter = z.infer<typeof PersonFilter>;
@@ -77,7 +110,14 @@ export class MasterdataLists {
     private readonly em: EntityManager,
     private readonly persons: PersonsService,
     private readonly settings: SettingsService,
+    private readonly accessLog: AccessLog,
+    @Inject(CONSENTS) private readonly consents: ConsentLookup,
   ) {}
+
+  /** Lists with contact or sensitive data are recorded in the read log, per person in the list. */
+  private logged(user: AuthenticatedUser, persons: readonly Person[]): Promise<void> {
+    return this.accessLog.record(user, persons.map((p) => p.id), LISTS_ACCESS_AREA);
+  }
 
   private async rules(): Promise<MembershipSettings> {
     return (await this.settings.get<MembershipSettings>('masterdata.membership')) as MembershipSettings;
@@ -141,6 +181,7 @@ export class MasterdataLists {
       rows: async (user, params, language) => {
         const { departments, entry } = await this.labels(language);
         const persons = await this.filtered(user, READ, params);
+        await this.logged(user, persons);
         return {
           personIds: persons.map((p) => p.id),
           rows: persons.map((p) => ({
@@ -188,23 +229,36 @@ export class MasterdataLists {
     };
   }
 
-  private phones(): ListDefinition<PersonFilter> {
+  private phones(): ListDefinition<PersonFilter & { purpose?: z.infer<typeof PhonePurpose> }> {
     return {
       id: 'masterdata.phones',
       name: { de: 'Telefonliste', en: 'Phone list' },
+      description: {
+        de: 'Für die Abteilung steht die Handynummer nur bei Personen mit Einwilligung, sonst „über Gruppenführer“; die Liste der Führungskräfte zeigt sie immer.',
+        en: 'For the department the mobile number is only shown for persons with consent, otherwise “via group leader”; the list of leaders always shows it.',
+      },
       permission: READ,
-      parameters: [departmentParameter],
-      schema: PersonFilter,
+      parameters: [phonePurposeParameter, departmentParameter],
+      schema: PersonFilter.extend({ purpose: PhonePurpose.optional() }),
       columns: [NAME, DEPARTMENT, col('phoneMobile', 'Mobil', 'Mobile', 1.3), col('phonePrivate', 'Privat', 'Private', 1.3), col('phoneWork', 'Dienstlich', 'Work', 1.3)],
       rows: async (user, params, language) => {
         const { departments } = await this.labels(language);
-        const persons = await this.filtered(user, READ, params);
+        const day = today();
+        const leaders = params.purpose === 'leaders';
+        // Leaders: a current office (commander, wardens …) or a leader qualification (group, platoon, unit leader).
+        const persons = (await this.filtered(user, READ, params)).filter(
+          (p) => !leaders || p.offices.getItems().some((o) => o.from <= day && (!o.to || o.to >= day)) || validQualifications(p).some((q) => LEADER_QUALIFICATIONS.has(q)),
+        );
+        await this.logged(user, persons);
+        const consented = leaders ? null : await this.consents.withEffect('masterdata.phone-list-mobile', persons.map((p) => p.id));
+        const viaGroupLeader = language === 'de' ? 'über Gruppenführer' : 'via group leader';
         return {
           personIds: persons.map((p) => p.id),
+          subtitle: leaders ? (language === 'de' ? 'Führungskräfte' : 'Leaders') : undefined,
           rows: persons.map((p) => ({
             name: name(p),
             department: departments.get(primaryDepartment(p) ?? '') ?? '',
-            phoneMobile: p.phoneMobile,
+            phoneMobile: !consented || consented.has(p.id) ? p.phoneMobile : p.phoneMobile ? viaGroupLeader : '',
             phonePrivate: p.phonePrivate,
             phoneWork: p.phoneWork,
           })),
@@ -237,6 +291,7 @@ export class MasterdataLists {
       rows: async (user, params, language) => {
         const { departments, entry } = await this.labels(language);
         const persons = await this.filtered(user, SENSITIVE, params);
+        await this.logged(user, persons);
         return {
           personIds: persons.map((p) => p.id),
           rows: persons.map((p) => ({
@@ -256,24 +311,32 @@ export class MasterdataLists {
     };
   }
 
-  private birthdays(): ListDefinition<{ from?: string; to?: string; departmentId?: string }> {
+  private birthdays(): ListDefinition<{ from?: string; to?: string; departmentId?: string; purpose?: z.infer<typeof BirthdayPurpose> }> {
     return {
       id: 'masterdata.birthdays',
       name: { de: 'Geburtstage', en: 'Birthdays' },
-      description: { de: 'Runde Geburtstage sind markiert.', en: 'Milestone birthdays are marked.' },
+      description: {
+        de: 'Runde Geburtstage sind markiert. Zum Aushang nur Personen mit Einwilligung.',
+        en: 'Milestone birthdays are marked. For posting only persons with consent.',
+      },
       permission: SENSITIVE,
       parameters: [
+        birthdayPurposeParameter,
         { key: 'from', label: { de: 'Von', en: 'From' }, type: 'date' },
         { key: 'to', label: { de: 'Bis', en: 'To' }, type: 'date' },
         departmentParameter,
       ],
-      schema: z.object({ from: date.optional(), to: date.optional(), departmentId: z.uuid().optional() }),
+      schema: z.object({ from: date.optional(), to: date.optional(), departmentId: z.uuid().optional(), purpose: BirthdayPurpose.optional() }),
       columns: [col('birthday', 'Geburtstag', 'Birthday'), NAME, col('age', 'Alter', 'Age', 0.6, 'right'), col('milestone', 'Rund', 'Milestone', 0.6), DEPARTMENT],
       rows: async (user, params, language) => {
         const from = params.from ?? today();
         const to = params.to ?? `${from.slice(0, 4)}-12-31`;
         const { departments } = await this.labels(language);
-        const persons = await this.filtered(user, SENSITIVE, { departmentId: params.departmentId });
+        const all = await this.filtered(user, SENSITIVE, { departmentId: params.departmentId });
+        // Posting in the station: only persons who consented (L9); internal use needs none.
+        const consented = params.purpose === 'posting' ? await this.consents.withEffect('masterdata.birthdays-posting', all.map((p) => p.id)) : null;
+        const persons = consented ? all.filter((p) => consented.has(p.id)) : all;
+        await this.logged(user, persons);
         const rows: Record<string, ListCell>[] = [];
         const ids = new Set<string>();
         const { youthEndAge, minimumAgeIncidents } = await this.rules();
@@ -294,7 +357,8 @@ export class MasterdataLists {
             });
           }
         }
-        return { subtitle: `${from} – ${to}`, personIds: [...ids], rows: rows.toSorted((a, b) => String(a['birthday']).localeCompare(String(b['birthday']))) };
+        const purpose = consented ? (language === 'de' ? ' · Aushang' : ' · posting') : '';
+        return { subtitle: `${from} – ${to}${purpose}`, personIds: [...ids], rows: rows.toSorted((a, b) => String(a['birthday']).localeCompare(String(b['birthday']))) };
       },
     };
   }
@@ -429,6 +493,7 @@ export class MasterdataLists {
         const year = params.year ?? Number(today().slice(0, 4));
         const { departments } = await this.labels(language);
         const persons = await this.filtered(user, SENSITIVE, { departmentId: params.departmentId });
+        await this.logged(user, persons);
         // The ages come from the membership settings; several meanings of one age are joined.
         const rules = await this.rules();
         const limits: { age: number; label: LocalizedText }[] = [

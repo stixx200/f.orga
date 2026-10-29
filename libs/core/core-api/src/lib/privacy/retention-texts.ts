@@ -36,8 +36,8 @@ export class RetentionTexts {
         const period =
           rule.years && rule.action !== 'none'
             ? language === 'de'
-              ? `${rule.years} Jahre nach ${event.de}`
-              : `${rule.years} years after ${event.en}`
+              ? `${rule.years} ${rule.years === 1 ? 'Jahr' : 'Jahre'} nach ${event.de}`
+              : `${rule.years} ${rule.years === 1 ? 'year' : 'years'} after ${event.en}`
             : UNTIL_SET[language];
         return `${name[language]}: ${period}`;
       });

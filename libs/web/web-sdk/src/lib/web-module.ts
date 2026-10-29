@@ -21,6 +21,8 @@ export interface Extension {
   label: LocalizedText;
   /** Shown only with this permission (in any department). */
   permission?: string;
+  /** Shown only with one of these permissions (in any department), e.g. a tab for two kinds of users. */
+  anyPermission?: string[];
   /** Position among the contributions, lowest first (default 100). */
   order?: number;
   /** Props depend on the extension point, e.g. `{ personId }`. */

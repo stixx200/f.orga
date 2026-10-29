@@ -81,7 +81,7 @@ function PersonFile({ person }: { person: Person }) {
     ...current.toSorted((a, b) => Number(b.primary) - Number(a.primary)).map((m) => `${department(m.departmentId)}${m.primary ? ` (${t('person.primary')})` : ''}`),
     person.personnelNumber ? t('persons.number', { number: person.personnelNumber }) : '',
   ].filter(Boolean).join(' · ');
-  const extensions = extensionsOf('masterdata.person.tab').filter((e) => !e.permission || can(session, e.permission));
+  const extensions = extensionsOf('masterdata.person.tab').filter((e) => (!e.permission || can(session, e.permission)) && (!e.anyPermission || e.anyPermission.some((p) => can(session, p))));
   // Actions of other parts in the header, e.g. „Auskunft erstellen“ of the core.
   const actions = extensionsOf('masterdata.person.actions').filter((e) => !e.permission || can(session, e.permission));
   // Deep link `?tab=<tab>`: own tabs by name, extension tabs by module ID.

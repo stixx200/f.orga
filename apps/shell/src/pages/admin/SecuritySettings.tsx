@@ -6,7 +6,7 @@ import { api, send, useTranslation } from '@forga/web-sdk';
 import { Notice, Panel, StatusBadge, useAction } from '@forga/web-ui';
 
 const SETTINGS_KEY = ['core', 'settings', 'security'] as const;
-const DEFAULTS: Settings = { mailHealthWithoutNames: true, mailAllWithoutNames: false };
+const DEFAULTS: Settings = { mailHealthWithoutNames: true, mailAllWithoutNames: false, notifyImpersonation: true };
 
 /**
  * "Settings → Security" (data protection concept, tab "Sicherheit"): the state of HTTPS and of the installation, and
@@ -75,6 +75,12 @@ function MailSettings({ initial }: { initial: Settings }) {
             description={t('settings.security.mailAllWithoutNamesHint')}
             checked={value.mailAllWithoutNames}
             onChange={(e) => setValue({ ...value, mailAllWithoutNames: e.currentTarget.checked })}
+          />
+          <Switch
+            label={t('transparency.security.notifyImpersonation')}
+            description={t('transparency.security.notifyImpersonationHint')}
+            checked={value.notifyImpersonation}
+            onChange={(e) => setValue({ ...value, notifyImpersonation: e.currentTarget.checked })}
           />
           <Group justify="flex-end">
             <Button type="submit" loading={save.isPending}>{common('actions.save')}</Button>

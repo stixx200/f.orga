@@ -66,3 +66,7 @@ export * from './lib/privacy/register.js';
 export * from './lib/privacy/technical-measures.js';
 export * from './lib/privacy/breaches.js';
 export * from './lib/privacy/breach-tools.js';
+export * from './lib/privacy/access-log.js';
+export * from './lib/privacy/consents.js';
+export * from './lib/privacy/rectifications.js';
+export * from './lib/security/impersonations.js';
