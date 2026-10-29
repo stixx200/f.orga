@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Language, LocalizedText } from './i18n.js';
 import { PRIVACY_TEXT_TEMPLATES } from './privacy-templates.js';
+import { ErasureExecution } from './erasure.js';
 
 export { PRIVACY_TEXT_TEMPLATES } from './privacy-templates.js';
 
@@ -426,6 +427,8 @@ export const PrivacyRequest = z.object({
   accessReportDocumentId: z.string().nullable(),
   /** Rectification asked for in "My area" (L12). */
   rectification: Rectification.nullable(),
+  /** Erasure executed for the request (L7): what was deleted, anonymised and kept. */
+  erasure: ErasureExecution.nullable(),
   createdAt: z.string(),
   createdByName: z.string().nullable(),
   version: z.number().int(),

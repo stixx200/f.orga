@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager, type FilterQuery, wrap } from '@mikro-orm/core';
 import { z } from 'zod';
 import { type ListColumn, normalizeRfid, type SearchHit } from '@forga/core-contracts';
-import { addBerlinDays, type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, type DescribeContext, HistoryEntry, type ListDefinition, type PersonDataSection, SettingsService, wordsWhere } from '@forga/core-api';
+import { addBerlinDays, type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlineProvider, type DescribeContext, type ErasureArea, type ErasureAreaInput, HistoryEntry, type ListDefinition, type PersonDataSection, SettingsService, wordsWhere } from '@forga/core-api';
 import { ClothingSettings } from '@forga/clothing-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, ConsumableReceiptEntity, IssueEntity, SizeProfileEntity } from './clothing.entities.js';
@@ -204,6 +204,52 @@ export class ClothingData implements DeadlineProvider {
     if (issues.length) {
       await em.nativeDelete(HistoryEntry, { entity: 'clothing.issue', entityId: { $in: issues.map((i) => i.id) } });
       await em.nativeUpdate(IssueEntity, { personId: { $in: ids } }, { notes: '', cancelReason: '' });
+    }
+  }
+
+  /**
+   * Erasure check: the sizes may be deleted; issues and returns stay for the stock without notes, but only once the
+   * person holds no piece any more.
+   */
+  async erasure(personId: string): Promise<ErasureAreaInput[]> {
+    const em = this.em.fork();
+    const areas: ErasureAreaInput[] = [];
+    const profile = await em.findOne(SizeProfileEntity, { personId });
+    if (profile && Object.keys(profile.sizes).length) {
+      areas.push({ key: 'clothing.sizes', title: { de: 'Kleiderkammer', en: 'Clothing store' }, data: { de: 'Größen', en: 'Sizes' }, count: 1, outcome: 'delete', keepUntil: null, reason: null });
+    }
+    const issues = await em.count(IssueEntity, { personId });
+    if (issues) {
+      const held = await em.count(ClothingItemEntity, { holderId: personId, status: 'issued' });
+      areas.push({
+        key: 'clothing.issues',
+        title: { de: 'Kleiderkammer', en: 'Clothing store' },
+        data: { de: `${issues} ${issues === 1 ? 'Ausgabe oder Rücknahme' : 'Ausgaben und Rücknahmen'}`, en: `${issues} ${issues === 1 ? 'issue or return' : 'issues and returns'}` },
+        count: issues,
+        outcome: held ? 'keep' : 'anonymize',
+        keepUntil: null,
+        reason: held
+          ? { de: `${held} ${held === 1 ? 'Stück ist' : 'Stücke sind'} noch ausgegeben: bis zur Rückgabe`, en: `${held} ${held === 1 ? 'piece is' : 'pieces are'} still issued: until returned` }
+          : { de: 'Ausgaben bleiben für den Bestand, ohne Notizen und Stornogründe', en: 'Issues stay for the stock, without notes and cancel reasons' },
+      });
+    }
+    return areas;
+  }
+
+  async erase(personId: string, areas: readonly ErasureArea[]): Promise<void> {
+    const keys = new Set(areas.map((a) => a.key));
+    const em = this.em.fork();
+    if (keys.has('clothing.sizes')) {
+      const profile = await em.findOne(SizeProfileEntity, { personId });
+      if (profile) {
+        await em.nativeDelete(HistoryEntry, { entity: 'clothing.size_profile', entityId: profile.id });
+        await em.nativeDelete(SizeProfileEntity, { id: profile.id });
+      }
+    }
+    if (keys.has('clothing.issues')) {
+      const issues = await em.find(IssueEntity, { personId }, { fields: ['id'] });
+      if (issues.length) await em.nativeDelete(HistoryEntry, { entity: 'clothing.issue', entityId: { $in: issues.map((i) => i.id) } });
+      await em.nativeUpdate(IssueEntity, { personId }, { notes: '', cancelReason: '' });
     }
   }
 

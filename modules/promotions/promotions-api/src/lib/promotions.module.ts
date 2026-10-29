@@ -46,7 +46,7 @@ export class PromotionsModule implements OnModuleInit {
       person: (id) => this.data.exportPerson(id),
       describePerson: (id, ctx) => this.data.describePerson(id, ctx),
     });
-    this.personData.register('promotions', { anonymize: (ids) => this.data.anonymize(ids) });
+    this.personData.register('promotions', { anonymize: (ids) => this.data.anonymize(ids), erasure: (id) => this.data.erasure(id), erase: (id, areas) => this.data.erase(id, areas) });
     // Rules (settings), promotion lists and exclusions refer to ranks; the rules also to qualifications and offices.
     // Persons in probation without a rank assignment count with the rank `probation`.
     this.catalogReferences.register('promotions', async (kind, key) => {

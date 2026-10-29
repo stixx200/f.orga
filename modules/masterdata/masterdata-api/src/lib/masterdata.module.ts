@@ -1,6 +1,6 @@
 import { Global, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { AccessLog, AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, OrganizationDirectory, RetentionRegistry, RoleAssignment, SearchRegistry } from '@forga/core-api';
+import { AccessLog, AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, OrganizationDirectory, PersonDataRegistry, RetentionRegistry, RoleAssignment, SearchRegistry } from '@forga/core-api';
 import {
   CATALOG_REFERENCES,
   MASTERDATA_LICENSE_SELF_CHECK,
@@ -37,6 +37,7 @@ import { Department, DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToke
 import { MasterdataData } from './data/masterdata.data.js';
 import { MasterdataDescription } from './data/masterdata.description.js';
 import { MasterdataRetention } from './data/masterdata.retention.js';
+import { MasterdataErasure } from './data/masterdata.erasure.js';
 import { OrganizationReferenceRegistry } from './organization/references.js';
 import { PersonHoldingsRegistry } from './persons/holdings.js';
 import { PersonFields, PersonFieldsController } from './persons/person-fields.js';
@@ -69,6 +70,7 @@ import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/person
     MasterdataData,
     MasterdataDescription,
     MasterdataRetention,
+    MasterdataErasure,
     { provide: PERSON_DIRECTORY, useClass: PersonDirectoryService },
     { provide: ORGANIZATION, useClass: OrganizationService },
     OrganizationReferenceRegistry,
@@ -115,6 +117,8 @@ export class MasterdataModule implements OnModuleInit {
     private readonly personPrivacy: PersonPrivacyService,
     private readonly restrictionDeadlines: RestrictionDeadlines,
     private readonly accessLog: AccessLog,
+    private readonly personData: PersonDataRegistry,
+    private readonly erasure: MasterdataErasure,
   ) {}
 
   /**
@@ -152,6 +156,7 @@ export class MasterdataModule implements OnModuleInit {
           postalCode: p.postalCode,
           city: p.city,
           phone: p.phoneMobile || p.phonePrivate,
+          anonymized: Boolean(p.anonymizedAt),
         })),
       catalogEntries: () => this.em.fork().count(CatalogEntry, {}),
       // A linked user reads and changes the person's own data including the sensitive fields.
@@ -185,6 +190,7 @@ export class MasterdataModule implements OnModuleInit {
       describePerson: (id, ctx) => this.description.describePerson(id, ctx),
     });
     this.retentionCategories.register(this.retention);
+    this.personData.register('masterdata', this.erasure);
     this.historyAccess.register('masterdata.person', async (user, id) => {
       const person = await this.em.fork().findOne(Person, id, { populate: ['memberships.department'] });
       if (!person || !this.persons.can(user, READ, person)) return { allowed: false };

@@ -141,6 +141,23 @@ export class RetentionService implements OnApplicationBootstrap, OnModuleDestroy
     return stored?.retention ?? {};
   }
 
+  /**
+   * The period in years of each category (stored rule or default; at least that of `atLeastAs`), `null` where none is
+   * set, e.g. for the erasure check. Subtypes are not considered.
+   */
+  async periods(): Promise<Map<string, { definition: RetentionCategoryDefinition; years: number | null }>> {
+    const rules = await this.storedRules();
+    const result = new Map<string, { definition: RetentionCategoryDefinition; years: number | null }>();
+    for (const definition of this.registry.categories.values()) {
+      const rule = this.ruleOf(rules, definition, definition.key);
+      let years = active(rule) ? rule.years : null;
+      const longer = definition.atLeastAs ? this.ruleOfKey(rules, definition.atLeastAs) : null;
+      if (years !== null && longer && active(longer) && longer.years! > years) years = longer.years!;
+      result.set(definition.key, { definition, years });
+    }
+    return result;
+  }
+
   private ruleOf(rules: Record<string, RetentionRule>, definition: RetentionCategoryDefinition, ruleKey: string): RetentionRule {
     return rules[ruleKey] ?? (ruleKey === definition.key ? RetentionRule.parse(definition.defaultRule ?? {}) : NONE);
   }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import { berlinDate, type DeadlineInput, type DeadlineProvider, type DescribeContext, HistoryEntry, type PersonDataSection } from '@forga/core-api';
+import { berlinDate, type DeadlineInput, type DeadlineProvider, type DescribeContext, type ErasureAreaInput, HistoryEntry, type PersonDataSection } from '@forga/core-api';
 import type { LocalizedText } from '@forga/core-contracts';
 import type { ConditionKey } from '@forga/respiratory-protection-contracts';
 import { EvidenceEntity, StatusEntity } from '../respiratory-protection.entities.js';
@@ -181,5 +181,35 @@ export class RespiratoryProtectionData implements DeadlineProvider {
       await em.nativeUpdate(EvidenceEntity, { personId: { $in: [...personIds] } }, { examiner: '', facility: '', restrictions: '', note: '' });
     }
     await em.nativeDelete(StatusEntity, { personId: { $in: [...personIds] } });
+  }
+
+  /** Erasure check: all evidence of the person may be deleted (no retention period of the retention plan applies). */
+  async erasure(personId: string): Promise<ErasureAreaInput[]> {
+    const evidence = await this.em.fork().find(EvidenceEntity, { personId }, { fields: ['id', 'kind'] });
+    if (!evidence.length) return [];
+    const examinations = evidence.filter((e) => e.kind === 'examination').length;
+    const other = evidence.length - examinations;
+    const parts = [
+      other && { de: `${other} ${other === 1 ? 'Nachweis' : 'Nachweise'}`, en: `${other} ${other === 1 ? 'record' : 'records'}` },
+      examinations && { de: `${examinations} ${examinations === 1 ? 'Eignungsuntersuchung' : 'Eignungsuntersuchungen'}`, en: `${examinations} medical ${examinations === 1 ? 'examination' : 'examinations'}` },
+    ].filter((p): p is LocalizedText => Boolean(p));
+    return [{
+      key: 'respiratory-protection.evidence',
+      title: { de: 'Atemschutz', en: 'Breathing apparatus' },
+      data: { de: parts.map((p) => p.de).join(', '), en: parts.map((p) => p.en).join(', ') },
+      count: evidence.length,
+      outcome: 'delete',
+      keepUntil: null,
+      reason: null,
+    }];
+  }
+
+  /** Deletes all evidence of the person with its history and the stored status. */
+  async erase(personId: string): Promise<void> {
+    const em = this.em.fork();
+    const evidence = await em.find(EvidenceEntity, { personId }, { fields: ['id'] });
+    if (evidence.length) await em.nativeDelete(HistoryEntry, { entity: 'respiratory_protection.evidence', entityId: { $in: evidence.map((e) => e.id) } });
+    await em.nativeDelete(EvidenceEntity, { personId });
+    await em.nativeDelete(StatusEntity, { personId });
   }
 }

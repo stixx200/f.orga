@@ -9,6 +9,7 @@ import { berlinToday, useActivityOptions, useAssignees, useRecipientOptions, use
 import { LiftDialog, RestrictDialog, useRefreshPrivacy } from './dialogs';
 import { DeadlineBadge, Field, requestSubject, STATUS_TONES } from './PrivacyPage';
 import { ThirdPartyRequestPanel } from '../../privacy/ThirdParties';
+import { ErasurePanel } from './ErasurePanel';
 import { RequestAccessReports } from '../../privacy/AccessReports';
 import { RequestConsents } from '../../privacy/consents/PersonConsents';
 import { RectificationPanel } from '../../privacy/Rectification';
@@ -76,6 +77,7 @@ function RequestView({ request }: { request: PrivacyRequest }) {
       {request.kind === 'consent-withdrawal' && request.personId && <RequestConsents personId={request.personId} requestId={request.id} open={open} />}
       <ExtensionPanel request={request} />
       <WorkPanel request={request} />
+      {request.kind === 'erasure' && request.personId && <ErasurePanel request={request} />}
       {['rectification', 'erasure', 'restriction'].includes(request.kind) && <RecipientsPanel request={request} />}
       {request.personId && ['restriction', 'objection', 'erasure', 'rectification'].includes(request.kind) && <RestrictionPanel request={request} />}
       {request.kind === 'access' && request.personId && (

@@ -12,6 +12,9 @@ import { departmentsOf, PersonsService } from '../persons/persons.service.js';
 /** First and last name of anonymised persons: "N." (nomen nescio) reads the same in every language. */
 const ANONYMIZED_NAME = 'N.';
 
+/** Fields of the person erased as contact data (also removed from the history of the person). */
+const CONTACT_FIELDS = ['salutation', 'title', 'nickname', 'street', 'postalCode', 'city', 'phonePrivate', 'phoneMobile', 'phoneWork', 'email', 'birthDate', 'birthPlace', 'employer', 'bank', 'notes'];
+
 const plain = async <T extends object>(em: EntityManager, entity: EntityClass<T>, where: object = {}) =>
   (await em.find(entity, where as never)).map((e) => wrap(e).toObject());
 
@@ -105,34 +108,65 @@ export class MasterdataData {
   /**
    * The person file of former members (Personalakte): contact and sensitive data, the driving licence with its checks,
    * requests and stickers, qualifications, honours, offices, rest periods and courses are removed, and so is the history
-   * holding them; the other modules remove what they keep about the persons (accounts, health data, notes, sizes, …).
+   * holding them; the other modules remove what they keep about the persons (accounts, health data, notes, sizes, …)
+   * unless `cascade` is off (the erasure of a request erases the modules area by area).
    * Name, memberships and ranks stay (basic data).
    */
-  async anonymizeFile(ids: readonly string[]): Promise<number> {
+  async anonymizeFile(ids: readonly string[], options: { cascade?: boolean } = {}): Promise<number> {
     const em = this.em.fork();
     const persons = await em.find(Person, { id: { $in: [...ids] }, fileAnonymizedAt: null }, { populate: ['qualifications', 'honors', 'offices', 'restPeriods'] });
     if (!persons.length) return 0;
     for (const person of persons) {
-      em.assign(person, {
-        salutation: '', title: '', nickname: '', street: '', postalCode: '', city: '', phonePrivate: '', phoneMobile: '', phoneWork: '', email: '',
-        birthDate: null, birthPlace: '', employer: null, bank: null, notes: '',
-        driverLicense: { ...EMPTY_DRIVER_LICENSE }, fileAnonymizedAt: new Date(),
-      });
-      person.qualifications.removeAll();
-      person.honors.removeAll();
-      person.offices.removeAll();
-      person.restPeriods.removeAll();
-      await em.nativeDelete(CourseAttendance, { person });
-      await em.nativeDelete(CourseNomination, { person });
-      await em.nativeDelete(DriverLicenseCheck, { person });
-      await em.nativeDelete(DriverLicenseRequest, { person });
-      await em.nativeDelete(DriverLicenseToken, { person });
+      this.clearContact(em, person);
+      await this.clearFile(em, person);
     }
     await em.flush();
     const done = persons.map((p) => p.id);
     await this.removeHistory(em, done);
-    await this.personData.anonymize(done);
+    if (options.cascade !== false) await this.personData.anonymize(done, { except: 'masterdata' });
     return persons.length;
+  }
+
+  /**
+   * Erasure (Art. 17) of the contact data while the rest of the file is kept: the fields are emptied and removed from
+   * the history of the person.
+   */
+  async eraseContact(id: string): Promise<void> {
+    const em = this.em.fork();
+    const person = await em.findOne(Person, id);
+    if (!person) return;
+    this.clearContact(em, person);
+    await em.flush();
+    for (const entry of await em.find(HistoryEntry, { entity: 'masterdata.person', entityId: id })) {
+      const changes = Object.fromEntries(Object.entries(entry.changes).filter(([field]) => !CONTACT_FIELDS.includes(field)));
+      if (Object.keys(changes).length) entry.changes = changes;
+      else em.remove(entry);
+    }
+    await em.flush();
+  }
+
+  /** Erasure of the whole person file (contact, licence, qualifications, …) with the history of the person. */
+  async eraseFile(id: string): Promise<void> {
+    await this.anonymizeFile([id], { cascade: false });
+  }
+
+  /** Contact, birth, employer, bank and notes: the part of the file erased first. */
+  private clearContact(em: EntityManager, person: Person): void {
+    em.assign(person, Object.fromEntries(CONTACT_FIELDS.map((field) => [field, ['birthDate', 'employer', 'bank'].includes(field) ? null : ''])));
+  }
+
+  /** Driving licence, qualifications, honours, offices, rest periods and courses (collections populated). */
+  private async clearFile(em: EntityManager, person: Person): Promise<void> {
+    em.assign(person, { driverLicense: { ...EMPTY_DRIVER_LICENSE }, fileAnonymizedAt: new Date() });
+    person.qualifications.removeAll();
+    person.honors.removeAll();
+    person.offices.removeAll();
+    person.restPeriods.removeAll();
+    await em.nativeDelete(CourseAttendance, { person });
+    await em.nativeDelete(CourseNomination, { person });
+    await em.nativeDelete(DriverLicenseCheck, { person });
+    await em.nativeDelete(DriverLicenseRequest, { person });
+    await em.nativeDelete(DriverLicenseToken, { person });
   }
 
   /**
@@ -140,8 +174,13 @@ export class MasterdataData {
    * language-neutral "N., N." (nomen nescio; the UI marks anonymised persons in the user's language) and the personnel
    * number is removed. Memberships and ranks stay for past statistics; incident reports keep the reference.
    */
-  async anonymizePersons(ids: readonly string[]): Promise<number> {
-    await this.anonymizeFile(ids);
+  async anonymizePersons(ids: readonly string[], options: { cascade?: boolean } = {}): Promise<number> {
+    await this.anonymizeFile(ids, options);
+    return this.anonymizeNames(ids);
+  }
+
+  /** Name „N.“, no personnel number, without the history; the file is left as it is (erasure while it is kept). */
+  async anonymizeNames(ids: readonly string[]): Promise<number> {
     const em = this.em.fork();
     const persons = await em.find(Person, { id: { $in: [...ids] }, anonymizedAt: null });
     if (!persons.length) return 0;

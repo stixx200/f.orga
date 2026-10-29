@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import { HistoryEntry, type RetentionCandidate, type RetentionExportRecord, type RetentionQuery, RetentionRegistry } from '@forga/core-api';
+import { type ErasureArea, type ErasureAreaInput, type ErasureContext, HistoryEntry, type RetentionCandidate, type RetentionExportRecord, type RetentionQuery, RetentionRegistry } from '@forga/core-api';
 import type { ItemSource } from '@forga/compensation-contracts';
-import { ItemEntity, RunEntity } from '../compensation.entities.js';
+import { FunctionHolderEntity, ItemEntity, RunEntity } from '../compensation.entities.js';
 
 /** Name of anonymised persons in payouts; reads the same in every language. */
 const ANONYMIZED_NAME = 'N. N.';
@@ -101,5 +101,70 @@ export class CompensationRetention {
     await em.flush();
     // The history of these runs holds the former names.
     await em.nativeDelete(HistoryEntry, { entity: 'compensation.run', entityId: { $in: changed } });
+  }
+
+  /**
+   * Erasure check: items of payout runs are booking records and stay until the period of the payout runs ends (runs not
+   * yet paid out without end); open items and functions with allowance may be deleted.
+   */
+  async erasure(personId: string, ctx: ErasureContext): Promise<ErasureAreaInput[]> {
+    const em = this.em.fork();
+    const areas: ErasureAreaInput[] = [];
+    const title = { de: 'Entschädigung', en: 'Compensation' };
+    const items = await em.find(ItemEntity, { personId }, { populate: ['run'] });
+    const inRuns = items.filter((i) => i.run);
+    if (inRuns.length) {
+      const runs = [...new Map(inRuns.map((i) => [i.run!.id, i.run!])).values()];
+      const unpaid = runs.some((r) => !r.paidAt);
+      const latest = runs.map((r) => r.paidAt?.toISOString().slice(0, 10) ?? '').toSorted().at(-1)!;
+      const hold = unpaid ? { until: null, reason: { de: 'Auszahlungslauf noch nicht ausgezahlt', en: 'Payout run not paid out yet' } } : ctx.retain('compensation.runs', latest);
+      areas.push({
+        key: 'compensation.payouts',
+        title,
+        data: { de: `${inRuns.length} Posten in ${runs.length} ${runs.length === 1 ? 'Auszahlungslauf' : 'Auszahlungsläufen'}`, en: `${inRuns.length} ${inRuns.length === 1 ? 'item' : 'items'} in ${runs.length} payout ${runs.length === 1 ? 'run' : 'runs'}` },
+        count: inRuns.length,
+        outcome: hold ? 'keep' : 'anonymize',
+        keepUntil: hold?.until ?? null,
+        reason: hold ? { de: `Kassenunterlage; ${hold.reason.de}`, en: `Booking record; ${hold.reason.en}` } : { de: 'Beträge bleiben ohne Begründungen und Namen', en: 'Amounts stay without reasons and names' },
+      });
+    }
+    const open = items.length - inRuns.length;
+    const functions = await em.count(FunctionHolderEntity, { personId });
+    if (open || functions) {
+      areas.push({
+        key: 'compensation.open',
+        title,
+        data: {
+          de: [open && `${open} offene${open === 1 ? 'r' : ''} Posten`, functions && `${functions} ${functions === 1 ? 'Funktion' : 'Funktionen'} mit Aufwandsentschädigung`].filter(Boolean).join(', '),
+          en: [open && `${open} open ${open === 1 ? 'item' : 'items'}`, functions && `${functions} ${functions === 1 ? 'function' : 'functions'} with allowance`].filter(Boolean).join(', '),
+        },
+        count: open + functions,
+        outcome: 'delete',
+        keepUntil: null,
+        reason: null,
+      });
+    }
+    return areas;
+  }
+
+  async erase(personId: string, areas: readonly ErasureArea[]): Promise<void> {
+    const keys = new Set(areas.map((a) => a.key));
+    const em = this.em.fork();
+    if (keys.has('compensation.open')) {
+      const items = await em.find(ItemEntity, { personId, run: null }, { fields: ['id'] });
+      const functions = await em.find(FunctionHolderEntity, { personId }, { fields: ['id'] });
+      const ids = [...items.map((i) => i.id), ...functions.map((f) => f.id)];
+      if (ids.length) await em.nativeDelete(HistoryEntry, { entity: { $in: ['compensation.item', 'compensation.function_holder'] }, entityId: { $in: ids } });
+      await em.nativeDelete(ItemEntity, { personId, run: null });
+      await em.nativeDelete(FunctionHolderEntity, { personId });
+    }
+    if (keys.has('compensation.payouts')) {
+      const items = await em.find(ItemEntity, { personId, run: { $ne: null } }, { fields: ['id'] });
+      if (items.length) {
+        await em.nativeUpdate(ItemEntity, { id: { $in: items.map((i) => i.id) } }, { reason: '' });
+        await em.nativeDelete(HistoryEntry, { entity: 'compensation.item', entityId: { $in: items.map((i) => i.id) } });
+      }
+      await this.anonymize([personId]);
+    }
   }
 }

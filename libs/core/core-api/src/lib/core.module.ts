@@ -40,6 +40,7 @@ import { DigestService } from './tasks/digest.service.js';
 import { MailService } from './tasks/mail.service.js';
 import { Notifications } from './tasks/notifications.js';
 import { CoreExport } from './data/core-export.js';
+import { ErasureController, ErasureService } from './privacy/erasure.js';
 import { CodeRegistry, DataController, ExportRegistry, PersonDataRegistry, SearchRegistry } from './data/data.js';
 import { CoreRetentionCategories } from './retention/core-categories.js';
 import { RetentionCaseEntity } from './retention/retention-case.entity.js';
@@ -152,7 +153,11 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
       person: (id) => this.coreExport.person(id),
       describePerson: (id, ctx) => this.coreDescription.describePerson(id, ctx),
     });
-    this.personData.register('core', { anonymize: (ids) => this.coreExport.anonymize(ids) });
+    this.personData.register('core', {
+      anonymize: (ids) => this.coreExport.anonymize(ids),
+      erasure: (id, ctx) => this.coreExport.erasure(id, ctx),
+      erase: (id, areas) => this.coreExport.erase(id, areas),
+    });
     this.historyAccess.registerPermission('core.user', 'core.users.manage');
     this.historyAccess.registerPermission('core.role', 'core.roles.manage');
     this.historyAccess.registerPermission('core.retention_case', RETENTION_PERMISSION);
@@ -214,6 +219,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         PrivacyNoticeController,
         PrivacyTextsController,
         PrivacyRequestsController,
+        ErasureController,
         PrivacyRegisterController,
         PrivacyBreachesController,
         BreachToolsController,
@@ -267,6 +273,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         PrivacyNoticeService,
         PrivacyRequests,
         PrivacyAssignees,
+        ErasureService,
         RetentionTexts,
         TechnicalMeasureRegistry,
         CoreMeasures,

@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { type DescribeContext, ImportRegistry, type PersonDataSection } from '@forga/core-api';
+import { ANONYMIZED_NAME, type AnonymizeContext, type DescribeContext, type ErasureAreaInput, HistoryEntry, ImportRegistry, type PersonDataSection } from '@forga/core-api';
 import type { ImportRowResult } from '@forga/core-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
-import { MpFeuerRunDatasetEntity, MpFeuerRunEntity } from '../mp-feuer.entities.js';
+import { MpFeuerMappingEntity, MpFeuerRunDatasetEntity, MpFeuerRunEntity } from '../mp-feuer.entities.js';
 import type { TransferRow } from '../archive/transfer-archive.js';
 
 /** Words of a name, lower case, for comparing with labels and values of transfer files. */
@@ -65,6 +65,53 @@ export class RunPersonData {
     return {
       matches: found.map((m) => ({ runId: m.dataset.run.id, runCreatedAt: m.dataset.run.createdAt.toISOString(), profile: m.dataset.profile, results: m.results, rows: m.rows })),
     };
+  }
+
+  /**
+   * Anonymisation: report rows with the name of the person read "N. N.", the rows of the transfer files with it are
+   * removed, and remembered mappings to the person are deleted (with their history).
+   */
+  async anonymize(personIds: readonly string[], ctx: AnonymizeContext): Promise<void> {
+    const em = this.em.fork();
+    for (const person of ctx.persons.filter((p) => personIds.includes(p.id))) {
+      const found = await this.matches(`${person.firstName} ${person.lastName}`);
+      for (const { dataset, results, rows } of found) {
+        const dataEm = em.fork();
+        const stored = await dataEm.findOneOrFail(MpFeuerRunDatasetEntity, dataset.id, { populate: ['results', 'rows'] });
+        stored.results = (stored.results ?? []).map((r) => (results.some((m) => m.row === r.row && m.label === r.label) ? { ...r, label: ANONYMIZED_NAME } : r));
+        if (rows.length && stored.rows) {
+          const removed = new Set(rows.map((r: TransferRow) => JSON.stringify(r)));
+          stored.rows = stored.rows.filter((r: TransferRow) => !removed.has(JSON.stringify(r)));
+        }
+        await dataEm.flush();
+      }
+    }
+    const mappings = await em.find(MpFeuerMappingEntity, { key: { $in: [...personIds] } }, { fields: ['id'] });
+    if (mappings.length) {
+      await em.nativeDelete(HistoryEntry, { entity: 'mp_feuer.mapping', entityId: { $in: mappings.map((m) => m.id) } });
+      await em.nativeDelete(MpFeuerMappingEntity, { id: { $in: mappings.map((m) => m.id) } });
+    }
+  }
+
+  /** Erasure check: rows with the name in reports and transfer files, remembered mappings to the person. */
+  async erasure(personId: string): Promise<ErasureAreaInput[]> {
+    const [person] = await this.directory.summaries([personId]);
+    const found = person ? await this.matches(`${person.firstName} ${person.lastName}`) : [];
+    const rows = found.reduce((sum, m) => sum + m.results.length + m.rows.length, 0);
+    const mappings = await this.em.fork().count(MpFeuerMappingEntity, { key: personId });
+    if (!rows && !mappings) return [];
+    return [{
+      key: 'mp-feuer.transfer',
+      title: { de: 'Datenübernahme aus MP-Feuer', en: 'Data transfer from MP-Feuer' },
+      data: {
+        de: [rows && `${rows} ${rows === 1 ? 'Zeile' : 'Zeilen'} mit dem Namen`, mappings && `${mappings} gemerkte ${mappings === 1 ? 'Zuordnung' : 'Zuordnungen'}`].filter(Boolean).join(', '),
+        en: [rows && `${rows} ${rows === 1 ? 'row' : 'rows'} with the name`, mappings && `${mappings} remembered ${mappings === 1 ? 'mapping' : 'mappings'}`].filter(Boolean).join(', '),
+      },
+      count: rows + mappings,
+      outcome: 'anonymize',
+      keepUntil: null,
+      reason: { de: 'Laufberichte bleiben mit „N. N.“; Zeilen der Transferdateien und Zuordnungen werden gelöscht', en: 'Run reports stay with "N. N."; rows of the transfer files and mappings are deleted' },
+    }];
   }
 
   async describePerson(personId: string, ctx: DescribeContext): Promise<PersonDataSection[]> {

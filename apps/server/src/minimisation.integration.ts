@@ -224,6 +224,8 @@ describe('data of third parties (L14)', () => {
     ids.request = request.id;
     expect(request).toMatchObject({ personId: null, personName: null, thirdParty: { name: 'Erika Beispiel' }, dueOn: '2026-11-20' });
     ids.erasureRequest = (await post('/core/privacy/requests', { ...base, kind: 'erasure' }).expect(201)).body.id;
+    // The erasure check of the modules needs a person of the master data; a third party is erased at the places.
+    expect((await get(`/core/privacy/requests/${ids.erasureRequest}/erasure`).expect(400)).body.code).toBe('privacy.erasureThirdParty');
     await post('/core/privacy/requests', { ...base, kind: 'restriction' }).expect(400);
     await post('/core/privacy/requests', { ...base, personId: ids.minna }).expect(400);
     await post('/core/privacy/requests', { ...base, kind: 'objection', restrict: true }).expect(400);
