@@ -15,8 +15,6 @@ export const CatalogAttributes = {
   qualification: z.object({
     /** Validity of an acquired qualification in months; `null` = unlimited. */
     validityMonths: z.number().int().positive().nullable().default(null),
-    /** Collective entry like "other course": a qualification of a person needs a description with the actual name. */
-    describe: z.boolean().default(false),
   }),
   'vehicle-type': z.object({
     /** Standard crew, e.g. `1/8`. */
@@ -34,12 +32,6 @@ export const CatalogAttributes = {
     level: z.number().int().min(0).default(0),
   }),
 } satisfies Record<CatalogKind, z.ZodObject>;
-
-/** Whether a qualification of this entry needs a description (collective entry like "other course"). */
-export const requiresDescription = (entry: { attributes: Record<string, unknown> } | null | undefined): boolean => entry?.attributes['describe'] === true;
-
-/** Display name of a person's qualification: the description follows the name of a collective entry. */
-export const qualificationLabel = (name: string, description: string | null | undefined): string => (description ? `${name}: ${description}` : name);
 
 export const CatalogEntryInput = z.object({
   kind: CatalogKind,

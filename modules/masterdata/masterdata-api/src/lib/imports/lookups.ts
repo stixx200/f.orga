@@ -2,8 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { type ImportLookup, ZodPipe } from '@forga/core-api';
 import type { LocalizedText } from '@forga/core-contracts';
-import { CatalogEntryInput, type CatalogKind } from '@forga/masterdata-contracts';
+import { CatalogEntryInput, type CatalogKind, COURSE_TARGET_PREFIX } from '@forga/masterdata-contracts';
 import { CatalogEntry, CatalogService } from '../catalog/catalog.js';
+import { Course } from '../courses/course.entities.js';
 import { Vehicle } from '../masterdata.entities.js';
 
 const MANAGE_CATALOGS = 'masterdata.catalogs.manage';
@@ -34,9 +35,11 @@ export class MasterdataLookups {
       kind,
       name,
       keyFormat: 'slug',
-      entries: async () =>
-        (await this.em.fork().find(CatalogEntry, { kind, active: true }, { orderBy: { sortOrder: 'asc', key: 'asc' } })).map((e) => ({ key: e.key, name: e.name })),
-      all: async () => (await this.em.fork().find(CatalogEntry, { kind })).map((e) => ({ key: e.key, name: e.name })),
+      entries: async () => [
+        ...(await this.em.fork().find(CatalogEntry, { kind, active: true }, { orderBy: { sortOrder: 'asc', key: 'asc' } })).map((e) => ({ key: e.key, name: e.name })),
+        ...(kind === 'qualification' ? await this.courses(true) : []),
+      ],
+      all: async () => [...(await this.em.fork().find(CatalogEntry, { kind })).map((e) => ({ key: e.key, name: e.name })), ...(kind === 'qualification' ? await this.courses(false) : [])],
       create: {
         permission: MANAGE_CATALOGS,
         run: async (input) => {
@@ -53,6 +56,18 @@ export class MasterdataLookups {
         },
       },
     };
+  }
+
+  /**
+   * Courses of the course catalog as targets for course names (`course:<key>`, e.g. `course:other-course`): the career
+   * import records an attendance instead of a qualification.
+   */
+  private async courses(activeOnly: boolean) {
+    const courses = await this.em.fork().find(Course, activeOnly ? { active: true } : {}, { orderBy: { sortOrder: 'asc', key: 'asc' } });
+    return courses.map((c) => ({
+      key: `${COURSE_TARGET_PREFIX}${c.key}`,
+      name: { de: `${c.name.de} (Lehrgangsteilnahme)`, en: `${c.name.en} (course attendance)` },
+    }));
   }
 
   /** Vehicles by ID; created in the organization only. */

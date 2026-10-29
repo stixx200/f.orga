@@ -249,7 +249,6 @@ export class PersonsService {
         acquiredOn: q.acquiredOn,
         validUntil: q.validUntil ?? null,
         courseAttendanceId: q.courseAttendanceId ?? null,
-        description: q.description,
         notes: q.notes,
       })),
       ranks: sortBy(person.ranks.getItems(), (r) => r.since).map((r: RankAssignment) => ({

@@ -29,12 +29,12 @@ afterAll(() => test?.app.close());
 describe('catalogs', () => {
   it('applies the BW templates once and validates keys', async () => {
     const first = await post('catalog/templates/bw', {}).expect(201);
-    expect(first.body.added).toMatchObject({ rank: 11, 'vehicle-type': 19, qualification: 21 });
+    expect(first.body.added).toMatchObject({ rank: 11, 'vehicle-type': 19, qualification: 20 });
     const second = await post('catalog/templates/bw', {}).expect(201);
     expect(second.body.added).toEqual({});
 
     const courses = await post('courses/templates/bw', {}).expect(201);
-    expect(courses.body.added).toBe(14);
+    expect(courses.body.added).toBe(15);
     // Template value: minimum age for breathing apparatus wearers.
     expect((await get('courses').expect(200)).body.find((c: { key: string }) => c.key === 'breathing-apparatus')).toMatchObject({ minimumAge: 18 });
 

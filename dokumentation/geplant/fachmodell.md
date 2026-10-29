@@ -139,7 +139,7 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Katalog, Katalogeintrag (Schlüssel) | `CatalogEntry` (`kind`, `key`) |
 | Verwendung eines Katalogeintrags | catalog reference (`CATALOG_REFERENCES`, `catalog.inUse`) |
 | Qualifikation | `Qualification` |
-| Anderer Lehrgang (Sammeleintrag), Beschreibung | Katalogeintrag `other-course` mit Zusatzfeld `describe`, `PersonQualification.description` |
+| Anderer Lehrgang (Sammellehrgang), Beschreibung | Lehrgang `other-course` mit `Course.describe`, `CourseAttendance.description`; Importziel `course:other-course` |
 | Dienstgrad | `Rank` |
 | Beförderung | `Promotion` |
 | Mein Bereich (Self-Service) | `core.me.sections`, `*.self` |

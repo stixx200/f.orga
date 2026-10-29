@@ -137,8 +137,6 @@ export const PersonQualificationInput = z.object({
   acquiredOn: date,
   /** `null` = computed from the validity of the catalog entry. */
   validUntil: date.nullable().default(null),
-  /** Actual name of the course for collective entries like "other course" (catalog attribute `describe`); required there. */
-  description: z.string().trim().max(200).default(''),
   notes: z.string().default(''),
 });
 export type PersonQualificationInput = z.input<typeof PersonQualificationInput>;
@@ -150,8 +148,6 @@ export const PersonQualification = z.object({
   validUntil: z.string().nullable(),
   /** Set when the qualification comes from a passed course. */
   courseAttendanceId: z.uuid().nullable(),
-  /** Actual name of the course for collective entries like "other course"; empty otherwise. */
-  description: z.string(),
   notes: z.string(),
 });
 export type PersonQualification = z.infer<typeof PersonQualification>;

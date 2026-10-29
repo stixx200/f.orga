@@ -4,7 +4,7 @@ import { IconTrash } from '@tabler/icons-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { type Course, type CourseAttendance, type CourseNomination, OPEN_NOMINATION_STATUSES, type Person } from '@forga/masterdata-contracts';
+import { type Course, type CourseAttendance, courseLabel, type CourseNomination, OPEN_NOMINATION_STATUSES, type Person } from '@forga/masterdata-contracts';
 import { api, can, formatDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, Notice, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, loadPerson, today } from '../api';
@@ -33,11 +33,13 @@ export function CoursesTab({ person, disabled, onChanged }: { person: Person; di
   });
   const [dialog, setDialog] = useState<'attendance' | 'nomination' | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
-  const [form, setForm] = useState({ course: null as string | null, startsOn: today() as string | null, endsOn: null as string | null, result: 'passed', location: '', priority: 2, desiredPeriod: '', confirmHeld: false });
+  const [form, setForm] = useState({ course: null as string | null, startsOn: today() as string | null, endsOn: null as string | null, result: 'passed', location: '', description: '', priority: 2, desiredPeriod: '', confirmHeld: false });
   const courseName = (key: string) => {
     const course = courses.find((c) => c.key === key);
     return course ? localized(course.name) : key;
   };
+  // A collective course like "other course" names the actual course in the description.
+  const describe = courses.find((c) => c.key === form.course)?.describe ?? false;
   // A passed course changes the qualifications, so the person is reloaded as well.
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: attendancesKey });
@@ -45,7 +47,7 @@ export function CoursesTab({ person, disabled, onChanged }: { person: Person; di
     setDialog(null);
   };
   const addAttendance = useAction(
-    () => send('POST', `masterdata/persons/${person.id}/course-attendances`, { course: form.course, startsOn: form.startsOn, endsOn: form.endsOn, result: form.result, location: form.location, confirmHeld: form.confirmHeld }),
+    () => send('POST', `masterdata/persons/${person.id}/course-attendances`, { course: form.course, startsOn: form.startsOn, endsOn: form.endsOn, result: form.result, location: form.location, description: describe ? form.description : '', confirmHeld: form.confirmHeld }),
     { success: t('person.saved'), invalidate: [['masterdata', 'course-nominations']], onSuccess: () => void refresh() },
   );
   const removeAttendance = useAction((id: string) => send('DELETE', `masterdata/persons/${person.id}/course-attendances/${id}`), { success: t('person.saved'), onSuccess: () => void refresh() });
@@ -54,7 +56,7 @@ export function CoursesTab({ person, disabled, onChanged }: { person: Person; di
     { success: t('person.saved'), invalidate: [['masterdata', 'course-nominations']], onSuccess: () => setDialog(null) },
   );
   const open = (d: 'attendance' | 'nomination') => {
-    setForm({ course: null, startsOn: today(), endsOn: null, result: 'passed', location: '', priority: 2, desiredPeriod: '', confirmHeld: false });
+    setForm({ course: null, startsOn: today(), endsOn: null, result: 'passed', location: '', description: '', priority: 2, desiredPeriod: '', confirmHeld: false });
     setDialog(d);
   };
   // An attendance ends after it starts; a passed course must have ended.
@@ -80,7 +82,7 @@ export function CoursesTab({ person, disabled, onChanged }: { person: Person; di
           rowKey={(a) => a.id}
           empty={t('courses.noAttendances')}
           columns={[
-            { key: 'course', header: t('courses.course'), render: (a) => <Text fw={700} size="sm">{courseName(a.course)}</Text> },
+            { key: 'course', header: t('courses.course'), render: (a) => <Text fw={700} size="sm">{courseLabel(courseName(a.course), a.description)}</Text> },
             { key: 'level', header: t('courses.level'), render: (a) => { const c = courses.find((x) => x.key === a.course); return c ? t(`courseLevel.${c.level}`) : ''; } },
             { key: 'date', header: t('courses.date'), render: (a) => [formatDate(a.startsOn, i18n.language), a.endsOn ? formatDate(a.endsOn, i18n.language) : ''].filter(Boolean).join(' – ') },
             { key: 'result', header: t('courses.result'), render: (a) => <StatusBadge tone={a.result === 'passed' ? 'done' : 'warning'}>{t(`courseResult.${a.result}`)}</StatusBadge> },
@@ -113,9 +115,12 @@ export function CoursesTab({ person, disabled, onChanged }: { person: Person; di
         </Panel>
       )}
       {dialog === 'attendance' && (
-        <ResponsiveDialog opened onClose={() => setDialog(null)} title={t('courses.addAttendance')} actions={actions(() => addAttendance.mutate(undefined), addAttendance.isPending, !endError && !futureError && Boolean(form.startsOn) && (!held || form.confirmHeld))}>
+        <ResponsiveDialog opened onClose={() => setDialog(null)} title={t('courses.addAttendance')} actions={actions(() => addAttendance.mutate(undefined), addAttendance.isPending, !endError && !futureError && Boolean(form.startsOn) && (!held || form.confirmHeld) && (!describe || Boolean(form.description.trim())))}>
           <Stack gap="sm">
             <Select label={t('courses.course')} data={courses.filter((c) => c.active).map((c) => ({ value: c.key, label: localized(c.name) }))} value={form.course} onChange={(v) => setForm({ ...form, course: v })} searchable required />
+            {describe && (
+              <TextInput label={t('courses.description')} description={t('courses.descriptionHint')} value={form.description} onChange={(e) => setForm({ ...form, description: e.currentTarget.value })} maxLength={200} required />
+            )}
             <SimpleGrid cols={2}>
               <DateInput label={t('courses.startsOn')} value={form.startsOn} onChange={(v) => setForm({ ...form, startsOn: v })} valueFormat="DD.MM.YYYY" minDate="1900-01-01" maxDate={today()} required />
               <DateInput label={t('courses.endsOn')} value={form.endsOn} onChange={(v) => setForm({ ...form, endsOn: v })} valueFormat="DD.MM.YYYY" clearable error={endError ?? futureError} />
