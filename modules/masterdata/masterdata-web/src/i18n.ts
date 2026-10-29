@@ -1,6 +1,7 @@
 import type { Translations } from '@forga/web-sdk';
+import { audit } from './audit.i18n';
 
-export const translations: Translations = {
+const texts: Translations = {
   de: {
     errors: {
       'masterdata.coursePassedAlready': 'Die Person hat diesen Lehrgang bereits bestanden.',
@@ -58,7 +59,7 @@ export const translations: Translations = {
       'masterdata.import.unknownCareerKind': 'Unbekannte Art „{{value}}“ (Lehrgang, Dienstgrad oder Ehrung).',
       'masterdata.import.unknownCatalogEntry': '„{{name}}“ ist nicht im Katalog. Wählen Sie unter „Nicht zugeordnete Bezeichnungen“ einen Eintrag aus oder legen Sie ihn an.',
       'masterdata.import.catalogEntryCreated': '„{{name}}“ im Katalog angelegt.',
-      'masterdata.descriptionRequired': 'Für diesen Eintrag ist eine Beschreibung nötig, z. B. der Name des Lehrgangs.',
+      'masterdata.descriptionRequired': 'Für diesen Lehrgang ist eine Beschreibung nötig: der Name des eigentlichen Lehrgangs, z. B. „Erste Hilfe“.',
       'masterdata.belowMinimumAgeYouth': 'Mitglied der Jugendfeuerwehr kann man laut Feuerwehrsatzung erst ab {{age}} Jahren sein.',
       'masterdata.statusDoesNotFitDepartment': 'Der Status passt nicht zur Stammabteilung (z. B. in der Jugendfeuerwehr nur „Jugendfeuerwehr“). Wechsel zwischen Jugend-, Einsatz- und Altersabteilung gehen über die Übernahme.',
       'masterdata.dateBeforeBirth': 'Das Datum liegt vor der Geburt der Person.',
@@ -297,7 +298,6 @@ export const translations: Translations = {
       qualification: {
         title: 'Qualifikationen', add: '+ Qualifikation', empty: 'Keine Qualifikationen.', name: 'Qualifikation', date: 'seit', validUntil: 'gültig bis',
         validHint: 'Leer = Gültigkeit aus dem Katalog.', source: 'Quelle', fromCourse: 'Lehrgang', manual: 'Eintrag', removeTitle: 'Qualifikation löschen?',
-        description: 'Beschreibung', descriptionHint: 'Name des Lehrgangs, z. B. „Erste Hilfe“.',
         hint: 'Qualifikationen aus bestandenen Lehrgängen entstehen automatisch; sie verschwinden mit dem Löschen der Teilnahme.',
       },
       honor: { title: 'Ehrungen', add: '+ Ehrung', empty: 'Keine Ehrungen.', name: 'Ehrung', date: 'verliehen am', removeTitle: 'Ehrung löschen?' },
@@ -316,6 +316,8 @@ export const translations: Translations = {
       result: 'Ergebnis',
       location: 'Ort',
       passedHint: 'Ein bestandener Lehrgang vermittelt seine Qualifikationen und erledigt Vormerkungen dafür.',
+      description: 'Beschreibung',
+      descriptionHint: 'Name des eigentlichen Lehrgangs, z. B. „Erste Hilfe“ oder „Holz in Spannung“.',
       removeTitle: 'Teilnahme löschen?',
       removeText: 'Qualifikationen aus diesem Lehrgang werden ebenfalls entfernt.',
       nominations: 'Vormerkungen',
@@ -430,14 +432,15 @@ export const translations: Translations = {
       sortOrder: 'Reihenfolge',
       active: 'aktiv',
       activeHint: 'Inaktive Einträge stehen nicht mehr zur Auswahl, bleiben aber an bestehenden Daten erhalten.',
-      describeHint: 'Sammeleintrag wie „Anderer Lehrgang“: Bei der Person wird der eigentliche Lehrgang als Beschreibung eingetragen.',
+      describe: 'Beschreibung erforderlich',
+      describeHint: 'Sammeleintrag wie „Anderer Lehrgang“: Bei der Teilnahme wird der eigentliche Lehrgang als Beschreibung eingetragen, z. B. „Anderer Lehrgang: Erste Hilfe“.',
       status: 'Status',
       activeBadge: 'aktiv',
       inactiveBadge: 'inaktiv',
       saved: 'Gespeichert.',
       grants: 'vermittelt Qualifikationen',
       prerequisites: 'Voraussetzungen',
-      attributes: { abbreviation: 'Abkürzung', validityMonths: 'Gültigkeit (Monate)', describe: 'Beschreibung erforderlich', crew: 'Normbesatzung', seats: 'Plätze', statisticsCategory: 'Statistik-Kategorie', level: 'Rangfolge' },
+      attributes: { abbreviation: 'Abkürzung', validityMonths: 'Gültigkeit (Monate)', crew: 'Normbesatzung', seats: 'Plätze', statisticsCategory: 'Statistik-Kategorie', level: 'Rangfolge' },
     },
     pending: 'Diese Seite folgt in einer späteren Etappe.',
     organization: {
@@ -587,7 +590,7 @@ export const translations: Translations = {
       'masterdata.import.unknownCareerKind': 'Unknown kind "{{value}}" (course, rank or honor).',
       'masterdata.import.unknownCatalogEntry': '"{{name}}" is not in the catalog. Choose an entry or add it under "Unassigned names".',
       'masterdata.import.catalogEntryCreated': '"{{name}}" added to the catalog.',
-      'masterdata.descriptionRequired': 'This entry needs a description, e.g. the name of the course.',
+      'masterdata.descriptionRequired': 'This course needs a description: the name of the actual course, e.g. "First aid".',
       'masterdata.belowMinimumAgeYouth': 'According to the fire brigade statute, members of the youth fire brigade must be at least {{age}}.',
       'masterdata.statusDoesNotFitDepartment': 'The status does not fit the primary department (e.g. only "youth" in the youth fire brigade). Moving between youth, operational and veterans departments works through the transfers.',
       'masterdata.dateBeforeBirth': 'The date lies before the birth of the person.',
@@ -826,7 +829,6 @@ export const translations: Translations = {
       qualification: {
         title: 'Qualifications', add: '+ Qualification', empty: 'No qualifications.', name: 'Qualification', date: 'since', validUntil: 'valid until',
         validHint: 'Empty = validity from the catalog.', source: 'Source', fromCourse: 'Course', manual: 'Entry', removeTitle: 'Delete qualification?',
-        description: 'Description', descriptionHint: 'Name of the course, e.g. "First aid".',
         hint: 'Qualifications from passed courses are created automatically; they disappear when the attendance is deleted.',
       },
       honor: { title: 'Honours', add: '+ Honour', empty: 'No honours.', name: 'Honour', date: 'awarded on', removeTitle: 'Delete honour?' },
@@ -845,6 +847,8 @@ export const translations: Translations = {
       result: 'Result',
       location: 'Location',
       passedHint: 'A passed course grants its qualifications and completes nominations for it.',
+      description: 'Description',
+      descriptionHint: 'Name of the actual course, e.g. "First aid" or "Wood under tension".',
       removeTitle: 'Delete attendance?',
       removeText: 'Qualifications from this course are removed as well.',
       nominations: 'Nominations',
@@ -959,14 +963,15 @@ export const translations: Translations = {
       sortOrder: 'Order',
       active: 'active',
       activeHint: 'Inactive entries are no longer offered but stay on existing data.',
-      describeHint: 'Collective entry like "Other course": the actual course is entered as description at the person.',
+      describe: 'Description required',
+      describeHint: 'Collective entry like "Other course": the actual course is entered as description of the attendance, e.g. "Other course: First aid".',
       status: 'Status',
       activeBadge: 'active',
       inactiveBadge: 'inactive',
       saved: 'Saved.',
       grants: 'grants qualifications',
       prerequisites: 'Prerequisites',
-      attributes: { abbreviation: 'Abbreviation', validityMonths: 'Validity (months)', describe: 'Description required', crew: 'Standard crew', seats: 'Seats', statisticsCategory: 'Statistics category', level: 'Rank order' },
+      attributes: { abbreviation: 'Abbreviation', validityMonths: 'Validity (months)', crew: 'Standard crew', seats: 'Seats', statisticsCategory: 'Statistics category', level: 'Rank order' },
     },
     pending: 'This page follows in a later stage.',
     organization: {
@@ -1060,3 +1065,5 @@ export const translations: Translations = {
     },
   },
 };
+
+export const translations: Translations = { de: { ...texts.de, audit: audit.de }, en: { ...texts.en, audit: audit.en } };

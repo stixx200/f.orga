@@ -1,9 +1,10 @@
 import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Attachments, CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
+import { Attachments, AuditReferenceRegistry, CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
 import { EQUIPMENT_MANIFEST, EQUIPMENT_SETTINGS, EQUIPMENT_USAGE } from '@forga/equipment-contracts';
 import { CATALOG_REFERENCES, type CatalogReferences, ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
 import { EQUIPMENT_MIGRATIONS } from '../migrations/index.js';
+import { registerAuditReferences } from './audit/audit.references.js';
 import { CatalogController } from './catalog/catalog.controller.js';
 import { EquipmentData } from './data/equipment.data.js';
 import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, UsageEntity } from './equipment.entities.js';
@@ -36,9 +37,11 @@ export class EquipmentModule implements OnModuleInit {
     private readonly items: ItemsService,
     @Inject(ORGANIZATION_REFERENCES) private readonly references: OrganizationReferences,
     @Inject(CATALOG_REFERENCES) private readonly catalogReferences: CatalogReferences,
+    private readonly auditReferences: AuditReferenceRegistry,
   ) {}
 
   onModuleInit(): void {
+    registerAuditReferences(this.auditReferences, this.em);
     for (const definition of this.moduleLists.definitions()) this.lists.register('equipment', definition);
     this.deadlines.register(this.data);
     this.search.register('equipment', (user, query) => this.data.search(user, query));

@@ -1,4 +1,5 @@
 import type { Translations } from '@forga/web-sdk';
+import { audit } from './audit.i18n';
 
 const de = {
   module: 'Dienste',
@@ -468,4 +469,4 @@ const en: typeof de = {
   },
 };
 
-export const translations: Translations = { de, en };
+export const translations: Translations = { de: { ...de, audit: audit.de }, en: { ...en, audit: audit.en } };

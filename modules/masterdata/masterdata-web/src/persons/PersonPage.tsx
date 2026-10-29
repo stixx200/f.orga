@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from 'react-router';
 import { isValidIban, type Person, type PersonInput } from '@forga/masterdata-contracts';
 import { apiUrl, can, extensionsOf, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ActionBar, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
-import { keys, today as todayDate, useCatalogNames, useDepartments, usePerson, useQualificationLabel, WRITE } from '../api';
+import { keys, today as todayDate, useCatalogNames, useDepartments, usePerson, WRITE } from '../api';
 import { BrigadeTab } from './BrigadeTab';
 import { CoursesTab, PLAN } from './CoursesTab';
 import { EntriesTab } from './EntriesTab';
@@ -54,7 +54,7 @@ function PersonFile({ person }: { person: Person }) {
   const session = useSession().data;
   const { data: departments = [] } = useDepartments();
   const rankName = useCatalogNames('rank');
-  const qualificationName = useQualificationLabel();
+  const qualificationName = useCatalogNames('qualification');
   const [form, setForm] = useState<PersonForm>(() => toForm(person));
   const [search, setSearch] = useSearchParams();
   const editable = person.memberships.some((m) => can(session, WRITE, m.departmentId)) || session?.permissions[WRITE] === 'brigade';
@@ -112,7 +112,7 @@ function PersonFile({ person }: { person: Person }) {
             <Text c="dimmed">{subtitle}</Text>
             <Group gap={4}>
               <StatusBadge tone={STATUS_TONES[person.status]}>{t(`status.${person.status}`)}</StatusBadge>
-              {person.qualifications.map((q) => <StatusBadge key={q.id}>{qualificationName(q, i18n.language)}</StatusBadge>)}
+              {person.qualifications.map((q) => <StatusBadge key={q.id}>{qualificationName(q.qualification, i18n.language)}</StatusBadge>)}
               {person.driverLicense.classes.length > 0 && <StatusBadge>{t('person.licenseBadge', { classes: person.driverLicense.classes.join(', ') })}</StatusBadge>}
             </Group>
           </Stack>

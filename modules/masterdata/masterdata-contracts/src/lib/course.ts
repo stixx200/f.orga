@@ -29,6 +29,11 @@ export const CourseInput = z.object({
   allowedStatuses: z.array(PersonStatus.exclude(['left'])).min(1).default([...DEFAULT_COURSE_STATUSES]),
   /** Target number of persons with the course per department (`departmentId → count`), for the course needs. */
   targets: z.record(z.uuid(), z.number().int().min(0).max(999)).default({}),
+  /**
+   * Collective entry like "other course" for courses without an own entry: each attendance names the actual course
+   * in its `description` (e.g. "Erste Hilfe"). It is never "held", so it has no course needs.
+   */
+  describe: z.boolean().default(false),
   active: z.boolean().default(true),
   sortOrder: z.number().int().default(0),
 });
@@ -45,11 +50,24 @@ export const Course = z.object({
   minimumAge: z.number().nullable(),
   allowedStatuses: z.array(PersonStatus),
   targets: z.record(z.string(), z.number()),
+  describe: z.boolean(),
   active: z.boolean(),
   sortOrder: z.number(),
   version: z.number(),
 });
 export type Course = z.infer<typeof Course>;
+
+/**
+ * Prefix of course targets in the import lookup `qualification`, e.g. `course:other-course`: a career row mapped to it
+ * becomes a course attendance instead of a qualification.
+ */
+export const COURSE_TARGET_PREFIX = 'course:';
+
+/** Display name of an attendance: the description follows the name of a collective course, e.g. "Anderer Lehrgang: Erste Hilfe". */
+export const courseLabel = (name: string, description: string | null | undefined): string => (description ? `${name}: ${description}` : name);
+
+/** Description of an attendance: the name of the actual course for collective courses like "other course". */
+const description = z.string().trim().max(200).default('');
 
 export const CourseResult = z.enum(['passed', 'failed']);
 export type CourseResult = z.infer<typeof CourseResult>;
@@ -69,6 +87,8 @@ export const CourseAttendanceInput = z
     result: CourseResult,
     location: z.string().trim().default(''),
     notes: z.string().default(''),
+    /** Required for courses with `describe` (`masterdata.descriptionRequired`), ignored for others. */
+    description,
     confirmHeld: z.boolean().default(false),
   })
   .refine((a) => !a.endsOn || a.endsOn >= a.startsOn, { message: 'End before start', path: ['endsOn'] });
@@ -85,6 +105,8 @@ export const CourseAttendance = z.object({
   result: CourseResult,
   location: z.string(),
   notes: z.string(),
+  /** Actual course of a collective course like "other course"; empty otherwise. */
+  description: z.string(),
 });
 export type CourseAttendance = z.infer<typeof CourseAttendance>;
 
@@ -209,6 +231,8 @@ export const CourseResultsInput = z
     endsOn: courseDate.nullable().default(null),
     location: z.string().trim().default(''),
     results: z.array(z.object({ personId: z.uuid(), result: CourseResult, notes: z.string().default('') })).min(1).max(500),
+    /** As in `CourseAttendanceInput`, for all results. */
+    description,
     confirmHeld: z.boolean().default(false),
   })
   .refine((r) => r.runId !== null || r.startsOn !== null, { message: 'Start or run required', path: ['startsOn'] })

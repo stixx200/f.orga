@@ -32,6 +32,7 @@ import {
   type Course as CourseDto,
   type CourseAttendance as CourseAttendanceDto,
   CourseAttendanceInput,
+  courseLabel,
   CourseInput,
   type CourseNeed,
   type CourseNomination as CourseNominationDto,
@@ -48,13 +49,13 @@ import {
   type NominationStatus,
   OPEN_NOMINATION_STATUSES,
   type QualificationChangedEvent,
-  requiresDescription,
 } from '@forga/masterdata-contracts';
 import { CatalogEntry, CatalogService } from '../catalog/catalog.js';
 import { Department, Person, PersonQualification } from '../masterdata.entities.js';
 import { activeMemberships, assertNotBeforeBirth, PersonsService, READ, WRITE, validQualifications } from '../persons/persons.service.js';
 import { today } from '../shared/access.js';
 import { addMonths, ageOn } from '../shared/dates.js';
+import { attendanceDescription } from './course-description.js';
 import { Course, CourseAttendance, CourseNomination, CourseRun } from './course.entities.js';
 
 export const PLAN = 'masterdata.courses.plan';
@@ -77,6 +78,7 @@ interface AttendanceFields {
   result: CourseResult;
   location: string;
   notes: string;
+  description: string;
   run: CourseRun | null;
 }
 
@@ -95,6 +97,7 @@ export function toCourseDto(c: Course): CourseDto {
     minimumAge: c.minimumAge ?? null,
     allowedStatuses: c.allowedStatuses?.length ? c.allowedStatuses : ['probation', 'active'],
     targets: c.targets ?? {},
+    describe: c.describe ?? false,
     active: c.active,
     sortOrder: c.sortOrder,
     version: c.version,
@@ -112,6 +115,7 @@ function toAttendanceDto(a: CourseAttendance): CourseAttendanceDto {
     result: a.result,
     location: a.location,
     notes: a.notes,
+    description: a.description ?? '',
   };
 }
 
@@ -241,6 +245,7 @@ export class CoursesController {
     const course = await this.course(em, input.course);
     const run = input.runId ? await em.findOne(CourseRun, { id: input.runId, course }) : null;
     if (input.runId && !run) throw new BadRequestException({ code: 'masterdata.unknownCourseRun' });
+    if (attendanceDescription(course, input.description) === null) throw new BadRequestException({ code: 'masterdata.descriptionRequired' });
     const dates = run
       ? { startsOn: run.startsOn, endsOn: run.endsOn ?? null, location: run.location }
       : { startsOn: input.startsOn as string, endsOn: input.endsOn, location: input.location };
@@ -257,7 +262,7 @@ export class CoursesController {
       seen.add(personId);
       try {
         const person = await this.loadForAttendance(em, personId, user);
-        pending.push((await this.record(em, person, course, entries, { ...dates, result, notes, run }, input.confirmHeld)).publish);
+        pending.push((await this.record(em, person, course, entries, { ...dates, result, notes, description: input.description, run }, input.confirmHeld)).publish);
       } catch (error) {
         skipped.push({ personId, code: codeOf(error) });
       }
@@ -563,7 +568,8 @@ export class CoursesController {
     const nominations = await em.find(CourseNomination, { status: { $in: [...OPEN_NOMINATION] }, person: { $in: persons.map((p) => p.id) } }, { populate: ['course'] });
     const passed = await this.passedBy(em, persons);
     const rows: CourseNeed[] = [];
-    for (const course of courses) {
+    // A collective course like "other course" stands for many courses and is never held, so it has no needs.
+    for (const course of courses.filter((c) => !c.describe)) {
       const has = (p: Person) => hasCourse(course, p, passed);
       const statuses: string[] = toCourseDto(course).allowedStatuses;
       for (const department of departments) {
@@ -589,7 +595,8 @@ export class CoursesController {
    * only once per person and course, grants the qualifications of the course and completes the open nominations.
    * Whoever holds all its qualifications already needs `confirmHeld`; then nothing is granted twice and
    * `masterdata.course.passed` is not published (no second course allowance). A failed one closes the open nominations
-   * of the run (or of earlier or no runs), so the person is not offered again for it.
+   * of the run (or of earlier or no runs), so the person is not offered again for it. A collective course like
+   * "other course" needs the actual course as description; "passed once" then counts per description.
    */
   private async record(em: EntityManager, person: Person, course: Course, entries: CatalogEntry[], fields: AttendanceFields, confirmHeld = false): Promise<{ attendance: CourseAttendance; publish: Pending }> {
     const passed = fields.result === 'passed';
@@ -597,20 +604,17 @@ export class CoursesController {
     if (passed && passedOn > today()) throw new BadRequestException({ code: 'masterdata.courseNotFinished' });
     if (fields.startsOn > today()) throw new BadRequestException({ code: 'masterdata.attendanceInFuture' });
     assertNotBeforeBirth(person.birthDate, [fields.startsOn]);
-    if (passed && (await em.count(CourseAttendance, { person, course, result: 'passed' }))) {
+    const description = attendanceDescription(course, fields.description);
+    if (description === null) throw new BadRequestException({ code: 'masterdata.descriptionRequired' });
+    if (passed && (await em.count(CourseAttendance, { person, course, result: 'passed', ...(course.describe ? { description } : {}) }))) {
       throw new ConflictException({ code: 'masterdata.coursePassedAlready' });
     }
     const valid = new Set(validQualifications(person, passedOn));
-    // A collective entry like "other course" is described by the course name and held only with that description.
-    const description = (entry: CatalogEntry) => (requiresDescription(entry) ? course.name.de : '');
-    const holds = (entry: CatalogEntry) =>
-      requiresDescription(entry)
-        ? person.qualifications.getItems().some((q) => q.qualification === entry.key && q.description === description(entry) && q.acquiredOn <= passedOn && (!q.validUntil || q.validUntil >= passedOn))
-        : valid.has(entry.key);
+    const holds = (entry: CatalogEntry) => valid.has(entry.key);
     const held = entries.length > 0 && entries.every(holds);
     if (passed && held && !confirmHeld) throw new ConflictException({ code: 'masterdata.qualificationsHeld' });
     // The ID is needed before the flush to link the granted qualifications.
-    const attendance = em.create(CourseAttendance, { id: uuidv7(), ...fields, person, course });
+    const attendance = em.create(CourseAttendance, { id: uuidv7(), ...fields, description, person, course });
     const open = await em.find(CourseNomination, { person, course, status: { $in: [...OPEN_NOMINATION] } }, { populate: ['run'] });
     if (!passed) {
       const sameOrEarlier = (n: CourseNomination) => !n.run || n.run.id === fields.run?.id || n.run.startsOn <= fields.startsOn;
@@ -631,7 +635,6 @@ export class CoursesController {
           acquiredOn: passedOn,
           validUntil: months ? addMonths(passedOn, months) : null,
           courseAttendanceId: attendance.id,
-          description: description(entry),
         }),
       );
     }
@@ -639,7 +642,7 @@ export class CoursesController {
       await this.events.publish<CoursePassedEvent>(MASTERDATA_EVENTS.coursePassed, {
         personId: person.id,
         course: course.key,
-        courseName: course.name.de,
+        courseName: courseLabel(course.name.de, description),
         passedOn,
         attendanceId: attendance.id,
       });
@@ -775,8 +778,12 @@ export class CoursesController {
   }
 }
 
-/** Passed the course, or holds all its qualifications (e.g. entered by hand or imported). */
+/**
+ * Passed the course, or holds all its qualifications (e.g. entered by hand or imported). A collective course like
+ * "other course" stands for many courses and is never held.
+ */
 function hasCourse(course: Course, person: Person, passed: Map<string, Set<string>>): boolean {
+  if (course.describe) return false;
   const held = new Set(validQualifications(person));
   return (passed.get(person.id)?.has(course.key) ?? false) || (course.grantsQualifications.length > 0 && course.grantsQualifications.every((q) => held.has(q)));
 }

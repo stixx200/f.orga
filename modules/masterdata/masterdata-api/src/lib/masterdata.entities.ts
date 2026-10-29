@@ -164,8 +164,6 @@ export const PersonQualificationSchema = defineEntity({
     validUntil: p.date().nullable(),
     /** Set when the qualification comes from a passed course; no foreign key to keep entities independent. */
     courseAttendanceId: p.string().nullable(),
-    /** Actual name of the course for collective entries like "other course" (catalog attribute `describe`). */
-    description: p.string().default(''),
     notes: p.text().default(''),
   },
 });

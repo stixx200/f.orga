@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { type CatalogEntry, type Department, type DepartmentGroup, type MembershipSettings, type Person, type PersonQualification, type PersonSummary, qualificationLabel, type Station, type Vehicle } from '@forga/masterdata-contracts';
+import type { CatalogEntry, Department, DepartmentGroup, MembershipSettings, Person, PersonSummary, Station, Vehicle } from '@forga/masterdata-contracts';
 import { api, withQuery } from '@forga/web-sdk';
 
 export const MANAGE = 'masterdata.organization.manage';
@@ -53,12 +53,6 @@ export function useCatalogNames(kind: CatalogEntry['kind']) {
     const entry = data.find((e) => e.key === key);
     return entry ? (language === 'en' ? entry.name.en : entry.name.de) : (key ?? '');
   };
-}
-
-/** Display name of a person's qualification, e.g. "Anderer Lehrgang: Erste Hilfe" for collective entries. */
-export function useQualificationLabel() {
-  const name = useCatalogNames('qualification');
-  return (q: Pick<PersonQualification, 'qualification' | 'description'>, language: string) => qualificationLabel(name(q.qualification, language), q.description);
 }
 
 export const WRITE = PERSONS_WRITE;

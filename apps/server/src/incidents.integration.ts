@@ -269,8 +269,15 @@ describe('incidents and reports', () => {
 
     const unlocked = await post(`/incidents/reports/${ids.musterstadtReport}/unlock`, { reason: 'Personal korrigieren' }).expect(200);
     expect(unlocked.body).toMatchObject({ status: 'review', locked: false });
-    const audit = (await get('/core/audit')).body as { action: string; details: { reason?: string } }[];
-    expect(audit.find((e) => e.action === 'incidents.report-unlocked')?.details.reason).toBe('Personal korrigieren');
+    const audit = (await get('/core/audit')).body as { action: string; details: { reason?: string; reportNumber?: string }; references: Record<string, { label: unknown; to?: string }> }[];
+    const unlockedEntry = audit.find((e) => e.action === 'incidents.report-unlocked')!;
+    expect(unlockedEntry.details.reason).toBe('Personal korrigieren');
+    // The audit log names the report by its number and department and links it.
+    expect(unlockedEntry.references[ids.musterstadtReport]).toEqual({
+      kind: 'incidents.report',
+      label: `${unlockedEntry.details.reportNumber} · Abteilung Musterstadt`,
+      to: `/incidents/reports/${ids.musterstadtReport}`,
+    });
   });
 
   it('switches the primary report and keeps the statistics with the incident', async () => {

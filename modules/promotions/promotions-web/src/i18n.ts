@@ -1,6 +1,7 @@
 import type { Translations } from '@forga/web-sdk';
+import { audit } from './audit.i18n';
 
-export const translations: Translations = {
+const texts: Translations = {
   de: {
     module: 'Beförderungen',
     loading: 'Wird geladen …',
@@ -390,3 +391,5 @@ export const translations: Translations = {
     },
   },
 };
+
+export const translations: Translations = { de: { ...texts.de, audit: audit.de }, en: { ...texts.en, audit: audit.en } };

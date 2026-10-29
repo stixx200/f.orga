@@ -94,6 +94,7 @@ beforeAll(async () => {
   admin = await setUp(test);
   mp = mpFeuerClient(test, () => admin);
   await post('/masterdata/catalog/templates/bw', {}).expect(201);
+  await post('/masterdata/courses/templates/bw', {}).expect(201);
   await post('/training/types/templates/bw', {}).expect(201);
   ids.musterstadt = (await post('/masterdata/departments', { name: 'Abteilung Musterstadt', shortName: 'Musterstadt', type: 'operational' }).expect(201)).body.id;
   ids.veterans = (await post('/masterdata/departments', { name: 'Altersabteilung Musterstadt', shortName: 'Alters Musterstadt', type: 'veterans', parentId: ids.musterstadt }).expect(201)).body.id;
@@ -286,7 +287,7 @@ describe('MP-Feuer: mappings of unknown names', () => {
     await post('/core/imports/lookups/alarm-keyword', { key: 'B2', name: 'B2 Wohnungsbrand' }).expect(201);
     const run = await mp.upload([FILE]);
     const mappings = {
-      qualification: { Drohnenpilot: 'drone-pilot', 'Erste Hilfe': 'other-course' },
+      qualification: { Drohnenpilot: 'drone-pilot', 'Erste Hilfe': 'course:other-course' },
       rank: { Brandmeisteranwärter: 'bm' },
       'session-type': { Jugendprobe: 'lesson' },
       'alarm-keyword': { 'B 2 Wohnung': 'B2' },
@@ -307,7 +308,9 @@ describe('MP-Feuer: mappings of unknown names', () => {
     expect(eva.qualifications).toMatchObject([{ qualification: 'drone-pilot' }]);
     expect(eva.ranks).toMatchObject([{ rank: 'bm' }]);
     const erna = (await get(`/masterdata/persons/${await personId('Kurs')}`)).body;
-    expect(erna.qualifications).toMatchObject([{ qualification: 'other-course', description: 'Erste Hilfe' }]);
+    // Mapped to the collective course: an attendance named by the value, no qualification.
+    expect(erna.qualifications).toEqual([]);
+    expect((await get(`/masterdata/persons/${erna.id}/course-attendances`)).body).toEqual([expect.objectContaining({ course: 'other-course', startsOn: '2022-03-01', result: 'passed', description: 'Erste Hilfe' })]);
     const [incident] = (await get('/incidents/incidents?from=2025-07-01&to=2025-07-01')).body as { alarmKeyword: string; reports: { id: string }[] }[];
     expect(incident.alarmKeyword).toBe('B2');
     const report = (await get(`/incidents/reports/${incident.reports[0].id}`)).body;

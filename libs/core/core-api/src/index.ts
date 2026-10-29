@@ -8,6 +8,7 @@ export * from './lib/module/modules.js';
 export * from './lib/history/history.entity.js';
 export * from './lib/history/history.subscriber.js';
 export * from './lib/audit/audit.js';
+export * from './lib/audit/audit-references.js';
 export * from './lib/settings/settings.js';
 export * from './lib/security/authenticated-user.js';
 export * from './lib/security/decorators.js';

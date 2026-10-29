@@ -1,9 +1,10 @@
 import { Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
-import { defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry, PersonDataRegistry } from '@forga/core-api';
+import { AuditReferenceRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry, PersonDataRegistry } from '@forga/core-api';
 import { PROMOTIONS_MANIFEST, PROMOTIONS_SETTINGS } from '@forga/promotions-contracts';
 import { CATALOG_REFERENCES, type CatalogReferences } from '@forga/masterdata-contracts';
 import { PROMOTIONS_MIGRATIONS } from '../migrations/index.js';
+import { registerAuditReferences } from './audit/audit.references.js';
 import { ruleReferences } from './catalog-usage.js';
 import { PromotionsLists } from './lists/promotions.lists.js';
 import { PromotionsController } from './promotions/promotions.controller.js';
@@ -26,9 +27,11 @@ export class PromotionsModule implements OnModuleInit {
     private readonly personData: PersonDataRegistry,
     private readonly promotions: PromotionsService,
     @Inject(CATALOG_REFERENCES) private readonly catalogReferences: CatalogReferences,
+    private readonly auditReferences: AuditReferenceRegistry,
   ) {}
 
   onModuleInit(): void {
+    registerAuditReferences(this.auditReferences, this.em);
     for (const definition of this.moduleLists.definitions()) this.lists.register('promotions', definition);
     this.historyAccess.registerPermission('promotions.promotion_list', 'promotions.decide');
     this.historyAccess.registerPermission('promotions.exclusion', 'promotions.exclude');
