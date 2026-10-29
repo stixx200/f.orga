@@ -28,6 +28,9 @@ import { MyAreaPage } from './pages/MyAreaPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ScanPage } from './pages/ScanPage';
 import { StartPage } from './pages/StartPage';
+import { FirstLoginPage, NoticePage } from './pages/privacy/NoticePage';
+import { PrivacyPage } from './pages/privacy/PrivacyPage';
+import { RequestPage } from './pages/privacy/RequestPage';
 
 function NotFound() {
   const { t } = useTranslation('shell');
@@ -64,6 +67,14 @@ function Router({ modules, session }: { modules: LoadedModule[]; session: Sessio
             { path: 'admin/settings', element: <Guard session={session} permission="core.settings.manage"><SettingsPage modules={modules} /></Guard> },
             { path: 'admin/audit', element: <Guard session={session} permission="core.audit.read"><AuditPage /></Guard> },
             { path: 'admin/retention', element: <Guard session={session} permission="core.retention.manage"><RetentionPage /></Guard> },
+            { path: 'admin/privacy', element: <Guard session={session} permission="core.privacy.manage"><PrivacyPage tab="requests" session={session} /></Guard> },
+            { path: 'admin/privacy/information', element: <Guard session={session} permission="core.privacy.manage"><PrivacyPage tab="information" session={session} /></Guard> },
+            { path: 'admin/privacy/requests/:id', element: <Guard session={session} permission="core.privacy.manage"><RequestPage /></Guard> },
+            {
+              path: 'admin/privacy/settings',
+              // Security and retention also for the managers of the settings.
+              element: <Guard session={session} permission={can(session, 'core.privacy.manage') ? 'core.privacy.manage' : 'core.settings.manage'}><PrivacyPage tab="settings" session={session} /></Guard>,
+            },
             ...modules.flatMap(({ info, web }) => (web ? [{ path: `${info.id}/*`, children: web.routes }] : [])),
             { path: '*', element: <NotFound /> },
           ],
@@ -85,6 +96,8 @@ function LoggedIn({ session }: { session: Session }) {
 
   if (error) return <Alert color="brand" title={t('serverUnavailable')}>{error.message}</Alert>;
   if (!modules) return <Loader m="xl" />;
+  // First sign-in or a new version of the privacy notice: acknowledge it before working.
+  if (session.privacyNotice.due) return <FirstLoginPage session={session} />;
   return (
     <>
       <Router modules={modules} session={session} />
@@ -121,6 +134,8 @@ function Pages() {
   if (kiosk) return <KioskPage path={kiosk} />;
   if (window.location.pathname === '/reset-password') return <ResetPasswordPage />;
   if (window.location.pathname === '/confirm-email') return <ConfirmEmailPage />;
+  // The privacy notice is readable without sign-in.
+  if (window.location.pathname === '/privacy') return <NoticePage />;
   return <Main />;
 }
 

@@ -16,7 +16,10 @@ export class YearTotals {
 
   async compute(year: number): Promise<YearTotal[]> {
     const config = await this.items.config();
-    const items = await this.em.fork().find(ItemEntity, { date: { $gte: `${year}-01-01`, $lte: `${year}-12-31` } });
+    const all = await this.em.fork().find(ItemEntity, { date: { $gte: `${year}-01-01`, $lte: `${year}-12-31` } });
+    // Persons whose processing is restricted (Art. 18) are left out of the totals.
+    const restricted = await this.directory.restrictedIds([...new Set(all.map((i) => i.personId))]);
+    const items = all.filter((i) => !restricted.has(i.personId));
     const names = new Map((await this.directory.snapshots([...new Set(items.map((i) => i.personId))])).map((p) => [p.id, `${p.lastName}, ${p.firstName}`]));
     const byPerson = new Map<string, ItemEntity[]>();
     for (const item of items) byPerson.set(item.personId, [...(byPerson.get(item.personId) ?? []), item]);

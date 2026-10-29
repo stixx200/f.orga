@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import type { z } from 'zod';
-import { type AuthenticatedUser, CurrentUser, RequirePermissions, ZodPipe } from '@forga/core-api';
+import { assertNotRestricted, type AuthenticatedUser, CurrentUser, RequirePermissions, ZodPipe } from '@forga/core-api';
 import { AmountsInput, type Item, ItemAmountInput, ManualItemInput, type MyCompensation, type YearTotal } from '@forga/compensation-contracts';
 import { ItemsService, MANUAL, READ, RUNS } from './items.service.js';
 import { YearTotals } from '../lists/year-totals.js';
@@ -24,6 +24,7 @@ export class ItemsController {
   @Get('persons/:personId/items')
   async person(@Param('personId') personId: string, @Query('year') year: string | undefined, @CurrentUser() user: AuthenticatedUser): Promise<Item[]> {
     if (!(await this.items.canReadPerson(user, personId))) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [READ] });
+    assertNotRestricted(user, await this.items.isRestricted(personId));
     return this.items.list(user, { personId, year: year ? Number(year) : undefined });
   }
 

@@ -54,9 +54,11 @@ export class TrainingLists {
     return { from, to, sessions, types };
   }
 
+  /** Names of the persons; persons whose processing is restricted (Art. 18) are left out (rows per person drop them). */
   private async names(ids: string[]): Promise<Map<string, string>> {
-    const persons = await this.directory.snapshots([...new Set(ids)]);
-    return new Map(persons.map((p) => [p.id, `${p.lastName}, ${p.firstName}`]));
+    const unique = [...new Set(ids)];
+    const [persons, restricted] = await Promise.all([this.directory.snapshots(unique), this.directory.restrictedIds(unique)]);
+    return new Map(persons.filter((p) => !restricted.has(p.id)).map((p) => [p.id, `${p.lastName}, ${p.firstName}`]));
   }
 
   /** Training schedule of a year (Dienstplan), e.g. to hand out or pin up per department. */
@@ -204,6 +206,7 @@ export class TrainingLists {
           subtitle: `${session.title} · ${dateTime(session.startsAt, language)}`,
           rows: session.attendance
             .getItems()
+            .filter((a) => names.has(a.personId))
             .map((a) => ({ name: names.get(a.personId) ?? '', status: status[a.status][language], role: a.role ?? '', ba: a.breathingApparatus }))
             .toSorted((a, b) => String(a.name).localeCompare(String(b.name))),
         };
@@ -255,7 +258,7 @@ export class TrainingLists {
           }
         }
         const names = await this.names([...totals.keys()]);
-        return { subtitle: `${from} – ${to}`, rows: [...totals].map(([id, t]) => ({ name: names.get(id) ?? '', sessions: t.sessions, hours: Math.round(t.hours * 10) / 10 })) };
+        return { subtitle: `${from} – ${to}`, rows: [...totals].filter(([id]) => names.has(id)).map(([id, t]) => ({ name: names.get(id) ?? '', sessions: t.sessions, hours: Math.round(t.hours * 10) / 10 })) };
       },
     };
   }

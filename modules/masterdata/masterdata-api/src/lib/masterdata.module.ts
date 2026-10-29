@@ -40,6 +40,7 @@ import { OrganizationReferenceRegistry } from './organization/references.js';
 import { PersonHoldingsRegistry } from './persons/holdings.js';
 import { PersonsController } from './persons/persons.controller.js';
 import { SelfController } from './self/self.controller.js';
+import { PersonPrivacyController, PersonPrivacyService, RestrictionDeadlines } from './privacy/privacy.controller.js';
 import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/persons.service.js';
 
 /**
@@ -48,10 +49,12 @@ import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/person
  */
 @Global()
 @Module({
-  controllers: [CatalogController, OrganizationController, GroupsController, PersonsController, CoursesController, SelfController, DriverLicensesController],
+  controllers: [CatalogController, OrganizationController, GroupsController, PersonsController, CoursesController, SelfController, DriverLicensesController, PersonPrivacyController],
   providers: [
     CatalogService,
     PersonsService,
+    PersonPrivacyService,
+    RestrictionDeadlines,
     MasterdataLists,
     MasterdataDeadlines,
     PersonsImport,
@@ -101,6 +104,8 @@ export class MasterdataModule implements OnModuleInit {
     private readonly auditReferences: AuditReferenceRegistry,
     private readonly licenseDeadlines: DriverLicenseDeadlines,
     private readonly licenseLists: DriverLicenseLists,
+    private readonly personPrivacy: PersonPrivacyService,
+    private readonly restrictionDeadlines: RestrictionDeadlines,
   ) {}
 
   /**
@@ -111,6 +116,7 @@ export class MasterdataModule implements OnModuleInit {
     for (const definition of [...this.masterdataLists.definitions(), ...this.licenseLists.definitions()]) this.lists.register('masterdata', definition);
     this.deadlineRegistry.register(this.deadlines);
     this.deadlineRegistry.register(this.licenseDeadlines);
+    this.deadlineRegistry.register(this.restrictionDeadlines);
     this.imports.register('masterdata', this.personsImport.profile());
     this.imports.register('masterdata', this.careerImport.profile());
     for (const lookup of this.lookups.lookups()) this.imports.registerLookup('masterdata', lookup);
@@ -133,6 +139,9 @@ export class MasterdataModule implements OnModuleInit {
           lastName: p.lastName,
           email: p.email,
           departmentIds: departmentsOf(p),
+          street: p.street,
+          postalCode: p.postalCode,
+          city: p.city,
         })),
       catalogEntries: () => this.em.fork().count(CatalogEntry, {}),
       // A linked user reads and changes the person's own data including the sensitive fields.
@@ -141,6 +150,9 @@ export class MasterdataModule implements OnModuleInit {
         (await this.persons.list(user, { query, includeLeft: true }))
           .slice(0, limit)
           .map((p) => ({ id: p.id, label: `${p.lastName}, ${p.firstName}${p.personnelNumber ? ` (${p.personnelNumber})` : ''}` })),
+      // Restriction of processing (Art. 18): the core leaves these persons out of deadlines and search.
+      restrictedPersonIds: () => this.personPrivacy.restrictedIds(),
+      restrictProcessing: (personId, restriction) => this.personPrivacy.restrict(personId, restriction),
     });
     this.search.register('masterdata', (user, query) => this.data.search(user, query));
     registerAuditReferences(this.auditReferences, this.em);

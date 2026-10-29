@@ -251,14 +251,25 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Fachbegriff | Code |
 | --- | --- |
 | Auskunft (Art. 15), lesbare Fassung | access report, `describePerson` an `ExportSource`, `PersonDataSection`; Ablage `core.privacy_document` |
-| Betroffenenanfrage (Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch, Widerruf) | data subject request (`core.privacy_request`, `kind`: `access`, `rectification`, `erasure`, `restriction`, `objection`, `withdrawal`) |
+| Betroffenenanfrage, Datenschutzanfrage (Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch, Widerruf einer Einwilligung) | data subject request (`core.privacy_request`, `PrivacyRequest`, `kind`: `access`, `rectification`, `erasure`, `restriction`, `objection`, `consent-withdrawal`) |
+| Eingegangen am, Weg | `receivedOn`, `channel` (`letter`, `email`, `in-person`, `my-area`) |
+| Stand der Anfrage (eingegangen, in Prüfung, verlängert, erledigt, abgelehnt) | `status` (`received`, `in-review`, `extended`, `done`, `rejected`), `OPEN_REQUEST_STATUSES` |
+| Frist (eingegangen + 1 Monat), Fristverlängerung, über die Verlängerung unterrichtet | `dueOn`, `deadline`, `extendedUntil`, `extensionReason`, `extensionNotifiedOn`; Aufgaben `privacy-request`, `privacy-extension-notice` |
+| Bearbeiter | assignee (`assigneeId`, `GET /api/core/privacy/assignees`) |
+| Antwortschreiben | reply letter (`GET /api/core/privacy/requests/:id/reply.pdf`, Bausteine `reply…`, `REPLY_TEXT_OF_KIND`) |
+| Empfänger informieren (Art. 19) | recipients (`PrivacyRequest.recipients`, Einstellungsabschnitt `privacy.recipients`) |
+| Bezug des Widerspruchs (Verarbeitungstätigkeit) | `activity` |
 | Löschprüfung | erasure check (`PersonDataHandler.erasure`) |
-| Einschränkung der Verarbeitung | restriction (`restrictedAt` an der Person, `PERSON_DIRECTORY.isRestricted`) |
+| Einschränkung der Verarbeitung, eingeschränkte Person | processing restriction (`masterdata.person.restricted_at`, `restriction_reason`, `restricted_until`, `restriction_request_id`; `Person.processingRestriction`, `ProcessingRestriction`, `RestrictedPerson`; `PERSON_DIRECTORY.isRestricted`, `restrictedIds`; `assertNotRestricted`, `refuseRestricted`; Fehlercode `privacy.processingRestricted`) |
+| Grund der Einschränkung (Richtigkeit bestritten, unrechtmäßig, Rechtsansprüche, Widerspruch wird geprüft, Aufbewahrungsfrist läuft) | `ProcessingRestrictionReason` (`accuracy-contested`, `unlawful-processing`, `legal-claims`, `objection-pending`, `retention`) |
 | Einwilligung, Fassung, Widerruf | consent (`core.consent`, `CONSENTS`, Einstellungsabschnitt `privacy.consents`), `version`, `withdrawnAt` |
-| Textbaustein (Vorlage / geprüft) | text block (`privacy.texts`, `reviewedAt`) |
-| Datenschutzhinweis | privacy notice (Seite `/privacy`) |
+| Textbaustein (Vorlage / geprüft, Fassung) | text block (`privacy.texts`, `PrivacyTexts`, `PrivacyTextBlock`: `version`, `reviewedAt`, `reviewedBy`; Vorlagen `PRIVACY_TEXT_TEMPLATES`, Platzhalter `fillPlaceholders`) |
+| Datenschutzhinweis, Fassung | privacy notice, version (Seite `/privacy`, `core.privacy_notice`, `PrivacyNotice`, `composeNotice`) |
+| Hinweis bei der ersten Anmeldung, „Zur Kenntnis genommen“ | first-login notice, acknowledgement (`Session.privacyNotice.due`, `core.user.privacy_notice_version`, `privacy_notice_acknowledged_at`, `POST /api/core/privacy/notice/acknowledge`) |
+| Information nach Art. 13/14, „Information erteilt am“ | privacy information (`masterdata.person.privacy_informed_on`, `privacy_informed_via`, `PrivacyInformation`, `UninformedPerson`) |
+| Selbstauskunft in Mein Bereich, „Auskunft anfordern“ | self-service access (`privacy.selfServiceAccess`: `mode` `request`/`instant`, `contact`; `POST /api/core/privacy/me/requests`) |
 | Verzeichnis der Verarbeitungstätigkeiten, Verarbeitungstätigkeit | record of processing activities, processing activity (`privacy.activities` im Manifest und in den Einstellungen) |
-| Verantwortlicher, Datenschutzbeauftragter, Aufsichtsbehörde | controller, data protection officer, supervisory authority (`privacy.contacts`, `privacy.authority`) |
+| Verantwortlicher, Datenschutzbeauftragter, Aufsichtsbehörde | controller, data protection officer, supervisory authority (`privacy.contacts`, `PrivacyContacts`: `controller`, `dpo`, `authority`) |
 | Gesundheitsdaten (besondere Kategorie) | `health: true` an Feldern, Fristarten und Tätigkeiten |
 | Leseprotokoll | access log (`core.access_log`) |
 | Zweiter Faktor, Einrichten, Wiederherstellungscode | MFA, TOTP, enrolment, recovery code (`core.user_mfa`, `MfaService`, `/api/core/mfa/…`) |

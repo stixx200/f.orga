@@ -214,7 +214,9 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
     const listed = new Set(session.attendance.getItems().map((a) => a.personId));
     const added = ids.filter((personId) => !listed.has(personId));
     if (added.length) {
-      const known = new Set((await this.directory.snapshots(added)).map((p) => p.id));
+      // Persons whose processing is restricted (Art. 18) cannot be added.
+      const restricted = await this.directory.restrictedIds(added);
+      const known = new Set((await this.directory.snapshots(added)).map((p) => p.id).filter((personId) => !restricted.has(personId)));
       const unknown = added.find((personId) => !known.has(personId));
       if (unknown) throw new BadRequestException({ code: 'training.unknownPerson', personId: unknown });
     }

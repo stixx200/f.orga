@@ -41,6 +41,7 @@ export class PersonDirectoryService implements PersonDirectory {
       Person,
       {
         status: { $ne: 'left' },
+        restrictedAt: null,
         ...words,
         ...(options.departmentIds ? { memberships: { department: { $in: options.departmentIds } } } : {}),
       },
@@ -55,17 +56,17 @@ export class PersonDirectoryService implements PersonDirectory {
     return found.map((p) => this.persons.snapshot(p, date));
   }
 
-  async membersOn(date: string): Promise<PersonSnapshot[]> {
+  async membersOn(date: string, options: { includeRestricted?: boolean } = {}): Promise<PersonSnapshot[]> {
     const found = await this.em.fork().find(
       Person,
-      { memberships: { from: { $lte: date }, $or: [{ to: null }, { to: { $gte: date } }] } },
+      { ...(options.includeRestricted ? {} : { restrictedAt: null }), memberships: { from: { $lte: date }, $or: [{ to: null }, { to: { $gte: date } }] } },
       { populate: POPULATE },
     );
     return found.map((p) => this.persons.snapshot(p, date));
   }
 
   async memberPeriods(): Promise<MemberPeriods[]> {
-    const found = await this.em.fork().find(Person, {}, { populate: ['memberships'] });
+    const found = await this.em.fork().find(Person, { restrictedAt: null }, { populate: ['memberships'] });
     return found.map((p) => ({
       id: p.id,
       firstName: p.firstName,
@@ -99,7 +100,7 @@ export class PersonDirectoryService implements PersonDirectory {
   }
 
   async careers(ids?: readonly string[]): Promise<PersonCareer[]> {
-    const where = ids ? { id: { $in: [...ids] } } : { status: { $ne: 'left' as const } };
+    const where = ids ? { id: { $in: [...ids] } } : { status: { $ne: 'left' as const }, restrictedAt: null };
     const persons = await this.em.fork().find(Person, where, { populate: ['memberships.department', 'ranks', 'qualifications', 'offices', 'restPeriods'] });
     return persons.map((p) => {
       const current = p.memberships.getItems().filter((m) => m.from <= today() && (!m.to || m.to >= today()));
@@ -122,8 +123,22 @@ export class PersonDirectoryService implements PersonDirectory {
   }
 
   async offices(filter: { offices?: readonly string[] } = {}): Promise<OfficeHolding[]> {
-    const rows = await this.em.fork().find(OfficeAssignment, filter.offices ? { office: { $in: [...filter.offices] } } : {}, { orderBy: { from: 'asc' } });
+    const rows = await this.em.fork().find(
+      OfficeAssignment,
+      { person: { restrictedAt: null }, ...(filter.offices ? { office: { $in: [...filter.offices] } } : {}) },
+      { orderBy: { from: 'asc' } },
+    );
     return rows.map((o) => ({ personId: o.person.id, office: o.office, departmentId: o.departmentId ?? null, from: o.from, to: o.to ?? null }));
+  }
+
+  async isRestricted(personId: string): Promise<boolean> {
+    return (await this.restrictedIds([personId])).has(personId);
+  }
+
+  async restrictedIds(ids?: readonly string[]): Promise<Set<string>> {
+    if (ids && !ids.length) return new Set();
+    const found = await this.em.fork().find(Person, { restrictedAt: { $ne: null }, ...(ids ? { id: { $in: [...ids] } } : {}) }, { fields: ['id'] });
+    return new Set(found.map((p) => p.id));
   }
 
   async recordPromotion(personId: string, promotion: { rank: string; since: string; notes: string }): Promise<void> {

@@ -1,7 +1,9 @@
 import type { de } from './de';
+import { privacyEn } from './privacy';
 
 /** English texts of the shell; the type keeps the keys in sync with `de.ts`. */
 export const en: typeof de = {
+  privacy: privacyEn,
   appName: 'f.orga',
   loading: 'Loading …',
   skipToContent: 'Skip to content',
@@ -33,6 +35,7 @@ export const en: typeof de = {
     settings: 'Settings',
     audit: 'Audit log',
     retention: 'Disposal',
+    privacy: 'Data protection',
     menu: 'Menu',
   },
   scan: {
@@ -74,10 +77,12 @@ export const en: typeof de = {
       users: 'Invite further users',
       secretKey: 'Set the server key FORGA_SECRET_KEY (without it no second factor; sensitive areas stay locked)',
       module: 'Check the settings: {{name}}',
+      privacyContacts: 'Data protection: enter controller and data protection officer',
+      privacyTexts: 'Review the data protection texts (agree the templates with the data protection officer of the municipality)',
     },
   },
   user: { profile: 'Profile', logout: 'Log out' },
-  footer: { brigade: '{{name}}' },
+  footer: { brigade: '{{name}}', phone: 'Phone', fax: 'Fax' },
   fields: {
     username: 'Username',
     displayName: 'Display name',
@@ -585,6 +590,11 @@ export const en: typeof de = {
       version: 'Version',
       via: 'Via',
       year: 'Year',
+      requestId: 'Request',
+      template: 'Template',
+      informedOn: 'Informed on',
+      text: 'Text block',
+      channel: 'Channel',
     },
     actions: {
       'retention.offered': 'Offered to the archive',
@@ -620,6 +630,20 @@ export const en: typeof de = {
       'auth.step-up-failed': 'Wrong code for the second factor',
       'auth.mfa-enrolled': 'Second factor set up',
       'auth.recovery-codes-renewed': 'Recovery codes renewed',
+      'privacy.notice-published': 'New version of the privacy notice',
+      'privacy.notice-acknowledged': 'Privacy notice acknowledged',
+      'privacy.text-changed': 'Data protection text changed',
+      'privacy.text-reviewed': 'Data protection text marked as reviewed',
+      'privacy.request-created': 'Data protection request recorded',
+      'privacy.request-status-changed': 'Status of a data protection request changed',
+      'privacy.request-extended': 'Deadline of a data protection request extended',
+      'privacy.request-closed': 'Data protection request closed',
+      'privacy.request-reopened': 'Data protection request reopened',
+      'privacy.recipients-notified': 'Recipients informed (Art. 19)',
+      'privacy.reply-created': 'Reply letter created',
+      'privacy.restricted': 'Processing restricted',
+      'privacy.restriction-lifted': 'Restriction of processing lifted',
+      'privacy.information-recorded': 'Information under Art. 13/14 recorded',
       'auth.mfa-reset': 'Second factor reset',
       'setup.completed': 'Initial setup',
       'setup.invalid-token': 'Initial setup with wrong token',

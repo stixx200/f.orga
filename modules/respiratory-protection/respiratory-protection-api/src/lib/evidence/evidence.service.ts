@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, type OnApplicationBootstrap, type OnModuleDestroy, type OnModuleInit, Optional } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { type AuthenticatedUser, berlinDate, DomainEvents, Notifications, SettingsService } from '@forga/core-api';
+import { assertNotRestricted, type AuthenticatedUser, berlinDate, DomainEvents, Notifications, SettingsService } from '@forga/core-api';
 import { SecuritySettings } from '@forga/core-contracts';
 import { INCIDENTS_EVENTS, INCIDENTS_LOOKUP, type IncidentsLookup, type ReportReleasedEvent, type ReportUnlockedEvent } from '@forga/incidents-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory, type PersonSnapshot } from '@forga/masterdata-contracts';
@@ -200,6 +200,7 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
   async personView(user: AuthenticatedUser, personId: string): Promise<PersonRespiratoryProtection> {
     const person = await this.person(personId);
     if (!this.can(user, READ, person)) throw new NotFoundException();
+    assertNotRestricted(user, await this.directory.isRestricted(personId));
     const [status] = await this.visibleStatuses(user, [person]);
     const rows = await this.em.fork().find(EvidenceEntity, { personId }, { orderBy: { date: 'desc' } });
     const examinations = this.can(user, EXAMINATIONS, person);
@@ -402,7 +403,8 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
    */
   private async notifyRed(personId: string): Promise<boolean> {
     const [person] = await this.directory.snapshots([personId]);
-    if (!person) return true;
+    // No e-mails about persons whose processing is restricted (Art. 18).
+    if (!person || (await this.directory.isRestricted(personId))) return true;
     const name = `${person.firstName} ${person.lastName}`;
     const recipients = await this.notifications.recipients(NOTIFY, person.primaryDepartmentId);
     if (!recipients.length) return true;

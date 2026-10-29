@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { classNames, isValidIban, type Person, type PersonInput } from '@forga/masterdata-contracts';
-import { apiUrl, can, extensionsOf, isElevated, openAfterStepUp, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
+import { ApiError, apiUrl, can, extensionsOf, isElevated, openAfterStepUp, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ActionBar, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, StatusBadge, StepUpButton, useAction } from '@forga/web-ui';
 import { keys, today as todayDate, useCatalogNames, useDepartments, usePerson, WRITE } from '../api';
 import { BrigadeTab } from './BrigadeTab';
@@ -40,7 +40,7 @@ export function toForm(person: Person): PersonForm {
   };
 }
 
-/** Tabs of the person file; extension tabs of other modules are addressed by their module ID (`?tab=clothing`). */
+/** Tabs of the person file; extension tabs of other modules (and the shell's `privacy`) are addressed by their ID (`?tab=clothing`). */
 const TABS = ['master', 'brigade', 'courses', 'qualifications', 'honors', 'offices', 'history'] as const;
 
 const initials = (p: Pick<Person, 'firstName' | 'lastName'>) => `${p.firstName[0] ?? ''}${p.lastName[0] ?? ''}`.toUpperCase();
@@ -109,6 +109,7 @@ function PersonFile({ person }: { person: Person }) {
         }
       />
       {person.anonymizedAt && <Notice kind="info">{t('person.anonymized')}</Notice>}
+      {person.processingRestriction && <Notice kind="warning">{t('person.restricted')}</Notice>}
       {person.stepUpAvailable && <Notice kind="info" action={<StepUpButton>{t('person.showSensitive')}</StepUpButton>}>{t('person.stepUpHidden')}</Notice>}
       <Panel>
         <Group wrap="nowrap" align="center">
@@ -117,6 +118,7 @@ function PersonFile({ person }: { person: Person }) {
             <Text c="dimmed">{subtitle}</Text>
             <Group gap={4}>
               <StatusBadge tone={STATUS_TONES[person.status]}>{t(`status.${person.status}`)}</StatusBadge>
+              {person.processingRestriction && <StatusBadge tone="error">{t('person.restrictedBadge')}</StatusBadge>}
               {person.qualifications.map((q) => <StatusBadge key={q.id}>{qualificationName(q.qualification, i18n.language)}</StatusBadge>)}
               {person.driverLicense.classes.length > 0 && <StatusBadge>{t('person.licenseBadge', { classes: classNames(person.driverLicense.classes) })}</StatusBadge>}
             </Group>
@@ -169,6 +171,7 @@ export function PersonPage() {
   const { id = '' } = useParams();
   const { t } = useTranslation('masterdata');
   const { data: person, error } = usePerson(id);
+  if (error instanceof ApiError && error.code === 'privacy.processingRestricted') return <EmptyState title={t('person.restrictedBadge')} text={t('person.restrictedPage')} />;
   if (error) return <EmptyState title={t('person.notFound')} />;
   if (!person) return null;
   return <PersonFile key={person.id} person={person} />;

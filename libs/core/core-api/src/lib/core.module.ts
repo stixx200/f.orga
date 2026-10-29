@@ -1,12 +1,16 @@
 import { type DynamicModule, type MiddlewareConsumer, Module, type NestModule, type OnModuleInit } from '@nestjs/common';
 import { APP_GUARD, DiscoveryModule } from '@nestjs/core';
 import { Migrator } from '@mikro-orm/migrations';
-import { RETENTION_PERMISSION } from '@forga/core-contracts';
+import { PRIVACY_PERMISSION, RETENTION_PERMISSION } from '@forga/core-contracts';
 import { CORE_MIGRATIONS } from '../migrations/index.js';
 import { Audit, AuditController, AuditEntry } from './audit/audit.js';
 import { AuditReferenceRegistry } from './audit/audit-references.js';
 import { CoreAuditReferences } from './audit/core-references.js';
 import { DomainEvents } from './events/domain-events.js';
+import { PrivacyNoticeEntity, PrivacyRequestEntity } from './privacy/privacy.entities.js';
+import { PrivacyNoticeController, PrivacyNoticeService } from './privacy/privacy-notice.js';
+import { PrivacyAssignees, PrivacyRequests, PrivacyRequestsController } from './privacy/privacy-requests.js';
+import { PrivacyTextsController } from './privacy/privacy-texts.js';
 import { CORE_HISTORIZED, HistoryAccessRegistry } from './history/history-access.js';
 import { HistoryController } from './history/history.controller.js';
 import { ImportRegistry } from './imports/import-registry.js';
@@ -75,6 +79,8 @@ export const CORE_ENTITIES: EntityDefinition[] = [
   BrigadeAsset,
   AttachmentEntity,
   RetentionCaseEntity,
+  PrivacyRequestEntity,
+  PrivacyNoticeEntity,
 ];
 
 function className(entity: EntityDefinition): string {
@@ -113,6 +119,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
     private readonly coreExport: CoreExport,
     private readonly personData: PersonDataRegistry,
     private readonly imports: ImportRegistry,
+    private readonly settings: SettingsService,
   ) {}
 
   onModuleInit(): void {
@@ -124,11 +131,20 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
     this.historyAccess.registerPermission('core.retention_case', RETENTION_PERMISSION);
     // Remembered mappings of the table import: for users of any import profile.
     this.historyAccess.register('core.import_mapping', async (user) => ({ allowed: this.imports.available(user).length > 0 }));
-    // Settings of a module: also for the managers of that module's settings.
+    // Settings of a module: also for the managers of that module's settings; data protection sections for
+    // `core.privacy.manage`.
     this.historyAccess.register('core.setting', async (user, section) => {
-      const module = section.includes('.') ? section.slice(0, section.indexOf('.')) : null;
-      return { allowed: user.can('core.settings.manage') || (module !== null && module !== 'core' && user.can(`${module}.settings.manage`)) };
+      const managers = (() => {
+        try {
+          return this.settings.managerPermissions(section);
+        } catch {
+          return ['core.settings.manage'];
+        }
+      })();
+      return { allowed: user.can('core.settings.manage') || managers.some((permission) => user.can(permission)) };
     });
+    this.historyAccess.registerPermission('core.privacy_request', PRIVACY_PERMISSION);
+    this.historyAccess.registerPermission('core.privacy_notice', PRIVACY_PERMISSION);
   }
 
   static forRoot(options: ForgaCoreOptions): DynamicModule {
@@ -160,6 +176,9 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         PluginsController,
         OnboardingController,
         SecurityStatusController,
+        PrivacyNoticeController,
+        PrivacyTextsController,
+        PrivacyRequestsController,
       ],
       providers: [
         { provide: FORGA_CORE_OPTIONS, useValue: { ...options, modules } },
@@ -199,8 +218,13 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         RetentionExport,
         CoreRetentionCategories,
         CoreExport,
+        PrivacyNoticeService,
+        PrivacyRequests,
+        PrivacyAssignees,
       ],
       exports: [
+        PrivacyNoticeService,
+        PrivacyRequests,
         FORGA_CORE_OPTIONS,
         CookiePolicy,
         ModuleStateService,

@@ -58,14 +58,17 @@ function UserMenu({ session }: { session: Session }) {
 }
 
 function Footer() {
+  const { t } = useTranslation('shell');
   const { data: brigade } = useBrigade();
-  if (!brigade) return null;
-  const address = [brigade.name, brigade.street, [brigade.postalCode, brigade.city].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
-  const contact = [brigade.phone && `Telefon ${brigade.phone}`, brigade.fax && `Fax ${brigade.fax}`, brigade.website].filter(Boolean).join(' · ');
+  const address = brigade ? [brigade.name, brigade.street, [brigade.postalCode, brigade.city].filter(Boolean).join(' ')].filter(Boolean).join(' · ') : '';
+  const contact = brigade ? [brigade.phone && `${t('footer.phone')} ${brigade.phone}`, brigade.fax && `${t('footer.fax')} ${brigade.fax}`, brigade.website].filter(Boolean).join(' · ') : '';
   return (
     <footer className={classes.footer}>
-      <div>{address}</div>
+      {address && <div>{address}</div>}
       {contact && <div>{contact}</div>}
+      <div>
+        <a href="/privacy">{t('privacy.notice.link')}</a>
+      </div>
     </footer>
   );
 }

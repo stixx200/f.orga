@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { AuditEntry } from '../audit/audit.js';
 import { HistoryEntry } from '../history/history.entity.js';
+import { PrivacyRequestEntity } from '../privacy/privacy.entities.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { PasswordReset } from '../security/password-reset.js';
 import { ApiToken, Role, Session, User } from '../security/security.entities.js';
@@ -53,7 +54,19 @@ export class CoreExport {
   async person(personId: string): Promise<Record<string, unknown>> {
     const em = this.em.fork();
     const users = await em.find(User, { personId }, { populate: ['roles.role'] });
-    if (!users.length) return { users: [] };
+    // Data protection requests of the person belong to the data stored about it.
+    const privacyRequests = (await em.find(PrivacyRequestEntity, { personId }, { orderBy: { receivedOn: 'asc' } })).map((r) => ({
+      kind: r.kind,
+      receivedOn: r.receivedOn,
+      channel: r.channel,
+      content: r.content,
+      dueOn: r.dueOn,
+      extendedUntil: r.extendedUntil ?? null,
+      status: r.status,
+      closedOn: r.closedOn ?? null,
+      rejectionReason: r.rejectionReason,
+    }));
+    if (!users.length) return { users: [], privacyRequests };
     const ids = users.map((u) => u.id);
     const sessions = await em.find(Session, { user: { $in: ids } }, { populate: ['impersonator'], orderBy: { createdAt: 'asc' } });
     const audit = await em.find(
@@ -69,6 +82,7 @@ export class CoreExport {
           .map((s) => ({ createdAt: s.createdAt.toISOString(), expiresAt: s.expiresAt.toISOString(), impersonatedBy: s.impersonator?.displayName ?? null, impersonationReason: s.impersonationReason ?? null })),
       })),
       audit: audit.map(auditDto),
+      privacyRequests,
     };
   }
 
@@ -78,6 +92,13 @@ export class CoreExport {
    */
   async anonymize(personIds: readonly string[]): Promise<void> {
     const em = this.em.fork();
+    // Data protection requests stay as proof (kind, dates, outcome), without the texts about the person.
+    const requests = await em.find(PrivacyRequestEntity, { personId: { $in: [...personIds] } }, { fields: ['id'] });
+    if (requests.length) {
+      const requestIds = requests.map((r) => r.id);
+      await em.nativeUpdate(PrivacyRequestEntity, { id: { $in: requestIds } }, { content: '', identityNote: '', notes: '', activity: '' });
+      await em.nativeDelete(HistoryEntry, { entity: 'core.privacy_request', entityId: { $in: requestIds } });
+    }
     const users = await em.find(User, { personId: { $in: [...personIds] } }, { populate: ['passwordHash'] });
     if (!users.length) return;
     for (const user of users) {
@@ -106,6 +127,8 @@ export class CoreExport {
       technical: u.technical,
       lastLogin: u.lastLogin?.toISOString() ?? null,
       oidcLinked: Boolean(u.oidcSubject),
+      privacyNoticeVersion: u.privacyNoticeVersion ?? null,
+      privacyNoticeAcknowledgedAt: u.privacyNoticeAcknowledgedAt?.toISOString() ?? null,
       roles: u.roles.getItems().map((a) => ({ roleId: a.role.id, role: a.role.name, departmentId: a.departmentId ?? null })),
     };
   }

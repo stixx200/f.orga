@@ -32,6 +32,12 @@ export interface PersonSnapshot {
   driverLicenseClasses: string[];
 }
 
+/**
+ * Persons whose processing is restricted (Art. 18) are left out of `search`, `membersOn`, `memberPeriods`, `careers()`
+ * without IDs and `offices`, so they disappear from lists, pickers, the info terminal and deadlines. `snapshots`,
+ * `summaries`, `paymentDetails` and `careers(ids)` still resolve them (names in existing records, payouts already
+ * due); callers that list or offer persons from their own tables filter with `restrictedIds`.
+ */
 export interface PersonDirectory {
   /** Search by name or personnel number among non-left persons. */
   search(query: string, options?: { departmentIds?: string[]; limit?: number }): Promise<PersonSummary[]>;
@@ -40,8 +46,11 @@ export interface PersonDirectory {
   findByPersonnelNumber(personnelNumber: string): Promise<PersonSummary | null>;
   /** Summaries (with e-mail and phone) of the given persons, e.g. to notify them; unknown IDs are omitted. */
   summaries(ids: readonly string[]): Promise<PersonSummary[]>;
-  /** Snapshots of all persons with a membership on the date, e.g. for the annual statistics. */
-  membersOn(date: string): Promise<PersonSnapshot[]>;
+  /**
+   * Snapshots of all persons with a membership on the date; `includeRestricted` only for counts such as the annual
+   * statistics, which must not change because of a restriction.
+   */
+  membersOn(date: string, options?: { includeRestricted?: boolean }): Promise<PersonSnapshot[]>;
   /** Names and membership periods of all persons, e.g. to match names on many dates in an import. */
   memberPeriods(): Promise<MemberPeriods[]>;
   /** Bank account and employer for payouts (sensitive: only for the server, never passed to the UI as is). */
@@ -50,6 +59,10 @@ export interface PersonDirectory {
   careers(ids?: readonly string[]): Promise<PersonCareer[]>;
   /** Offices held (also past ones), e.g. for function allowances; optionally only of these offices. */
   offices(filter?: { offices?: readonly string[] }): Promise<OfficeHolding[]>;
+  /** Is the processing of the person restricted (Art. 18)? */
+  isRestricted(personId: string): Promise<boolean>;
+  /** The restricted persons among `ids`, or all restricted persons without `ids`. */
+  restrictedIds(ids?: readonly string[]): Promise<Set<string>>;
   /** Records a promotion in the person file (rank history). */
   recordPromotion(personId: string, promotion: { rank: string; since: string; notes: string }): Promise<void>;
 }

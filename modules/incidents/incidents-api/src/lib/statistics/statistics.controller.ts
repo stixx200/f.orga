@@ -140,7 +140,8 @@ export class StatisticsController {
       this.organization.departments(),
       this.organization.stations(),
       this.organization.vehicles({ includeRetired: true }),
-      this.directory.membersOn(referenceDate),
+      // Counts only: a restriction of processing must not change the statistics.
+      this.directory.membersOn(referenceDate, { includeRestricted: true }),
       em.find(AlarmKeywordEntity, { mainType: { $ne: null } }),
     ]);
     const reports = await em.find(ReportEntity, { alarmedAt: { $gte: start, $lt: end } }, { populate: ['personnel', 'incident'] });

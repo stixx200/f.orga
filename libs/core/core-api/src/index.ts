@@ -52,3 +52,8 @@ export * from './lib/plugins/tar.js';
 export * from './lib/stage.js';
 export * from './lib/security/http-security.js';
 export * from './lib/security/cookie-policy.js';
+export * from './lib/privacy/privacy.entities.js';
+export * from './lib/privacy/privacy-notice.js';
+export * from './lib/privacy/privacy-requests.js';
+export * from './lib/privacy/privacy-text.js';
+export * from './lib/privacy/restriction.js';
