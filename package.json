@@ -16,6 +16,7 @@
     "dev": "nx run-many -t serve --parallel=20",
     "seed": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/seed.mts",
     "e2e": "playwright test -c e2e/playwright.config.ts",
+    "e2e:fresh": "tsx --tsconfig tools/tsconfig.json tools/e2e.mts",
     "check": "npm run lint && npm run typecheck && npm run test && npm run integration && npm run build"
   },
   "private": true,

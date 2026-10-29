@@ -64,6 +64,53 @@ jobs:
       - name: Build
         run: npm run build
 
+  e2e:
+    name: End-to-end tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: forga
+          POSTGRES_PASSWORD: forga
+          POSTGRES_DB: forga
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forga"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      FORGA_E2E_DATABASE_URL: postgresql://forga:forga@localhost:5432/forga_e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Nx cache
+        uses: actions/cache@v4
+        with:
+          path: .nx/cache
+          key: nx-e2e-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: nx-e2e-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+      - name: Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build, start a fresh instance, seed and run the tests
+        run: npm run e2e:fresh
+      - name: Report and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            dist/e2e-report
+            dist/e2e-results
+            dist/e2e/server.log
+          retention-days: 14
+
   docker:
     name: Docker image
     runs-on: ubuntu-latest

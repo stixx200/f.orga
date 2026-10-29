@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { login } from './support';
+import { expect, login, test } from './support';
 
 /**
  * The commander creates a cost notice for a chargeable incident, adds material, issues it and cancels it again
@@ -10,9 +9,11 @@ test('cost notice from a chargeable incident', async ({ browser }) => {
   await page.goto('/cost-recovery/candidates');
   await expect(page.getByRole('heading', { name: 'Kostenpflichtige Einsätze', level: 1 })).toBeVisible();
   // A free chargeable incident, otherwise a draft left by an earlier run.
-  const create = page.getByRole('button', { name: 'Bescheid erstellen' });
-  if (await create.count()) await create.first().click();
-  else await page.getByRole('row').filter({ hasText: 'Entwurf' }).getByRole('button', { name: 'Öffnen' }).first().click();
+  const create = page.getByRole('button', { name: 'Bescheid erstellen' }).first();
+  const draft = page.getByRole('row').filter({ hasText: 'Entwurf' }).getByRole('button', { name: 'Öffnen' }).first();
+  await expect(create.or(draft).first()).toBeVisible();
+  if (await create.isVisible()) await create.click();
+  else await draft.click();
   await expect(page.getByRole('heading', { name: /Kostenbescheid KE-\d{4}-\d{3}/, level: 1 })).toBeVisible();
   await expect(page.getByText('Entwurf', { exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Bezeichnung' }).first()).toHaveValue(/Personal/);

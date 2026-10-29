@@ -1,7 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { login } from './support';
-
-const local = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+import { expect, localDateTime, login, test } from './support';
 
 /**
  * The commander plans a session, a member checks in via QR code,
@@ -17,8 +14,8 @@ test('session with QR check-in, attendance and closing', async ({ browser }) => 
   await commander.getByRole('button', { name: '+ Dienst planen' }).click();
   const dialog = commander.getByRole('dialog');
   await dialog.getByLabel(/^Titel/).fill(title);
-  await dialog.getByLabel(/^Beginn/).fill(local(new Date(Date.now() - 10 * 60_000)));
-  await dialog.getByLabel(/^Ende/).fill(local(new Date(Date.now() + 110 * 60_000)));
+  await dialog.getByLabel(/^Beginn/).fill(localDateTime(-10));
+  await dialog.getByLabel(/^Ende/).fill(localDateTime(110));
   await dialog.getByRole('combobox', { name: 'Abteilungen' }).click({ force: true });
   await commander.getByRole('option', { name: 'Abteilung Musterstadt', exact: true }).click();
   await dialog.getByLabel(/^Thema/).fill('Löschangriff mit Wasserentnahme');
@@ -36,7 +33,7 @@ test('session with QR check-in, attendance and closing', async ({ browser }) => 
   const member = await login(browser, 'group-leader');
   await member.goto(`/training/check-in?code=${code}`);
   await member.getByRole('button', { name: 'Ich bin da' }).click();
-  await expect(member.getByText(`Deine Anwesenheit bei „${title}“ ist erfasst.`)).toBeVisible();
+  await expect(member.getByText(`Ihre Anwesenheit bei „${title}“ ist erfasst.`)).toBeVisible();
 
   // The commander sees the check-in, completes the list and closes the session.
   await commander.reload();

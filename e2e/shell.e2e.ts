@@ -1,7 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { login } from './support';
-
-const ADMIN = { username: process.env['FORGA_ADMIN_USER'] ?? 'admin', password: process.env['FORGA_ADMIN_PASSWORD'] ?? 'sehr-geheim-123' };
+import { ADMIN, download, expect, login, test } from './support';
 
 test('forgotten password and reset page', async ({ page }) => {
   await page.goto('/');
@@ -18,20 +15,21 @@ test('forgotten password and reset page', async ({ page }) => {
 });
 
 test('global search, data protection and export', async ({ browser }) => {
-  const page = await login(browser, ADMIN.username, ADMIN.password);
+  const page = await login(browser, ADMIN.username);
   await page.getByRole('textbox', { name: 'Personen, Fahrzeuge, Einsätze suchen' }).fill('HLF');
   await page.getByRole('option', { name: /HLF 20/ }).first().click();
   await expect(page.getByRole('heading', { name: 'Fahrzeuge', level: 1 })).toBeVisible();
 
-  await page.goto('/admin/settings');
-  await page.getByRole('tab', { name: 'Datenschutz' }).click();
-  await page.getByRole('button', { name: 'Prüfen, was jetzt betroffen wäre' }).click();
-  await expect(page.getByText(/Personen zu anonymisieren/)).toBeVisible();
+  // Retention periods show how many records each rule would affect now.
+  await page.goto('/admin/privacy/settings?tab=retention');
+  await expect(page.getByRole('heading', { name: 'Aufbewahrungsfristen' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Jetzt betroffen' })).toBeVisible();
 
+  await page.goto('/admin/settings');
   await page.getByRole('tab', { name: 'Export' }).click();
-  const download = page.waitForEvent('download');
-  await page.getByRole('link', { name: 'Stammdaten exportieren' }).click();
-  expect((await download).suggestedFilename()).toMatch(/^forga-masterdata-.*\.json$/);
+  const masterdata = await download(page, () => page.getByRole('link', { name: 'Stammdaten exportieren' }).click());
+  expect(masterdata.name).toMatch(/^forga-masterdata-.*\.json$/);
+  expect(JSON.parse(masterdata.content.toString('utf8'))).toBeTruthy();
 
   await page.getByRole('tab', { name: 'Feuerwehr' }).click();
   await expect(page.getByText('Wappen', { exact: true })).toBeVisible();

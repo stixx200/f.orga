@@ -12,6 +12,8 @@ const projects = roots.flatMap((root) => readdirSync(root, { withFileTypes: true
 const configs = projects.flatMap((dir) => ['tsconfig.app.json', 'tsconfig.lib.json', 'tsconfig.spec.json'].map((c) => join(dir, c)).filter(existsSync));
 // Apps without app/lib configs (the web apps) keep their sources in tsconfig.json.
 for (const dir of projects) if (!configs.some((c) => c.startsWith(`${dir}/`)) && existsSync(join(dir, 'tsconfig.json'))) configs.push(join(dir, 'tsconfig.json'));
+// The Playwright end-to-end tests.
+configs.push('e2e/tsconfig.json');
 
 const failures = [];
 const queue = [...configs];

@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { choose, login } from './support';
+import { choose, expect, login, test } from './support';
 
 /**
  * The commander admits a new member: create with probation, fill in the person file,
@@ -38,6 +37,8 @@ test('commander maintains a person file', async ({ browser }) => {
   // Final admission, promotion, second department.
   await page.getByRole('tab', { name: 'Feuerwehr' }).click();
   await page.getByRole('button', { name: 'Endgültig aufnehmen …' }).click();
+  // Before the end of the probation the admission needs a reason.
+  await page.getByRole('dialog').getByLabel(/^Begründung für die vorzeitige Aufnahme/).fill('E2E: Beschluss des Feuerwehrausschusses');
   await page.getByRole('dialog').getByRole('button', { name: 'Speichern' }).click();
   await expect(page.getByText('aktiv').first()).toBeVisible();
   await page.getByRole('button', { name: '+ Dienstgrad' }).click();
@@ -45,9 +46,9 @@ test('commander maintains a person file', async ({ browser }) => {
   await page.getByRole('dialog').getByRole('button', { name: 'Speichern' }).click();
   await expect(page.getByRole('cell', { name: 'Feuerwehrmann/-frau' })).toBeVisible();
   await page.getByRole('button', { name: '+ Abteilung' }).click();
-  await choose(page, 'Abteilung', 'Gesamtfeuerwehr');
+  await choose(page, 'Abteilung', 'Abteilung Ahornfeld');
   await page.getByRole('dialog').getByRole('button', { name: 'Speichern' }).click();
-  await expect(page.getByRole('cell', { name: 'Gesamtfeuerwehr' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Abteilung Ahornfeld' })).toBeVisible();
 
   // An office with period (the catalog template brings the offices).
   await page.request.post('/api/masterdata/catalog/templates/bw', { headers: { 'x-forga': '1' }, data: {} });

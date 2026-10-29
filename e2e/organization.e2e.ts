@@ -1,12 +1,9 @@
-import { expect, test } from '@playwright/test';
-import { choose, login } from './support';
-
-const ADMIN = { username: process.env['FORGA_ADMIN_USER'] ?? 'admin', password: process.env['FORGA_ADMIN_PASSWORD'] ?? 'sehr-geheim-123' };
+import { ADMIN, choose, expect, login, test } from './support';
 
 /** The administrator adds, edits and removes a department with station and vehicle. */
 test('administrator maintains the organization', async ({ browser }) => {
   const name = `E2E-Einheit-${Date.now()}`;
-  const page = await login(browser, ADMIN.username, ADMIN.password);
+  const page = await login(browser, ADMIN.username);
   await page.goto('/masterdata/organization');
   await expect(page.getByRole('heading', { name: 'Organisation', level: 1 })).toBeVisible();
 

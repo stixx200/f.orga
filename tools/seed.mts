@@ -22,6 +22,7 @@
  */
 import { createHmac } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import ExcelJS from 'exceljs';
 import { VWV_2022_RULES } from '@forga/promotions-contracts';
 import { BW_TEMPLATE } from '@forga/cost-recovery-contracts';
@@ -73,7 +74,7 @@ async function call<T>(method: string, path: string, body?: unknown, retried = f
 
 // --- second factor (step-up) --------------------------------------------------------------------
 
-const TOTP_FILE = 'tmp/seed-totp.json';
+const TOTP_FILE = process.env['FORGA_TOTP_FILE'] ?? 'tmp/seed-totp.json';
 const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
 /** TOTP code (RFC 6238, SHA-1, 6 digits, 30 seconds) of a Base32 secret. */
@@ -104,7 +105,7 @@ async function stepUp(): Promise<void> {
   if (!session.mfa.enrolled) {
     const { secret } = await call<{ secret: string }>('POST', 'core/mfa/enrolment', { password: ADMIN.password }, true);
     await call('POST', 'core/mfa/enrolment/confirm', { code: totpCode(secret) }, true);
-    mkdirSync('tmp', { recursive: true });
+    mkdirSync(dirname(TOTP_FILE), { recursive: true });
     writeFileSync(TOTP_FILE, `${JSON.stringify({ ...storedSecrets(), [ADMIN.username]: secret }, null, 2)}\n`, { mode: 0o600 });
     console.log(`Zweiter Faktor für ${ADMIN.username} eingerichtet. Geheimnis für die Authenticator-App: ${secret} (gespeichert in ${TOTP_FILE})`);
     return;

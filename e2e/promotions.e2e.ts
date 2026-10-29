@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { chooseFirst, login } from './support';
+import { chooseFirst, expect, login, test } from './support';
 
 /**
  * The commander looks at the preview, creates a promotion list, promotes one proposal with a comment, decides the list
@@ -13,7 +12,8 @@ test('promotion list from the rules', async ({ browser }) => {
   await page.getByRole('tab', { name: 'Vorschau' }).click();
   await page.getByText('Alle', { exact: true }).click();
   await page.getByRole('row').filter({ hasText: 'Musterstadt' }).first().click();
-  await expect(page.getByRole('dialog').getByText('alle Bedingungen')).toBeVisible();
+  // The explanation lists each condition with its state.
+  await expect(page.getByRole('dialog').getByText(/^(erfüllt|fehlt|erfüllt ab .*)$/).first()).toBeVisible();
   await page.keyboard.press('Escape');
 
   const title = `E2E ${Date.now()}`;
