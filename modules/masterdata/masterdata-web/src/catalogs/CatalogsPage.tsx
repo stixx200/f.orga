@@ -185,7 +185,7 @@ function DeleteEntryDialog({ entry, onClose }: { entry: CatalogEntry; onClose: (
   const { t: common } = useTranslation('common');
   const localized = useLocalized();
   const [blocked, setBlocked] = useState<Blocked | null>(null);
-  const { data: modules = [] } = useQuery({ queryKey: ['core', 'modules'], queryFn: () => api<ActiveModule[]>('core/modules'), staleTime: 5 * 60_000 });
+  const { data: modules = [] } = useQuery({ queryKey: ['core', 'modules', 'active'], queryFn: () => api<ActiveModule[]>('core/modules'), staleTime: 5 * 60_000 });
   const moduleName = (id: string) => {
     const module = modules.find((m) => m.id === id);
     return module ? localized(module.name) : id;

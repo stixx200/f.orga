@@ -91,7 +91,8 @@ function Router({ modules, session }: { modules: LoadedModule[]; session: Sessio
 
 function LoggedIn({ session }: { session: Session }) {
   const { t } = useTranslation('shell');
-  const { data: modules, error } = useQuery({ queryKey: ['core', 'modules'], queryFn: loadModules });
+  // Own key: modules read `core/modules` as plain data, the shell keeps the loaded frontends (`LoadedModule`).
+  const { data: modules, error } = useQuery({ queryKey: ['shell', 'loaded-modules'], queryFn: loadModules, staleTime: Infinity });
 
   // After login the language stored in the user's profile applies.
   useEffect(() => {
