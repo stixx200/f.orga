@@ -147,7 +147,7 @@ export function SettingsPage() {
     <Stack gap="lg">
       <PageHeader breadcrumbs={breadcrumbs(t, t('settings.title'))} title={t('overview.title')} />
       <BackupTabs />
-      {overview && !overview.configured && <Notice kind="error">{t('warnings.backup.notConfigured')}</Notice>}
+      {overview && !overview.configured && <Notice kind="info">{t('warnings.backup.notConfigured')}</Notice>}
       {data && overview && <SettingsForm initial={data} root={overview.root ?? 'FORGA_BACKUP_ROOT'} />}
     </Stack>
   );

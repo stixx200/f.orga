@@ -107,6 +107,15 @@ describe('backup', { timeout: 120_000 }, () => {
     process.env.FORGA_BACKUP_ROOT = root;
   });
 
+  it('stays quiet until it is set up: no warnings, tasks or open setup step', async () => {
+    const status = await get('/backup/status').expect(200);
+    expect(status.body).toMatchObject({ configured: true, settingsSaved: false, warnings: [] });
+    expect((await get('/core/tasks').expect(200)).body.some((t: { module: string }) => t.module === 'backup')).toBe(false);
+    const onboarding = (await get('/core/onboarding').expect(200)).body as { key: string }[];
+    expect(onboarding.some((item) => item.key === 'module:backup')).toBe(false);
+    expect(await test.app.get(BackupScheduler).runIfDue(new Date())).toBeNull();
+  });
+
   it('stores the passphrase encrypted and write-only', async () => {
     expect((await put('/backup/settings', settings({ passphrase: PASSPHRASE, passphraseRepeat: 'anders-als-vorher', passphraseKeptSafe: true })).expect(400)).body.code).toBe('backup.passphraseMismatch');
     expect((await put('/backup/settings', settings({ passphrase: PASSPHRASE, passphraseRepeat: PASSPHRASE })).expect(400)).body.code).toBe('backup.passphraseNotConfirmed');
@@ -118,8 +127,10 @@ describe('backup', { timeout: 120_000 }, () => {
     expect(saved.body).toMatchObject({ passphraseSet: true, passphraseUnreadable: false, targetPath: 'forga' });
     expect(saved.body.passphraseId).toMatch(/^[0-9A-F]{8}$/);
     expect(JSON.stringify(saved.body)).not.toContain(PASSPHRASE);
-    const generic = await get('/core/settings/backup.general').expect(200);
-    expect(generic.body.passphraseEncrypted).toBeUndefined();
+    // Only through /api/backup/settings, not through the generic settings endpoint.
+    await get('/core/settings/backup.general').expect(404);
+    const exported = JSON.stringify((await get('/core/export/core').expect(200)).body);
+    expect(exported).not.toContain('passphraseEncrypted');
     const history = await get('/core/history/core.setting/backup.general').expect(200);
     expect(JSON.stringify(history.body)).not.toContain('v1.');
     expect(JSON.stringify(history.body)).toContain('••••••');

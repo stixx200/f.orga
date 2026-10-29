@@ -84,9 +84,9 @@ Die Datei hat den eigenen Projektnamen `forga-stages` und feste Volumenamen (`fo
 
 ### In der Anwendung (Modul Datensicherung)
 
-Unter „Verwaltung → Datensicherung“ richtet ein Administrator mit `backup.manage` eine regelmäßige, verschlüsselte Sicherung der eigenen Instanz ein, prüft Sicherungen und stellt eine Sicherung ohne Konsole wieder her (Einzelheiten in der [Architektur](architektur.md#modul-datensicherung-backup)). Voraussetzungen:
+Optional: Unter „Verwaltung → Datensicherung“ richtet ein Administrator mit `backup.manage` eine regelmäßige, verschlüsselte Sicherung der eigenen Instanz ein, prüft Sicherungen und stellt eine Sicherung ohne Konsole wieder her (Einzelheiten in der [Architektur](architektur.md#modul-datensicherung-backup)). Voraussetzungen:
 
-- `FORGA_BACKUP_ROOT` (Compose: `/backups`) mit einem Ordner auf dem Host (`FORGA_BACKUP_DIR`, Eigentümer UID 1000) oder dem Volume `forga-backups`. Ein NAS wird auf dem Host eingebunden (NFS/SMB), nicht im Container. Der Zielordner in den Einstellungen liegt darunter (Standard `forga`).
+- `FORGA_BACKUP_ROOT` (Compose: `/backups`) mit einem Ordner auf dem Host (`FORGA_BACKUP_DIR`, Eigentümer UID 1000) oder, ohne Angabe, dem Volume `forga-backups`; Compose startet also auch ohne `FORGA_BACKUP_DIR`. Solange die Einstellungen nicht gespeichert sind, sichert das Modul nichts und meldet nichts (keine Warnungen, Aufgaben oder E-Mails). Ein NAS wird auf dem Host eingebunden (NFS/SMB), nicht im Container. Der Zielordner in den Einstellungen liegt darunter (Standard `forga`).
 - `FORGA_SECRET_KEY` für die gespeicherte Passphrase (geplante Sicherungen).
 - Die Datenbankrolle `forga` legt für die Wiederherstellung eine neue Datenbank an und benennt Datenbanken um; der Benutzer aus `POSTGRES_USER` darf das. Ohne `CREATEDB` stellt das Modul in die laufende Datenbank in einer Transaktion wieder her.
 

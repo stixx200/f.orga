@@ -167,6 +167,8 @@ export type BackupWarning = z.infer<typeof BackupWarning>;
 export const BackupOverview = z.object({
   /** `FORGA_BACKUP_ROOT` is set. */
   configured: z.boolean(),
+  /** The settings have been saved once (the backup is set up); before, no warnings, tasks or e-mails. */
+  settingsSaved: z.boolean(),
   root: z.string().nullable(),
   settings: BackupSettingsView,
   target: TargetCheck.nullable(),

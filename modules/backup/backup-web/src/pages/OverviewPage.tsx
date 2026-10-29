@@ -138,11 +138,16 @@ export function OverviewPage() {
           </SimpleGrid>
           {overview.running && <Notice kind="info">{t('overview.running')}</Notice>}
           {overview.warnings.map((warning) => (
-            <Notice key={warning} kind={warning === 'backup.notConfigured' || warning === 'backup.lastFailed' || warning === 'backup.targetNotWritable' ? 'error' : 'warning'}>
+            <Notice key={warning} kind={warning === 'backup.notConfigured' ? 'info' : warning === 'backup.lastFailed' || warning === 'backup.targetNotWritable' ? 'error' : 'warning'}>
               {t(`warnings.${warning}`)}
             </Notice>
           ))}
-          {overview.settings.encryption && <Notice kind="warning">{t('overview.passphraseWarning')}</Notice>}
+          {overview.configured && !overview.settingsSaved && (
+            <Notice kind="info" action={<Button component={Link} to="/backup/settings" size="compact-sm" variant="default">{t('actions.settings')}</Button>}>
+              {t('overview.notSetUp')}
+            </Notice>
+          )}
+          {overview.settingsSaved && overview.settings.encryption && <Notice kind="warning">{t('overview.passphraseWarning')}</Notice>}
           <SimpleGrid cols={{ base: 1, md: 2 }}>
             <Panel title={t('overview.state')} aside={<StatusBadge tone={overview.warnings.length ? 'warning' : 'done'}>{t(overview.warnings.length ? 'overview.attention' : 'overview.ok')}</StatusBadge>}>
               <StateList overview={overview} />

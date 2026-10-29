@@ -1,6 +1,7 @@
 import type { Translations } from '@forga/web-sdk';
+import { audit } from './audit.i18n';
 
-export const translations: Translations = {
+const texts: Translations = {
   de: {
     module: 'Datensicherung',
     administration: 'Verwaltung',
@@ -31,6 +32,7 @@ export const translations: Translations = {
       free: 'Frei am Ziel',
       freeHint: 'reicht für über {{count}} Sicherungen',
       running: 'Eine Sicherung läuft gerade.',
+      notSetUp: 'Die Datensicherung ist optional und noch nicht eingerichtet. Es laufen keine Sicherungen, und es gibt keine Warnungen oder Aufgaben, bis die Einstellungen gespeichert sind.',
       passphraseWarning: 'Die Passphrase liegt nur verschlüsselt in f.orga. Ohne sie lässt sich keine Sicherung wiederherstellen. Bewahren Sie Passphrase und FORGA_SECRET_KEY getrennt von den Sicherungen auf, z. B. im Passwortsafe der Feuerwehr.',
       state: 'Stand',
       ok: 'in Ordnung',
@@ -77,7 +79,7 @@ export const translations: Translations = {
     trigger: { scheduled: 'geplant', manual: 'Jetzt sichern', safety: 'Sicherheitssicherung vor Wiederherstellung', upload: 'hochgeladen', foreign: 'fremd' },
     status: { running: 'läuft', ok: 'erfolgreich', failed: 'fehlgeschlagen', missing: 'Datei fehlt', deleted: 'gelöscht', foreign: 'nicht von dieser Instanz' },
     warnings: {
-      'backup.notConfigured': 'Die Datensicherung ist nicht eingerichtet: Auf dem Server fehlt FORGA_BACKUP_ROOT (Ordner bzw. Volume für die Sicherungen). Siehe Betriebsanleitung.',
+      'backup.notConfigured': 'Die Datensicherung ist optional und auf diesem Server nicht eingerichtet: Es fehlt FORGA_BACKUP_ROOT (Ordner bzw. Volume für die Sicherungen). Siehe Betriebsanleitung.',
       'backup.noSecretKey': 'FORGA_SECRET_KEY fehlt: Die Passphrase kann nicht gespeichert werden, geplante Sicherungen laufen nicht. „Jetzt sichern“ fragt nach der Passphrase.',
       'backup.noPassphrase': 'Es ist keine Passphrase gespeichert. Legen Sie in den Einstellungen eine Passphrase fest.',
       'backup.passphraseUnreadable': 'Die gespeicherte Passphrase lässt sich nicht entschlüsseln (FORGA_SECRET_KEY hat sich geändert). Geben Sie die Passphrase in den Einstellungen erneut ein.',
@@ -308,6 +310,7 @@ export const translations: Translations = {
       free: 'Free at the target',
       freeHint: 'enough for more than {{count}} backups',
       running: 'A backup is running.',
+      notSetUp: 'Backups are optional and not set up yet. No backups run, and there are no warnings or tasks until the settings are saved.',
       passphraseWarning: 'The passphrase is stored in f.orga only encrypted. Without it no backup can be restored. Keep the passphrase and FORGA_SECRET_KEY apart from the backups, e.g. in the password safe of the brigade.',
       state: 'State',
       ok: 'all right',
@@ -354,7 +357,7 @@ export const translations: Translations = {
     trigger: { scheduled: 'scheduled', manual: 'Back up now', safety: 'safety backup before restore', upload: 'uploaded', foreign: 'foreign' },
     status: { running: 'running', ok: 'successful', failed: 'failed', missing: 'file missing', deleted: 'deleted', foreign: 'not from this instance' },
     warnings: {
-      'backup.notConfigured': 'Backups are not set up: FORGA_BACKUP_ROOT (folder or volume for the backups) is missing on the server. See the operating manual.',
+      'backup.notConfigured': 'Backups are optional and not set up on this server: FORGA_BACKUP_ROOT (folder or volume for the backups) is missing. See the operating manual.',
       'backup.noSecretKey': 'FORGA_SECRET_KEY is missing: the passphrase cannot be stored, scheduled backups do not run. „Back up now“ asks for the passphrase.',
       'backup.noPassphrase': 'No passphrase is stored. Set a passphrase in the settings.',
       'backup.passphraseUnreadable': 'The stored passphrase cannot be decrypted (FORGA_SECRET_KEY has changed). Enter the passphrase again in the settings.',
@@ -556,3 +559,5 @@ export const translations: Translations = {
     },
   },
 };
+
+export const translations: Translations = { de: { ...texts.de, audit: audit.de }, en: { ...texts.en, audit: audit.en } };

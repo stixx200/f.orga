@@ -47,16 +47,19 @@ export class BackupOverviewService {
     const now = new Date();
 
     const warnings: BackupWarning[] = [];
+    // Optional module: until it is set up (folder and saved settings) it only says so, without warnings.
     if (!root) warnings.push('backup.notConfigured');
-    if (!serverKey()) warnings.push('backup.noSecretKey');
-    if (view.encryption && !view.passphraseSet) warnings.push('backup.noPassphrase');
-    if (view.passphraseUnreadable) warnings.push('backup.passphraseUnreadable');
-    if (!view.encryption) warnings.push('backup.unencrypted');
-    if (root && this.stale(lastSuccess?.startedAt ?? null, loaded.settings.notify.staleHours, now)) warnings.push('backup.stale');
-    if (latest?.status === 'failed') warnings.push('backup.lastFailed');
-    if (target && !target.writable) warnings.push('backup.targetNotWritable');
-    if (!tools.pgDump) warnings.push('backup.toolsMissing');
-    else if (tools.server && majorVersion(tools.pgDump)! < majorVersion(tools.server)!) warnings.push('backup.clientMismatch');
+    else if (loaded.saved) {
+      if (!serverKey()) warnings.push('backup.noSecretKey');
+      if (view.encryption && !view.passphraseSet) warnings.push('backup.noPassphrase');
+      if (view.passphraseUnreadable) warnings.push('backup.passphraseUnreadable');
+      if (!view.encryption) warnings.push('backup.unencrypted');
+      if (this.stale(lastSuccess?.startedAt ?? null, loaded.settings.notify.staleHours, now)) warnings.push('backup.stale');
+      if (latest?.status === 'failed') warnings.push('backup.lastFailed');
+      if (target && !target.writable) warnings.push('backup.targetNotWritable');
+      if (!tools.pgDump) warnings.push('backup.toolsMissing');
+      else if (tools.server && majorVersion(tools.pgDump)! < majorVersion(tools.server)!) warnings.push('backup.clientMismatch');
+    }
 
     const restores = await this.restores.latest();
     const events: BackupOverview['events'] = [];
@@ -83,6 +86,7 @@ export class BackupOverviewService {
     const own = entries.filter((e) => e.status === 'ok' && e.fileName);
     return {
       configured: Boolean(root),
+      settingsSaved: loaded.saved,
       root,
       settings: view,
       target,

@@ -1,7 +1,9 @@
 import { type MiddlewareConsumer, Module, type NestModule, type OnModuleInit } from '@nestjs/common';
-import { defineModule, DeadlineRegistry } from '@forga/core-api';
-import { BACKUP_MANIFEST, BACKUP_SETTINGS_SECTION, BackupSettings } from '@forga/backup-contracts';
+import { EntityManager } from '@mikro-orm/core';
+import { AuditReferenceRegistry, defineModule, DeadlineRegistry } from '@forga/core-api';
+import { BACKUP_MANIFEST, BACKUP_SETTINGS_SECTION } from '@forga/backup-contracts';
 import { BACKUP_MIGRATIONS } from '../migrations/index.js';
+import { registerAuditReferences } from './audit/audit.references.js';
 import { BackupController } from './backup.controller.js';
 import { BackupRestore, BackupRun } from './backup.entities.js';
 import { BackupsService } from './backups/backups.service.js';
@@ -20,10 +22,13 @@ export class BackupModule implements NestModule, OnModuleInit {
   constructor(
     private readonly deadlines: DeadlineRegistry,
     private readonly overview: BackupOverviewService,
+    private readonly auditReferences: AuditReferenceRegistry,
+    private readonly em: EntityManager,
   ) {}
 
   onModuleInit(): void {
     this.deadlines.register({ module: 'backup', deadlines: (asOf) => this.overview.deadlines(asOf) });
+    registerAuditReferences(this.auditReferences, this.em);
   }
 
   /** Maintenance mode during a restore: every API request except the status of the restore gets 503. */
@@ -39,6 +44,7 @@ export const backupModule = defineModule({
   // Records of backups and restores are a protocol and not historized; changes of the settings are (core.setting).
   historized: [],
   migrations: BACKUP_MIGRATIONS,
-  settings: { [BACKUP_SETTINGS_SECTION]: BackupSettings },
+  // The section is not registered as module settings: the backup is optional and does not appear as open in the
+  // setup list; it is read and written only through /api/backup/settings.
   settingsAccess: { [BACKUP_SETTINGS_SECTION]: { managersOnly: true } },
 });
