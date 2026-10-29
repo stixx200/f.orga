@@ -15,6 +15,7 @@ export const BACKUP_MANIFEST = {
       name: { de: 'Datensicherung einrichten, sichern, herunterladen und wiederherstellen', en: 'Set up, create, download and restore backups' },
       scope: 'brigade',
       privileged: true,
+      stepUp: true,
     },
     { id: BACKUP_NOTIFY, name: { de: 'E-Mail bei fehlgeschlagener Datensicherung', en: 'E-mail when a backup fails' }, scope: 'brigade' },
   ],

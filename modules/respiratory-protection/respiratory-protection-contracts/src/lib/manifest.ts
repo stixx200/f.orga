@@ -14,6 +14,7 @@ export const RESPIRATORY_PROTECTION_MANIFEST = {
       id: 'respiratory-protection.examinations',
       name: { de: 'Eignungsuntersuchungen (Gesundheitsdaten)', en: 'Medical examinations (health data)' },
       scope: 'department',
+      stepUp: true,
     },
     { id: 'respiratory-protection.notify', name: { de: 'E-Mail beim Wechsel auf Rot', en: 'E-mail when the status turns red' }, scope: 'department' },
     { id: 'respiratory-protection.settings.manage', name: { de: 'Tauglichkeitsregel einstellen', en: 'Configure the fitness rule' }, scope: 'brigade' },

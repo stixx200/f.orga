@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import type { z } from 'zod';
 import type { Language, ListCell, ListColumn, ListInfo, ListOption, ListParameter } from '@forga/core-contracts';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
+import { PermissionRegistry } from '../security/permission-registry.js';
 
 export interface ListContent {
   /** Overrides the declared columns, e.g. for matrices with one column per qualification. */
@@ -40,6 +41,8 @@ export interface ListDefinition<P = Record<string, unknown>> {
 export class ListRegistry {
   private readonly lists = new Map<string, { module: string; definition: ListDefinition<never> }>();
 
+  constructor(@Optional() private readonly permissions?: PermissionRegistry) {}
+
   register<P>(module: string, definition: ListDefinition<P>): void {
     if (!definition.id.startsWith(`${module}.`)) {
       throw new Error(`List "${definition.id}" of module "${module}" must start with "${module}.".`);
@@ -53,12 +56,13 @@ export class ListRegistry {
 
   available(user: AuthenticatedUser): ListInfo[] {
     return [...this.lists.values()]
-      .filter(({ definition }) => user.can(definition.permission))
-      .map(({ module, definition }) => toInfo(module, definition, user.grant(definition.permission) ?? []));
+      // Lists with sensitive data are offered without step-up; creating them asks for the second factor.
+      .filter(({ definition }) => user.holds(definition.permission))
+      .map(({ module, definition }) => toInfo(module, definition, user.heldGrant(definition.permission) ?? [], this.permissions?.stepUp.has(definition.permission) ?? false));
   }
 }
 
-export function toInfo(module: string, definition: ListDefinition<never> | ListDefinition<unknown>, departments: ListInfo['departments']): ListInfo {
+export function toInfo(module: string, definition: ListDefinition<never> | ListDefinition<unknown>, departments: ListInfo['departments'], stepUp = false): ListInfo {
   return {
     id: definition.id,
     module,
@@ -69,5 +73,6 @@ export function toInfo(module: string, definition: ListDefinition<never> | ListD
     signatureColumn: definition.signatureColumn ?? false,
     orientation: definition.orientation ?? 'portrait',
     departments,
+    stepUp,
   };
 }

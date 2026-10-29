@@ -10,6 +10,15 @@ export class PermissionRegistry {
 
   constructor(@Inject(FORGA_CORE_OPTIONS) options: ForgaCoreOptions) {
     this.all = [...CORE_PERMISSIONS, ...options.modules.flatMap((m) => m.manifest.permissions ?? [])];
+    this.stepUp = new Set(this.all.filter((p) => p.stepUp).map((p) => p.id));
+  }
+
+  /** IDs of the permissions that need the second factor (step-up). */
+  readonly stepUp: ReadonlySet<string>;
+
+  /** Permissions an API token may never hold: privileged ones and those with step-up (unless `tokenAllowed`). */
+  tokenForbidden(permission: Permission): boolean {
+    return Boolean(permission.privileged || (permission.stepUp && !permission.tokenAllowed));
   }
 
   /** A role pattern is valid if it matches at least one known permission. */

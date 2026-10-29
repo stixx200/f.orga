@@ -4,15 +4,15 @@ import type { Permission, RoleTemplate } from './module.js';
 
 /** Permissions of the core itself. Modules declare their own in their manifest. */
 export const CORE_PERMISSIONS = [
-  { id: 'core.users.manage', name: { de: 'Benutzer verwalten', en: 'Manage users' }, scope: 'brigade' },
-  { id: 'core.users.impersonate', name: { de: 'Als anderer Benutzer anmelden', en: 'Log in as another user' }, scope: 'brigade' },
-  { id: 'core.roles.manage', name: { de: 'Rollen verwalten', en: 'Manage roles' }, scope: 'brigade' },
-  { id: 'core.modules.manage', name: { de: 'Module verwalten', en: 'Manage modules' }, scope: 'brigade' },
-  { id: 'core.settings.manage', name: { de: 'Einstellungen verwalten', en: 'Manage settings' }, scope: 'brigade' },
-  { id: 'core.tokens.manage', name: { de: 'API-Tokens verwalten', en: 'Manage API tokens' }, scope: 'brigade' },
-  { id: 'core.audit.read', name: { de: 'Audit-Log lesen', en: 'Read audit log' }, scope: 'brigade' },
-  { id: 'core.retention.manage', name: { de: 'Aussonderung bearbeiten (Archiv anbieten, Fristablauf ausführen)', en: 'Process retention (offer to the archive, execute expiry)' }, scope: 'brigade' },
-  { id: 'core.data.export', name: { de: 'Vollexport und Auskunft (DSGVO)', en: 'Full export and data access requests' }, scope: 'brigade' },
+  { id: 'core.users.manage', name: { de: 'Benutzer verwalten', en: 'Manage users' }, scope: 'brigade', stepUp: true },
+  { id: 'core.users.impersonate', name: { de: 'Als anderer Benutzer anmelden', en: 'Log in as another user' }, scope: 'brigade', stepUp: true },
+  { id: 'core.roles.manage', name: { de: 'Rollen verwalten', en: 'Manage roles' }, scope: 'brigade', stepUp: true },
+  { id: 'core.modules.manage', name: { de: 'Module verwalten', en: 'Manage modules' }, scope: 'brigade', stepUp: true },
+  { id: 'core.settings.manage', name: { de: 'Einstellungen verwalten', en: 'Manage settings' }, scope: 'brigade', stepUp: true },
+  { id: 'core.tokens.manage', name: { de: 'API-Tokens verwalten', en: 'Manage API tokens' }, scope: 'brigade', stepUp: true },
+  { id: 'core.audit.read', name: { de: 'Audit-Log lesen', en: 'Read audit log' }, scope: 'brigade', stepUp: true },
+  { id: 'core.retention.manage', name: { de: 'Aussonderung bearbeiten (Archiv anbieten, Fristablauf ausführen)', en: 'Process retention (offer to the archive, execute expiry)' }, scope: 'brigade', stepUp: true },
+  { id: 'core.data.export', name: { de: 'Vollexport und Auskunft (DSGVO)', en: 'Full export and data access requests' }, scope: 'brigade', stepUp: true },
 ] as const satisfies readonly Permission[];
 
 /**
@@ -136,8 +136,51 @@ export const Session = z.object({
   permissions: z.record(z.string(), Grant),
   /** Set while an administrator acts as this user (impersonation). */
   impersonator: z.object({ id: z.string(), displayName: z.string(), endsAt: z.string() }).nullable(),
+  /** Held permissions that only take effect while the session is confirmed with the second factor (step-up). */
+  stepUpPermissions: z.array(z.string()),
+  /** End of the step-up confirmation of this session; `null` = not confirmed. Fixed, not extended by activity. */
+  elevatedUntil: z.string().nullable(),
+  /**
+   * Second factor of the user (during an impersonation: of the administrator, whose factor confirms). `available`:
+   * the server can store a factor (`FORGA_SECRET_KEY` is set); `passwordRequired`: setting it up asks for the password
+   * (not for accounts without password that sign in with OIDC); `viaProvider`: the session can also be confirmed by a new
+   * sign-in at the OIDC provider with its second factor (setting `oidc.stepUpViaProvider`, linked account).
+   */
+  mfa: z.object({ enrolled: z.boolean(), available: z.boolean(), passwordRequired: z.boolean(), recoveryCodesLeft: z.number().int(), viaProvider: z.boolean() }),
 });
 export type Session = z.infer<typeof Session>;
+
+/** Confirms the session with the code of the authenticator app or a recovery code (step-up). */
+export const StepUpInput = z.union([
+  z.object({ code: z.string().trim().regex(/^\d{3}\s?\d{3}$/) }),
+  z.object({ recoveryCode: z.string().trim().min(8).max(20) }),
+]);
+export type StepUpInput = z.infer<typeof StepUpInput>;
+
+export const StepUpResult = z.object({ elevatedUntil: z.string() });
+export type StepUpResult = z.infer<typeof StepUpResult>;
+
+/** Starts setting up the second factor; the password is required for accounts that have one. */
+export const MfaEnrolmentStart = z.object({ password: z.string().optional() });
+export type MfaEnrolmentStart = z.infer<typeof MfaEnrolmentStart>;
+
+/** Secret of a factor being set up: shown as QR code (`uri`) and as text for entering it by hand. */
+export const MfaEnrolment = z.object({ secret: z.string(), uri: z.string() });
+export type MfaEnrolment = z.infer<typeof MfaEnrolment>;
+
+export const MfaEnrolmentConfirm = z.object({ code: z.string().trim().regex(/^\d{3}\s?\d{3}$/) });
+export type MfaEnrolmentConfirm = z.infer<typeof MfaEnrolmentConfirm>;
+
+/** Ten one-time recovery codes, shown only once (after setting up or renewing). */
+export const RecoveryCodes = z.object({ recoveryCodes: z.array(z.string()), elevatedUntil: z.string().nullable() });
+export type RecoveryCodes = z.infer<typeof RecoveryCodes>;
+
+/** An administrator removes the second factor of another user (lost phone); the reason is kept in the audit log. */
+export const MfaReset = z.object({ reason: z.string().trim().min(3).max(500) });
+export type MfaReset = z.infer<typeof MfaReset>;
+
+/** Minutes a step-up confirmation lasts (fixed). */
+export const STEP_UP_MINUTES = 30;
 
 /** Starting an impersonation needs a reason; it is kept in the audit log. */
 export const Impersonate = z.object({ reason: z.string().trim().min(3) });
@@ -179,6 +222,10 @@ export const User = z.object({
   oidcLinked: z.boolean(),
   /** `false` for invited users who have not set their password yet. */
   passwordSet: z.boolean(),
+  /** A second factor is set up. */
+  mfaEnrolled: z.boolean(),
+  /** The user holds permissions that need the second factor (step-up). */
+  mfaNeeded: z.boolean(),
   roles: z.array(z.object({ roleId: z.string(), departmentId: z.string().nullable() })),
   version: z.number(),
 });
@@ -270,6 +317,8 @@ export const ApiToken = z.object({
   expiresAt: z.string().nullable(),
   lastUsedAt: z.string().nullable(),
   revokedAt: z.string().nullable(),
+  /** Scopes without effect: permissions with step-up are never granted to tokens (shown struck through). */
+  inactiveScopes: z.array(z.string()),
 });
 export type ApiToken = z.infer<typeof ApiToken>;
 

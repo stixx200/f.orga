@@ -135,6 +135,12 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     return person.departmentIds.length ? person.departmentIds.some((d) => user.can(permission, d)) : user.grant(permission) === 'brigade';
   }
 
+  /** Would the step-up (second factor) give the permission for the person? */
+  needsStepUp(user: AuthenticatedUser, permission: string, person: Pick<PersonSnapshot, 'departmentIds'>): boolean {
+    if (this.can(user, permission, person)) return false;
+    return person.departmentIds.length ? person.departmentIds.some((d) => user.needsStepUp(permission, d)) : user.heldGrant(permission) === 'brigade';
+  }
+
   private async person(personId: string): Promise<PersonSnapshot> {
     const [person] = await this.directory.snapshots([personId]);
     if (!person) throw new NotFoundException();
@@ -187,7 +193,7 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     const person = await this.person(user.personId);
     const [status] = await this.statuses([person]);
     const rows = await this.em.fork().find(EvidenceEntity, { personId: person.id }, { orderBy: { date: 'desc' } });
-    return { status, evidence: rows.map(toEvidenceDto) };
+    return { status, evidence: rows.map(toEvidenceDto), stepUpAvailable: false };
   }
 
   async personView(user: AuthenticatedUser, personId: string): Promise<PersonRespiratoryProtection> {
@@ -196,12 +202,19 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     const [status] = await this.visibleStatuses(user, [person]);
     const rows = await this.em.fork().find(EvidenceEntity, { personId }, { orderBy: { date: 'desc' } });
     const examinations = this.can(user, EXAMINATIONS, person);
-    return { status, evidence: rows.filter((e) => e.kind !== 'examination' || examinations).map(toEvidenceDto) };
+    return {
+      status,
+      evidence: rows.filter((e) => e.kind !== 'examination' || examinations).map(toEvidenceDto),
+      stepUpAvailable: this.needsStepUp(user, EXAMINATIONS, person),
+    };
   }
 
   private async requireWrite(user: AuthenticatedUser, personId: string, kind: EvidenceKind): Promise<void> {
     const permission = kind === 'examination' ? EXAMINATIONS : EVIDENCE;
-    if (!this.can(user, permission, await this.person(personId))) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [permission] });
+    const person = await this.person(personId);
+    if (this.can(user, permission, person)) return;
+    // Examinations wait for the second factor: refused with `auth.stepUpRequired`, so the UI asks for the code.
+    throw this.needsStepUp(user, permission, person) ? user.stepUpRequired() : new ForbiddenException({ code: 'auth.forbidden', permissions: [permission] });
   }
 
   /**

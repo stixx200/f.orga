@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Fragment, useState } from 'react';
 import { useDebouncedValue } from '@mantine/hooks';
 import type { ListCell, ListData, ListInfo, ListOption, ListParameter } from '@forga/core-contracts';
-import { api, apiUrl, formatDate, withQuery, useLocalized, useTranslation } from '@forga/web-sdk';
+import { api, apiUrl, formatDate, isElevated, openAfterStepUp, useSession, withQuery, useLocalized, useTranslation } from '@forga/web-sdk';
 import { DataTable, EmptyState, Notice, PageHeader, Panel } from '@forga/web-ui';
 import type { LoadedModule } from '../modules';
 import { useDepartments } from './admin/data';
@@ -112,6 +112,7 @@ function ListView({ list }: { list: ListInfo }) {
     queryFn: () => api<ListData>(withQuery(`core/lists/${list.id}`, shown ?? {})),
     enabled: !!shown,
   });
+  const session = useSession().data;
   const exportUrl = (format: string) => apiUrl(`core/lists/${list.id}/export/${format}`, { ...values, lang: i18n.language });
 
   return (
@@ -139,7 +140,14 @@ function ListView({ list }: { list: ListInfo }) {
                   { format: 'xlsx', icon: IconFileSpreadsheet, label: 'Excel' },
                   { format: 'csv', icon: IconFileText, label: 'CSV' },
                 ].map(({ format, icon: Icon, label }) => (
-                  <Button key={format} component="a" href={missing.length ? undefined : exportUrl(format)} variant="default" leftSection={<Icon size={18} />} data-disabled={missing.length > 0 || undefined} onClick={(e) => missing.length && e.preventDefault()}>
+                  <Button key={format} component="a" href={missing.length ? undefined : exportUrl(format)} variant="default" leftSection={<Icon size={18} />} data-disabled={missing.length > 0 || undefined} onClick={(e) => {
+                    if (missing.length) e.preventDefault();
+                    // Lists with sensitive data: ask for the second factor first instead of opening the server's error.
+                    else if (list.stepUp && !isElevated(session)) {
+                      e.preventDefault();
+                      void openAfterStepUp(exportUrl(format));
+                    }
+                  }}>
                     {label}
                   </Button>
                 ))}

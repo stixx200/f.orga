@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import type { Evidence } from '@forga/respiratory-protection-contracts';
 import { apiUrl, can, formatDate, send, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, Panel, useAction } from '@forga/web-ui';
+import { ConfirmDialog, DataTable, Notice, Panel, StepUpButton, useAction } from '@forga/web-ui';
 import { EVIDENCE, EXAMINATIONS, keys, usePersonRespiratoryProtection } from '../api';
 import { ConditionList, FitnessBadge } from '../parts';
 import { EvidenceDialog, KINDS } from './EvidenceDialog';
@@ -27,6 +27,7 @@ export function PersonTab({ personId }: { personId?: unknown }) {
 
   return (
     <Stack gap="lg">
+      {data.stepUpAvailable && <Notice kind="info" action={<StepUpButton>{t('person.showExaminations')}</StepUpButton>}>{t('person.examinationsHidden')}</Notice>}
       <Panel
         title={t('person.title')}
         aside={

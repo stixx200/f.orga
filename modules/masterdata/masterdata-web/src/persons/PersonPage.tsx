@@ -3,8 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { classNames, isValidIban, type Person, type PersonInput } from '@forga/masterdata-contracts';
-import { apiUrl, can, extensionsOf, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { ActionBar, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
+import { apiUrl, can, extensionsOf, isElevated, openAfterStepUp, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
+import { ActionBar, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, StatusBadge, StepUpButton, useAction } from '@forga/web-ui';
 import { keys, today as todayDate, useCatalogNames, useDepartments, usePerson, WRITE } from '../api';
 import { BrigadeTab } from './BrigadeTab';
 import { CoursesTab, PLAN } from './CoursesTab';
@@ -99,11 +99,17 @@ function PersonFile({ person }: { person: Person }) {
         title={`${person.firstName} ${person.lastName}`}
         actions={
           can(session, 'core.data.export') && (
-            <Button component="a" href={apiUrl(`core/export/person/${person.id}`)} variant="default">{t('person.dataAccess')}</Button>
+            <Button component="a" href={apiUrl(`core/export/person/${person.id}`)} variant="default" onClick={(e) => {
+              // The data access needs the second factor: ask first instead of opening the server's error.
+              if (isElevated(session)) return;
+              e.preventDefault();
+              void openAfterStepUp(apiUrl(`core/export/person/${person.id}`));
+            }}>{t('person.dataAccess')}</Button>
           )
         }
       />
       {person.anonymizedAt && <Notice kind="info">{t('person.anonymized')}</Notice>}
+      {person.stepUpAvailable && <Notice kind="info" action={<StepUpButton>{t('person.showSensitive')}</StepUpButton>}>{t('person.stepUpHidden')}</Notice>}
       <Panel>
         <Group wrap="nowrap" align="center">
           <Avatar size={64} color="brand" radius="xl">{initials(person)}</Avatar>

@@ -13,8 +13,14 @@
  *   npm run seed -- --only clothing      (only the clothing store, into an instance with persons)
  *   FORGA_URL=http://localhost:3000 FORGA_ADMIN_USER=admin FORGA_ADMIN_PASSWORD=… npm run seed
  *   FORGA_SETUP_TOKEN=… npm run seed     (empty instance: the setup token from the server log or its environment)
+ *
+ * Users and settings need a session confirmed with the second factor (step-up). On the first run the script sets up
+ * the administrator's factor (TOTP) and keeps the secret in `tmp/seed-totp.json` (ignored by version control), printing
+ * it once for an authenticator app; later runs read it from there or from `FORGA_ADMIN_TOTP_SECRET`. The server needs
+ * `FORGA_SECRET_KEY`. Demo users set up their own factor at their first step-up in the browser.
  */
-import { readFileSync } from 'node:fs';
+import { createHmac } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import ExcelJS from 'exceljs';
 import { VWV_2022_RULES } from '@forga/promotions-contracts';
 import { BW_TEMPLATE } from '@forga/cost-recovery-contracts';
@@ -46,7 +52,7 @@ const chance = (probability: number) => random() < probability;
 
 let cookie = '';
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function call<T>(method: string, path: string, body?: unknown, retried = false): Promise<T> {
   const response = await fetch(`${BASE}/api/${path}`, {
     method,
     headers: { 'x-forga': '1', cookie, ...(body instanceof FormData || body === undefined ? {} : { 'content-type': 'application/json' }) },
@@ -55,8 +61,62 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   const setCookie = response.headers.get('set-cookie');
   if (setCookie) cookie = setCookie.split(';')[0];
   const text = await response.text();
+  // The confirmation lasts 30 minutes: confirm again and repeat the request.
+  if (response.status === 403 && !retried && text.includes('auth.stepUpRequired')) {
+    await stepUp();
+    return call<T>(method, path, body, true);
+  }
   if (!response.ok) throw new Error(`${method} ${path}: ${response.status} ${text}`);
   return (text ? JSON.parse(text) : undefined) as T;
+}
+
+// --- second factor (step-up) --------------------------------------------------------------------
+
+const TOTP_FILE = 'tmp/seed-totp.json';
+const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+/** TOTP code (RFC 6238, SHA-1, 6 digits, 30 seconds) of a Base32 secret. */
+function totpCode(secret: string, at = Date.now()): string {
+  let bits = '';
+  for (const char of secret.replace(/[\s=]/g, '').toUpperCase()) bits += BASE32.indexOf(char).toString(2).padStart(5, '0');
+  const key = Buffer.from((bits.match(/.{8}/g) ?? []).map((b) => parseInt(b, 2)));
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(at / 30_000)));
+  const hash = createHmac('sha1', key).update(counter).digest();
+  const offset = hash[hash.length - 1] & 0x0f;
+  return String((hash.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, '0');
+}
+
+function storedSecrets(): Record<string, string> {
+  try {
+    return JSON.parse(readFileSync(TOTP_FILE, 'utf8')) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+/** Confirms the session of the administrator with the second factor; sets the factor up on the first run. */
+async function stepUp(): Promise<void> {
+  const session = await call<{ elevatedUntil: string | null; mfa: { enrolled: boolean; available: boolean } }>('GET', 'core/session', undefined, true);
+  if (session.elevatedUntil && Date.parse(session.elevatedUntil) > Date.now() + 60_000) return;
+  if (!session.mfa.available) throw new Error('Auf dem Server fehlt FORGA_SECRET_KEY: ohne ihn kein zweiter Faktor und keine Verwaltung.');
+  if (!session.mfa.enrolled) {
+    const { secret } = await call<{ secret: string }>('POST', 'core/mfa/enrolment', { password: ADMIN.password }, true);
+    await call('POST', 'core/mfa/enrolment/confirm', { code: totpCode(secret) }, true);
+    mkdirSync('tmp', { recursive: true });
+    writeFileSync(TOTP_FILE, `${JSON.stringify({ ...storedSecrets(), [ADMIN.username]: secret }, null, 2)}\n`, { mode: 0o600 });
+    console.log(`Zweiter Faktor für ${ADMIN.username} eingerichtet. Geheimnis für die Authenticator-App: ${secret} (gespeichert in ${TOTP_FILE})`);
+    return;
+  }
+  const secret = process.env['FORGA_ADMIN_TOTP_SECRET'] ?? storedSecrets()[ADMIN.username];
+  if (!secret) throw new Error(`Der zweite Faktor von ${ADMIN.username} ist eingerichtet, das Geheimnis aber unbekannt: FORGA_ADMIN_TOTP_SECRET setzen oder ${TOTP_FILE} anlegen.`);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await fetch(`${BASE}/api/core/step-up`, { method: 'POST', headers: { 'x-forga': '1', cookie, 'content-type': 'application/json' }, body: JSON.stringify({ code: totpCode(secret) }) });
+    if (response.ok) return;
+    // A code counts only once: after a confirmation within the same 30 seconds wait for the next one.
+    if (attempt === 0 && response.status === 400) await new Promise((resolve) => setTimeout(resolve, 31_000));
+    else throw new Error(`core/step-up: ${response.status} ${await response.text()}`);
+  }
 }
 
 interface ImportResult {
@@ -390,6 +450,7 @@ async function login(): Promise<void> {
     await call('POST', 'core/setup', { setupToken, brigadeName: BRIGADE, username: ADMIN.username, displayName: 'Administrator', email: 'admin@example.org', password: ADMIN.password });
   }
   await call('POST', 'core/login', ADMIN);
+  await stepUp();
 }
 
 async function settings(): Promise<void> {

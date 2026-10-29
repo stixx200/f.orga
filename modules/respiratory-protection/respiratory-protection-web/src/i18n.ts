@@ -61,6 +61,8 @@ const de = {
     noWearer: 'Die Person hat kein Kennzeichen Atemschutzgeräteträger.',
     noEvidence: 'Noch keine Nachweise.',
     recordPdf: 'Atemschutznachweis (PDF)',
+    examinationsHidden: 'Eignungsuntersuchungen (Gesundheitsdaten) sind ausgeblendet, bis Sie mit Ihrem zweiten Faktor bestätigen. Die Ampel zeigt sie wie ohne das Recht.',
+    showExaminations: 'Untersuchungen anzeigen …',
   },
   evidence: {
     add: '+ Nachweis eintragen',
@@ -235,6 +237,8 @@ const en: typeof de = {
     noWearer: 'The person is not a breathing apparatus wearer.',
     noEvidence: 'No evidence yet.',
     recordPdf: 'BA record (PDF)',
+    examinationsHidden: 'Medical examinations (health data) are hidden until you confirm with your second factor. The traffic light shows them as without the permission.',
+    showExaminations: 'Show examinations …',
   },
   evidence: {
     add: '+ Record evidence',

@@ -61,6 +61,12 @@ function UserEditor({ user, onDone }: { user: User | null; onDone: (id: string |
   });
   const resend = useAction(() => send('POST', `core/users/${user!.id}/invitation`), { success: t('users.resent') });
   const unlinkOidc = useAction(() => send('DELETE', `core/users/${user!.id}/oidc`), { success: t('users.oidcUnlinked'), invalidate: [USERS_KEY] });
+  const [resettingMfa, setResettingMfa] = useState(false);
+  const resetMfa = useAction((reason: string) => send('DELETE', `core/users/${user!.id}/mfa`, { reason }), {
+    success: t('users.mfaResetDone'),
+    invalidate: [USERS_KEY],
+    onSuccess: () => setResettingMfa(false),
+  });
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
   const save = useAction(
@@ -157,6 +163,7 @@ function UserEditor({ user, onDone }: { user: User | null; onDone: (id: string |
             )}
             {user && !user.passwordSet && user.active && <Button variant="subtle" onClick={() => resend.mutate(undefined)} loading={resend.isPending}>{t('users.resend')}</Button>}
             {user?.oidcLinked && <Button variant="subtle" onClick={() => unlinkOidc.mutate(undefined)} loading={unlinkOidc.isPending}>{t('users.oidcUnlink')}</Button>}
+            {user?.mfaEnrolled && !isSelf && <Button variant="subtle" onClick={() => setResettingMfa(true)}>{t('users.mfaReset')}</Button>}
             {user && !isSelf && (
               user.active ? (
                 <Button variant="default" onClick={() => setLocking(true)}>{t('users.lock')}</Button>
@@ -177,6 +184,16 @@ function UserEditor({ user, onDone }: { user: User | null; onDone: (id: string |
         confirmLabel={t('users.impersonateConfirm')}
         loading={impersonate.isPending}
         onConfirm={(reason) => impersonate.mutate(reason)}
+      />
+      <ConfirmDialog
+        opened={resettingMfa}
+        onClose={() => setResettingMfa(false)}
+        title={t('users.mfaResetTitle', { name: user?.displayName })}
+        description={t('users.mfaResetText')}
+        reason={t('users.mfaResetReason')}
+        confirmLabel={t('users.mfaResetConfirm')}
+        loading={resetMfa.isPending}
+        onConfirm={(reason) => resetMfa.mutate(reason)}
       />
       <ConfirmDialog
         opened={locking}
@@ -260,6 +277,14 @@ export function UsersPage() {
                 { key: 'person', header: t('users.personColumn'), render: (u) => (u.technical ? <Text size="sm" c="dimmed">{t('users.technical')}</Text> : (person(u.personId) ? personLabel(person(u.personId)!) : u.displayName)) },
                 { key: 'roles', header: t('users.roles'), render: (u) => u.roles.map((r) => assignmentLabel(r.roleId, r.departmentId, roles, departments, t('users.brigade'), localized)).join(' · ') },
                 { key: 'lastLogin', header: t('users.lastLogin'), render: (u) => formatDateTime(u.lastLogin, i18n.language) },
+                {
+                  key: 'mfa',
+                  header: t('users.mfa'),
+                  render: (u) =>
+                    u.mfaEnrolled ? <StatusBadge tone="done">{t('users.mfaEnrolled')}</StatusBadge>
+                    : u.mfaNeeded ? <StatusBadge tone="warning">{t('users.mfaMissing')}</StatusBadge>
+                    : <Text size="sm" c="dimmed">{t('users.mfaNotNeeded')}</Text>,
+                },
                 {
                   key: 'status',
                   header: t('users.status'),

@@ -14,6 +14,14 @@ export const Permission = z.object({
    * to API tokens.
    */
   privileged: z.boolean().optional(),
+  /**
+   * Sensitive data or administration: the permission only takes effect in a session confirmed with the second factor
+   * (step-up, 30 minutes). Without the confirmation the user is treated as lacking it; never granted to API tokens
+   * unless `tokenAllowed`.
+   */
+  stepUp: z.boolean().optional(),
+  /** A permission with `stepUp` that API tokens may nevertheless hold (explicit exception). */
+  tokenAllowed: z.boolean().optional(),
 });
 export type Permission = z.infer<typeof Permission>;
 

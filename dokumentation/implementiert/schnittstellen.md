@@ -6,7 +6,7 @@ Alle Pfade liegen unter `/api`.
 - per Sitzungs-Cookie `forga_session`, bei ändernden Methoden zusätzlich mit dem Header `x-forga: 1`,
 - oder per `Authorization: Bearer forga_…`.
 
-**Rechte.** Die Spalte „Recht“ nennt die Berechtigung, die der Aufrufer in mindestens einer Abteilung braucht.
+**Rechte.** Die Spalte „Recht“ nennt die Berechtigung, die der Aufrufer in mindestens einer Abteilung braucht. Berechtigungen mit `stepUp` (alle `core.*`-Verwaltungsrechte, `masterdata.persons.sensitive`, `respiratory-protection.examinations`, `backup.manage`) und die Überweisungsdateien und Abrechnungen der Entschädigung verlangen zusätzlich eine mit dem zweiten Faktor bestätigte Sitzung ([Step-up](datenschutz.md#zweiter-faktor-bei-sensiblen-daten-step-up)); API-Tokens bekommen solche Rechte nicht.
 
 **Fehler.** Fehlerantworten tragen einen `code`. Typische Codes:
 
@@ -14,6 +14,7 @@ Alle Pfade liegen unter `/api`.
 | --- | --- | --- |
 | `auth.required` | `401` | nicht angemeldet |
 | `auth.forbidden` | `403` | Berechtigung fehlt |
+| `auth.stepUpRequired` | `403` | Berechtigung vorhanden, aber Sitzung nicht mit dem zweiten Faktor bestätigt (`enrolled`: Faktor eingerichtet) |
 | `auth.csrf` | `403` | Header `x-forga` fehlt |
 | `validation.failed` | `400` | Eingabe ungültig |
 | `codes.taken` | `400`/`409` | Barcode oder RFID-Chip (`field`, `value`) gehört schon zu einem anderen Gegenstand des Moduls |
@@ -30,7 +31,14 @@ Alle Pfade liegen unter `/api`.
 | `POST` | `/core/oidc/link` | angemeldet (Sitzung) | Eigenes Konto beim Anbieter verknüpfen; Antwort `{ url }` zum Anbieter |
 | `POST` | `/core/login` | offen | Anmelden (`Login`), setzt das Cookie. Fehler: `auth.invalidCredentials` (`401`), `auth.locked` (`429`) |
 | `POST` | `/core/logout` | offen | Sitzung beenden, Cookie löschen (`204`) |
-| `GET` | `/core/session` | angemeldet | Benutzer (mit `language`, `email`, `receiveDigest`) und wirksame Berechtigungen (`brigade` oder Liste von Abteilungs-IDs) |
+| `GET` | `/core/session` | angemeldet | Benutzer (mit `language`, `email`, `receiveDigest`) und gehaltene Berechtigungen (`brigade` oder Liste von Abteilungs-IDs), dazu `stepUpPermissions`, `elevatedUntil` und `mfa: { enrolled, available, passwordRequired, recoveryCodesLeft, viaProvider }` |
+| `GET` | `/core/step-up` | angemeldet | `204` in einer mit dem zweiten Faktor bestätigten Sitzung, sonst `403` `auth.stepUpRequired` (`{ enrolled }`) |
+| `POST` | `/core/step-up` | angemeldet (Sitzung) | Sitzung 30 Minuten bestätigen (`StepUpInput`: `{ code }` oder `{ recoveryCode }`); Antwort `{ elevatedUntil }`. Fehler: `auth.invalidCode` (`400`), `auth.stepUpLocked` (`429`), `auth.mfaNotEnrolled`, `auth.mfaNoSecretKey` (`503`) |
+| `POST` | `/core/step-up/end` | angemeldet | Bestätigung beenden (`204`) |
+| `POST` | `/core/mfa/enrolment` | angemeldet (Sitzung, keine Impersonation) | Zweiten Faktor einrichten (`{ password }`, ohne Passwort im Konto entfällt es); Antwort `{ secret, uri }`. Fehler: `auth.passwordRequired` (`401`), `auth.mfaEnrolled` (`409`), `auth.mfaNoSecretKey` (`503`) |
+| `POST` | `/core/mfa/enrolment/confirm` | angemeldet (Sitzung, keine Impersonation) | Einrichtung mit einem Code bestätigen (`{ code }`); Antwort `{ recoveryCodes, elevatedUntil }`. Fehler: `auth.invalidCode`, `auth.stepUpLocked`, `auth.mfaNotStarted` |
+| `POST` | `/core/mfa/recovery-codes` | bestätigte Sitzung | Zehn neue Wiederherstellungscodes, die alten enden |
+| `POST` | `/core/oidc/step-up` | angemeldet (Sitzung, keine Impersonation), Einstellung `oidc.stepUpViaProvider` | Sitzung durch erneute Anmeldung beim Anbieter bestätigen (`{ returnTo }`); Antwort `{ url }`. Fehler: `auth.oidcStepUpDisabled` |
 | `PUT` | `/core/profile` | angemeldet | Eigene Sprache, Sammel-E-Mail, ausgeblendete Aufgaben und E-Mail-Adresse ändern (`UpdateProfile`: `language`, `receiveDigest`, optional `hiddenTasks`, `email` mit `currentPassword`). Antwort `{ ok, confirmationSent }`; eine neue Adresse gilt erst nach Bestätigung. Fehler: `auth.passwordRequired` (`401`), `auth.emailTaken` (`409`) |
 | `POST` | `/core/email-confirmation` | öffentlich | Neue E-Mail-Adresse bestätigen (`ConfirmEmail`: `token`). Fehler: `auth.emailLinkInvalid`, `auth.emailTaken` |
 | `PUT` | `/core/password` | angemeldet | Eigenes Passwort ändern (`ChangePassword`) |
@@ -42,6 +50,7 @@ Alle Pfade liegen unter `/api`.
 | `POST` | `/core/users/invitations/bulk` | `core.users.manage` | Mehrere Personen einladen (`BulkUserInvitation`); Antwort `{ invited, skipped }`, `skipped` je Person mit `reason` (`unknownPerson`, `hasUser`, `noEmail`, `emailTaken`, `usernameTaken`, `forbidden`, `mailFailed` mit `code`) |
 | `POST` | `/core/users/:id/invitation` | `core.users.manage` | Einladung erneut senden, solange kein Passwort gesetzt ist (`users.alreadyActivated`) |
 | `DELETE` | `/core/users/:id/oidc` | `core.users.manage` | Verknüpfung mit dem Konto der Gemeinde lösen (`users.targetWider` wie beim Ändern) |
+| `DELETE` | `/core/users/:id/mfa` | `core.users.manage` | Zweiten Faktor eines anderen Benutzers zurücksetzen (`MfaReset`: `reason`); beendet seine Sitzungen, E-Mail an ihn. Fehler: `users.mfaResetSelf`, `users.targetWider`, `auth.mfaNotEnrolled` |
 | `POST` | `/core/users/:id/impersonate` | `core.users.impersonate` | Als dieser Benutzer anmelden (`{ reason }`), höchstens 60 Minuten. Fehler: `auth.impersonationSelf`, `auth.impersonationWider`, `auth.impersonationNested`, `auth.impersonationUnknownUser` |
 | `POST` | `/core/impersonation/end` | angemeldet | Impersonation beenden, eigene Sitzung wiederherstellen |
 | `GET` | `/core/permissions` | `core.roles.manage` oder `core.tokens.manage` | Alle Berechtigungen von Core und Modulen (`name` als `{ de, en }`) |

@@ -144,6 +144,7 @@ export class OrganizationController {
     // also for rights the user does not hold. So it needs the right to manage roles as well and is logged.
     const previousParent = department.parent?.id ?? null;
     const moved = fields.parentId !== previousParent;
+    if (moved && user.needsStepUp(ROLES_MANAGE)) throw user.stepUpRequired();
     if (moved && !user.can(ROLES_MANAGE)) throw new ForbiddenException({ code: 'masterdata.departmentMoveNeedsRoles', permissions: [MANAGE, ROLES_MANAGE] });
     em.assign(department, await this.departmentFields(em, fields, id));
     await em.flush();

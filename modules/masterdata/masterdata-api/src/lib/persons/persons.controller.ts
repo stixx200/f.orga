@@ -4,7 +4,6 @@ import {
   ConflictException,
   Controller,
   Delete,
-  ForbiddenException,
   Get,
   NotFoundException,
   Param,
@@ -640,12 +639,18 @@ export class PersonsController {
     return this.persons.toDto(person, user);
   }
 
-  /** Master fields; sensitive ones are only applied with `masterdata.persons.sensitive`. */
+  /**
+   * Master fields; sensitive ones are only applied with `masterdata.persons.sensitive`. If the permission waits for the
+   * second factor, sending sensitive fields is refused (`auth.stepUpRequired`) instead of silently ignoring them.
+   */
   private masterFields(input: ParsedPerson, user: AuthenticatedUser, existing: Person | null) {
     const { birthDate, birthPlace, employer, bank, notes, version: _version, ...rest } = input;
     const sensitive = existing
       ? this.persons.can(user, SENSITIVE, existing)
       : user.grant(SENSITIVE) !== null;
+    const stepUp = existing ? this.persons.needsStepUp(user, SENSITIVE, existing) : user.heldGrant(SENSITIVE) !== null;
+    const sent = [birthDate, birthPlace, employer, bank].some((value) => value !== undefined && value !== null && value !== '') || Boolean(notes);
+    if (!sensitive && stepUp && sent) throw user.stepUpRequired();
     if (!sensitive) return rest;
     if (birthDate && birthDate > today()) throw new BadRequestException({ code: 'masterdata.birthDateInFuture' });
     return {
@@ -718,7 +723,7 @@ export class PersonsController {
   /** Loads a person for changes of sensitive data (rest periods): `masterdata.persons.write` and `masterdata.persons.sensitive`. */
   private async loadSensitive(em: EntityManager, id: string, user: AuthenticatedUser): Promise<Person> {
     const person = await this.persons.load(em, id, user, WRITE);
-    if (!this.persons.can(user, SENSITIVE, person)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [SENSITIVE] });
+    if (!this.persons.can(user, SENSITIVE, person)) throw this.persons.denied(user, SENSITIVE, person);
     return person;
   }
 

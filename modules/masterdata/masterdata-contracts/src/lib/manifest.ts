@@ -17,6 +17,7 @@ export const MASTERDATA_MANIFEST = {
       id: 'masterdata.persons.sensitive',
       name: { de: 'Sensible Personendaten', en: 'Sensitive personal data' },
       scope: 'department',
+      stepUp: true,
     },
     {
       id: 'masterdata.organization.manage',

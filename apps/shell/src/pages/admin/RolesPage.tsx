@@ -122,7 +122,10 @@ function RoleEditor({ role, permissions, modules, onDone }: { role: Role | null;
                         .map((p) => (
                           <Table.Tr key={p.id}>
                             <Table.Td>
-                              <Text size="sm">{localized(p.name)}</Text>
+                              <Group gap={6}>
+                                <Text size="sm">{localized(p.name)}</Text>
+                                {p.stepUp && <span title={t('roles.stepUpHint')}><StatusBadge tone="highlight">{t('roles.stepUp')}</StatusBadge></span>}
+                              </Group>
                               <Text size="xs" c="dimmed"><code>{p.id}</code> · {t(p.scope === 'brigade' ? 'roles.scopeBrigade' : 'roles.scopeDepartment')}</Text>
                             </Table.Td>
                             <Table.Td align="right">{areaControl(p.id, wholeModule)}</Table.Td>
