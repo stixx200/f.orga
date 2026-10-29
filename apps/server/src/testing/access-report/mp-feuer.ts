@@ -45,5 +45,5 @@ export async function seedMpFeuer(fx: AccessReportFixture): Promise<SeedResult> 
       { row: 3, action: 'create', label: 'Dritter, Max', messages: [{ code: 'imports.unknownValue' }], archive: 'a' },
     ],
   });
-  return { expect: ['19.10.2026', 'Zeilen mit Ihrem Namen in Datenübernahmen', '1 Hinweis(e) im Bericht'] };
+  return { expect: ['19.10.2026', 'Zeilen mit Ihrem Namen in Datenübernahmen', '1 Hinweis im Bericht'] };
 }

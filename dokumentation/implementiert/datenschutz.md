@@ -1,6 +1,6 @@
 # Datenschutz (umgesetzter Stand)
 
-Was vom [Datenschutzkonzept](../geplant/datenschutz.md) im Code existiert (Phase 1: L1, L2, L5 teilweise, L6, L18 teilweise). Offene Punkte stehen dort. Weitere umgesetzte Bausteine: Rechte je Abteilung, sensible Felder, Historie und Audit-Log ([Architektur](architektur.md#sicherheit)), Auskunft als JSON und Aufbewahrungsplan ([Aufbewahrung](aufbewahrung.md)).
+Was vom [Datenschutzkonzept](../geplant/datenschutz.md) im Code existiert (Phase 1: L1, L2, L5 teilweise, L6, L18 teilweise; Phase 2: L3 Auskunft als PDF). Offene Punkte stehen dort. Weitere umgesetzte Bausteine: Rechte je Abteilung, sensible Felder, Historie und Audit-Log ([Architektur](architektur.md#sicherheit)), Auskunft als JSON und Aufbewahrungsplan ([Aufbewahrung](aufbewahrung.md)).
 
 ## Zweiter Faktor bei sensiblen Daten (Step-up)
 
@@ -62,6 +62,72 @@ Keinen Step-up brauchen Einstellungen der Module (`<modul>.settings.manage`), di
 
 - `npm run seed` richtet beim ersten Lauf den zweiten Faktor des Administrators ein, gibt das Geheimnis einmal aus und legt es in `tmp/seed-totp.json` ab (nicht versioniert); spätere Läufe lesen es dort oder aus `FORGA_ADMIN_TOTP_SECRET` und bestätigen ihre Sitzung selbst. Der Server braucht dafür `FORGA_SECRET_KEY` (in der Entwicklung aus `apps/server/.env`). Demobenutzer mit sensiblen Rechten richten ihren Faktor beim ersten Step-up im Browser mit einer Authenticator-App ein; ein verlorener Faktor wird in der Benutzerverwaltung zurückgesetzt. Die E2E-Tests bestätigen die Sitzung über die API und richten fehlende Faktoren dabei selbst ein (Geheimnisse ebenfalls in `tmp/seed-totp.json`).
 - In den Integrationstests gilt eine Sitzung aus `login()`/`setUp()` als bestätigt (Abkürzung über die Datenbank); `login(…, { elevated: false })` liefert eine Sitzung wie nach einer echten Anmeldung (`apps/server/src/step-up.integration.ts`).
+
+## Auskunft nach Art. 15 als PDF (L3)
+
+Eine lesbare Auskunft über alle Daten einer Person als PDF: Anschreiben mit den Angaben nach Art. 15 Abs. 1, danach je Bereich die Daten, am Ende die Änderungen an den Daten. Mockups `datenschutz/person.html` (Dialog `#d-auskunft`), `auskunft-vorschau.html`, `mein-bereich.html`.
+
+### Recht (vorläufig)
+
+Erstellen, Ansehen, Herunterladen und Übergeben verlangen bis zur Einführung von `core.privacy.manage` das Recht `core.data.export` (Gesamtwehr, mit `stepUp`), im Code als vorläufige Konstante `ACCESS_REPORT_PERMISSION` (`core-contracts`, `access-report.ts`) gekennzeichnet. Das Herunterladen in „Mein Bereich“ braucht kein Recht und keinen zweiten Faktor.
+
+### Beiträge der Module (`describePerson`)
+
+`ExportSource` hat neben `person(id)` (JSON) die lesbare Methode `describePerson(personId, ctx)`; sie liefert `PersonDataSection[]` (`core-api`, `access-report/person-description.ts`):
+
+- `key`, `title`, `activity` (Verarbeitungstätigkeit aus dem Manifest), `categories` (Datenkategorien als Text), `health` (Gesundheitsdaten, im PDF gekennzeichnet), `blocks`: `fields` (Beschriftung/Wert), `table` (Spalten, Zeilen, `summary` z. B. Summen je Jahr), `text`.
+- `records`: eigene Datensätze der Person (Historienname, IDs, lesbarer Name); ihre Änderungen und die ihrer untergeordneten Einträge erscheinen im Protokoll, ihr erster Eintrag ergibt die Herkunft. Gemeinsame Datensätze (Einsatz, Dienst, Beförderungsliste) gehören nicht dazu, sonst kämen Änderungen an Daten anderer ins Protokoll. `labels` benennt untergeordnete Einträge („Mitgliedschaft“).
+- `DescribeContext` (`ctx`): Sprache, Stichtag, `text`/`t`, `date` (`21.10.2026` bzw. `21 Oct 2026`, Zeiten in Europe/Berlin), `dateTime`, `time`, `money`, `number`, `yesNo`, `value` („–“ für leer), `iban` („IBAN endet auf 4711“), `actor(userId)` und `person(personId)`: die Person selbst mit Namen bzw. „Sie selbst“, andere Benutzer nur mit ihrer Funktion (Namen ihrer Rollen), technische Benutzer als „Schnittstelle „Name““, Personen ohne Konto als „andere Person“, ohne Benutzer „automatisch (System)“.
+- Regeln: Klartext, keine IDs, keine Feldnamen aus dem Code, andere Personen nie mit Namen, große Mengen als Tabelle mit Summen je Jahr, interne Bemerkungen gehören dazu.
+
+**Manifest:** `privacy: { personData, activities }`. `personData: true` heißt, das Modul speichert Daten über Personen; dann muss es `describePerson` oder `anonymize` (`PersonDataRegistry`) anbieten, sonst bricht der Server beim Start ab (`assertPersonDataComplete`), wie bei der Historie. Tätigkeiten (`ProcessingActivity`: `key` mit der Modul-ID als Präfix, `name`, `purpose`, `recipients`, `retention` mit Kategorien des Aufbewahrungsplans) liefern Zweck, Empfänger und Speicherdauer je Abschnitt; die Tätigkeit des Core ist `core.accounts` (`CORE_ACTIVITIES`).
+
+| Bereich | Inhalt |
+| --- | --- |
+| Stammdaten (`masterdata`, Tätigkeit `masterdata.persons`) | Anrede, Titel, Name, Rufname, Personalnummer, Geburtsdatum und -ort, Geschlecht, Anschrift, Telefonnummern, E-Mail, Beschäftigung, Arbeitgeber, Bankverbindungen gekürzt auf die letzten vier Stellen, Abtretung des Verdienstausfalls, Eintritt, Status, Probezeit, Aufnahme, Austritt mit Grund, Musiker, interne Bemerkungen; Tabellen Mitgliedschaften, Dienstgrade, Qualifikationen, Lehrgänge („Anderer Lehrgang: …“), Vormerkungen, Ehrungen, Ämter, Ruhezeiten, Gruppen |
+| Führerschein (`masterdata.driver-license`, Tätigkeit `masterdata.driver-licenses`) | Klassen mit Ablauf, Gültigkeit, Kontrollen (Art, Gerät, „geprüft von“ nur mit Funktion, Original, Bemerkung, Storno), Aufforderungen zur erneuten Vorlage, Transponder mit Endung der Kennung (kein Hash) |
+| Einsätze (`incidents`, Tätigkeit `incidents.reports`) | je Einsatz eine Zeile: Datum, Stichwort, Ort nur mit Ortsteil bzw. Gemeinde, Abteilung, eigene Funktion, Fahrzeug, Zeit, Atemschutz mit Minuten, verletzt, Verdienstausfall/Arbeitszeit, Eintrag am Infoterminal; Summen je Jahr; selbst verfasste Berichte mit Stand. Besatzung, Beteiligte, Zeugen, Einsatzleiter und Freitexte fehlen (Hinweis Art. 15 Abs. 4). Gesundheitsdaten, wenn verletzt |
+| Dienste (`training`, Tätigkeit `training.sessions`) | Anwesenheit mit Zeit, Stand, Entschuldigungsgrund und eigenem Text, Funktion, Atemschutz (kJ, bestanden), verletzt, Eintrag per QR-Code oder Infoterminal; Summen je Jahr; verantwortete bzw. ausgebildete Dienste. Gesundheitsdaten bei „krank“ oder verletzt |
+| Atemschutz (`respiratory-protection`, Tätigkeit `respiratory-protection.fitness`) | alle Nachweise mit Datum, Art, Ergebnis, Einschränkungen, Untersucher, Einrichtung, Gerät, kJ, Minuten, Notiz, gültig bis und Herkunft; Summen je Jahr. Gesundheitsdaten bei Eignungsuntersuchungen |
+| Entschädigung (`compensation`, Tätigkeit `compensation.payouts`) | Posten mit Datum, Anlass, Art, Stunden, Betrag, Bemerkung; Auszahlungslauf mit Stand und Weg; Summen je Jahr; Funktionen mit Aufwandsentschädigung. Die Bankverbindung steht bei den Stammdaten |
+| Geräte (`equipment`, Tätigkeit `equipment.inspections`) | von den Konten der Person gemeldete Mängel (Gerät, Beschreibung, Stand), von der Person durchgeführte Prüfungen (Gerät, Prüfung, Ergebnis, nächste Prüfung, Messwerte, Notizen) |
+| Beförderungen (`promotions`, Tätigkeit `promotions.promotions`) | Ausschlüsse mit Zeitraum, Geltung und Grund; Einträge in Beförderungslisten (Liste, Stichtag, Dienstgrad, Ziel, Entscheidung, Bemerkung); andere Personen der Listen fehlen |
+| Kleiderkammer (`clothing`, Tätigkeit `clothing.issues`) | gehaltene Stücke, Ausgaben und Rücknahmen mit Notiz und Stornogrund, Größen |
+| Einsatzleiter vom Dienst (`duty-officer`, Tätigkeit `duty-officer.roster`) | Dienste im Dienstplan mit Zeitraum, Tagen, Entschädigung, Notiz und Summen je Jahr; EvD-Berichte stehen bei den Einsätzen |
+| MP-Feuer (`mp-feuer`, Tätigkeit `mp-feuer.transfer`) | Zeilen der Laufberichte, deren Bezeichnung den Namen der Person trägt (Lauf, Bereich, Zeile, Aktion, Zahl der Hinweise), und die Zahl noch nicht gelöschter Zeilen aus Transferdateien; die Zuordnung geht über den Namen, weil die Zeilen keine Personen-ID tragen. Das Modul ist dafür auch im Vollexport (Läufe mit Zählern und Berichtszeilen, ohne Rohzeilen) |
+| Benutzerkonto (`core.account`, Tätigkeit `core.accounts`) | Benutzername, angezeigter Name, E-Mail, Sprache, wöchentliche E-Mail, aktiv, letzte Anmeldung, Gemeinde-Konto, zweiter Faktor, Rollen mit Abteilung, aktuelle Sitzungen (Impersonation mit Funktion und Grund), API-Tokens, Audit-Einträge des Kontos (Vorgang lesbar, Vorgänge der Module als „Vorgang: Modulname“, ohne Details) |
+| Änderungen an Ihren Daten (`core.protocol`) | Historie der `records` aller Bereiche: Zeitpunkt, Bereich, Änderung („Mitgliedschaft angelegt“), durch (Funktion bzw. „Sie selbst“) |
+
+Kein Abschnitt: **Kostenersatz** (speichert keine Daten über Mitglieder; Bescheide nennen nur den Anzeigenamen des ausstellenden Benutzers als Text), **Infoterminal** (Eintragungen stehen als Anwesenheit im Dienst bzw. im Personal des Berichts; das Modul selbst speichert nur Geräte), **Datensicherung** (Kopien der ganzen Datenbank mit eigener Aufbewahrung; Sicherung und Wiederherstellung stehen im Audit-Log des Kontos).
+
+### Inhalt des PDF
+
+`access-report.pdf.ts`, Rahmen wie die anderen Briefe (`renderLetterPdf` mit Wappen, Fußzeile mit Anschrift, Seite x/y, Erstellungszeit), A4, Helvetica, Kopfzeile jeder Seite „Auskunft nach Art. 15 DSGVO · Name · Stand“. Ein hinterlegter Briefkopf wird hier nicht verwendet, weil er die Kopfzeile ersetzen würde.
+
+- **Anschreiben:** Anschrift der Person (`OrganizationProvider.postalAddress` der Stammdaten), Ort und Datum, Betreff, Anrede, Einleitung, „Angaben nach Art. 15 Abs. 1 DSGVO“: Verantwortlicher, Datenschutzbeauftragter, Zwecke (a, aus den Tätigkeiten der Bereiche mit Daten), Kategorien (b, Gesundheitsdaten gekennzeichnet), Empfänger (c, aus den Tätigkeiten und den gültigen API-Tokens als „Schnittstelle „Name““), Speicherdauer (d, Verweis auf die Bereiche), Rechte (e), Beschwerderecht (f), Herkunft (g), automatisierte Entscheidung (h), Drittländer (Abs. 2).
+- **Textbausteine:** `AccessReportTexts` liefert bis zu den Einstellungen „Datenschutz“ (`privacy.contacts`, `privacy.texts`) Beispieltexte mit Platzhaltern in eckigen Klammern; sie sind als „Vorlage“ markiert, das Anschreiben trägt den Hinweis „Vorlage: Die Textbausteine dieses Schreibens sind noch nicht vom Datenschutzbeauftragten geprüft.“
+- **Je Bereich** eine nummerierte Überschrift (Reihenfolge: Module in Ladereihenfolge, Benutzerkonto und Protokoll am Ende), Plakette „Gesundheitsdaten“, Zeile mit Zweck, Speicherdauer (Regeln aus `privacy.retention` je Kategorie der Tätigkeit, z. B. „Personalakte Ausgeschiedener: 30 Jahre nach Austritt“, sonst „bis zur Festlegung einer Frist“), Empfängern und Herkunft.
+- **Herkunft** je Bereich aus dem ersten Historieneintrag der `records`: „Ihre Angaben in Mein Bereich“ (eigenes Konto), „Schnittstelle „Name““ (technischer Benutzer, ohne Token mit seinem Anzeigenamen, z. B. ein Infoterminal), „automatisch (z. B. Infoterminal)“ (ohne Benutzer), „Tabellen-Import am …“ bzw. „Datenübernahme aus MP-Feuer am …“ (Audit `imports.applied`, mit `source.module: mp-feuer` als Datenübernahme, bzw. `mp-feuer.run-applied` desselben Benutzers bis 30 Minuten danach), sonst „Erfassung durch die Feuerwehr“.
+- **Anhang:** auf Wunsch das JSON (`forga.person`, wie `GET /api/core/export/person/:personId`) als eingebettete Datei `auskunft.json`; die letzte Seite sagt, ob es beigefügt ist.
+
+### Ablage, Übergabe und Ablauf
+
+- **Erstellen** (`POST /api/core/privacy/access-reports`): legt `core.privacy_document` (`PrivacyDocument`) mit `status: pending` an, antwortet `202` und erzeugt das PDF im Hintergrund; danach `ready` bzw. `failed` mit `privacy.generationFailed`. Beim Start des Servers werden noch wartende als `failed` (`privacy.generationInterrupted`) markiert. Audit `privacy.access-report-created` (Person, Dokument, Sprache, JSON).
+- **Verschlüsselt:** Das PDF liegt mit `FORGA_SECRET_KEY` verschlüsselt in der Datenbank (AES-256-GCM, `encryptBytes`/`decryptBytes` in `server-key.ts`). Ohne Schlüssel lehnt der Server das Erstellen ab (`503 privacy.noSecretKey`), es gibt keine unverschlüsselte Ablage. Lässt sich die Datei nicht entschlüsseln (Schlüssel gewechselt), `409 privacy.documentUnreadable`.
+- **Ablauf:** 30 Tage (`ACCESS_REPORT_DAYS`). Ein stündlicher Lauf (`purgeExpired`, aus mit `FORGA_PRIVACY_SCHEDULER=off`) löscht die Datei; die Zeile bleibt mit Erstellung und Übergabe („gelöscht nach 30 Tagen“). Abgelaufene Auskünfte antworten `410 privacy.documentExpired`.
+- **Herunterladen** (`…/:id/file`, `?inline=1` zum Ansehen im Browser): Dateiname ohne Namen der Person (`auskunft-2026-10-29.pdf`), `Cache-Control: no-store`. Audit `privacy.access-report-downloaded` mit `by: administration` bzw. `person`.
+- **Übergabe vermerken** (`…/:id/hand-over`): Tag und Weg (`self-service` in Mein Bereich bereitgestellt, `in-person` persönlich, `post` per Post). „In Mein Bereich“ verlangt ein aktives Konto der Person (`400 privacy.noAccount`) und schickt ihr eine E-Mail, die nur sagt, dass die Auskunft in f.orga bereitliegt (mit Link auf `/me`, ohne Inhalt); kein Versand als Anhang. Audit `privacy.access-report-handed-over`.
+- **Nicht historisiert:** Die Entität kommt in keinem Export vor; Erstellung, Herunterladen und Übergabe stehen im Audit-Log, eine Historie würde die Löschung der Datei überdauern. `requestId` nimmt den Bezug zur Betroffenenanfrage auf.
+
+### Oberfläche
+
+- **Personalakte:** Knopf „Auskunft erstellen …“ in der Kopfzeile (Erweiterungspunkt `masterdata.person.actions`, von der Shell belegt; ersetzt den früheren Knopf für die JSON-Auskunft). Dialog: Sprache (Deutsch/Englisch), Tabelle der Bereiche mit Zahl der Einträge und Plakette Gesundheitsdaten (`…/preview`), „Maschinenlesbare Fassung (JSON) als Anhang beifügen“, Hinweis auf Rechte Dritter und „kein Versand per E-Mail“.
+- **Reiter „Datenschutz“** (Erweiterungspunkt `masterdata.person.tab`): „Erstellte Auskünfte“ mit erstellt am/von, Sprache, Übergabe bzw. Stand („wird erstellt …“, „noch nicht übergeben“, „persönlich 28.10.2026“, „gelöscht nach 30 Tagen“), „Ansehen“, „Herunterladen“ (beide nach dem zweiten Faktor) und „Übergabe vermerken …“ (Tag, Weg; „in Mein Bereich bereitgestellt“ benachrichtigt die Person). Die Liste fragt nach, solange eine Auskunft entsteht. Eine eigene Vorschauseite (`auskunft-vorschau.html`) gibt es nicht: „Ansehen“ öffnet das PDF im Browser, weil `frame-ancestors 'none'` das Einbetten verbietet.
+- **Mein Bereich:** Abschnitt „Meine Daten“ mit „Ihre Auskunft liegt bereit (erstellt …, bis …)“ und „PDF herunterladen“, solange eine bereitgestellte Auskunft nicht abgelaufen ist.
+
+### Tests
+
+`apps/server/src/access-report.integration.ts` mit Daten je Modul aus `apps/server/src/testing/access-report/*.ts`: Eine erfundene Person mit Daten in allen Modulen bekommt eine Auskunft; jeder Bereich kommt vor, keine UUID im Text, der Name einer zweiten Person und die vom Seed verbotenen Texte (Straße des Einsatzes, Geschädigte) fehlen, Gesundheitsdaten sind gekennzeichnet, eigene Änderungen heißen „Sie selbst“, die anderer die Funktion; dazu Erstellen im Hintergrund, verschlüsselte Ablage, Download, Übergabe in Mein Bereich mit E-Mail ohne Inhalt, Ablauf nach 30 Tagen, fehlender Schlüssel und Audit. `ACCESS_REPORT_MODULES=incidents,training` beschränkt den Test auf einzelne Module, `ACCESS_REPORT_PDF=<Datei>` schreibt das erzeugte PDF zum Ansehen. Unit-Tests: Startprüfung, Formate des Kontexts, Verschlüsselung (`access-report.spec.ts`).
 
 ## HTTPS und Sicherheitsheader (L1)
 

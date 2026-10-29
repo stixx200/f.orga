@@ -84,7 +84,7 @@ export class RunPersonData {
     for (const m of found) {
       const run = ctx.date(m.dataset.run.createdAt);
       for (const r of m.results) {
-        rows.push([run, profile(m.dataset.profile), ctx.number(r.row), `${actions[r.action] ?? r.action}, ${ctx.t(`${r.messages.length} Hinweis(e) im Bericht`, `${r.messages.length} note(s) in the report`)}`]);
+        rows.push([run, profile(m.dataset.profile), ctx.number(r.row), `${actions[r.action] ?? r.action}, ${(r.messages.length === 1 ? ctx.t('1 Hinweis im Bericht', '1 note in the report') : ctx.t(`${r.messages.length} Hinweise im Bericht`, `${r.messages.length} notes in the report`))}`]);
       }
       if (m.rows.length) {
         rows.push([

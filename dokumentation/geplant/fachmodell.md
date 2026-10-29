@@ -250,14 +250,16 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 
 | Fachbegriff | Code |
 | --- | --- |
-| Auskunft (Art. 15), lesbare Fassung | access report, `describePerson` an `ExportSource`, `PersonDataSection`; Ablage `core.privacy_document` |
+| Auskunft (Art. 15), lesbare Fassung | access report (`AccessReport`, `AccessReportService`), `describePerson` an `ExportSource` mit `DescribeContext`, Bereich `PersonDataSection` (Blöcke `fields`, `table`, `text`); Ablage `core.privacy_document` (`PrivacyDocument`) |
+| Übergabe der Auskunft (in Mein Bereich bereitgestellt, persönlich, per Post) | handover (`AccessReportHandOver`, `AccessReportChannel`: `self-service`, `in-person`, `post`) |
+| Personendaten eines Moduls (Meldung im Manifest) | `privacy.personData` im Manifest (`ModulePrivacy`), Startprüfung `assertPersonDataComplete` |
 | Betroffenenanfrage (Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch, Widerruf) | data subject request (`core.privacy_request`, `kind`: `access`, `rectification`, `erasure`, `restriction`, `objection`, `withdrawal`) |
 | Löschprüfung | erasure check (`PersonDataHandler.erasure`) |
 | Einschränkung der Verarbeitung | restriction (`restrictedAt` an der Person, `PERSON_DIRECTORY.isRestricted`) |
 | Einwilligung, Fassung, Widerruf | consent (`core.consent`, `CONSENTS`, Einstellungsabschnitt `privacy.consents`), `version`, `withdrawnAt` |
 | Textbaustein (Vorlage / geprüft) | text block (`privacy.texts`, `reviewedAt`) |
 | Datenschutzhinweis | privacy notice (Seite `/privacy`) |
-| Verzeichnis der Verarbeitungstätigkeiten, Verarbeitungstätigkeit | record of processing activities, processing activity (`privacy.activities` im Manifest und in den Einstellungen) |
+| Verzeichnis der Verarbeitungstätigkeiten, Verarbeitungstätigkeit | record of processing activities, processing activity (`ProcessingActivity` in `privacy.activities` im Manifest, `CORE_ACTIVITIES`; Ergänzungen in den Einstellungen) |
 | Verantwortlicher, Datenschutzbeauftragter, Aufsichtsbehörde | controller, data protection officer, supervisory authority (`privacy.contacts`, `privacy.authority`) |
 | Gesundheitsdaten (besondere Kategorie) | `health: true` an Feldern, Fristarten und Tätigkeiten |
 | Leseprotokoll | access log (`core.access_log`) |
