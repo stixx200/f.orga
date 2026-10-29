@@ -70,7 +70,7 @@ export class SessionsImport {
         run: async ({ key, name }) => {
           const em = this.em.fork();
           if (await em.count(SessionTypeEntity, { key })) throw new ConflictException({ code: 'catalog.keyTaken', key });
-          const last = await em.findOne(SessionTypeEntity, {}, { orderBy: { sortOrder: 'desc' } });
+          const [last] = await em.find(SessionTypeEntity, {}, { orderBy: { sortOrder: 'desc' }, limit: 1 });
           const type = em.create(SessionTypeEntity, { ...new ZodPipe(SessionTypeInput).transform({ key, name: { de: name, en: name }, sortOrder: (last?.sortOrder ?? 0) + 10 }) });
           await em.flush();
           return { key: type.key, name: type.name };
