@@ -24,10 +24,11 @@ const sql = (statement: string, params: unknown[] = []) => test.app.get(EntityMa
 
 const today = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
 const addDays = (date: string, days: number) => new Date(Date.parse(`${date}T12:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+/** Like the server: the day is clamped to the end of the target month (31.10. + 6 months = 30.04.). */
 const addMonths = (date: string, months: number) => {
-  const d = new Date(`${date}T12:00:00Z`);
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d.toISOString().slice(0, 10);
+  const [year, month, day] = date.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(year, month + months, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month - 1 + months, Math.min(day, lastDay))).toISOString().slice(0, 10);
 };
 
 type File = {
