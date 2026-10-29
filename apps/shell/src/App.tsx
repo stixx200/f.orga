@@ -4,9 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useMemo } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import type { Session } from '@forga/core-contracts';
-import { api, ApiError, can, currentLanguage, setLanguage, useSession, useTranslation } from '@forga/web-sdk';
+import { api, ApiError, can, currentLanguage, setLanguage, useMaintenance, useSession, useTranslation } from '@forga/web-sdk';
 import { EmptyState } from '@forga/web-ui';
 import { LoginPage } from './auth/LoginPage';
+import { MaintenancePage } from './auth/MaintenancePage';
 import { ConfirmEmailPage } from './auth/ConfirmEmailPage';
 import { ResetPasswordPage } from './auth/ResetPasswordPage';
 import { SetupPage } from './auth/SetupPage';
@@ -97,6 +98,9 @@ function KioskPage({ path }: { path: string }) {
 
 export function App() {
   const kiosk = KIOSK_PATHS.find((path) => window.location.pathname === `/${path}` || window.location.pathname.startsWith(`/${path}/`));
+  // While a backup is being restored every request answers `503 maintenance`.
+  const maintenance = useMaintenance();
+  if (maintenance) return <MaintenancePage kiosk={Boolean(kiosk)} />;
   if (kiosk) return <KioskPage path={kiosk} />;
   if (window.location.pathname === '/reset-password') return <ResetPasswordPage />;
   if (window.location.pathname === '/confirm-email') return <ConfirmEmailPage />;

@@ -9,6 +9,7 @@ Was hier steht, existiert im Code. Umgesetzt sind:
 - das Modul Einsatzleiter vom Dienst mit EvD-Dienstplan und EvD-Bericht zu jedem Einsatz
 - das Modul Infoterminal: Selbsteintragung an der Wache in Einsatzberichte und Dienste (Kiosk-Seite `/terminal`)
 - das Modul MP-Feuer: Datenübernahme aus MP-Feuer-Transferdateien im Hintergrund, mit eigener Zuordnungsliste und Verlauf
+- das Modul Datensicherung: geplante, verschlüsselte Sicherung in einen Ordner auf dem Server, Prüfung, Herunterladen und Wiederherstellung mit Wartungsmodus und Neustart
 - die Module Übungsdienst, Atemschutz, Entschädigungen, Geräte, Kostenersatz, Beförderungen und Kleiderkammer
 - Plugins (signierte Zusatzmodule)
 - die Mehrsprachigkeit (Deutsch/Englisch)

@@ -1,6 +1,6 @@
 # Mockups Release 1
 
-**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben. Zur Freigabe sind die Mockups des Moduls MP-Feuer (`mp-feuer/`) und der Konzepte [Führerscheinkontrolle](../module/fuehrerscheinkontrolle.md), [Datensicherung](../module/backup.md) und [Aufbewahrung](../aufbewahrung.md). Die Mockups zum Datenschutz (`datenschutz/`) sind freigegeben.
+**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben. Zur Freigabe sind die Mockups des Moduls MP-Feuer (`mp-feuer/`) und der Konzepte [Führerscheinkontrolle](../module/fuehrerscheinkontrolle.md) und [Aufbewahrung](../aufbewahrung.md). Die Mockups zum Datenschutz (`datenschutz/`) sind freigegeben.
 
 Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stammdaten und Einsatzberichte, dazu das Modul Infoterminal (Kiosk-Seite je Wache) und das Modul MP-Feuer ([Konzept](../module/mp-feuer.md)). Sie funktionieren nicht und enthalten nur erfundene Daten. Farben, Schrift, Tabellen sowie Kopf- und Fußzeile folgen `Stil.md`.
 
@@ -92,7 +92,7 @@ Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stam
 | | `infoterminal/fuehrerschein.html`, `infoterminal/fuehrerschein-bestaetigen.html` | Selbstkontrolle am Infoterminal: scannen, Selbsterklärung bestätigen (`#d-kontrolliert`), unbekannter Code (`#d-unbekannt`) |
 | | `shell/mein-fuehrerschein.html` | „Mein Bereich“: eigener Führerschein, Selbstkontrolle mit NFC oder Kamera (`#d-selbst`) |
 | | `shell/start.html#aufgaben` | Aufgabe „Führerscheinkontrolle fällig“ |
-| Datensicherung (Konzept) | `sicherung/uebersicht.html` | Stand, letzte und nächste Sicherung, Ziel, Warnung zur Passphrase, „Jetzt sichern“ (`#d-jetzt`) |
+| Datensicherung | `sicherung/uebersicht.html` | Stand, letzte und nächste Sicherung, Ziel, Warnung zur Passphrase, „Jetzt sichern“ (`#d-jetzt`) |
 | | `sicherung/einstellungen.html` | Ziel unter `/backups`, Zeitplan, Aufbewahrung, Verschlüsselung mit Passphrase, Inhalt, Benachrichtigung |
 | | `sicherung/sicherungen.html` | Sicherungen mit Status und Prüfung; Prüfen (`#d-pruefen`) mit Wiederherstellung testen, Herunterladen und Löschen (`#d-mehr`) |
 | | `sicherung/wiederherstellen.html`, `sicherung/wiederherstellung-laeuft.html` | Assistent: Bestätigen mit Name der Feuerwehr und Zahlen, Fortschritt mit Wartungsmodus |
@@ -167,7 +167,8 @@ Die Seiten werden mit `python3 _generator/bauen.py` aus den Skripten in `_genera
 | --- | --- |
 | `rahmen.py` | Kopf, Seitenleiste, Fußzeile, Symbole und Bausteine: `tabelle()`, `dialog()`, `leer()` |
 | `shell.py`, `stammdaten.py`, `einsatzberichte.py`, `infoterminal.py`, `mpfeuer.py`, `datenschutz.py` | Seiteninhalte je App; `datenschutz.py` mit Reitern der Verwaltungsseiten (`vseite()`) und eigenen Stilen für die PDF-Vorschau; `infoterminal.py` baut die Kiosk-Seiten mit eigenem Kopf (`tk()`) ohne Seitenleiste, `mpfeuer.py` die Seiten des Moduls MP-Feuer mit Reitern (`mseite()`) |
-| `fuehrerschein.py`, `sicherung.py`, `aufbewahrung.py` | Konzepte zur Freigabe: Führerscheinkontrolle (Stammdaten, Infoterminal, Mein Bereich), Modul Datensicherung, Aufbewahrung und Aussonderung |
+| `fuehrerschein.py`, `aufbewahrung.py` | Konzepte zur Freigabe: Führerscheinkontrolle (Stammdaten, Infoterminal, Mein Bereich), Aufbewahrung und Aussonderung |
+| `sicherung.py` | Modul Datensicherung (freigegeben, umgesetzt) |
 | `uebersetzung_datenschutz.py` | Englische Texte der Datenschutz-Seiten, gleiches Format wie `uebersetzung.py` (dort eingebunden) |
 | `uebersetzung.py` | Englische Texte als Zeilen `Deutsch => English`. Zeilen ohne `=>` sind Daten, die gleich bleiben (Namen, Orte, Fahrzeuge, Kataloge). Dazu Muster für wiederkehrende Formen. |
 | `assets/mockup.css` | Gemeinsames Aussehen |

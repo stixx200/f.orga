@@ -325,18 +325,20 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Transponder, Barcode-Aufkleber | `DriverLicenseToken` (`kind`: `nfc`, `barcode`; `codeHash`) |
 | Recht „Führerscheine kontrollieren“ | `masterdata.licenses.check` |
 
-### Datensicherung (geplant)
+### Datensicherung
 
 | Fachbegriff | Code |
 | --- | --- |
 | Datensicherung (Modul) | `backup` |
-| Sicherung | backup (`backup.run`, Datei `*.forgabackup`) |
-| Sicherheitssicherung (vor einer Wiederherstellung) | trigger `safety` |
-| Prüfen, Wiederherstellung testen | verify, `restoreTest` |
-| Wiederherstellung | restore (`backup.restore`) |
-| Wartungsmodus | maintenance (`503 maintenance`) |
+| Sicherung (Datei) | backup run (`BackupRun`, Tabelle `backup.run`), Datei `*.forgabackup` |
+| Auslöser: geplant, „Jetzt sichern“, Sicherheitssicherung, hochgeladen, fremd | trigger `scheduled`, `manual`, `safety`, `upload`, `foreign` |
 | Zielordner, Wurzel | `targetPath`, `FORGA_BACKUP_ROOT` |
-| Passphrase, Kennwert der Passphrase | passphrase, passphrase fingerprint |
+| Passphrase, Kennwert der Passphrase | passphrase (`passphraseEncrypted`), `passphraseId` |
+| Prüfen, Wiederherstellung testen | verify, `restoreTest` (`Verification`) |
+| Aufbewahrung | retention (`keepCount`, `keepDays`, `keepUntil`) |
+| Wiederherstellung | restore (`BackupRestore`, Tabelle `backup.restore`) |
+| Wartungsmodus | maintenance (`503 maintenance`, `FORGA_MAINTENANCE_FILE`) |
+| Vorige Datenbank | previous database (`<db>_before_<zeit>`) |
 
 ### Aufbewahrung (geplant)
 
@@ -367,4 +369,4 @@ Die Modul-ID ist zugleich das Präfix der Berechtigungen und der Pfad in API und
 | Kleiderkammer | `clothing` |
 | Einsatzleiter vom Dienst | `duty-officer` |
 | Infoterminal | `info-terminal` |
-| Datensicherung (geplant) | `backup` |
+| Datensicherung | `backup` |
