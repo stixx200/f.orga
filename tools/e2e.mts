@@ -5,7 +5,9 @@
  * 2. recreates the database `forga_e2e` (`FORGA_E2E_DATABASE_URL`),
  * 3. starts the built server on port 3100 (`FORGA_E2E_PORT`) serving the built frontends like the Docker image
  *    (`FORGA_WEB_DIR` with `shell` and `modules/<id>`), with `NODE_ENV=production`, `FORGA_STAGE=development`
- *    (`FORGA_E2E_STAGE`), a fresh `FORGA_SECRET_KEY` and setup token, e-mails in memory and the schedulers off,
+ *    (`FORGA_E2E_STAGE`), a fresh `FORGA_SECRET_KEY` and setup token, e-mails in memory, the schedulers off,
+ *    backups to `dist/e2e/backups` (`FORGA_BACKUP_ROOT`; PostgreSQL 17 tools from `FORGA_PG_BIN` or the `PATH`) and
+ *    calendar imports from local addresses allowed (`FORGA_IMPORT_URL_ALLOW_PRIVATE`),
  * 4. fills it with `npm run seed`,
  * 5. runs `playwright test` (further arguments go to Playwright) and stops the server.
  *
@@ -34,6 +36,8 @@ const URL = `http://localhost:${PORT}`;
 const TOTP_FILE = join(OUT, 'totp.json');
 /** `FORGA_SECRET_KEY` of the instance: the secrets of the second factor are encrypted with it. */
 const KEY_FILE = join(OUT, 'secret-key');
+/** `FORGA_BACKUP_ROOT` of the instance (emptied for a fresh run). */
+const BACKUP_ROOT = join(OUT, 'backups');
 
 const args = process.argv.slice(2);
 const serveOnly = args.includes('--serve');
@@ -115,10 +119,12 @@ async function main(): Promise<void> {
   if (reuse && !existsSync(KEY_FILE)) throw new Error('--reuse needs the data of an earlier run: start without it first.');
   if (!reuse) {
     rmSync(TOTP_FILE, { force: true });
+    rmSync(BACKUP_ROOT, { recursive: true, force: true });
     writeFileSync(KEY_FILE, randomBytes(32).toString('base64'), { mode: 0o600 });
     await recreateDatabase();
   }
 
+  mkdirSync(BACKUP_ROOT, { recursive: true });
   const setupToken = randomBytes(16).toString('hex');
   const web = webDirectory();
   const server = startServer({
@@ -138,6 +144,10 @@ async function main(): Promise<void> {
     FORGA_PRIVACY_SCHEDULER: 'off',
     FORGA_BACKUP_SCHEDULER: 'off',
     FORGA_MAINTENANCE_FILE: join(OUT, 'maintenance'),
+    // Backups go to a folder of the run; the PostgreSQL tools come from `FORGA_PG_BIN` or the `PATH`.
+    FORGA_BACKUP_ROOT: BACKUP_ROOT,
+    // The iCal import test serves its calendar from the test runner (localhost).
+    FORGA_IMPORT_URL_ALLOW_PRIVATE: 'true',
   });
   const stop = () => {
     if (server.exitCode === null) server.kill('SIGTERM');

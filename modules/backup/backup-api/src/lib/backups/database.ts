@@ -55,7 +55,15 @@ export function stdinSink(child: ChildProcessWithoutNullStreams, tolerateEarlyEx
         if (tolerateEarlyExit) return;
         throw new Error('The tool ended before reading all data');
       }
-      if (!child.stdin.write(chunk)) await Promise.race([once(child.stdin, 'drain'), once(child, 'close')]);
+      if (child.stdin.write(chunk)) return;
+      // Waiting for `drain` rejects with EPIPE when the tool ends meanwhile (the next write sees `closed`). The
+      // listener of the other event is removed again, so long dumps do not pile up listeners.
+      const waiting = new AbortController();
+      await Promise.race([once(child.stdin, 'drain', { signal: waiting.signal }), once(child, 'close', { signal: waiting.signal })])
+        .catch((error: unknown) => {
+          if (!tolerateEarlyExit) throw error;
+        })
+        .finally(() => waiting.abort());
     },
     end() {
       if (!closed && !child.stdin.destroyed) child.stdin.end();

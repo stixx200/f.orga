@@ -14,6 +14,7 @@ import {
   Tabs,
   Tooltip,
 } from '@mantine/core';
+import { parseDateInput } from '@forga/web-sdk';
 import { wordsFilter } from './search';
 
 /** Colors from the style guide (Stil.md) and the approved mockups. */
@@ -103,5 +104,7 @@ export const forgaTheme = createTheme({
     Select: Select.extend({ defaultProps: { filter: wordsFilter } }),
     MultiSelect: MultiSelect.extend({ defaultProps: { filter: wordsFilter } }),
     Autocomplete: Autocomplete.extend({ defaultProps: { filter: wordsFilter } }),
+    // Typed dates as shown (`DD.MM.YYYY`): the default parser of Mantine reads `01.03.2025` as 3 January.
+    DateInput: { defaultProps: { dateParser: parseDateInput } },
   },
 });
