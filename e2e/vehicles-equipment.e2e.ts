@@ -19,11 +19,11 @@ test('vehicles with radio call sign and station, equipment on a vehicle', async 
   await page.goto('/equipment/items');
   await page.getByRole('button', { name: '+ Gerät' }).click();
   const dialog = page.getByRole('dialog');
-  await choose(page, 'Kategorie', /.+/, dialog);
+  await choose(dialog, 'Kategorie', /.+/);
   await dialog.getByLabel(/^Inventar-Nr\./).fill(number);
   await dialog.getByLabel(/^Bezeichnung/).fill('Wärmebildkamera E2E');
-  await choose(page, 'Abteilung', 'Abteilung Musterstadt', dialog);
-  await choose(page, 'Fahrzeug', 'HLF 20 · Florian Musterstadt 1/46 (Musterstadt)', dialog);
+  await choose(dialog, 'Abteilung', 'Abteilung Musterstadt');
+  await choose(dialog, 'Fahrzeug', 'HLF 20 · Florian Musterstadt 1/46 (Musterstadt)');
   await dialog.getByLabel('Beladeplatz / Lagerort').fill('G1');
   await dialog.getByRole('button', { name: 'Speichern' }).click();
   await expect(page.getByRole('heading', { name: 'Wärmebildkamera E2E', level: 1 })).toBeVisible();

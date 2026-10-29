@@ -39,10 +39,10 @@ test('clothing store: article, piece, issue, laundry, inspection, my area', asyn
   await officer.goto('/clothing/items');
   await officer.getByRole('button', { name: '+ Stück erfassen' }).click();
   dialog = officer.getByRole('dialog');
-  await choose(officer, 'Artikel', articleName, dialog);
+  await choose(dialog, 'Artikel', articleName);
   await dialog.getByLabel(/^Inventar-Nr\./).fill(number);
-  await choose(officer, 'Größe', 'L', dialog);
-  await choose(officer, 'Kleiderkammer der Abteilung', 'Abteilung Musterstadt', dialog);
+  await choose(dialog, 'Größe', 'L');
+  await choose(dialog, 'Kleiderkammer der Abteilung', 'Abteilung Musterstadt');
   await dialog.getByRole('button', { name: 'Speichern' }).click();
   await expect(officer.getByRole('heading', { name: `${number} · ${articleName}`, level: 1 })).toBeVisible();
   const itemUrl = officer.url();
@@ -135,10 +135,10 @@ test('clothing store: receipt of consumables on the stock page', async ({ browse
 
   await officer.getByRole('button', { name: 'Zugang erfassen' }).click();
   const dialog = officer.getByRole('dialog');
-  await choose(officer, 'Artikel', 'Mütze', dialog);
+  await choose(dialog, 'Artikel', 'Mütze');
   if (size) {
     const field = dialog.getByRole('textbox', { name: /^Größe/ });
-    if (await dialog.getByRole('combobox', { name: /^Größe/ }).count()) await choose(officer, 'Größe', size, dialog);
+    if (await dialog.getByRole('combobox', { name: /^Größe/ }).count()) await choose(dialog, 'Größe', size);
     else await field.fill(size);
   }
   await dialog.getByLabel(/^Anzahl/).fill('5');

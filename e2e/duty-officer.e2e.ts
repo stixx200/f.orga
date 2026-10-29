@@ -9,7 +9,7 @@ async function addKind(page: Page, kind: Kind): Promise<void> {
   const added = page.getByRole('row').last();
   await added.getByRole('textbox', { name: 'Schlüssel' }).fill(kind.key);
   await added.getByRole('textbox', { name: 'Bezeichnung (deutsch)' }).fill(kind.name);
-  await choose(page, 'Gezählt werden', kind.unit, added);
+  await choose(added, 'Gezählt werden', kind.unit);
   await added.getByRole('textbox', { name: 'Satz je Tag' }).fill('10');
 }
 
@@ -17,8 +17,8 @@ async function addKind(page: Page, kind: Kind): Promise<void> {
 async function addDuty(page: Page, person: string, kind: string, from: string, to: string): Promise<void> {
   await page.getByRole('button', { name: '+ Dienst eintragen' }).click();
   const dialog = page.getByRole('dialog');
-  await choose(page, 'Person', person, dialog);
-  await choose(page, 'Art', kind, dialog);
+  await choose(dialog, 'Person', person);
+  await choose(dialog, 'Art', kind);
   await dialog.getByLabel(/^von/).fill(from);
   await dialog.getByLabel(/^bis/).fill(to);
   await dialog.getByRole('button', { name: 'Speichern' }).click();

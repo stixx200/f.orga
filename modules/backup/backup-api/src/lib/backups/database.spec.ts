@@ -1,4 +1,5 @@
-import { forbiddenEntries } from './database.js';
+import { spawn } from 'node:child_process';
+import { forbiddenEntries, stdinSink } from './database.js';
 
 const LIST = `;
 ; Archive created at 2026-10-29 17:00:00 UTC
@@ -31,5 +32,27 @@ describe('forbiddenEntries', () => {
       '506; 1259 4169005 TABLE pg_catalog pg_authid forga',
     ];
     expect(forbiddenEntries(`${LIST}${evil.join('\n')}\n`)).toEqual(evil);
+  });
+});
+
+/** A tool that reads only the beginning of its input and ends, like `pg_restore --list` after the table of contents. */
+const earlyExit = () => spawn(process.execPath, ['-e', "process.stdin.once('data', () => process.exit(0))"], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+describe('stdinSink', () => {
+  const chunk = Buffer.alloc(1024 * 1024, 1);
+
+  it('drops the rest when the tool ends early and that is tolerated', async () => {
+    const child = earlyExit();
+    const sink = stdinSink(child, true);
+    for (let i = 0; i < 64; i++) await sink.write(chunk);
+    sink.end();
+  });
+
+  it('fails when the tool ends early and that is not tolerated', async () => {
+    const child = earlyExit();
+    const sink = stdinSink(child);
+    await expect((async () => {
+      for (let i = 0; i < 64; i++) await sink.write(chunk);
+    })()).rejects.toThrow();
   });
 });

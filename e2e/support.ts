@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { type APIResponse, type Browser, type BrowserContext, type Download, expect, type Locator, type Page, test as base } from '@playwright/test';
+import { type APIResponse, type Browser, type BrowserContext, type Download, expect, type FileChooser, type Locator, type Page, test as base } from '@playwright/test';
 
 export { expect } from '@playwright/test';
 
@@ -112,6 +112,15 @@ function secrets(): Record<string, string> {
   }
 }
 
+/**
+ * Keeps the secret of a second factor set up through the interface (e.g. read from the enrolment dialog), so
+ * `totpCode` and `stepUp` work for this user as well.
+ */
+export function rememberTotpSecret(username: string, secret: string): void {
+  mkdirSync(dirname(TOTP_FILE), { recursive: true });
+  writeFileSync(TOTP_FILE, JSON.stringify({ ...secrets(), [username]: secret.replace(/\s/g, '') }, null, 2));
+}
+
 /** Last time step used per user: the server accepts each code only once, and the next one up to a step early. */
 const usedSteps = new Map<string, number>();
 
@@ -139,8 +148,7 @@ export async function stepUp(page: Page, username: string, password = username =
   if (!session.stepUpPermissions.length) return;
   if (!session.mfa.enrolled) {
     const { secret } = (await (await page.request.post('/api/core/mfa/enrolment', { headers: CSRF, data: { password } })).json()) as { secret: string };
-    mkdirSync(dirname(TOTP_FILE), { recursive: true });
-    writeFileSync(TOTP_FILE, JSON.stringify({ ...secrets(), [username]: secret }, null, 2));
+    rememberTotpSecret(username, secret);
     await expectOk(page.request.post('/api/core/mfa/enrolment/confirm', { headers: CSRF, data: { code: await totpCode(username) } }));
     return;
   }
@@ -196,6 +204,12 @@ export async function download(page: Page, action: () => Promise<unknown>): Prom
   return { name: file.suggestedFilename(), content: readFileSync(path), download: file };
 }
 
+/** Chooses files in a file field (e.g. a Mantine `FileInput`) by its label, through the file chooser of the browser. */
+export async function chooseFiles(page: Page, label: string | RegExp, files: Parameters<FileChooser['setFiles']>[0]): Promise<void> {
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByLabel(fieldLabel(label)).first().click()]);
+  await chooser.setFiles(files);
+}
+
 // ----- Info terminal --------------------------------------------------------------------------------------------------
 
 /**
@@ -228,19 +242,22 @@ const fieldLabel = (label: string | RegExp) => (typeof label === 'string' ? new 
 const selectField = (scope: Page | Locator, label: string | RegExp) =>
   scope.getByRole('combobox', { name: fieldLabel(label) }).or(scope.getByRole('textbox', { name: fieldLabel(label) })).first();
 
+/** The page of a scope; the options of a select open in a layer of the page. */
+const pageOf = (scope: Page | Locator): Page => ('mainFrame' in scope ? scope : scope.page());
+
 /**
- * Chooses an option of a Mantine select by its label and the text of the option. `within` limits the search for the
- * field, e.g. to a dialog over a page with a filter of the same label.
+ * Chooses an option of a Mantine select by its label and the text of the option. `scope` is the page or a part of it
+ * (e.g. a form), when the label occurs more than once.
  */
-export async function choose(page: Page, label: string | RegExp, option: string | RegExp, within?: Locator): Promise<void> {
-  await selectField(within ?? page, label).click();
-  await page.getByRole('option', { name: option }).first().click();
+export async function choose(scope: Page | Locator, label: string | RegExp, option: string | RegExp): Promise<void> {
+  await selectField(scope, label).click();
+  await pageOf(scope).getByRole('option', { name: option }).first().click();
 }
 
 /** Picks the first offered option of a select. */
-export async function chooseFirst(page: Page, label: string | RegExp): Promise<void> {
-  await selectField(page, label).click();
-  await page.getByRole('option').first().click();
+export async function chooseFirst(scope: Page | Locator, label: string | RegExp): Promise<void> {
+  await selectField(scope, label).click();
+  await pageOf(scope).getByRole('option').first().click();
 }
 
 /** Opens a section of the report editor by its title. */
