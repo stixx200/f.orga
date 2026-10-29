@@ -10,19 +10,14 @@ import { type TestApp, setUp, startTestApp, UI } from './testing/test-app';
 import { TEST_DATABASE_URL } from './testing/test-database';
 
 /**
- * The backup module against the test database. `pg_dump`/`pg_restore`/`psql` of PostgreSQL 17 come from the `PATH`, or,
- * if they are missing or older, from the database container of docker/compose.dev.yml (`tools/pg-docker`).
+ * The backup module against the test database (`TEST_DATABASE_URL`). `pg_dump`, `pg_restore` and `psql` of PostgreSQL 17
+ * come from `FORGA_PG_BIN` (a folder; relative to the repository) or from the `PATH`, as in the CI. Without local
+ * tools: `FORGA_PG_BIN=tools/pg-docker` runs them in the database container of docker/compose.dev.yml.
  */
 function pgBin(): string | undefined {
-  if (process.env.FORGA_PG_BIN) return process.env.FORGA_PG_BIN;
-  try {
-    const version = execFileSync('pg_dump', ['--version'], { encoding: 'utf8' });
-    if (Number(/(\d+)/.exec(version)?.[1]) >= 17) return undefined;
-  } catch {
-    // not installed
-  }
+  const bin = process.env.FORGA_PG_BIN;
   // The integration tests run in apps/server.
-  return resolvePath('../../tools/pg-docker');
+  return bin ? resolvePath('../..', bin) : undefined;
 }
 
 const PASSPHRASE = 'unsere-geheime-passphrase';
@@ -59,7 +54,12 @@ async function backupNow(body: object = {}): Promise<Entry> {
   return finished(started.id);
 }
 
-const psql = (sql: string) => execFileSync(pgBin() ? join(pgBin()!, 'psql') : 'psql', ['-X', '-A', '-t', '-c', sql], { encoding: 'utf8', env: { ...process.env, PGUSER: 'forga', PGPASSWORD: 'forga', PGDATABASE: 'postgres', PGHOST: 'localhost', PGPORT: '5433' } }).trim();
+/** SQL in the maintenance database of the test server (connection from `TEST_DATABASE_URL`). */
+function psql(sql: string): string {
+  const url = new URL(TEST_DATABASE_URL);
+  const env = { ...process.env, PGUSER: decodeURIComponent(url.username), PGPASSWORD: decodeURIComponent(url.password), PGDATABASE: 'postgres', PGHOST: url.hostname, PGPORT: url.port || '5432' };
+  return execFileSync(pgBin() ? join(pgBin()!, 'psql') : 'psql', ['-X', '-A', '-t', '-c', sql], { encoding: 'utf8', env }).trim();
+}
 
 beforeAll(async () => {
   root = realpathSync(mkdtempSync(join(tmpdir(), 'forga-backup-it-')));
