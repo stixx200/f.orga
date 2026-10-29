@@ -24,6 +24,8 @@ export const NavigationEntry = z.object({
    * `settings`: settings page of the module; not in the side menu but on the page "Verwaltung → Module" at its module.
    */
   section: z.enum(['module', 'administration', 'settings']).optional(),
+  /** `false`: the settings page is no step of the setup list on the start page (e.g. tools needed only for a while). */
+  onboarding: z.boolean().optional(),
 });
 export type NavigationEntry = z.infer<typeof NavigationEntry>;
 
