@@ -27,6 +27,7 @@ import {
   CreateIncident,
   type Incident as IncidentDto,
   IncidentCosts,
+  IncidentRetention,
   type IncidentMatch,
   IncidentUpdate,
   type PreviousCrew,
@@ -311,6 +312,32 @@ export class IncidentsController {
     await this.reports.setStatistics(em, incident, input.statistics, input.version, user);
     await em.flush();
     await this.audit.log('incidents.statistics-changed', { incidentId: incident.id, dispatchNumber: incident.dispatchNumber, removed: !input.statistics });
+    const [dto] = await this.reports.incidentDtos(em, [incident], user);
+    return dto;
+  }
+
+  /**
+   * „30 Jahre aufbewahren (Sonderfall)“: keeps the incident like one with special features (retention plan), e.g. a major
+   * fire without injured persons. Releasers, `incidents.costs` and the writers of the primary report, also after the release.
+   */
+  @Put('incidents/:id/retention')
+  @RequirePermissions(READ)
+  async retention(
+    @Param('id') id: string,
+    @Body(new ZodPipe(IncidentRetention)) input: IncidentRetention,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<IncidentDto> {
+    const em = this.em.fork();
+    const incident = await em.findOne(IncidentEntity, id, { populate: ['reports'] });
+    if (!incident || !this.visible(user, incident)) throw new NotFoundException();
+    if (!this.reports.mayMarkRetention(user, incident.reports.getItems())) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [RELEASE, COSTS] });
+    if (incident.anonymizedAt) throw new ConflictException({ code: 'incidents.anonymized' });
+    assertVersion(incident, input.version);
+    if (incident.retentionSpecial !== input.retentionSpecial) {
+      incident.retentionSpecial = input.retentionSpecial;
+      await em.flush();
+      await this.audit.log('incidents.retention-changed', { incidentId: incident.id, dispatchNumber: incident.dispatchNumber, retentionSpecial: input.retentionSpecial });
+    }
     const [dto] = await this.reports.incidentDtos(em, [incident], user);
     return dto;
   }

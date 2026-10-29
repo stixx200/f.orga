@@ -361,6 +361,10 @@ export const IncidentCosts = z
   .refine((c) => !c.chargeable || c.chargeableReason.trim().length > 0, { message: 'Reason required', path: ['chargeableReason'] });
 export type IncidentCosts = z.input<typeof IncidentCosts>;
 
+/** „30 Jahre aufbewahren (Sonderfall)“ of an incident (`PUT incidents/incidents/:id/retention`). */
+export const IncidentRetention = z.object({ retentionSpecial: z.boolean(), version: z.number().int() });
+export type IncidentRetention = z.infer<typeof IncidentRetention>;
+
 export const Incident = z.object({
   id: z.uuid(),
   dispatchNumber: z.string(),
@@ -382,6 +386,12 @@ export const Incident = z.object({
   statisticsCounted: z.boolean(),
   /** The current user may change the statistics now (see `PUT incidents/incidents/:id/statistics`). */
   statisticsEditable: z.boolean(),
+  /** „30 Jahre aufbewahren (Sonderfall)“: kept like an incident with special features (retention plan). */
+  retentionSpecial: z.boolean(),
+  /** The current user may change `retentionSpecial` (releasers, `incidents.costs`, writers of the primary report). */
+  retentionSpecialEditable: z.boolean(),
+  /** Anonymised after the retention period: parties, free texts and attachments are removed. */
+  anonymizedAt: z.string().nullable(),
   reports: z.array(
     z.object({
       id: z.uuid(),

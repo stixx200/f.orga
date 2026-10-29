@@ -132,6 +132,11 @@ berichtkarte('Abteilung Musterstadt', False, 'Tobias Rief', S_ENTWURF, '17 Perso
 berichtkarte('Führungsgruppe Musterstadt', False, 'Markus Vogt', S_ENTWURF, '4 Personen', 'ELW 1 (mit Musterstadt)', '13:10 – 16:20', 'Markus Vogt steht auch im Bericht Musterstadt (ELW 1, 13:07–15:50). Bitte nur einem Bericht zuordnen.') + '''
 </div>''' + STATISTIK_EINSATZ + '''
 <section class="karte">
+  <h2>Aufbewahrung</h2>
+  <label class="schalter"><input type="checkbox"> 30 Jahre aufbewahren (Sonderfall)</label>
+  <p class="meta" style="margin:8px 0 0">Z. B. Großbrand ohne Verletzte: Der Einsatz wird wie ein Einsatz mit Besonderheiten aufbewahrt und in der Aussonderung mit diesem Grund angezeigt.</p>
+</section>
+<section class="karte">
   <div class="karte-kopf"><h2>Bericht für weitere Abteilung</h2></div>
   <div class="filter" style="margin:0"><div class="feld"><label>Abteilung</label><select><option>Birkenhain</option><option>Pappelhain</option><option>Ahornfeld</option><option>Eschenbrunn</option><option>Sonderdienste</option></select></div><a class="knopf sekundaer" href="bericht.html">+ Bericht anlegen</a></div>
 </section>

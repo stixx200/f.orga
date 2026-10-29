@@ -16,6 +16,7 @@ import { moduleSettings } from './frame/Sidebar';
 import { KIOSK_PATHS, type LoadedModule, loadKiosk, loadModules } from './modules';
 import { AuditPage } from './pages/admin/AuditPage';
 import { ModulesPage } from './pages/admin/ModulesPage';
+import { RetentionPage } from './pages/admin/RetentionPage';
 import { RolesPage } from './pages/admin/RolesPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { TokensPage } from './pages/admin/TokensPage';
@@ -61,6 +62,7 @@ function Router({ modules, session }: { modules: LoadedModule[]; session: Sessio
             { path: 'admin/tokens', element: <Guard session={session} permission="core.tokens.manage"><TokensPage /></Guard> },
             { path: 'admin/settings', element: <Guard session={session} permission="core.settings.manage"><SettingsPage modules={modules} /></Guard> },
             { path: 'admin/audit', element: <Guard session={session} permission="core.audit.read"><AuditPage /></Guard> },
+            { path: 'admin/retention', element: <Guard session={session} permission="core.retention.manage"><RetentionPage /></Guard> },
             ...modules.flatMap(({ info, web }) => (web ? [{ path: `${info.id}/*`, children: web.routes }] : [])),
             { path: '*', element: <NotFound /> },
           ],

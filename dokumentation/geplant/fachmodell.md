@@ -340,16 +340,22 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Wartungsmodus | maintenance (`503 maintenance`, `FORGA_MAINTENANCE_FILE`) |
 | Vorige Datenbank | previous database (`<db>_before_<zeit>`) |
 
-### Aufbewahrung (geplant)
+### Aufbewahrung
 
 | Fachbegriff | Code |
 | --- | --- |
+| Aufbewahrungsplan | retention plan (`RetentionRegistry`, `RetentionService`) |
 | Aufbewahrungsfrist je Datenkategorie | retention rule (`privacy.retention`), Kategorie `RetentionCategory` |
+| Unterart (z. B. Einsätze mit Besonderheiten) | subtype (`incidents.incidents:special`) |
+| 30 Jahre aufbewahren (Sonderfall) | `retentionSpecial` am Einsatz |
+| Grunddaten / Personalakte Ausgeschiedener | `masterdata.person-core` / `masterdata.person-file` |
+| Vorlage „Kommunaler Aktenplan (Beispiel)“ | `RETENTION_TEMPLATE_MUNICIPAL` |
 | Aktion nach Ablauf | `offer-archive`, `anonymize`, `delete`, `none`; nach Entscheidung `afterDecision` |
 | Sonderfall prüfen | `specialCase` |
-| Aussonderung, Aussonderungsfall | disposal, `core.retention_case` |
+| Aussonderung, Aussonderungsfall | disposal, `core.retention_case` (`RetentionCase`), Recht `core.retention.manage` |
 | Dem Archiv anbieten, angeboten | offer, `offered` |
-| Übernommen, kassiert, zurückgestellt | `taken`, `rejected`, `deferred` |
+| Fällig, übernommen, kassiert, zurückgestellt, erledigt | `due`, `accepted`, `destroyed`, `deferred`, `done` |
+| Anbietungsverzeichnis, Export für das Archiv | offer export (`offerId`) |
 
 ### Modul-IDs
 

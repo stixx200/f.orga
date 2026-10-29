@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { type EntityClass, EntityManager, wrap } from '@mikro-orm/core';
 import { type AuthenticatedUser, HistoryEntry, PersonDataRegistry, wordsWhere } from '@forga/core-api';
-import type { PrivacySettings, SearchHit } from '@forga/core-contracts';
+import type { SearchHit } from '@forga/core-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { Course, CourseAttendance, CourseNomination, CourseRun } from '../courses/course.entities.js';
 import { DepartmentGroup } from '../organization/group.entities.js';
@@ -94,35 +94,51 @@ export class MasterdataData {
   }
 
   /**
-   * Anonymises persons who left more than the configured years ago: name becomes the language-neutral "N., N." (nomen nescio; the UI marks anonymised persons in the user's language),
-   * contact, sensitive data, qualifications, honours and courses are removed, and so is their history.
-   * Memberships and ranks stay for past statistics; incident reports keep the reference.
+   * The person file of former members (Personalakte): contact and sensitive data, qualifications, honours, offices, rest
+   * periods and courses are removed, and so is the history holding them; the other modules remove what they keep about the
+   * persons (accounts, health data, notes, sizes, …). Name, memberships and ranks stay (basic data).
    */
-  async anonymize(settings: PrivacySettings, dryRun: boolean): Promise<number> {
-    if (!settings.anonymizeLeftAfterYears) return 0;
-    const cutoff = new Date();
-    cutoff.setFullYear(cutoff.getFullYear() - settings.anonymizeLeftAfterYears);
+  async anonymizeFile(ids: readonly string[]): Promise<number> {
     const em = this.em.fork();
-    const persons = await em.find(Person, { status: 'left', leftOn: { $lt: cutoff.toISOString().slice(0, 10) }, anonymizedAt: null }, { populate: ['qualifications', 'honors'] });
-    if (dryRun || !persons.length) return persons.length;
+    const persons = await em.find(Person, { id: { $in: [...ids] }, fileAnonymizedAt: null }, { populate: ['qualifications', 'honors', 'offices', 'restPeriods'] });
+    if (!persons.length) return 0;
     for (const person of persons) {
       em.assign(person, {
-        personnelNumber: null, salutation: '', title: '', firstName: ANONYMIZED_NAME, lastName: ANONYMIZED_NAME, nickname: '',
-        street: '', postalCode: '', city: '', phonePrivate: '', phoneMobile: '', phoneWork: '', email: '',
+        salutation: '', title: '', nickname: '', street: '', postalCode: '', city: '', phonePrivate: '', phoneMobile: '', phoneWork: '', email: '',
         birthDate: null, birthPlace: '', employer: null, bank: null, notes: '',
-        driverLicense: { classes: [], expiresOn: null, lastCheckedOn: null }, anonymizedAt: new Date(),
+        driverLicense: { classes: [], expiresOn: null, lastCheckedOn: null }, fileAnonymizedAt: new Date(),
       });
       person.qualifications.removeAll();
       person.honors.removeAll();
+      person.offices.removeAll();
+      person.restPeriods.removeAll();
       await em.nativeDelete(CourseAttendance, { person });
       await em.nativeDelete(CourseNomination, { person });
     }
     await em.flush();
-    const ids = persons.map((p) => p.id);
-    await em.nativeDelete(HistoryEntry, { $or: [{ entity: 'masterdata.person', entityId: { $in: ids } }, { parentEntity: 'masterdata.person', parentId: { $in: ids } }] });
-    // The other modules remove what they keep about the persons (accounts, health data, notes, sizes, …).
-    await this.personData.anonymize(ids);
+    const done = persons.map((p) => p.id);
+    await this.removeHistory(em, done);
+    await this.personData.anonymize(done);
     return persons.length;
   }
 
+  /**
+   * Anonymises persons completely (basic data, Personalstammrolle): first the person file, then the name becomes the
+   * language-neutral "N., N." (nomen nescio; the UI marks anonymised persons in the user's language) and the personnel
+   * number is removed. Memberships and ranks stay for past statistics; incident reports keep the reference.
+   */
+  async anonymizePersons(ids: readonly string[]): Promise<number> {
+    await this.anonymizeFile(ids);
+    const em = this.em.fork();
+    const persons = await em.find(Person, { id: { $in: [...ids] }, anonymizedAt: null });
+    if (!persons.length) return 0;
+    for (const person of persons) em.assign(person, { personnelNumber: null, firstName: ANONYMIZED_NAME, lastName: ANONYMIZED_NAME, anonymizedAt: new Date() });
+    await em.flush();
+    await this.removeHistory(em, persons.map((p) => p.id));
+    return persons.length;
+  }
+
+  private async removeHistory(em: EntityManager, ids: string[]): Promise<void> {
+    await em.nativeDelete(HistoryEntry, { $or: [{ entity: 'masterdata.person', entityId: { $in: ids } }, { parentEntity: 'masterdata.person', parentId: { $in: ids } }] });
+  }
 }

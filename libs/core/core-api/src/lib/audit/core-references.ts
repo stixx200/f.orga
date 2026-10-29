@@ -3,6 +3,7 @@ import { EntityManager } from '@mikro-orm/core';
 import { ImportRegistry } from '../imports/import-registry.js';
 import { ListRegistry } from '../lists/list-registry.js';
 import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
+import { RetentionRegistry } from '../retention/retention-registry.js';
 import { ApiToken, Role, User } from '../security/security.entities.js';
 import { AuditReferenceRegistry, type AuditReferenceTarget } from './audit-references.js';
 
@@ -14,6 +15,7 @@ export class CoreAuditReferences implements OnModuleInit {
     private readonly em: EntityManager,
     private readonly lists: ListRegistry,
     private readonly imports: ImportRegistry,
+    private readonly retention: RetentionRegistry,
     @Inject(FORGA_CORE_OPTIONS) private readonly options: ForgaCoreOptions,
   ) {}
 
@@ -61,6 +63,13 @@ export class CoreAuditReferences implements OnModuleInit {
       actions: ['imports.'],
       uuid: false,
       resolve: async (ids) => new Map(ids.flatMap((id) => { const profile = this.imports.get(id); return profile ? [[id, { label: profile.name }]] : []; })),
+    });
+    // Data categories of the retention plan (`incidents.incidents`), named in the steps of the list „Aussonderung“.
+    this.registry.register('core.retention-category', {
+      keys: ['category', 'categories'],
+      actions: ['retention.'],
+      uuid: false,
+      resolve: async (ids) => new Map(ids.flatMap((id) => { const category = this.retention.categories.get(id); return category ? [[id, { label: category.name }]] : []; })),
     });
   }
 }

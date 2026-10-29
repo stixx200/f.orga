@@ -29,6 +29,7 @@ import { GroupsController } from './organization/groups.controller.js';
 import { OrganizationController } from './organization/organization.controller.js';
 import { Department, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod, Station, Vehicle } from './masterdata.entities.js';
 import { MasterdataData } from './data/masterdata.data.js';
+import { MasterdataRetention } from './data/masterdata.retention.js';
 import { OrganizationReferenceRegistry } from './organization/references.js';
 import { PersonHoldingsRegistry } from './persons/holdings.js';
 import { PersonsController } from './persons/persons.controller.js';
@@ -51,6 +52,7 @@ import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/person
     CareerImport,
     MasterdataLookups,
     MasterdataData,
+    MasterdataRetention,
     { provide: PERSON_DIRECTORY, useClass: PersonDirectoryService },
     { provide: ORGANIZATION, useClass: OrganizationService },
     OrganizationReferenceRegistry,
@@ -83,6 +85,7 @@ export class MasterdataModule implements OnModuleInit {
     private readonly exports: ExportRegistry,
     private readonly retention: RetentionRegistry,
     private readonly data: MasterdataData,
+    private readonly retentionCategories: MasterdataRetention,
     private readonly organization: OrganizationDirectory,
     private readonly auditReferences: AuditReferenceRegistry,
   ) {}
@@ -128,7 +131,7 @@ export class MasterdataModule implements OnModuleInit {
     this.search.register('masterdata', (user, query) => this.data.search(user, query));
     registerAuditReferences(this.auditReferences, this.em);
     this.exports.register('masterdata', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
-    this.retention.register('masterdata.persons', { run: (settings, dryRun) => this.data.anonymize(settings, dryRun) });
+    this.retentionCategories.register(this.retention);
     this.historyAccess.register('masterdata.person', async (user, id) => {
       const person = await this.em.fork().findOne(Person, id, { populate: ['memberships.department'] });
       if (!person || !this.persons.can(user, READ, person)) return { allowed: false };

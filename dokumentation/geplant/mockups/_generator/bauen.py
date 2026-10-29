@@ -45,7 +45,7 @@ GRUPPEN = [
                       ('sicherung/sicherungen.html', 'Sicherungen mit Prüfen und Wiederherstellen'), ('sicherung/sicherungen.html#d-pruefen', 'Sicherung prüfen'),
                       ('sicherung/wiederherstellen.html', 'Wiederherstellung bestätigen'), ('sicherung/wiederherstellung-laeuft.html', 'Wiederherstellung läuft'),
                       ('sicherung/wartung.html', 'Wartungsseite für andere Benutzer')]),
-    ('Aufbewahrung (Konzept)', [('shell/aufbewahrung.html', 'Aufbewahrungsfristen'), ('shell/aufbewahrung.html#d-vorlage', 'Vorlage Kommunaler Aktenplan'),
+    ('Aufbewahrung', [('shell/aufbewahrung.html', 'Aufbewahrungsfristen'), ('shell/aufbewahrung.html#d-vorlage', 'Vorlage Kommunaler Aktenplan'),
                       ('shell/aussonderung.html', 'Aussonderung: Archiv anbieten'), ('shell/aussonderung.html#d-entscheidung', 'Entscheidung des Archivs')]),
     ('Datenschutz', [('datenschutz/person.html', 'Personalakte: Datenschutz, Auskunft erstellen'), ('datenschutz/auskunft-vorschau.html', 'Auskunft nach Art. 15 (PDF-Vorschau)'),
                      ('datenschutz/anfragen.html', 'Betroffenenanfragen'), ('datenschutz/anfrage.html', 'Löschantrag mit Löschprüfung'),

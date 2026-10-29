@@ -1,10 +1,11 @@
 import { Global, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Attachments, AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry, SearchRegistry } from '@forga/core-api';
+import { Attachments, AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry, RetentionRegistry, SearchRegistry } from '@forga/core-api';
 import { TRAINING_CASUALTIES, TRAINING_MANIFEST, TRAINING_SESSIONS, TRAINING_SETTINGS, TRAINING_TERMINAL_CHECK_IN } from '@forga/training-contracts';
 import { TRAINING_MIGRATIONS } from '../migrations/index.js';
 import { registerAuditReferences } from './audit/audit.references.js';
 import { TrainingData } from './data/training.data.js';
+import { TrainingRetention } from './data/training.retention.js';
 import { SessionsImport } from './imports/sessions.import.js';
 import { TrainingLists } from './lists/training.lists.js';
 import { SessionsController } from './sessions/sessions.controller.js';
@@ -17,7 +18,7 @@ import { AttendanceEntity, SessionEntity, SessionTypeEntity } from './training.e
 @Global()
 @Module({
   controllers: [SessionsController, TrainingSelfController],
-  providers: [SessionsService, TrainingLists, TrainingData, SessionsImport, { provide: TRAINING_CASUALTIES, useExisting: SessionsService }, { provide: TRAINING_SESSIONS, useExisting: SessionsService },
+  providers: [SessionsService, TrainingLists, TrainingData, TrainingRetention, SessionsImport, { provide: TRAINING_CASUALTIES, useExisting: SessionsService }, { provide: TRAINING_SESSIONS, useExisting: SessionsService },
     TerminalCheckInService, { provide: TRAINING_TERMINAL_CHECK_IN, useExisting: TerminalCheckInService },
   ],
   exports: [TRAINING_CASUALTIES, TRAINING_SESSIONS, TRAINING_TERMINAL_CHECK_IN],
@@ -38,6 +39,8 @@ export class TrainingModule implements OnModuleInit {
     private readonly attachments: Attachments,
     private readonly personData: PersonDataRegistry,
     private readonly auditReferences: AuditReferenceRegistry,
+    private readonly retention: RetentionRegistry,
+    private readonly retentionCategory: TrainingRetention,
   ) {}
 
   onModuleInit(): void {
@@ -47,6 +50,7 @@ export class TrainingModule implements OnModuleInit {
     this.search.register('training', (user, query) => this.data.search(user, query));
     this.exports.register('training', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
     this.personData.register('training', { anonymize: (ids) => this.data.anonymize(ids) });
+    this.retentionCategory.register(this.retention);
     this.imports.register('training', this.sessionsImport.profile());
     this.imports.registerLookup('training', this.sessionsImport.lookup());
     this.historyAccess.register('training.session', async (user, id) => {

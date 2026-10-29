@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { LocalizedText } from './i18n.js';
+import { RetentionRule } from './retention.js';
 import { ReminderSettings } from './tasks.js';
 
 function isPublicUrl(value: string): boolean {
@@ -49,12 +50,12 @@ export const SmtpSettings = z.object({
 });
 export type SmtpSettings = z.infer<typeof SmtpSettings>;
 
-/** Data protection: anonymising former members and keeping the audit log. */
+/**
+ * Data protection: retention period and action per data category (and subtype), keyed like `incidents.incidents:special`.
+ * Categories without a stored rule use their default (nothing happens, except deleting the audit log after 2 years).
+ */
 export const PrivacySettings = z.object({
-  /** Persons who left are anonymised this many years after leaving; `null` = never. */
-  anonymizeLeftAfterYears: z.number().int().min(1).max(50).nullable().default(null),
-  /** Audit entries older than this are deleted. */
-  auditRetentionMonths: z.number().int().min(6).max(240).default(24),
+  retention: z.record(z.string(), RetentionRule).default({}),
 });
 export type PrivacySettings = z.infer<typeof PrivacySettings>;
 

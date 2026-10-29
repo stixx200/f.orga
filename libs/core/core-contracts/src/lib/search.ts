@@ -13,27 +13,6 @@ export const SearchHit = z.object({
 });
 export type SearchHit = z.infer<typeof SearchHit>;
 
-/** Result of applying the retention rules (`POST /api/core/retention/run`). */
-export const RetentionResult = z.object({
-  dryRun: z.boolean(),
-  /** Count per rule, e.g. `{ 'core.audit': 120, 'masterdata.persons': 3 }`. */
-  counts: z.record(z.string(), z.number()),
-});
-export type RetentionResult = z.infer<typeof RetentionResult>;
-
-/** Runs the retention rules; a dry run may try other values than the stored ones, e.g. before saving them. */
-export const RetentionRun = z.object({
-  dryRun: z.boolean().default(true),
-  /** Only for dry runs: overrides of the stored privacy settings. */
-  settings: z
-    .object({
-      anonymizeLeftAfterYears: z.number().int().min(1).max(50).nullable().optional(),
-      auditRetentionMonths: z.number().int().min(6).max(240).optional(),
-    })
-    .optional(),
-});
-export type RetentionRun = z.input<typeof RetentionRun>;
-
 /**
  * Barcode or RFID chip of a physical item (equipment, hose, breathing apparatus, clothing). Empty input means none;
  * stored codes are unique per module.

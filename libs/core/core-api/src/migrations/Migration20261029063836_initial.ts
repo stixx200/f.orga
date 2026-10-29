@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261029053956_initial extends Migration {
+export class Migration20261029063836_initial extends Migration {
 
-  override name = 'Migration20261029053956_initial';
+  override name = 'Migration20261029063836_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"core\";");
@@ -19,6 +19,10 @@ export class Migration20261029053956_initial extends Migration {
     this.addSql("create table \"core\".\"import_upload\" (\"id\" uuid not null, \"user_id\" varchar(255) not null, \"file_name\" varchar(255) not null, \"headers\" jsonb not null, \"rows\" jsonb not null, \"created_at\" timestamptz not null, primary key (\"id\"));");
     this.addSql("create table \"core\".\"import_url\" (\"user_id\" varchar(255) not null, \"url\" text not null, \"display\" varchar(255) not null, \"saved_at\" timestamptz not null, primary key (\"user_id\"));");
     this.addSql("create table \"core\".\"module\" (\"id\" varchar(255) not null, \"active\" boolean not null default true, \"granted_templates\" jsonb null, \"updated_at\" timestamptz not null, primary key (\"id\"));");
+    this.addSql("create table \"core\".\"retention_case\" (\"id\" uuid not null, \"category\" varchar(255) not null, \"rule_key\" varchar(255) not null, \"record_id\" varchar(255) not null, \"label\" text not null, \"neutral_label\" text not null, \"reason\" jsonb null, \"event_date\" varchar(10) not null, \"due_since\" varchar(10) not null, \"attachments\" int not null default 0, \"status\" varchar(255) not null default 'due', \"action\" varchar(255) not null, \"after_decision\" varchar(255) null, \"special_case\" boolean not null default false, \"blocked_by\" varchar(255) null, \"offer_id\" varchar(255) null, \"offered_at\" timestamptz null, \"archive\" varchar(255) null, \"offer_note\" text null, \"decided_on\" varchar(10) null, \"decision_note\" text null, \"deferred_until\" varchar(10) null, \"defer_reason\" text null, \"executed_at\" timestamptz null, \"executed_action\" varchar(255) null, \"created_at\" timestamptz not null, \"version\" int not null default 1, primary key (\"id\"));");
+    this.addSql("create index \"retention_case_category_record_id_index\" on \"core\".\"retention_case\" (\"category\", \"record_id\");");
+    this.addSql("create index \"retention_case_status_index\" on \"core\".\"retention_case\" (\"status\");");
+    this.addSql("create index \"retention_case_offer_id_index\" on \"core\".\"retention_case\" (\"offer_id\");");
     this.addSql("create table \"core\".\"role\" (\"id\" uuid not null, \"name\" jsonb not null, \"template_key\" varchar(255) null, \"description\" jsonb not null default '{\"de\":\"\",\"en\":\"\"}', \"permissions\" jsonb not null, \"permissions_all_departments\" jsonb not null default '[]', \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("alter table \"core\".\"role\" add constraint \"role_template_key_unique\" unique (\"template_key\");");
     this.addSql("create table \"core\".\"setting\" (\"section\" varchar(255) not null, \"value\" jsonb not null, \"version\" int not null default 1, primary key (\"section\"));");
@@ -56,6 +60,7 @@ export class Migration20261029053956_initial extends Migration {
     this.addSql("drop table if exists \"core\".\"import_upload\" cascade;");
     this.addSql("drop table if exists \"core\".\"import_url\" cascade;");
     this.addSql("drop table if exists \"core\".\"module\" cascade;");
+    this.addSql("drop table if exists \"core\".\"retention_case\" cascade;");
     this.addSql("drop table if exists \"core\".\"role\" cascade;");
     this.addSql("drop table if exists \"core\".\"setting\" cascade;");
     this.addSql("drop table if exists \"core\".\"user\" cascade;");

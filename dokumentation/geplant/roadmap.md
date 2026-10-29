@@ -131,9 +131,12 @@ Umgesetzt, siehe [Modul Infoterminal](../implementiert/architektur.md#modul-info
 
 Umgesetzt, siehe [Modul Datensicherung](../implementiert/architektur.md#modul-datensicherung-backup) nach den freigegebenen Mockups (`mockups/sicherung/`); offen sind ein zweites Ziel außer Haus und E2E-Tests ([offene Punkte](module/backup.md)).
 
+## Aufbewahrungsplan
+
+Umgesetzt, siehe [Aufbewahrungsplan](../implementiert/aufbewahrung.md): Fristen je Datenkategorie, Vorlage „Kommunaler Aktenplan (Beispiel)“, Aussonderung mit Anbietung an das Archiv. Offen sind die Punkte in [aufbewahrung.md](aufbewahrung.md).
+
 ## Konzepte zur Freigabe
 
 Konzept und Mockups liegen vor; umgesetzt wird nach Freigabe der Mockups und Klärung der offenen Entscheidungen im jeweiligen Konzept.
 
 - **Führerscheinkontrolle** ([Konzept](module/fuehrerscheinkontrolle.md)): Befristung je Klasse, Kontrollen mit Historie und Nachweis für die Gemeinde, anlassbezogene Fristen (optional regelmäßig), erneute Vorlage, Selbstkontrolle mit Transponder am Infoterminal und in „Mein Bereich“.
-- **Aufbewahrungsplan** ([Konzept](aufbewahrung.md)): Fristen je Datenkategorie, Vorlage „Kommunaler Aktenplan (Beispiel)“, Aussonderung mit Anbietung an das Archiv.

@@ -59,6 +59,7 @@ export const SESSION_TYPE_TEMPLATE: SessionTypeInput[] = [
   t('equipment-support', 'Unterstützung Gerätewart', 'Supporting the equipment officer', special, 92),
   t('fire-safety-education', 'Brandschutzerziehung', 'Fire safety education', special, 94),
   t('meeting', 'Sitzung / Ausschuss', 'Meeting / committee', { category: 'other', compensation: 'none', countsForParticipation: false }, 100),
+  t('staff-meeting', 'Dienstbesprechung', 'Staff meeting', { category: 'other', compensation: 'none', countsForParticipation: false }, 105),
   t('youth', 'Jugendfeuerwehrdienst', 'Youth fire brigade session', { compensation: 'none' }, 110),
 ];
 

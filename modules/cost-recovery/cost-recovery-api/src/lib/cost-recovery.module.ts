@@ -1,5 +1,5 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
-import { AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
+import { AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, RetentionRegistry, SearchRegistry } from '@forga/core-api';
 import { COST_RECOVERY_MANIFEST, COST_RECOVERY_SETTINGS } from '@forga/cost-recovery-contracts';
 import { EntityManager, wrap } from '@mikro-orm/core';
 import { COST_RECOVERY_MIGRATIONS } from '../migrations/index.js';
@@ -10,11 +10,12 @@ import { CostRecoveryLists } from './lists/cost-recovery.lists.js';
 import { TreasuryHandover } from './notices/handover.js';
 import { NoticesController } from './notices/notices.controller.js';
 import { NoticesService } from './notices/notices.service.js';
+import { NoticesRetention } from './notices/notices.retention.js';
 import { OverdueNotices } from './notices/overdue.deadlines.js';
 
 @Module({
   controllers: [NoticesController],
-  providers: [NoticesService, TreasuryHandover, OverdueNotices, CostRecoveryLists, PaymentsImport],
+  providers: [NoticesService, NoticesRetention, TreasuryHandover, OverdueNotices, CostRecoveryLists, PaymentsImport],
 })
 export class CostRecoveryModule implements OnModuleInit {
   constructor(
@@ -30,6 +31,8 @@ export class CostRecoveryModule implements OnModuleInit {
     private readonly deadlines: DeadlineRegistry,
     private readonly overdue: OverdueNotices,
     private readonly auditReferences: AuditReferenceRegistry,
+    private readonly retention: RetentionRegistry,
+    private readonly noticesRetention: NoticesRetention,
   ) {}
 
   onModuleInit(): void {
@@ -41,6 +44,7 @@ export class CostRecoveryModule implements OnModuleInit {
     this.historyAccess.registerPermission('cost_recovery.incident_offense', 'cost-recovery.read');
     this.search.register('cost-recovery', (user, query) => this.notices.search(user, query));
     this.deadlines.register(this.overdue);
+    this.noticesRetention.register(this.retention);
     this.exports.register('cost-recovery', {
       all: async () => {
         const em = this.em.fork();

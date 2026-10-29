@@ -1,6 +1,7 @@
 import { type DynamicModule, type MiddlewareConsumer, Module, type NestModule, type OnModuleInit } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { Migrator } from '@mikro-orm/migrations';
+import { RETENTION_PERMISSION } from '@forga/core-contracts';
 import { CORE_MIGRATIONS } from '../migrations/index.js';
 import { Audit, AuditController, AuditEntry } from './audit/audit.js';
 import { AuditReferenceRegistry } from './audit/audit-references.js';
@@ -18,7 +19,13 @@ import { DigestService } from './tasks/digest.service.js';
 import { MailService } from './tasks/mail.service.js';
 import { Notifications } from './tasks/notifications.js';
 import { CoreExport } from './data/core-export.js';
-import { CodeRegistry, DataController, ExportRegistry, PersonDataRegistry, RetentionRegistry, RetentionService, SearchRegistry } from './data/data.js';
+import { CodeRegistry, DataController, ExportRegistry, PersonDataRegistry, SearchRegistry } from './data/data.js';
+import { CoreRetentionCategories } from './retention/core-categories.js';
+import { RetentionCaseEntity } from './retention/retention-case.entity.js';
+import { RetentionController } from './retention/retention.controller.js';
+import { RetentionExport } from './retention/retention-export.js';
+import { RetentionRegistry } from './retention/retention-registry.js';
+import { RetentionService } from './retention/retention.service.js';
 import { EmailConfirmationController, PasswordReset, PasswordResetController, PasswordResetService } from './security/password-reset.js';
 import { AttachmentEntity, Attachments, AttachmentsController } from './attachments/attachments.js';
 import { BrigadeAsset, BrigadeAssetsController } from './settings/assets.js';
@@ -61,6 +68,7 @@ export const CORE_ENTITIES: EntityDefinition[] = [
   PasswordReset,
   BrigadeAsset,
   AttachmentEntity,
+  RetentionCaseEntity,
 ];
 
 function className(entity: EntityDefinition): string {
@@ -106,6 +114,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
     this.personData.register('core', { anonymize: (ids) => this.coreExport.anonymize(ids) });
     this.historyAccess.registerPermission('core.user', 'core.users.manage');
     this.historyAccess.registerPermission('core.role', 'core.roles.manage');
+    this.historyAccess.registerPermission('core.retention_case', RETENTION_PERMISSION);
     // Remembered mappings of the table import: for users of any import profile.
     this.historyAccess.register('core.import_mapping', async (user) => ({ allowed: this.imports.available(user).length > 0 }));
     // Settings of a module: also for the managers of that module's settings.
@@ -138,6 +147,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         BrigadeAssetsController,
         AttachmentsController,
         DataController,
+        RetentionController,
         OidcController,
         PluginsController,
         OnboardingController,
@@ -174,6 +184,8 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         RetentionRegistry,
         PersonDataRegistry,
         RetentionService,
+        RetentionExport,
+        CoreRetentionCategories,
         CoreExport,
       ],
       exports: [
