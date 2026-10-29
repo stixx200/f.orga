@@ -15,6 +15,7 @@ export * from './lib/security/decorators.js';
 export * from './lib/security/auth.service.js';
 export * from './lib/security/auth.guard.js';
 export * from './lib/security/password.js';
+export * from './lib/security/server-key.js';
 export * from './lib/security/permission-registry.js';
 export * from './lib/security/organization-directory.js';
 export * from './lib/security/password-reset.js';

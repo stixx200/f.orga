@@ -11,7 +11,7 @@
   - Wird etwas umgesetzt, wird die Beschreibung von `geplant/` nach `implementiert/` verschoben, nicht kopiert.
   - Fachbegriff ↔ Code-Begriff steht im Glossar in `dokumentation/geplant/fachmodell.md`.
 - **Mockups vor Frontends:** Vor der Umsetzung eines Frontends müssen die Mockups der App in `dokumentation/geplant/mockups/` freigegeben sein. Gestaltung nach `../Stil.md` (Theme in `libs/web/web-ui`).
-- **Modul-IDs:** `core`, `masterdata`, `incidents`, `training`, `respiratory-protection`, `compensation`, `equipment`, `cost-recovery`, `promotions`, `clothing`, `duty-officer`, `info-terminal`, `mp-feuer`.
+- **Modul-IDs:** `core`, `masterdata`, `incidents`, `training`, `respiratory-protection`, `compensation`, `equipment`, `cost-recovery`, `promotions`, `clothing`, `duty-officer`, `info-terminal`, `mp-feuer`, `backup`.
   - Die ID ist Präfix der Berechtigungen und der API-Pfade (`/api/<id>/…`).
   - Das Datenbankschema heißt wie die ID, mit `_` statt `-`.
 - **Modulgrenzen:** Module importieren voneinander nur `*-contracts`-Pakete. Verträge (Zod) liegen in `*-contracts` und werden von Backend und Frontend genutzt. Geprüft wird das mit `tools/module-boundaries.mjs` über die Nx-Tags `scope:*` und `type:*`.

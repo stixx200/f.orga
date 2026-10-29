@@ -1,4 +1,5 @@
 import { i18n } from './i18n';
+import { reportMaintenance } from './maintenance';
 
 /** An API error with the machine-readable `code` from the server, e.g. `auth.invalidCredentials`. */
 export class ApiError extends Error {
@@ -53,6 +54,13 @@ export function translateCode(code: string, params: Record<string, unknown> = {}
   return i18n.t(`errors.${code}`, { ns: namespaces, defaultValue: i18n.t('errors.generic', { ns: 'common' }), ...params });
 }
 
+/** The error of a failed request; `503 maintenance` (a backup is being restored) also switches the shell to its maintenance page. */
+function failure(response: Response, body: unknown): ApiError {
+  const error = new ApiError(response.status, body as ApiError['body']);
+  if (response.status === 503 && error.code === 'maintenance') reportMaintenance();
+  return error;
+}
+
 /**
  * Calls the f.orga API with the session cookie. Paths without the `/api` prefix.
  * The `x-forga` header marks requests from the UI (CSRF protection).
@@ -64,7 +72,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers: { 'Content-Type': 'application/json', 'x-forga': '1', ...init.headers },
   });
   const body = response.status === 204 ? undefined : await response.json().catch(() => undefined);
-  if (!response.ok) throw new ApiError(response.status, body as ApiError['body']);
+  if (!response.ok) throw failure(response, body);
   return body as T;
 }
 
@@ -77,7 +85,7 @@ export async function upload<T>(path: string, file: File, method: 'POST' | 'PUT'
   form.append('file', file);
   const response = await fetch(`/api/${path.replace(/^\//, '')}`, { method, credentials: 'include', headers: { 'x-forga': '1' }, body: form });
   const body = await response.json().catch(() => undefined);
-  if (!response.ok) throw new ApiError(response.status, body as ApiError['body']);
+  if (!response.ok) throw failure(response, body);
   return body as T;
 }
 
@@ -87,7 +95,7 @@ export async function uploadFiles<T>(path: string, files: readonly File[]): Prom
   for (const file of files) form.append('files', file);
   const response = await fetch(`/api/${path.replace(/^\//, '')}`, { method: 'POST', credentials: 'include', headers: { 'x-forga': '1' }, body: form });
   const body = await response.json().catch(() => undefined);
-  if (!response.ok) throw new ApiError(response.status, body as ApiError['body']);
+  if (!response.ok) throw failure(response, body);
   return body as T;
 }
 

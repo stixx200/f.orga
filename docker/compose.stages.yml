@@ -32,8 +32,12 @@ services:
       FORGA_SECURE_COOKIES: ${FORGA_SECURE_COOKIES:-false}
       FORGA_PLUGIN_DIR: /plugins
       FORGA_PLUGIN_KEYS: ${FORGA_PLUGIN_KEYS:-}
+      # Backups of the real system, apart from those of the test system (FORGA_BACKUP_DIR_REAL: folder on the host).
+      FORGA_BACKUP_ROOT: /backups
+      FORGA_INSTANCE: real
     volumes:
       - forga-real-plugins:/plugins
+      - ${FORGA_BACKUP_DIR_REAL:-forga-real-backups}:/backups
     ports:
       - '${FORGA_REAL_PORT:-8080}:3000'
     depends_on:
@@ -59,8 +63,13 @@ services:
       FORGA_SECURE_COOKIES: ${FORGA_SECURE_COOKIES:-false}
       FORGA_PLUGIN_DIR: /plugins
       FORGA_PLUGIN_KEYS: ${FORGA_PLUGIN_KEYS:-}
+      # Backups of the test system (FORGA_BACKUP_DIR_TEST: folder on the host); no scheduled backups by default.
+      FORGA_BACKUP_ROOT: /backups
+      FORGA_INSTANCE: test
+      FORGA_BACKUP_SCHEDULER: ${FORGA_BACKUP_SCHEDULER_TEST:-off}
     volumes:
       - forga-test-plugins:/plugins
+      - ${FORGA_BACKUP_DIR_TEST:-forga-test-backups}:/backups
     ports:
       - '${FORGA_TEST_PORT:-8081}:3000'
     depends_on:
@@ -82,7 +91,11 @@ volumes:
     name: forga_real_db
   forga-real-plugins:
     name: forga_real_plugins
+  forga-real-backups:
+    name: forga_real_backups
   forga-test-db:
     name: forga_test_db
   forga-test-plugins:
     name: forga_test_plugins
+  forga-test-backups:
+    name: forga_test_backups

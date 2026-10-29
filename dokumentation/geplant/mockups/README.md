@@ -1,6 +1,6 @@
 # Mockups Release 1
 
-**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben, ebenso die der Führerscheinkontrolle (umgesetzt, siehe [Führerscheinkontrolle](../../implementiert/architektur.md#führerscheinkontrolle); „Mein Bereich“ zeigt abweichend von `shell/mein-fuehrerschein.html` nur den Stand, ohne Selbstkontrolle). Zur Freigabe sind die Mockups des Moduls MP-Feuer (`mp-feuer/`) und der Konzepte [Datensicherung](../module/backup.md) und [Aufbewahrung](../aufbewahrung.md).
+**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben, ebenso die der Führerscheinkontrolle (umgesetzt, siehe [Führerscheinkontrolle](../../implementiert/architektur.md#führerscheinkontrolle); „Mein Bereich“ zeigt abweichend von `shell/mein-fuehrerschein.html` nur den Stand, ohne Selbstkontrolle). Zur Freigabe sind die Mockups des Moduls MP-Feuer (`mp-feuer/`) und des Konzepts [Aufbewahrung](../aufbewahrung.md). Die Mockups zum Datenschutz (`datenschutz/`) sind freigegeben.
 
 Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stammdaten und Einsatzberichte, dazu das Modul Infoterminal (Kiosk-Seite je Wache) und das Modul MP-Feuer ([Konzept](../module/mp-feuer.md)). Sie funktionieren nicht und enthalten nur erfundene Daten. Farben, Schrift, Tabellen sowie Kopf- und Fußzeile folgen `Stil.md`.
 
@@ -92,7 +92,7 @@ Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stam
 | | `infoterminal/fuehrerschein.html`, `infoterminal/fuehrerschein-bestaetigen.html` | Selbstkontrolle am Infoterminal: scannen, Selbsterklärung bestätigen (`#d-kontrolliert`), unbekannter Code (`#d-unbekannt`) |
 | | `shell/mein-fuehrerschein.html` | „Mein Bereich“: eigener Führerschein, Selbstkontrolle mit NFC oder Kamera (`#d-selbst`) |
 | | `shell/start.html#aufgaben` | Aufgabe „Führerscheinkontrolle fällig“ |
-| Datensicherung (Konzept) | `sicherung/uebersicht.html` | Stand, letzte und nächste Sicherung, Ziel, Warnung zur Passphrase, „Jetzt sichern“ (`#d-jetzt`) |
+| Datensicherung | `sicherung/uebersicht.html` | Stand, letzte und nächste Sicherung, Ziel, Warnung zur Passphrase, „Jetzt sichern“ (`#d-jetzt`) |
 | | `sicherung/einstellungen.html` | Ziel unter `/backups`, Zeitplan, Aufbewahrung, Verschlüsselung mit Passphrase, Inhalt, Benachrichtigung |
 | | `sicherung/sicherungen.html` | Sicherungen mit Status und Prüfung; Prüfen (`#d-pruefen`) mit Wiederherstellung testen, Herunterladen und Löschen (`#d-mehr`) |
 | | `sicherung/wiederherstellen.html`, `sicherung/wiederherstellung-laeuft.html` | Assistent: Bestätigen mit Name der Feuerwehr und Zahlen, Fortschritt mit Wartungsmodus |
@@ -117,6 +117,23 @@ Seiten im Rahmen der Shell unter „Verwaltung → MP-Feuer“ ([Konzept](../mod
 | `mp-feuer/einstellungen.html` | Gemerkte Auswahl je Archivnummer, Datensätze und Optionen, Zurücksetzen (`#d-vergessen`); Eingangsordner und Zeitplan als „später“ |
 | `mp-feuer/export.html` | Export nach MP-Feuer: Platzhalter „in Vorbereitung“, geplante Exporte mit „Vorlage fehlt“ |
 | `mp-feuer/tabellen-import.html` | Import-Seite des Core: Hinweis auf das Modul, Reiter „Gemerkte Zuordnungen“ mit der Zuordnungsliste des Tabellen-Imports (`#d-loeschen-core`) |
+
+### Datenschutz
+
+Seiten zum [Datenschutzkonzept](../datenschutz.md). Die Seiten der Verwaltung liegen unter „Verwaltung → Datenschutz“ mit Reitern (Anfragen, Verzeichnis, Einstellungen); der Menüeintrag fehlt in der Seitenleiste der Mockups, damit die übrigen Seiten unverändert bleiben.
+
+| Seite | Inhalt |
+| --- | --- |
+| `datenschutz/person.html` | Personalakte, Reiter „Datenschutz“: sensible Daten ausgeblendet bis zum Step-up (`#d-stepup`), Anfragen der Person mit Frist, Einwilligungen mit Widerruf, Information nach Art. 13/14, Einschränkung (`#d-einschraenkung`), erstellte Auskünfte; „Auskunft erstellen“ (`#d-auskunft`), „Anfrage erfassen“ (`#d-anfrage`), „Einwilligung erfassen“ (`#d-einwilligung`) |
+| `datenschutz/auskunft-vorschau.html` | Beispielseiten der Auskunft als PDF: Deckblatt mit den Angaben nach Art. 15 Abs. 1, Stammdaten, Einsätze ohne Namen anderer, Atemschutz als Gesundheitsdaten, Benutzerkonto und Protokolle; Übergabe vermerken (`#d-uebergabe`) |
+| `datenschutz/anfragen.html` | Betroffenenanfragen mit Frist und Stand, Kennzahlen, Auskunft zu einer anderen Person (Beteiligte, Kostenschuldner, `#d-dritte`), Datenpanne |
+| `datenschutz/anfrage.html` | Löschantrag mit Löschprüfung je Modul (löschen, anonymisieren, einschränken bis), Empfänger informieren, Ausführen mit Namensbestätigung (`#d-loeschen`) |
+| `datenschutz/verzeichnis.html` | Verzeichnis der Verarbeitungstätigkeiten als Entwurf aus den Modulen, eine Tätigkeit im Detail mit Feldern der Gemeinde und technischen Maßnahmen |
+| `datenschutz/einstellungen.html` | Kontakte (Verantwortlicher, DSB, Aufsichtsbehörde), Textbausteine als Vorlage oder geprüft, Katalog der Einwilligungen, Sicherheit (Zwei-Faktor, Leerlauf, E-Mails ohne Namen, Stand HTTPS und Sicherung) |
+| `datenschutz/mein-bereich.html` | Mein Bereich: eigene Einwilligungen, Auskunft anfordern und herunterladen, Berichtigung beantragen (`#d-berichtigung`), eigene Anfragen, „Anmeldungen als Sie“ |
+| `datenschutz/hinweis.html` | Datenschutzhinweis ohne Anmeldung, aus Textbausteinen und Verzeichnis |
+| `datenschutz/erste-anmeldung.html` | Hinweis bei der ersten Anmeldung mit Kenntnisnahme und freiwilligen Einwilligungen |
+| `datenschutz/zwei-faktor.html` | Zweiten Faktor einrichten (App verbinden, Code bestätigen, Wiederherstellungscodes); Bestätigung beim Öffnen sensibler Daten mit Übersicht der Bereiche und Dialog „Bitte bestätigen Sie mit Ihrem Code“ (`#d-stepup`) |
 
 ### Berichtseditor
 
@@ -149,8 +166,10 @@ Die Seiten werden mit `python3 _generator/bauen.py` aus den Skripten in `_genera
 | Datei | Inhalt |
 | --- | --- |
 | `rahmen.py` | Kopf, Seitenleiste, Fußzeile, Symbole und Bausteine: `tabelle()`, `dialog()`, `leer()` |
-| `shell.py`, `stammdaten.py`, `einsatzberichte.py`, `infoterminal.py`, `mpfeuer.py` | Seiteninhalte je App; `infoterminal.py` baut die Kiosk-Seiten mit eigenem Kopf (`tk()`) ohne Seitenleiste, `mpfeuer.py` die Seiten des Moduls MP-Feuer mit Reitern (`mseite()`) |
-| `fuehrerschein.py`, `sicherung.py`, `aufbewahrung.py` | Konzepte zur Freigabe: Führerscheinkontrolle (Stammdaten, Infoterminal, Mein Bereich), Modul Datensicherung, Aufbewahrung und Aussonderung |
+| `shell.py`, `stammdaten.py`, `einsatzberichte.py`, `infoterminal.py`, `mpfeuer.py`, `datenschutz.py` | Seiteninhalte je App; `datenschutz.py` mit Reitern der Verwaltungsseiten (`vseite()`) und eigenen Stilen für die PDF-Vorschau; `infoterminal.py` baut die Kiosk-Seiten mit eigenem Kopf (`tk()`) ohne Seitenleiste, `mpfeuer.py` die Seiten des Moduls MP-Feuer mit Reitern (`mseite()`) |
+| `fuehrerschein.py`, `aufbewahrung.py` | Konzepte zur Freigabe: Führerscheinkontrolle (Stammdaten, Infoterminal, Mein Bereich), Aufbewahrung und Aussonderung |
+| `sicherung.py` | Modul Datensicherung (freigegeben, umgesetzt) |
+| `uebersetzung_datenschutz.py` | Englische Texte der Datenschutz-Seiten, gleiches Format wie `uebersetzung.py` (dort eingebunden) |
 | `uebersetzung.py` | Englische Texte als Zeilen `Deutsch => English`. Zeilen ohne `=>` sind Daten, die gleich bleiben (Namen, Orte, Fahrzeuge, Kataloge). Dazu Muster für wiederkehrende Formen. |
 | `assets/mockup.css` | Gemeinsames Aussehen |
 | `assets/mockup.js` | Reiter und Schritte, Menü, Dialoge, bedingte Statistikfelder, Sprachumschalter |

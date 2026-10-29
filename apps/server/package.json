@@ -109,7 +109,8 @@
     "@forga/duty-officer-api": "*",
     "@forga/info-terminal-api": "*",
     "@forga/mp-feuer-api": "*",
-    "@forga/mp-feuer-contracts": "*"
+    "@forga/mp-feuer-contracts": "*",
+    "@forga/backup-api": "*"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.0",

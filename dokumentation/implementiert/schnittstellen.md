@@ -364,6 +364,30 @@ Modul `mp-feuer`, Pfade unter `/api/mp-feuer`. Rechte `mp-feuer.transfer` (Gesam
 
 **Einstellungsabschnitt** `mp-feuer.remembered` (nur für Verwalter lesbar; gepflegt über die Übernahme).
 
+## Datensicherung
+
+Alle Endpunkte brauchen `backup.manage` (privilegiert, nie für API-Tokens), außer dem Status einer Wiederherstellung. Fehlercodes `backup.*`, u. a. `backup.notConfigured`, `backup.pathOutsideRoot`, `backup.targetNotWritable`, `backup.diskFull`, `backup.running` (`409`), `backup.noPassphrase`, `backup.wrongPassphrase`, `backup.corrupt`, `backup.newerVersion` (mit `version`), `backup.missingModules` (mit `modules`), `backup.confirmNameMismatch`, `backup.restoreRunning` (`409`).
+
+| Methode | Pfad | Recht | Zweck |
+| --- | --- | --- | --- |
+| `GET` | `/backup/status` | `backup.manage` | Übersicht (`BackupOverview`): letzte Sicherung, nächste geplante, Ziel mit freiem Speicher, Warnungen, Werkzeugversionen, Weg der Wiederherstellung, letzte Ereignisse, vorige Datenbanken |
+| `GET` | `/backup/settings` | `backup.manage` | Einstellungen ohne Passphrase, mit `passphraseSet`, `passphraseId`, `passphraseUnreadable` |
+| `PUT` | `/backup/settings` | `backup.manage` | Speichern (`BackupSettingsInput`); neue Passphrase mit `passphraseRepeat` und `passphraseKeptSafe`, Ausschalten der Verschlüsselung mit `unencryptedConfirmed`. Fehler: `backup.passphraseMismatch`, `backup.passphraseNotConfirmed`, `backup.unencryptedNotConfirmed`, `backup.noSecretKey` |
+| `POST` | `/backup/settings/test-target` | `backup.manage` | „Ziel prüfen“ (`{ targetPath? }`): Testdatei schreiben und löschen, freier Speicher (`TargetCheck`) |
+| `GET` | `/backup/backups` | `backup.manage` | Sicherungen, abgeglichen mit dem Zielordner (`BackupEntry[]`, auch „fremd“ und „Datei fehlt“) |
+| `GET` | `/backup/backups/:id` | `backup.manage` | Eine Sicherung |
+| `POST` | `/backup/backups` | `backup.manage` | „Jetzt sichern“ (`{ verify, passphrase? }`), `202` mit der laufenden Sicherung |
+| `POST` | `/backup/backups/upload?name=` | `backup.manage` | Sicherung hochladen (Body: die Datei, `application/octet-stream`). Fehler: `backup.invalidFileName`, `backup.fileExists` (`409`), `backup.notABackup` |
+| `POST` | `/backup/backups/:id/verify` | `backup.manage` | „Prüfen“ (`{ passphrase?, restoreTest }`); Ergebnis an der Sicherung, Audit `backup.verified`, `backup.restore-tested` bzw. `backup.verify-failed` |
+| `GET` | `/backup/backups/:id/file` | `backup.manage` | Datei herunterladen (verschlüsselt, wie sie liegt), Audit `backup.downloaded` |
+| `DELETE` | `/backup/backups/:id` | `backup.manage` | Löschen (`204`), Audit `backup.deleted`. Fehler: `backup.foreignNotDeletable` |
+| `POST` | `/backup/restore/check` | `backup.manage` | Assistent, Schritt „Prüfen“ (`{ backupId, passphrase }`): Manifest, Prüfergebnis, Zahlen jetzt und in der Sicherung (`RestoreCheck`) |
+| `POST` | `/backup/restore` | `backup.manage` | Wiederherstellung starten (`{ backupId, passphrase, confirmName, usersInformed: true }`), `202` mit `{ token }` |
+| `GET` | `/backup/restore/status?token=` | Token der Wiederherstellung (ohne Anmeldung) | Fortschritt (`RestoreProgress`), auch im Wartungsmodus und nach dem Neustart; unbekanntes Token `404` |
+| `DELETE` | `/backup/previous-databases/:name` | `backup.manage` | „Alte Datenbank löschen“ (`<db>_before_<zeit>`), Audit `backup.previous-database-dropped` |
+
+**Wartungsmodus:** Während einer Wiederherstellung antworten alle Anfragen unter `/api` außer dem Status `503` mit `{ "code": "maintenance", "retryAfter": 15 }` und `Retry-After: 15`, auch Kiosk und API-Tokens.
+
 ## Inaktive Module
 
 Anfragen an `/api/<modul-id>/…` eines deaktivierten Moduls ergeben `404` mit `{ "code": "modules.inactive", "module": "<id>" }`.

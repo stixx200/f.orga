@@ -1,0 +1,5 @@
+#!/bin/sh
+# Runs the PostgreSQL client tool of the same name in the database container of docker/compose.dev.yml, for development
+# and tests without local PostgreSQL 17 tools: FORGA_PG_BIN=<repository>/tools/pg-docker. Container: FORGA_PG_CONTAINER
+# (default docker-db-1). The connection comes from the PG* variables; inside the container the tool uses the socket.
+exec docker exec -i -e PGUSER -e PGPASSWORD -e PGDATABASE "${FORGA_PG_CONTAINER:-docker-db-1}" "$(basename "$0")" "$@"

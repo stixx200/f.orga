@@ -9,6 +9,7 @@ import {
   IconChartBar,
   IconCheck,
   IconCoins,
+  IconDatabaseExport,
   IconDeviceTablet,
   IconTransfer,
   IconFileImport,
@@ -64,6 +65,7 @@ export const NAV_ICONS: Record<string, Icon> = {
   edit: IconPencil,
   terminal: IconDeviceTablet,
   transfer: IconTransfer,
+  backup: IconDatabaseExport,
   shirt: IconShirt,
   wash: IconWash,
 };

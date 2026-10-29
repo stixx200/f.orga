@@ -114,13 +114,26 @@ Umgesetzt, mit Oberflächen ohne eigene Mockups: Beförderungen, Urkunden (Befö
 
 Umgesetzt, siehe [Modul MP-Feuer](../implementiert/architektur.md#modul-mp-feuer-mp-feuer) nach den freigegebenen Mockups (`mockups/mp-feuer/`): Datenübernahme im Hintergrund in Teilen, Zuordnungslisten statt Aliassen, Verlauf, Einstellungen, Export-Platzhalter. Offen sind nur die Punkte in [module/mp-feuer.md](module/mp-feuer.md).
 
+## Datenschutz (DSGVO)
+
+Konzept mit Lückenanalyse: [datenschutz.md](datenschutz.md), Konzept und Mockups `mockups/datenschutz/` freigegeben. Umsetzung in fünf Phasen:
+
+1. Vor dem Echtbetrieb: HTTPS mit Sicherheitsheadern, Kennzeichnung des Testsystems, zweiter Faktor beim Öffnen sensibler Daten (Step-up), E-Mails ohne Gesundheitsbezug, Verletzte im Bericht nur mit Recht.
+2. Rechte der Betroffenen: Datenschutzhinweis und Hinweis bei der ersten Anmeldung, Betroffenenanfragen mit Frist, Auskunft als PDF aus allen Modulen, Einschränkung, Widerspruch.
+3. Nachweise: Verzeichnis der Verarbeitungstätigkeiten aus den Manifesten, Einwilligungen, Berichtigung in Mein Bereich, Leseprotokoll, Datenpannen.
+4. Löschen und Minimieren: Löschprüfung je Modul, vollständige Anonymisierung, Daten Dritter, abschaltbare Felder, Zweck der Listen.
+5. Härtung: Sitzungen, Infoterminal, API-Tokens, Passwörter, Anhänge, Betriebsanleitung.
+
 ## Infoterminal
 
 Umgesetzt, siehe [Modul Infoterminal](../implementiert/architektur.md#modul-infoterminal-info-terminal) nach den freigegebenen Mockups (`mockups/infoterminal/`, Karte an der Wache in `stammdaten/organisation.html`). Offen sind nur die Punkte in [module/infoterminal.md](module/infoterminal.md).
+
+## Datensicherung
+
+Umgesetzt, siehe [Modul Datensicherung](../implementiert/architektur.md#modul-datensicherung-backup) nach den freigegebenen Mockups (`mockups/sicherung/`); offen sind ein zweites Ziel außer Haus und E2E-Tests ([offene Punkte](module/backup.md)).
 
 ## Konzepte zur Freigabe
 
 Konzept und Mockups liegen vor; umgesetzt wird nach Freigabe der Mockups und Klärung der offenen Entscheidungen im jeweiligen Konzept.
 
-- **Datensicherung** ([Konzept](module/backup.md)): Modul `backup` mit verschlüsselter, geplanter Sicherung in einen Ordner auf dem Server, Prüfen, Wiederherstellung in der Oberfläche mit Wartungsmodus. Voraussetzung: PostgreSQL-Clientwerkzeuge im Image, Volume `/backups`.
 - **Aufbewahrungsplan** ([Konzept](aufbewahrung.md)): Fristen je Datenkategorie, Vorlage „Kommunaler Aktenplan (Beispiel)“, Aussonderung mit Anbietung an das Archiv.

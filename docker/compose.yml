@@ -16,8 +16,13 @@ services:
       # Plugin packages (.tgz) and the trusted keys of their publishers (comma separated, base64).
       FORGA_PLUGIN_DIR: /plugins
       FORGA_PLUGIN_KEYS: ${FORGA_PLUGIN_KEYS:-}
+      # Backups (module backup): target folders lie below /backups. FORGA_BACKUP_DIR: folder on the host (e.g. a NAS
+      # mounted there, owned by UID 1000); without it a Docker volume. The container restarts after a restore.
+      FORGA_BACKUP_ROOT: /backups
+      FORGA_INSTANCE: ${FORGA_INSTANCE:-forga}
     volumes:
       - forga-plugins:/plugins
+      - ${FORGA_BACKUP_DIR:-forga-backups}:/backups
     ports:
       - '${FORGA_PORT:-8080}:3000'
     depends_on:
@@ -41,3 +46,4 @@ services:
 volumes:
   forga-db:
   forga-plugins:
+  forga-backups:

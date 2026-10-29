@@ -2209,7 +2209,9 @@ f.orga 1.4.0 · PostgreSQL 17.6
 
 EN = {}
 GLEICH = set()
-for zeile in TEXTE.strip().splitlines():
+from uebersetzung_datenschutz import TEXTE_DATENSCHUTZ  # noqa: E402
+
+for zeile in (TEXTE + '\n' + TEXTE_DATENSCHUTZ).strip().splitlines():
     if ' => ' in zeile:
         de, en = zeile.split(' => ', 1)
         EN[de.strip()] = en.strip()

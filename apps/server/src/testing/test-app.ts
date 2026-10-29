@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { MikroORM } from '@mikro-orm/core';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { applyTrustProxy } from '@forga/core-api';
@@ -18,9 +19,12 @@ export interface TestApp {
   login(credentials?: { username: string; password: string }): Promise<string>;
 }
 
-/** Starts the full server against an empty test database; `register` options e.g. add plugin modules. */
-export async function startTestApp(options: Parameters<typeof import('../app/app.module.js').AppModule.register>[0] = {}): Promise<TestApp> {
-  await resetTestDatabase();
+/**
+ * Starts the full server against an empty test database; `register` options e.g. add plugin modules. With
+ * `keepDatabase` it starts like after a restart: the data stays, pending migrations run as in `main.ts`.
+ */
+export async function startTestApp(options: Parameters<typeof import('../app/app.module.js').AppModule.register>[0] = {}, start: { keepDatabase?: boolean } = {}): Promise<TestApp> {
+  if (!start.keepDatabase) await resetTestDatabase();
   process.env.DATABASE_URL = TEST_DATABASE_URL;
   // Collect e-mails in memory and send digests only when a test asks for it.
   process.env.FORGA_MAIL_TRANSPORT = 'memory';
@@ -36,6 +40,7 @@ export async function startTestApp(options: Parameters<typeof import('../app/app
   applyTrustProxy(app);
   servePluginFrontends(app, options.plugins?.states ?? []);
   app.use(cookieParser());
+  if (start.keepDatabase) await app.get(MikroORM).migrator.up();
   await app.init();
   const http = request(app.getHttpServer());
   return {

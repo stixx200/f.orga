@@ -69,6 +69,9 @@ export class TokensController {
     // Administration (users, roles, settings, tokens) never runs through a token.
     const administrative = input.scopes.filter((s) => s.startsWith('core.'));
     if (administrative.length) throw new BadRequestException({ code: 'tokens.coreScopes', scopes: administrative });
+    // Privileged permissions (e.g. backups: the whole data) never run through a token either.
+    const privileged = input.scopes.filter((s) => this.registry.all.some((p) => p.id === s && p.privileged));
+    if (privileged.length) throw new BadRequestException({ code: 'tokens.privilegedScopes', scopes: privileged });
     // A token can do at most what its creator can (brigade-wide), so it cannot be used to widen one's permissions.
     const wider = await this.auth.widerThanActor(current, [{ role: { permissions: input.scopes, permissionsAllDepartments: [] }, departmentId: null }]);
     if (wider.length) throw new ForbiddenException({ code: 'tokens.scopesWider', scopes: wider });

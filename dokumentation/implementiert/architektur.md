@@ -229,6 +229,7 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
 - Jedes Token bekommt einen eigenen technischen Benutzer. So zeigt die Historie, welches System etwas geändert hat.
 - Ein Token hat genau die Berechtigungen seiner `scopes`, immer für die Gesamtwehr. Ein Ablaufdatum ist optional.
 - Verwaltungsrechte (`core.*`) gibt es für Tokens nicht (`tokens.coreScopes`), und ein Token bekommt nur Rechte, die sein Ersteller selbst für die Gesamtwehr hat (`tokens.scopesWider`).
+- Rechte, die im Manifest als `privileged` markiert sind (z. B. `backup.manage`: ganzen Datenbestand herunterladen und ersetzen), gibt es für Tokens ebenfalls nicht (`tokens.privilegedScopes`); auch ein Muster im Token gewährt sie nicht.
 - Die Liste der Berechtigungen (`GET /api/core/permissions`) lesen Rollen- und Token-Verwalter (`core.roles.manage` oder `core.tokens.manage`).
 - Beim Widerruf werden das Token und sein Benutzer gesperrt. Die letzte Nutzung wird mitgeschrieben.
 
@@ -285,7 +286,7 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
 - Lesen darf jeder angemeldete Benutzer, weil Modul-Oberflächen die Einstellungen brauchen (z. B. `brigade`, `incidents.general`, `compensation.general`, `cost-recovery.general`). Ausnahmen (`SettingsAccess`): `smtp`, `oidc`, `privacy` und `reminders` lesen nur die Verwalter (`CORE_SETTINGS_ACCESS`); Module melden eigene Einschränkungen in `defineModule({ settingsAccess })`, z. B. sieht das Feld `feedToken` von `training.general` (geheimer Teil der Kalender-Adresse) nur, wer die Einstellungen der Dienste verwaltet.
 - `brigade.publicUrl` muss eine `https://`-Adresse sein (`http://` nur für `localhost`), `brigade.email` eine E-Mail-Adresse. Ein gespeicherter Wert, der eine spätere, strengere Regel verletzt, fällt beim Lesen auf den Standard zurück, statt den ganzen Abschnitt zu verlieren.
 
-**Einrichtungsliste.** `GET /api/core/onboarding` (`core.settings.manage` oder `core.users.manage`) liefert, was auf einer neuen Installation noch fehlt: `publicUrl`, `smtp`, `departments` und `catalogs` (über den `OrganizationDirectory`), je aktivem Modul mit Einstellungen und Einstellungsseite `module:<id>` (erledigt, sobald ein Abschnitt des Moduls gespeichert ist; mit Beschriftung der Seite) und `users` (mehr als ein Benutzer). Jeder Punkt nennt die Seite, auf der er erledigt wird. Die Startseite zeigt die offenen Punkte.
+**Einrichtungsliste.** `GET /api/core/onboarding` (`core.settings.manage` oder `core.users.manage`) liefert, was auf einer neuen Installation noch fehlt: `publicUrl`, `smtp`, `departments` und `catalogs` (über den `OrganizationDirectory`), je aktivem Modul mit Einstellungen und Einstellungsseite `module:<id>` (erledigt, sobald ein Abschnitt des Moduls gespeichert ist; mit Beschriftung der Seite; nicht für Einstellungsseiten mit `onboarding: false`, z. B. MP-Feuer als Werkzeug für die Übergangszeit) und `users` (mehr als ein Benutzer). Jeder Punkt nennt die Seite, auf der er erledigt wird. Die Startseite zeigt die offenen Punkte.
 
 ## Listen
 
@@ -1372,6 +1373,63 @@ Fenster lassen sich nicht von Hand schließen oder verlängern. Außerhalb antwo
 - **Einstellungen:** gemerkte Auswahl je Archivnummer und der Datensätze, „Gemerkte Auswahl zurücksetzen …“ (`DELETE /api/mp-feuer/remembered`; die Zuordnungen bleiben); Eingangsordner und Zeitplan als „später“.
 - **Hinweis auf der Import-Seite:** Erweiterungspunkt `core.imports.notice` der Shell: „MP-Feuer-Transferdateien übernimmt das Modul MP-Feuer“ mit Link, für Benutzer mit `mp-feuer.read`, solange das Modul aktiv ist.
 
+## Modul Datensicherung (`backup`)
+
+Administratoren richten in der Oberfläche eine regelmäßige, verschlüsselte Sicherung der eigenen Instanz in einen Ordner auf dem Server ein, prüfen Sicherungen und stellen eine Sicherung ohne Konsole wieder her. Backend `modules/backup/backup-api`, Oberfläche `backup-web`, Verträge `backup-contracts`. Benötigt nur `core`. Mockups: `dokumentation/geplant/mockups/sicherung/`. Betrieb (Volumes, Variablen, Rücktausch von Hand): [Betrieb](betrieb.md#datensicherung).
+
+**Abgrenzung:** Das Modul sichert die eigene Instanz. `docker/backup.sh` auf dem Host sichert alle Instanzen einer Compose-Datei und `docker/.env` und hilft, wenn die Anwendung nicht mehr startet. Der Vollexport (`core.data.export`) ist JSON zur Auswertung, keine Sicherung. Bei den Stufen sichert jede Instanz in ihren eigenen Ordner, mit eigener Passphrase und eigenem `FORGA_SECRET_KEY`.
+
+**Rechte:** `backup.manage` (Gesamtwehr: einrichten, sichern, prüfen, herunterladen, hochladen, löschen, wiederherstellen) und `backup.notify` (E-Mail bei Fehlschlag). Keine Rollenvorlage außer `administrator` (`*`). `backup.manage` ist im Manifest `privileged`: Es lässt sich keinem API-Token geben (`tokens.privilegedScopes`), auch nicht über ein Muster wie `backup.*`, und wie jedes gesamtwehrweite `….manage` verknüpft OIDC Konten damit nicht automatisch.
+
+**Voraussetzungen:** `FORGA_BACKUP_ROOT` (sonst nur lesbar, Warnung `backup.notConfigured`), `FORGA_SECRET_KEY` für die gespeicherte Passphrase (sonst `backup.noSecretKey`: nur „Jetzt sichern“ mit Eingabe der Passphrase), `pg_dump`/`pg_restore`/`psql` (`FORGA_PG_BIN` oder `PATH`, im Image `postgresql17-client`). Die Übersicht vergleicht `pg_dump --version` mit der Serverversion (`backup.clientMismatch`, `backup.toolsMissing`) und zeigt, ob die Datenbankrolle Datenbanken anlegen darf (Weg der Wiederherstellung).
+
+**Entitäten** (Schema `backup`, nicht historisiert, weil Protokoll; Anlegen, Löschen und Wiederherstellen stehen im Audit-Log):
+
+| Entität | Tabelle | Inhalt |
+| --- | --- | --- |
+| `BackupRun` | `run` | Eine Sicherung: Datei und Zielordner, Auslöser (`scheduled`, `manual`, `safety`, `upload`, `foreign`), Benutzer, Beginn und Ende, Größe, Status (`running`, `ok`, `failed` mit Code, `missing`, `deleted`), verschlüsselt, Kennwert der Passphrase, Instanz, Version, Manifest, Ergebnis der letzten Prüfung, `keepUntil` (Sicherheitssicherungen), `deletedAt` |
+| `BackupRestore` | `restore` | Eine Wiederherstellung mit Schritten, Ergebnis, Weg (`swap`, `clean`), Sicherheitssicherung und voriger Datenbank |
+
+**Einstellung** `backup.general` in `core.setting`, nicht als Einstellungsabschnitt des Moduls angemeldet: gelesen und geschrieben nur über `/api/backup/settings` mit `backup.manage` (der allgemeine Endpunkt kennt den Abschnitt nicht): `targetPath` (`forga`), `schedule` (`mode` `off`/`daily`/`weekdays`, `time` `02:30`, Europe/Berlin), `keepCount` (14), `keepDays` (30), `verifyAfterBackup` (an), `encryption` (an), `include` (`plugins`, `settingsCopy`), `notify` (`onFailure`, `staleHours` 36). Dazu nur schreibbar `passphraseEncrypted` (in `SECRET_SETTING_FIELDS`: nie in Antworten oder Vollexport, Historie mit `••••••`), der Kennwert `passphraseId` und die Kennung der Instanz `instanceId`.
+
+**Optional:** Die Datensicherung ist freiwillig. Ohne `FORGA_BACKUP_ROOT` zeigt die Übersicht nur einen Hinweis; mit Wurzel, aber ohne gespeicherte Einstellungen gibt es keine geplanten Sicherungen, keine Warnungen, keine Aufgaben und keine E-Mails, und die Einrichtungsliste der Startseite nennt das Modul nicht.
+
+**Zielordner** (`backups/rules.ts`): relativ zu `FORGA_BACKUP_ROOT`; absolute Pfade, `..`, die Wurzel selbst und Verknüpfungen nach außen lehnt der Server ab (`backup.pathOutsideRoot`), auch bevor er Ordner anlegt. „Ziel prüfen“ schreibt und löscht eine Testdatei und meldet den freien Speicher (`statfs`).
+
+**Dateiformat** (`format/backup-format.ts`, Version 1): `forga-<instanz>-JJJJ-MM-TT_HHMM.forgabackup` (`FORGA_INSTANCE`, Ortszeit).
+- Kopf unverschlüsselt: `FORGABAK`, Länge, JSON mit Format, Version von f.orga (`FORGA_VERSION`), Instanz und Kennung, Zeitpunkt, Auslöser, Kennwert der Passphrase und den Parametern der Verschlüsselung. Damit listet das Modul eine Datei ohne Passphrase.
+- Danach Blöcke von höchstens 1 MiB, jeder mit AES-256-GCM, eigener zufälliger Nonce und Tag. Die zusätzlichen Daten jedes Blocks binden den SHA-256 des Kopfs, die Blocknummer und die Endmarke: geänderte, vertauschte, fehlende oder angehängte Blöcke und ein geänderter Kopf fallen auf (`backup.corrupt`). Schlüssel aus der Passphrase mit scrypt (N = 2^17, r = 8, p = 1, Salz je Datei); ein HMAC des Schlüssels im Kopf unterscheidet eine falsche Passphrase (`backup.wrongPassphrase`) von einer beschädigten Datei. Unverschlüsselt (nur nach ausdrücklicher Bestätigung) sind es dieselben Blöcke ohne Verschlüsselung.
+- Inhalt: Einträge mit Name und Datenabschnitten, `manifest.json` (Format, Version, Instanz, Module mit Version, ausgeführte Migrationen, PostgreSQL-Versionen, Zahl der Personen, Einsätze, Berichte und Dienste, Inhalt), `database.dump` (`pg_dump --format=custom` der ganzen Datenbank), `plugins.tgz` (Plugin-Ordner, höchstens 50 MB), `settings.json` (Einstellungen ohne Geheimnisse) und zuletzt `checksums.json` (SHA-256 und Größe jedes Eintrags). Ein Container statt tar, weil die Länge des Dumps beim Streamen vorher nicht bekannt ist.
+- Kennwert der Passphrase: erste 8 Hex-Zeichen eines HMAC über einen scrypt-Hash mit festem Salz, angezeigt als `3F9A·C21B`; er zeigt, welche Passphrase eine Sicherung braucht.
+- `npm run backup -- info|decrypt <datei> [<ordner>]` (`tools/backup.mts`) liest und entpackt eine Sicherung ohne laufendes f.orga und prüft alle Prüfsummen; die Passphrase aus `FORGA_BACKUP_PASSPHRASE` oder abgefragt.
+
+**Ablauf einer Sicherung** (`backups/backups.service.ts`)
+1. Auslöser: Zeitplan (Prüfung jede Minute, `BackupScheduler`; eine verpasste Sicherung wird höchstens 12 Stunden nachgeholt, `FORGA_BACKUP_SCHEDULER=off` schaltet ab), „Jetzt sichern“ (`202`, läuft im Hintergrund) oder Sicherheitssicherung vor einer Wiederherstellung. Höchstens eine Sicherung gleichzeitig: Merker im Prozess (`409 backup.running`) und `pg_try_advisory_xact_lock` in der Datenbank.
+2. Freien Speicher gegen die letzte Sicherung (+20 %) prüfen (`backup.diskFull`), `pg_dump` als Kindprozess in den Strom, Verschlüsselung dahinter, Datei als `.part` (Rechte `0600`), nach `fsync` umbenannt; bei einem Fehler wird die Teildatei gelöscht.
+3. „Nach jeder Sicherung prüfen“ (Standard): erst danach gilt sie als `ok`. Audit `backup.created` bzw. `backup.failed`.
+4. Aufbewahrung: Die neuesten `keepCount` und alle der letzten `keepDays` Tage bleiben, Sicherheitssicherungen zusätzlich 30 Tage (`keepUntil`); nur geplante, manuelle und Sicherheitssicherungen im aktuellen Zielordner. Audit `backup.pruned`. Einträge gelöschter Sicherungen werden nach einem Jahr entfernt.
+5. Fehlschlag (auch wenn eine geplante Sicherung gar nicht starten kann, z. B. Ziel nicht beschreibbar): Aufgabe „Datensicherung fehlgeschlagen“ für `backup.manage` (Fristen-Registry, bis zur nächsten erfolgreichen Sicherung) und E-Mail an Benutzer mit `backup.notify` (Audit `backup.failure-notified`), abschaltbar mit `notify.onFailure`. Ohne erfolgreiche Sicherung seit `staleHours` Aufgabe „Keine aktuelle Datensicherung“ und Warnung auf der Übersicht.
+
+**Liste:** Sie gleicht den Zielordner mit den Einträgen ab. Dateien ohne Eintrag bekommen einen: mit der eigenen `instanceId` als das, was der Kopf sagt (so erscheint z. B. die Sicherheitssicherung nach einer Wiederherstellung wieder), sonst als „fremd“; fremde lassen sich prüfen und wiederherstellen, aber nicht löschen (`backup.foreignNotDeletable`). Einträge ohne Datei zeigen „Datei fehlt“. Dateien, die keine Sicherung sind, bleiben unberührt. **Hochladen** streamt in den Zielordner (Name nur aus Buchstaben, Ziffern, `._-` mit Endung `.forgabackup`, `backup.notABackup` für andere Dateien). **Herunterladen** liefert die Datei, wie sie liegt (Audit `backup.downloaded`).
+
+**Prüfen:** Entschlüsseln, Prüfsummen vergleichen, Inhaltsverzeichnis des Dumps mit `pg_restore --list` lesen (Zahl der Objekte und Schemas), Version und Module mit dem Server vergleichen. **Wiederherstellung testen:** zusätzlich in eine temporäre Datenbank `<db>_restoretest_<zeit>` einspielen (ohne Migrationen), Personen, Einsätze, Berichte und Dienste zählen und mit dem Manifest vergleichen (`backup.restoreTestMismatch`), danach die Datenbank löschen. Fremde Sicherungen brauchen ihre Passphrase. Das Ergebnis steht an der Sicherung; Audit `backup.verified`, `backup.restore-tested` bzw. `backup.verify-failed`.
+
+**Wiederherstellung** (`restore/restore.service.ts`)
+1. Prüfen mit der erneut eingegebenen Passphrase (nie der gespeicherten). Abgelehnt werden eine neuere Version von f.orga oder eine Migration, die der Server nicht kennt (`backup.newerVersion`), und Module, die hier fehlen (`backup.missingModules`; Plugins der Sicherung zählen nicht als fehlend). Ältere Sicherungen sind erlaubt, ihre Migrationen laufen beim Neustart.
+2. Bestätigen mit dem Namen der Feuerwehr (ohne Groß- und Kleinschreibung, `backup.confirmNameMismatch`) und „Benutzer informiert“. Die Antwort enthält ein Token für den Status; Audit `backup.restore-started`.
+3. Im Hintergrund: Wartungsmodus an, laufende Anfragen höchstens 30 s auslaufen lassen, Zeitplan pausiert. Sicherheitssicherung des jetzigen Stands mit der gespeicherten Passphrase (ohne sie mit der eingegebenen), geprüft, 30 Tage aufbewahrt; scheitert sie, endet alles ohne Änderung (`backup.safetyBackupFailed`).
+4. Mit `CREATEDB` (Weg `swap`): neue Datenbank `<db>_restore_<zeit>` (`template0`), `pg_restore --no-owner --exit-on-error`, Markierung als Kommentar der Datenbank. Dann der Tausch über `psql` in der Datenbank `postgres`: keine neuen Verbindungen zur laufenden Datenbank, offene beenden, `<db>` → `<db>_before_<zeit>`, neue → `<db>`. Scheitert das Einspielen, wird die neue Datenbank gelöscht und die alte bleibt (`backup.restoreFailed` mit Ausschnitt der Fehlerausgabe, Audit `backup.restore-failed`). Scheitert der Tausch, wird er zurückgenommen; gelingt auch das nicht, bleibt der Wartungsmodus an (`swapFailed`) und die Seite nennt die Befehle für die Konsole.
+   Ohne `CREATEDB` (Weg `clean`): `pg_restore --clean --if-exists --single-transaction` in die laufende Datenbank; bei einem Fehler bleibt der alte Stand.
+5. Plugins der Sicherung zurückschreiben (der Plugin-Ordner bekommt genau den gesicherten Inhalt).
+6. Neustart: Der Prozess beendet sich mit Exit-Code 0 (`FORGA_RESTORE_EXIT=off` in Tests); Docker startet ihn neu. Beim Start laufen die Migrationen, dann schließt das Modul ab: Trägt die laufende Datenbank die Markierung, löscht es alle Sitzungen, schreibt die Wiederherstellung und Audit `backup.restored` in die neue Datenbank und beendet den Wartungsmodus. Ohne Markierung (von Hand zurückgetauscht) gilt sie als gescheitert (`backup.restoreRolledBack`); war der Prozess vor dem Tausch beendet worden, als unterbrochen (`backup.restoreInterrupted`).
+7. Die vorige Datenbank bleibt 7 Tage und wird dann vom Modul gelöscht (täglich, `BackupScheduler`), oder sofort über „Alte Datenbank löschen“ (Audit `backup.previous-database-dropped`). Übrig gebliebene `_restore_`- und `_restoretest_`-Datenbanken löscht es nach einem Tag.
+
+**Wartungsmodus** (`restore/maintenance.ts`): Merker im Prozess und in `FORGA_MAINTENANCE_FILE` (Standard `/tmp/forga-maintenance`, mit dem Stand der Wiederherstellung und dem SHA-256 des Status-Tokens; das Ergebnis bleibt in `<datei>.result`). Solange er an ist, antwortet jede Anfrage unter `/api` außer `GET /api/backup/restore/status` mit `503 maintenance` und `Retry-After`, auch Kiosk und API-Tokens; statische Dateien liefert der Server weiter. Der Status ist ohne Anmeldung abrufbar, aber nur mit dem Token der Seite, die die Wiederherstellung gestartet hat; so funktioniert er auch nach dem Neustart, wenn die Sitzung nicht mehr gilt.
+
+**Audit-Log:** Die Aktionen `backup.*` und ihre Detailschlüssel haben Texte (`backup-web/src/audit.i18n.ts`); `backupId` zeigt den Dateinamen der Sicherung mit Link auf die Liste (`AuditReferenceRegistry`, Art `backup.run`).
+
+**Daten:** Der Vollexport enthält die Einstellung ohne Passphrase, keine Sicherungen.
+
 ## Mehrsprachigkeit
 
 - Die Oberfläche ist zwischen Deutsch (`de`, Standard) und Englisch (`en`) umschaltbar.
@@ -1516,6 +1574,19 @@ Karte „Infoterminal“ je Wache in der Organisation der Stammdaten (`masterdat
 - „Wer sind Sie?“: Namenskacheln nach Nachnamen mit Sprungleiste, Eingetragene grün mit Fahrzeug und Funktion, in anderen Berichten des Einsatzes Stehende nicht wählbar (mit Abteilung); Namenssuche über alle Personen.
 - Formular, Bestätigung, „Eingetragene ansehen“ je Fahrzeug mit Ändern und Austragen eigener Eintragungen; Eintragungen des Verfassers gesperrt. „Neuer Einsatz“ mit Trefferdialog. Dienste wie Einsätze, ohne Fahrzeug; Atemschutz nur in Einsatzabteilungen.
 - „Führerschein kontrollieren“ (nur bei eingeschalteter Selbstkontrolle): Kachel in der Übersicht. Ein Lesegerät im Tastaturmodus darf auch direkt auf der Übersicht lesen (Eingabe außerhalb eines Feldes, die mit Enter endet). Auf Android-Tablets mit Chrome liest die Seite NFC über Web NFC, sonst Barcode und QR über die Kamera (`CodeCamera`). Danach Name, Klassen, letzte Kontrolle und die Selbsterklärung mit „Bestätigen“ und „Das bin ich nicht“; Bestätigung mit Haken und nächster Fälligkeit, nach 10 Sekunden zurück zur Übersicht. Unbekannter Code: „Dieser Führerschein ist nicht registriert. Bitte beim Kommandanten im Original vorzeigen.“
+
+### Oberfläche Datensicherung
+
+`modules/backup/backup-web/src/` nach den Mockups `sicherung/`, alle Seiten mit `backup.manage` (im Menü „Verwaltung → Datensicherung“), Reiter Übersicht, Sicherungen, Einstellungen:
+
+| Pfad | Seite |
+| --- | --- |
+| `/backup` | Übersicht: Kacheln letzte Sicherung, nächste Sicherung, Zahl der Sicherungen, frei am Ziel; Warnungen (nicht eingerichtet, kein `FORGA_SECRET_KEY`, keine oder unlesbare Passphrase, unverschlüsselt, keine aktuelle Sicherung, letzte fehlgeschlagen, Ziel nicht beschreibbar, Werkzeuge fehlen oder zu alt) und der dauerhafte Hinweis zur Passphrase; Stand (Ziel, Zeitplan, Verschlüsselung mit Kennwert, Inhalt, Werkzeuge, Weg der Wiederherstellung, Benachrichtigung); letzte Ereignisse; vorige Datenbanken mit „Alte Datenbank löschen“; „Jetzt sichern“ mit „Danach prüfen“ (fragt die Passphrase, wenn keine lesbar gespeichert ist) |
+| `/backup/backups` | Sicherungen mit Zeitpunkt, Auslöser, Größe, Status und Prüfung; „Prüfen“ (mit „Wiederherstellung testen“, Passphrase für fremde), „Wiederherstellen …“, Details mit Datei, Version, Kennwert, Herunterladen und Löschen; „Sicherung hochladen“ |
+| `/backup/settings` | Auch als Knopf beim Modul unter „Verwaltung → Module“. Ziel mit „Ziel prüfen“, Zeitplan und Aufbewahrung, Verschlüsselung (neue Passphrase zweimal, Warnung und „Ich habe die Passphrase sicher aufbewahrt“; Ausschalten nur mit Bestätigung), Inhalt und Benachrichtigung; Seitenkarte „Nicht in der Sicherung“ |
+| `/backup/restore/:id` | Assistent in vier Schritten: Sicherung, Prüfen (Passphrase erneut), Bestätigen (Zahlen jetzt und in der Sicherung, „Alle Änderungen seit … gehen verloren“, Name der Feuerwehr, „Benutzer informiert“, Ablauf), Wiederherstellen (Schritte live; das Token liegt in `sessionStorage`, die Seite übersteht so Neuladen und Neustart; nach 2 Minuten ohne Neustart der Hinweis auf `docker compose restart forga`) |
+
+**Wartungsseite der Shell:** Antwortet der Server `503 maintenance`, meldet das der API-Client des Web-SDK (`reportMaintenance`), und die Shell zeigt statt der Anwendung „f.orga wird gerade wiederhergestellt“ (auf der Kiosk-Seite „Vorübergehend nicht verfügbar“); sie fragt alle 15 Sekunden nach und lädt neu, sobald der Server wieder antwortet. Der Assistent behält während der Wiederherstellung seine eigene Seite (`setMaintenanceHandledByPage`). Nach dem Neustart zeigt die Anmeldeseite einmal „Wiederhergestellt aus der Sicherung vom …“ (`setLoginNotice`).
 
 ### Oberfläche Dienste
 
