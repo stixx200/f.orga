@@ -42,6 +42,7 @@ import { MfaService } from './mfa.js';
 import { PermissionRegistry } from './permission-registry.js';
 import { Role, RoleAssignment, Session, User } from './security.entities.js';
 import { serverKey } from './server-key.js';
+import { PrivacyNoticeService } from '../privacy/privacy-notice.js';
 
 @Controller('core')
 export class AuthController {
@@ -55,6 +56,7 @@ export class AuthController {
     private readonly cookies: CookiePolicy,
     private readonly mfa: MfaService,
     private readonly registry: PermissionRegistry,
+    private readonly notices: PrivacyNoticeService,
   ) {}
 
   /** Login page data: is a setup needed, the brigade name if known, and the stage of the installation. */
@@ -161,6 +163,7 @@ export class AuthController {
         passwordRequired: Boolean(factorOwner.passwordHash),
         viaProvider: Boolean(!user.impersonator && stored.oidcSubject && oidc?.enabled && oidc.stepUpViaProvider),
       },
+      privacyNotice: await this.notices.sessionState(user),
     };
   }
 

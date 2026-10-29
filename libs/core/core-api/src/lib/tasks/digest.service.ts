@@ -143,6 +143,7 @@ export class DigestService implements OnApplicationBootstrap, OnApplicationShutd
 
   /** Name of the area of a deadline in the e-mail: the module's name. */
   private areaName(module: string, language: Language): string {
+    if (module === 'core') return language === 'de' ? 'Verwaltung' : 'Administration';
     const manifest = this.options.modules.find((m) => m.manifest.id === module)?.manifest;
     return (manifest?.name as LocalizedText | undefined)?.[language] ?? module;
   }

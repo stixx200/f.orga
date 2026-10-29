@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -44,8 +45,13 @@ export class SettingsService {
     this.access = new Map(Object.entries(Object.assign({}, CORE_SETTINGS_ACCESS, ...options.modules.map((m) => m.settingsAccess)) as Record<string, SettingsAccess>));
   }
 
-  /** Managers of a section: `core.settings.manage`, or `<module>.settings.manage` for the sections of that module. */
+  /**
+   * Managers of a section: `core.settings.manage`, or `<module>.settings.manage` for the sections of that module, unless
+   * the section names its own (`SettingsAccess.managers`, e.g. `core.privacy.manage`).
+   */
   managerPermissions(section: string): string[] {
+    const managers = this.access.get(section)?.managers;
+    if (managers) return managers;
     const module = section.includes('.') ? section.slice(0, section.indexOf('.')) : null;
     return ['core.settings.manage', ...(module && module !== 'core' ? [`${module}.settings.manage`] : [])];
   }
@@ -75,6 +81,18 @@ export class SettingsService {
     return retry.success ? (retry.data as T) : null;
   }
 
+  /** Changes of a section notify its listeners after the commit, e.g. a new version of the privacy notice. */
+  private readonly listeners = new Map<string, ((section: string) => Promise<void>)[]>();
+
+  onChange(sections: readonly string[], listener: (section: string) => Promise<void>): void {
+    for (const section of sections) this.listeners.set(section, [...(this.listeners.get(section) ?? []), listener]);
+  }
+
+  /** Is the section changed only through its own endpoint? */
+  isDedicated(section: string): boolean {
+    return Boolean(this.access.get(section)?.dedicatedEndpoint);
+  }
+
   async set(section: string, value: Record<string, unknown>): Promise<void> {
     const em = this.em.fork();
     const stored = await em.findOne(Setting, { section });
@@ -86,6 +104,7 @@ export class SettingsService {
     if (stored) stored.value = next;
     else em.create(Setting, { section, value: next });
     await em.flush();
+    for (const listener of this.listeners.get(section) ?? []) await listener(section);
   }
 
   /**
@@ -134,6 +153,7 @@ export class SettingsController {
   @Put(':section')
   async set(@Param('section') section: string, @Body() body: unknown, @CurrentUser() user: AuthenticatedUser) {
     if (!this.settings.isManager(user, section)) throw user.denied(this.settings.managerPermissions(section));
+    if (this.settings.isDedicated(section)) throw new BadRequestException({ code: 'settings.dedicatedEndpoint', section });
     const value = new ZodPipe(this.settings.schema(section)).transform(body) as Record<string, unknown>;
     await this.settings.set(section, value);
     return this.settings.getVisible(section, user);

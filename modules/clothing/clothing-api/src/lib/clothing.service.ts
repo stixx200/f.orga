@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
-import { assertVersion, type AuthenticatedUser, berlinDate, wordsWhere } from '@forga/core-api';
+import { assertNotRestricted, assertVersion, type AuthenticatedUser, berlinDate, refuseRestricted, wordsWhere } from '@forga/core-api';
 import { normalizeRfid } from '@forga/core-contracts';
 import {
   type Article,
@@ -106,6 +106,7 @@ export class ClothingService {
    */
   private async recipient(user: AuthenticatedUser, personId: string): Promise<PersonSnapshot> {
     const person = await this.person(personId);
+    refuseRestricted(await this.directory.isRestricted(personId));
     if (person.status === 'left') throw new BadRequestException({ code: 'clothing.personLeft' });
     if (person.status === 'veterans') throw new BadRequestException({ code: 'clothing.personVeteran' });
     if (!this.canForPerson(user, ISSUE, person)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [ISSUE] });
@@ -628,6 +629,7 @@ export class ClothingService {
     const person = await this.person(personId);
     const own = user.personId === personId && user.can(SELF);
     if (!own && !this.canForPerson(user, READ, person)) throw new NotFoundException();
+    if (!own) assertNotRestricted(user, await this.directory.isRestricted(personId));
     const em = this.em.fork();
     const [items, history, profile] = await Promise.all([
       em.find(ClothingItemEntity, { holderId: personId, status: 'issued' }, { orderBy: { articleKey: 'asc' } }),

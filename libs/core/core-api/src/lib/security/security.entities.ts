@@ -24,6 +24,9 @@ export const UserSchema = defineEntity({
     lastLogin: p.datetime().nullable(),
     /** `issuer|subject` of the linked OIDC account. */
     oidcSubject: p.string().nullable().unique(),
+    /** Version of the privacy notice the user acknowledged ("Zur Kenntnis genommen", no consent) and when. */
+    privacyNoticeVersion: p.integer().nullable(),
+    privacyNoticeAcknowledgedAt: p.datetime().nullable(),
     roles: () => p.oneToMany(RoleAssignment).mappedBy('user').orphanRemoval(),
     version: p.integer().version(),
   },

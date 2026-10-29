@@ -16,6 +16,7 @@ import {
   RequirePermissions,
   SettingsService,
   ZodPipe,
+  refuseRestricted,
 } from '@forga/core-api';
 import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
 import {
@@ -304,6 +305,8 @@ export class RosterController {
     const settings = await this.config.get();
     if (!settings.dutyKinds.some((k) => k.key === input.kind)) throw new BadRequestException({ code: 'duty-officer.unknownKind', kind: input.kind });
     if (!(await this.directory.snapshots([input.personId])).length) throw new BadRequestException({ code: 'duty-officer.unknownPerson' });
+    // Persons whose processing is restricted (Art. 18) get no new duties.
+    refuseRestricted(await this.directory.isRestricted(input.personId));
     return settings;
   }
 }

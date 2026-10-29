@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Deadline, DeadlineStage, LocalizedText } from '@forga/core-contracts';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
+import { OrganizationDirectory } from '../security/organization-directory.js';
 
 /** A deadline as a module computes it from its current data. */
 export interface DeadlineInput {
@@ -27,6 +28,16 @@ export interface DeadlineInput {
    * no persons for it (setting `security.mailHealthWithoutNames`), only how many there are.
    */
   health?: boolean;
+  /**
+   * The person the deadline is about (subjects `masterdata.person` and `core.me` count without it): dropped while the
+   * processing of the person is restricted (Art. 18).
+   */
+  personId?: string;
+  /**
+   * Holding the permission suffices, also while it waits for the step-up: the task itself names no sensitive data
+   * (e.g. a data protection request with its date only).
+   */
+  held?: boolean;
 }
 
 /**
@@ -39,6 +50,9 @@ export interface DeadlineProvider {
 }
 
 const DUE_DAYS = 7;
+
+/** Subject types whose ID is a person. */
+const PERSON_SUBJECTS = new Set(['masterdata.person', 'core.me']);
 
 function addDays(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
@@ -55,6 +69,8 @@ export function stageOf(dueOn: string, asOf: string): DeadlineStage {
 export class DeadlineRegistry {
   private readonly providers: DeadlineProvider[] = [];
 
+  constructor(private readonly organization: OrganizationDirectory) {}
+
   register(provider: DeadlineProvider): void {
     this.providers.push(provider);
   }
@@ -62,12 +78,21 @@ export class DeadlineRegistry {
   /** Deadlines the user is responsible for, already within their lead time, earliest first. */
   async forUser(user: AuthenticatedUser, asOf: string): Promise<Deadline[]> {
     const result: Deadline[] = [];
+    const restricted = await this.organization.restrictedPersonIds();
     for (const provider of this.providers) {
       for (const input of await provider.deadlines(asOf)) {
+        const personId = input.personId ?? (PERSON_SUBJECTS.has(input.subject.type) ? input.subject.id : null);
+        if (personId && restricted.has(personId)) continue;
         if (addDays(input.dueOn, -input.leadDays) > asOf) continue;
         const permissions = typeof input.permission === 'string' ? [input.permission] : input.permission;
         const permitted = permissions.some((permission) =>
-          input.departmentIds.length ? input.departmentIds.some((id) => user.can(permission, id)) : user.grant(permission) === 'brigade',
+          input.held
+            ? input.departmentIds.length
+              ? input.departmentIds.some((id) => user.holds(permission, id))
+              : user.heldGrant(permission) === 'brigade'
+            : input.departmentIds.length
+              ? input.departmentIds.some((id) => user.can(permission, id))
+              : user.grant(permission) === 'brigade',
         );
         const responsible = permitted && (!input.personIds || (user.personId !== null && input.personIds.includes(user.personId)));
         if (!responsible) continue;

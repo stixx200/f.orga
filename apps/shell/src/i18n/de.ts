@@ -1,5 +1,8 @@
+import { privacyDe } from './privacy';
+
 /** German texts of the shell. Keep the keys in sync with `en.ts`. */
 export const de = {
+  privacy: privacyDe,
   appName: 'f.orga',
   loading: 'Wird geladen …',
   skipToContent: 'Zum Inhalt springen',
@@ -31,6 +34,7 @@ export const de = {
     settings: 'Einstellungen',
     audit: 'Audit-Log',
     retention: 'Aussonderung',
+    privacy: 'Datenschutz',
     menu: 'Menü',
   },
   scan: {
@@ -72,10 +76,12 @@ export const de = {
       users: 'Weitere Benutzer einladen',
       secretKey: 'Server-Schlüssel FORGA_SECRET_KEY setzen (ohne ihn kein zweiter Faktor; sensible Bereiche bleiben gesperrt)',
       module: 'Einstellungen prüfen: {{name}}',
+      privacyContacts: 'Datenschutz: Verantwortlichen und Datenschutzbeauftragten eintragen',
+      privacyTexts: 'Datenschutztexte prüfen (Vorlagen mit dem Datenschutzbeauftragten der Gemeinde abstimmen)',
     },
   },
   user: { profile: 'Profil', logout: 'Abmelden' },
-  footer: { brigade: '{{name}}' },
+  footer: { brigade: '{{name}}', phone: 'Telefon', fax: 'Fax' },
   fields: {
     username: 'Benutzername',
     displayName: 'Anzeigename',
@@ -583,6 +589,11 @@ export const de = {
       version: 'Version',
       via: 'Über',
       year: 'Jahr',
+      requestId: 'Anfrage',
+      template: 'Vorlage',
+      informedOn: 'Informiert am',
+      text: 'Textbaustein',
+      channel: 'Weg',
     },
     actions: {
       'retention.offered': 'Dem Archiv angeboten',
@@ -618,6 +629,20 @@ export const de = {
       'auth.step-up-failed': 'Falscher Code beim zweiten Faktor',
       'auth.mfa-enrolled': 'Zweiten Faktor eingerichtet',
       'auth.recovery-codes-renewed': 'Wiederherstellungscodes neu erzeugt',
+      'privacy.notice-published': 'Neue Fassung des Datenschutzhinweises',
+      'privacy.notice-acknowledged': 'Datenschutzhinweis zur Kenntnis genommen',
+      'privacy.text-changed': 'Datenschutztext geändert',
+      'privacy.text-reviewed': 'Datenschutztext als geprüft markiert',
+      'privacy.request-created': 'Datenschutzanfrage erfasst',
+      'privacy.request-status-changed': 'Stand einer Datenschutzanfrage geändert',
+      'privacy.request-extended': 'Frist einer Datenschutzanfrage verlängert',
+      'privacy.request-closed': 'Datenschutzanfrage abgeschlossen',
+      'privacy.request-reopened': 'Datenschutzanfrage wieder geöffnet',
+      'privacy.recipients-notified': 'Empfänger informiert (Art. 19)',
+      'privacy.reply-created': 'Antwortschreiben erstellt',
+      'privacy.restricted': 'Verarbeitung eingeschränkt',
+      'privacy.restriction-lifted': 'Einschränkung der Verarbeitung aufgehoben',
+      'privacy.information-recorded': 'Information nach Art. 13/14 vermerkt',
       'auth.mfa-reset': 'Zweiten Faktor zurückgesetzt',
       'setup.completed': 'Ersteinrichtung',
       'setup.invalid-token': 'Ersteinrichtung mit falschem Schlüssel',

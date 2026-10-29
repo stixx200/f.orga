@@ -32,13 +32,14 @@ Umgesetzt ist (siehe [implementiert/architektur.md](../implementiert/architektur
 - **Aufbewahrung** ([Aufbewahrungsplan](../implementiert/aufbewahrung.md), Einstellung `privacy.retention`): Frist und Aktion je Datenkategorie (Grunddaten und Personalakte Ausgeschiedener, Einsätze, Dienste, ausgesonderte Geräte und Fahrzeuge, Kostenbescheide, Auszahlungsläufe, Audit-Log, Historie) mit Aussonderung und Anbietung an das Archiv; Standard nichts außer Audit-Log 2 Jahre. Import-Uploads 24 Stunden, Zeilen von MP-Feuer-Läufen 7 Tage. `PersonDataRegistry` mit Beiträgen von Core, Atemschutz, Kleiderkammer, Beförderungen, Diensten, Entschädigungen, Geräten und Einsatzleiter vom Dienst.
 - **Sicherheit:** scrypt, Sitzung 14 Tage als `HttpOnly`-Cookie, CSRF-Header, Anmeldesperre, API-Tokens als Hash mit Bereichen, OIDC, verschlüsselte Geräteschlüssel, zweiter Faktor (TOTP) als Step-up bei sensiblen Daten und Verwaltung ([Datenschutz, umgesetzt](../implementiert/datenschutz.md)).
 - **Phase 1** ([implementiert/datenschutz.md](../implementiert/datenschutz.md)): HTTPS mit Caddy, `Secure`-Cookies bei `https://`-Adresse, Sicherheitsheader, `/api/docs` nur angemeldet (L1); `FORGA_STAGE` mit Band und Sperren im Testsystem (L6); Verletzte im Bericht nur mit `incidents.injuries.read`, Hinweise an Freitexten, Entschuldigungsgrund als Auswahl (L5, Teil); E-Mails mit Gesundheitsbezug ohne Namen (L18, Teil).
+- **Phase 2, Teil 1** ([implementiert/datenschutz.md](../implementiert/datenschutz.md#recht-und-seite-datenschutz)): Recht `core.privacy.manage`, Seite „Verwaltung → Datenschutz“ mit Kontakten, versionierten Textbausteinen, Selbstauskunft, Sicherheit und Aufbewahrung; Datenschutzhinweis `/privacy` mit Fassungen, PDF und Hinweis bei der ersten Anmeldung, „Information erteilt am“ mit Liste und Massenaktion (L4); Betroffenenanfragen mit Frist, Verlängerung, Antwortschreiben und Empfängern nach Art. 19, Einschränkung der Verarbeitung über alle Module (L7 ohne Löschprüfung); Widerspruch (L19); „Auskunft anfordern“ in Mein Bereich.
 - **Mein Bereich:** Kontakt und Bankverbindung selbst ändern, eigene Dienste, Einsätze, Entschädigung, Atemschutz, Schutzausrüstung.
 
 ## Auskunft nach Art. 15 als PDF
 
 ### Ablauf
 
-1. **Antrag erfassen** (Personalakte, Reiter „Datenschutz“ → „Anfrage erfassen“, oder die Person stellt ihn in „Mein Bereich“): Art „Auskunft“, eingegangen am, Weg (schriftlich, E-Mail, persönlich, Mein Bereich), Identität geprüft (ja/wie). Daraus entsteht eine **Betroffenenanfrage** mit Frist eingegangen + 1 Monat (Art. 12 Abs. 3); die Frist erscheint als Aufgabe bei allen mit `core.privacy.manage` und in der Sammel-E-Mail. Verlängern um bis zu zwei Monate geht nur mit Begründung; die Person ist innerhalb eines Monats darüber zu unterrichten (die Seite erinnert daran).
+1. **Antrag erfassen:** umgesetzt als [Betroffenenanfrage](../implementiert/datenschutz.md#betroffenenanfragen-l7-l19) mit Frist, Verlängerung und Erinnerung (Personalakte, Reiter „Datenschutz“, oder „Auskunft anfordern“ in Mein Bereich). Offen: Bezug der erstellten Auskunft zur Anfrage über `accessReportDocumentId` (`PrivacyRequests.attachAccessReport`).
 2. **Auskunft erstellen** (Knopf in der Personalakte, Dialog `#d-auskunft`): Sprache (Deutsch/Englisch), Anhang „maschinenlesbare Fassung (JSON)“ optional, Bezug zur Anfrage. Der Umfang ist immer **alles**: Art. 15 kennt keine Auswahl. Der Dialog zeigt je Modul, wie viele Einträge enthalten sind.
 3. Der Server erzeugt das PDF im Hintergrund (bei vielen Einsätzen mehrere Sekunden) und legt es **verschlüsselt mit Ablauf** ab (`core.privacy_document`, 30 Tage, dann gelöscht). Die Anfrage zeigt „erstellt am, von“, „übergeben am, Weg“. Audit `privacy.access-report-created`, `privacy.access-report-downloaded`, `privacy.access-report-handed-over`.
 4. **Übergabe:** Herunterladen für die persönliche Übergabe oder den Postversand; Bereitstellen in „Mein Bereich“ (die Person lädt sie dort nach Anmeldung herunter). Kein Versand als E-Mail-Anhang: Die Auskunft enthält Gesundheitsdaten. Die E-Mail an die Person sagt nur „Ihre Auskunft liegt in f.orga bereit“.
@@ -101,9 +102,9 @@ describePerson?(personId: string, ctx: DescribeContext): Promise<PersonDataSecti
 
 ### Selbstauskunft in „Mein Bereich“
 
-Abschnitt „Datenschutz“ in Mein Bereich: „Auskunft anfordern“ legt eine Anfrage an (Identität gilt durch die Anmeldung als geprüft; die Verwaltung sieht das). Einstellung `privacy.selfServiceAccess`:
-- `request` (Standard): Die Verwaltung erstellt und gibt frei; die Person lädt das PDF in Mein Bereich herunter.
-- `instant`: Die Person erzeugt ihre Auskunft sofort selbst, höchstens einmal je Tag.
+Umgesetzt: Abschnitt „Datenschutz“ in Mein Bereich mit „Auskunft anfordern“ und „Meine Anfragen“, Einstellung `privacy.selfServiceAccess` ([implementiert](../implementiert/datenschutz.md#betroffenenanfragen-l7-l19)). Offen mit der Auskunft als PDF:
+- `request` (Standard): Die Verwaltung erstellt und gibt frei; die Person lädt das PDF in Mein Bereich herunter („Ihre Auskunft liegt bereit“).
+- `instant`: Die Person erzeugt ihre Auskunft sofort selbst, höchstens einmal je Tag. Bis dahin legt auch diese Einstellung nur eine Anfrage an.
 
 Die Inhalte von Mein Bereich (eigene Einsätze, Dienste, Entschädigung) sind kein Ersatz für die Auskunft, weil Art. 15 Abs. 1 Angaben verlangt, die dort fehlen.
 
@@ -118,10 +119,10 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 | L1 | HTTPS, sichere Cookies, Sicherheitsheader | Art. 32 | kritisch (umgesetzt) |
 | L2 | Zweiter Faktor beim Öffnen sensibler Daten (Step-up) | Art. 32 | kritisch |
 | L3 | Verständliche Auskunft mit Angaben nach Art. 15 Abs. 1 | Art. 12, 15 | kritisch |
-| L4 | Informationspflichten: Datenschutzhinweis, erste Anmeldung, Information bei Übernahme | Art. 13, 14 | kritisch |
+| L4 | Informationspflichten: Datenschutzhinweis, erste Anmeldung, Information bei Übernahme | Art. 13, 14 | kritisch (umgesetzt bis auf Verzeichnis und Einwilligungen) |
 | L5 | Gesundheitsdaten: Zugriff, Protokoll, Weitergabe per E-Mail | Art. 9, 32 | kritisch (teilweise umgesetzt) |
 | L6 | Echtdaten nur im Echtsystem; Test- und Entwicklungsdaten | Art. 5 Abs. 1 f, 32 | kritisch (umgesetzt) |
-| L7 | Betroffenenanfragen mit Frist; Löschung und Einschränkung je Person | Art. 12, 17, 18 | kritisch |
+| L7 | Betroffenenanfragen mit Frist; Löschung und Einschränkung je Person | Art. 12, 17, 18 | kritisch (Anfragen und Einschränkung umgesetzt) |
 | L8 | Verzeichnis der Verarbeitungstätigkeiten und technische Maßnahmen | Art. 30, 32 | wichtig |
 | L9 | Einwilligungen erfassen, nachweisen, widerrufen (auch Minderjährige) | Art. 6, 7, 8 | wichtig |
 | L10 | Datenminimierung der Felder und Freitexte | Art. 5 Abs. 1 c, 25 | wichtig |
@@ -133,7 +134,7 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 | L16 | Sitzungen: Leerlauf-Abmeldung, Geräteübersicht | Art. 32 | wichtig |
 | L17 | Verschlüsselung der Sicherungen und der gespeicherten Daten | Art. 32 | wichtig |
 | L18 | E-Mails: Inhalt der Sammel-E-Mail und Benachrichtigungen | Art. 5 Abs. 1 c, f, 32 | wichtig (teilweise umgesetzt) |
-| L19 | Widerspruch | Art. 21 | wichtig |
+| L19 | Widerspruch | Art. 21 | wichtig (umgesetzt) |
 | L20 | Unterstützung bei Datenpannen | Art. 33, 34 | wichtig |
 | L21 | Benutzer ohne Person; gesperrte Konten | Art. 5 Abs. 1 e | empfohlen |
 | L22 | Infoterminal als öffentlich zugängliches Gerät | Art. 25, 32 | empfohlen |
@@ -166,12 +167,12 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L4 Informationspflichten (kritisch)
 
-- **Heute:** Kein Datenschutzhinweis in der Anwendung; Mitglieder erfahren nicht, was f.orga speichert; nach der Übernahme aus MP-Feuer gibt es keine Information.
 - **Soll:** Information bei Erhebung (Art. 13), bei Daten aus anderer Quelle innerhalb eines Monats (Art. 14 Abs. 3).
-- **Umsetzung:**
-  - Seite **Datenschutzhinweis** `/privacy` (ohne Anmeldung lesbar, Link in Fußzeile und Anmeldeseite), zusammengesetzt aus Textbausteinen und dem Verzeichnis: Verantwortlicher, DSB, Zwecke und Rechtsgrundlagen je Tätigkeit, Empfänger, Fristen, Rechte, Beschwerde. Versioniert: jede Änderung ist eine neue Fassung mit Datum.
-  - **Hinweis bei der ersten Anmeldung** und nach einer neuen Fassung (Mockup `datenschutz/erste-anmeldung.html`): Kurzfassung, Link auf den vollständigen Text, „Zur Kenntnis genommen“ (mit Zeitpunkt gespeichert; keine Einwilligung), danach die angebotenen Einwilligungen, freiwillig und einzeln.
-  - **Information ohne Benutzerkonto:** Die meisten Mitglieder haben kein Konto. „Datenschutzhinweis als PDF“ für den Aushang und als Beilage zur Aufnahme; Liste „Information nach Art. 13/14“ mit allen Personen, deren Information noch nicht vermerkt ist, und „Information erteilt am“ an der Person (auch als Massenaktion nach einer Datenübernahme).
+- **Umgesetzt:** Datenschutzhinweis `/privacy` aus Textbausteinen und Kontakten mit Fassungen und PDF, Hinweis bei der ersten Anmeldung und nach einer neuen Fassung, „Information erteilt am“ an der Person mit Liste und Massenaktion; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#datenschutzhinweis-l4). Abweichung: Der Hinweis bei der ersten Anmeldung erscheint erst, wenn alle Bausteine des Hinweises als geprüft markiert sind, weil eine ungeprüfte Vorlage noch nicht gilt.
+- **Offen:**
+  - Zwecke, Rechtsgrundlagen, Empfänger und Fristen je Tätigkeit aus dem Verzeichnis (L8) statt aus dem Baustein `noticeProcessing`.
+  - Die angebotenen Einwilligungen auf der Seite der ersten Anmeldung, freiwillig und einzeln (L9).
+  - Hinweis nach der ersten Übernahme aus MP-Feuer „Mitglieder informieren“ mit Link auf die Liste (L28).
 - **Organisatorisch:** Text abstimmen; Mitglieder bei Aufnahme und nach der Umstellung informieren (Dienstabend, Aushang, Schreiben).
 
 ### L5 Gesundheitsdaten (kritisch)
@@ -191,12 +192,12 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L7 Betroffenenanfragen, Löschung und Einschränkung (kritisch)
 
-- **Heute:** Keine Erfassung von Anträgen, keine Frist; Löschen nur über die Anonymisierung nach Jahren; keine Einschränkung.
 - **Soll:** Antwort binnen eines Monats (Art. 12 Abs. 3); Löschung, soweit keine Ausnahme nach Art. 17 Abs. 3 greift (u. a. rechtliche Pflicht, öffentliche Aufgabe, Archivzwecke); Einschränkung statt Löschung (Art. 18), Mitteilung an Empfänger (Art. 19).
-- **Umsetzung:** Seite **Verwaltung → Datenschutz → Anfragen** (Mockup `datenschutz/anfragen.html`), Recht `core.privacy.manage` (neu; Rollenvorlage `administrator`, auf Wunsch `administration`). Arten: Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch, Widerruf einer Einwilligung. Je Anfrage Frist, Status (eingegangen, in Prüfung, verlängert, erledigt, abgelehnt mit Begründung), Bearbeiter, Notizen, Antwortschreiben als PDF aus Textbaustein.
+- **Umgesetzt:** Seite „Verwaltung → Datenschutz → Anfragen“ mit Arten, Frist als Aufgabe, Verlängerung, Status, Bearbeiter, Notizen, Antwortschreiben als PDF und Empfängern nach Art. 19; Einschränkung an der Person mit Wirkung in allen Modulen ([implementiert/datenschutz.md](../implementiert/datenschutz.md#betroffenenanfragen-l7-l19), [Einschränkung](../implementiert/datenschutz.md#einschränkung-der-verarbeitung-art-18)). Abweichungen: Die Empfänger nach Art. 19 sind bis zum Verzeichnis (L8) eine Liste in den Einstellungen (`privacy.recipients`); eine Einschränkung endet nicht von selbst am Datum „bis“, sondern wird dann als Aufgabe vorgelegt; Personalakte und Modulseiten öffnen sich mit `core.privacy.manage`, Listen, Suche und Personalauswahl lassen eingeschränkte Personen auch dafür weg; bestehende Einsatzberichte, Dienste, Auszahlungsläufe und Prüfprotokolle zeigen die Person weiter (Art. 18 Abs. 2).
+- **Offen:**
   - **Löschprüfung:** Jedes Modul beantwortet über `PersonDataHandler.erasure(personId)` je Datenbereich: löschbar, nur anonymisierbar, aufzubewahren bis (mit Grund aus dem Aufbewahrungsplan, z. B. Auszahlungsläufe als Kassenunterlage). Die Seite zeigt das als Tabelle; „Ausführen“ löscht bzw. anonymisiert, was erlaubt ist, und setzt für den Rest eine Einschränkung bis zum Fristende. Audit `privacy.erasure-executed` mit Zählern, ohne gelöschte Inhalte.
-  - **Einschränkung** an der Person (`restrictedAt`, Grund, bis): Die Person erscheint nicht mehr in Listen, Suche, Infoterminal, Personalauswahl, Fristen und E-Mails; Daten sind nur noch mit `core.privacy.manage` lesbar; Änderungen nur zur Berichtigung. Personalakte mit Plakette „Verarbeitung eingeschränkt“. Module fragen das über `PERSON_DIRECTORY` ab (`isRestricted`).
-  - **Mitteilung an Empfänger (Art. 19):** Die Anfrage listet die Empfänger aus dem Verzeichnis (z. B. Kämmerei bei geänderter Bankverbindung) zum Abhaken.
+  - **Mitteilung an Empfänger (Art. 19)** aus dem Verzeichnis (z. B. Kämmerei bei geänderter Bankverbindung) statt aus der Liste der Einstellungen.
+  - Kennzeichen „eingeschränkt“ in bestehenden Datensätzen anderer Module (z. B. Name im Einsatzbericht nur noch mit Hinweis).
 - **Organisatorisch:** Wer bearbeitet Anfragen (Kommandant, Hauptamt, DSB)? Begründung von Ablehnungen.
 
 ### L8 Verzeichnis der Verarbeitungstätigkeiten (wichtig)
@@ -282,15 +283,15 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L18 E-Mails (wichtig)
 
-- **Umgesetzt:** Einstellung `security` mit „Fristen mit Gesundheitsbezug ohne Namen“ (Standard an) und „Alle Fristen ohne Namen“, Fristen mit `health: true` (Eignungsuntersuchung), Ampel auf Rot ohne Namen, Warnung bei SMTP ohne TLS; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#e-mails-ohne-gesundheitsbezug-l18-teil).
-- **Offen:** Die Einstellung zieht mit auf die Seite „Verwaltung → Datenschutz → Sicherheit“ (heute „Einstellungen → Sicherheit“). Keine Anhänge mit Personendaten (Auskunft nur zum Herunterladen, siehe L3).
+- **Umgesetzt:** Einstellung `security` („Verwaltung → Datenschutz → Einstellungen → Sicherheit“) mit „Fristen mit Gesundheitsbezug ohne Namen“ (Standard an) und „Alle Fristen ohne Namen“, Fristen mit `health: true` (Eignungsuntersuchung), Ampel auf Rot ohne Namen, Warnung bei SMTP ohne TLS; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#e-mails-ohne-gesundheitsbezug-l18-teil).
+- **Offen:** Keine Anhänge mit Personendaten (Auskunft nur zum Herunterladen, siehe L3).
 - **Organisatorisch:** E-Mail-Adressen der Gemeinde statt privater Anbieter, wo möglich.
 
 ### L19 Widerspruch (wichtig)
 
-- **Heute:** Kein Weg.
 - **Soll:** Bei Verarbeitung für eine öffentliche Aufgabe kann die Person aus Gründen ihrer besonderen Situation widersprechen (Art. 21 Abs. 1); dann ist abzuwägen.
-- **Umsetzung:** Art „Widerspruch“ in den Anfragen mit Bezug auf eine Verarbeitungstätigkeit; bis zur Entscheidung optional Einschränkung (L7). Entscheidung mit Begründung als Antwortschreiben.
+- **Umgesetzt:** Art „Widerspruch“ mit Bezug als Text, Einschränkung bis zur Entscheidung, Antwortschreiben ([implementiert](../implementiert/datenschutz.md#betroffenenanfragen-l7-l19)).
+- **Offen:** Bezug auf eine Verarbeitungstätigkeit des Verzeichnisses (L8) statt Freitext.
 - **Organisatorisch:** Abwägung durch den Verantwortlichen.
 
 ### L20 Datenpannen (wichtig)
@@ -352,34 +353,28 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 Umgesetzt (Faktor, Auslöser, Durchsetzung, Oberfläche): siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#zweiter-faktor-bei-sensiblen-daten-step-up). Offen ist:
 
-- **Weitere Bereiche mit `stepUp`**, sobald es sie gibt: `incidents.injuries.read` („Verletzt“/„getötet“ im Personal eines Berichts; ohne Bestätigung die Zahl ohne Namen, „1 eigene Verletzte“), `core.privacy.manage` (Auskunft, Anfragen, Löschung, Einschränkung, Verzeichnis, Einstellungen Datenschutz: ganze Seite) und das Leseprotokoll unter `core.audit.read`. Der Mechanismus ist allgemein: Die Berechtigung bekommt im Manifest `stepUp: true`, Lesepfade mit solchen Feldern prüfen `user.can` (bzw. `needsStepUp` für `stepUpAvailable`), Schreibpfade antworten mit `user.denied(...)`.
-- **Seite „Sicherheit“** in „Einstellungen → Datenschutz“: Stand des Step-up (nur Anzeige: Benutzer mit sensiblen Rechten und eingerichtetem Faktor).
+- **Weitere Bereiche mit `stepUp`**, sobald es sie gibt: das Leseprotokoll unter `core.audit.read`. (`incidents.injuries.read` und `core.privacy.manage` tragen es bereits.) Der Mechanismus ist allgemein: Die Berechtigung bekommt im Manifest `stepUp: true`, Lesepfade mit solchen Feldern prüfen `user.can` (bzw. `needsStepUp` für `stepUpAvailable`), Schreibpfade antworten mit `user.denied(...)`.
+- **Reiter „Sicherheit“** in „Verwaltung → Datenschutz → Einstellungen“ (umgesetzt mit HTTPS, System und E-Mails): Zahl der Benutzer mit sensiblen Rechten und eingerichtetem Faktor, Leerlauf-Abmeldung (L16), Stand der Sicherung.
 - Später zusätzlich **WebAuthn** (Passkeys) als zweiter Faktor.
 
 ## Einstellungen „Datenschutz“
 
-Seite „Verwaltung → Datenschutz“ (neu, Recht `core.privacy.manage`; Mockup `datenschutz/einstellungen.html`) mit Reitern:
+Umgesetzt: Seite „Verwaltung → Datenschutz“ mit den Reitern Anfragen, Information und Einstellungen (Kontakte, Texte, Selbstauskunft, Sicherheit, Aufbewahrung) und den Abschnitten `privacy.contacts`, `privacy.texts`, `privacy.selfServiceAccess`, `privacy.recipients` ([implementiert](../implementiert/datenschutz.md#recht-und-seite-datenschutz)). Offen:
 
 | Reiter | Inhalt |
 | --- | --- |
-| Kontakte | Verantwortlicher (Gemeinde, Anschrift, vertreten durch), Datenschutzbeauftragter (Name oder Stelle, Anschrift, E-Mail, Telefon), Aufsichtsbehörde (vorbelegt mit dem Namen der Behörde in Baden-Württemberg, Anschrift und Website einzutragen) |
-| Texte | Textbausteine (de/en) für Deckblatt der Auskunft, Datenschutzhinweis, Antwortschreiben (Berichtigung, Löschung, Ablehnung, Fristverlängerung), Hinweis bei der ersten Anmeldung; je Baustein „Vorlage“ oder „geprüft am/von“ und Fassung |
-| Einwilligungen | Katalog (L9) |
-| Selbstauskunft | `selfServiceAccess`, Ansprechpartner in Mein Bereich |
-| Sicherheit | Zwei-Faktor: Step-up bei sensiblen Daten (festgelegt, nur Anzeige des Stands), Leerlauf-Abmeldung, E-Mails ohne Namen, Stand HTTPS und Sicherung (nur Anzeige) |
-| Aufbewahrung | wie im [Aufbewahrungsplan](aufbewahrung.md) |
-
-Abschnitte in `core.setting`: `privacy` (erweitert), `privacy.contacts`, `privacy.texts`, `privacy.consents`, `privacy.activities`, `security`. Alle historisiert; nur Verwalter lesen sie, der Datenschutzhinweis ist öffentlich.
+| Verzeichnis | Verzeichnis der Verarbeitungstätigkeiten (L8), Abschnitt `privacy.activities` |
+| Einwilligungen | Katalog (L9), Abschnitt `privacy.consents` |
+| Sicherheit | zusätzlich Stand des Step-up (Benutzer mit sensiblen Rechten und eingerichtetem Faktor), Leerlauf-Abmeldung, „Benutzer bei Anmelden als benachrichtigen“, Stand der Sicherung |
 
 ## Rechte und Rollen
 
 | Recht | Bereich | Zweck | Vorlage |
 | --- | --- | --- | --- |
-| `core.privacy.manage` | Gesamtwehr | Anfragen, Auskünfte, Löschung, Einschränkung, Einwilligungen erfassen, Einstellungen Datenschutz, Verzeichnis | `administrator`, auf Wunsch `administration` |
 | `core.privacy.consents` | Abteilung | Einwilligungen von Personen der Abteilung erfassen und widerrufen | `commander`, `department-commander` |
 | `masterdata.lists.contact` | Abteilung | Listen mit Kontaktdaten ausgeben | `commander`, `department-commander` |
 
-`core.privacy.manage` gilt als privilegiert (`isPrivileged`) und trägt `stepUp` (siehe [Step-up](#step-up-zweiter-faktor-bei-sensiblen-daten)); ebenso das umgesetzte `incidents.injuries.read` (Abteilung, Vorlage `commander`, [umgesetzt](../implementiert/datenschutz.md#gesundheitsdaten-l5-teil)), sobald es das Kennzeichen gibt.
+`core.privacy.manage` ist umgesetzt (Gesamtwehr, privilegiert, `stepUp`, Vorlage `administrator`; [implementiert](../implementiert/datenschutz.md#recht-und-seite-datenschutz)); es deckt künftig auch Auskünfte, Löschung, Einwilligungen und Verzeichnis ab. Die Vorlage `administration` bekommt es nur auf Wunsch.
 
 ## Entscheidungen
 
@@ -401,7 +396,7 @@ Alle Entscheidungen sind festgelegt (wie empfohlen, Nr. 2 abweichend).
 | Phase | Inhalt | Lücken |
 | --- | --- | --- |
 | 1 – vor dem Echtbetrieb | umgesetzt: zweiter Faktor als Step-up, HTTPS mit Caddy und Sicherheitsheader, `FORGA_STAGE` mit Band und Sperren im Testsystem, E-Mails ohne Gesundheitsbezug, Verletzte nur mit Recht (mit `stepUp`) ([implementiert](../implementiert/datenschutz.md)) | L1, L2, L5 (Teil), L6, L18 (Teil) |
-| 2 – Rechte der Betroffenen | Datenschutzhinweis und erste Anmeldung; Anfragen mit Frist; Auskunft als PDF mit `describePerson` in allen Modulen; Einschränkung | L3, L4, L7 (Anfragen, Einschränkung), L19 |
+| 2 – Rechte der Betroffenen | umgesetzt: Datenschutzhinweis und erste Anmeldung, Anfragen mit Frist, Einschränkung, Widerspruch ([implementiert](../implementiert/datenschutz.md#datenschutzhinweis-l4)); offen: Auskunft als PDF mit `describePerson` in allen Modulen | L3; umgesetzt L4, L7 (Anfragen, Einschränkung), L19 |
 | 3 – Nachweise | Verzeichnis aus den Manifesten mit technischen Maßnahmen; Einwilligungen; Berichtigung in Mein Bereich; Leseprotokoll; Impersonation sichtbar | L8, L9, L12, L15, L20 |
 | 4 – Löschen und Minimieren | Löschprüfung je Modul; vollständige Anonymisierung mit Startprüfung; Daten Dritter; abschaltbare Felder; Zweck der Listen; Aufbewahrungsplan | L7 (Löschung), L10, L11, L13, L14, L29 |
 | 5 – Härtung | Sitzungen, Benutzer ohne Person, Infoterminal, API-Tokens, Passwörter, Anhänge, MP-Feuer-Laufberichte, Betriebsanleitung | L16, L17, L21–L28 |

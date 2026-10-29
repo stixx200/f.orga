@@ -144,6 +144,11 @@ export class ItemsService implements OnModuleInit, CompensationStatute {
     return { personId: { $in: members.filter((m) => m.departmentIds.some((d) => grant.includes(d))).map((m) => m.id) } };
   }
 
+  /** Is the processing of the person restricted (Art. 18)? */
+  isRestricted(personId: string): Promise<boolean> {
+    return this.directory.isRestricted(personId);
+  }
+
   async canReadPerson(user: AuthenticatedUser, personId: string): Promise<boolean> {
     if (user.grant(READ) === 'brigade' || user.grant(RUNS) === 'brigade') return true;
     const [person] = await this.directory.snapshots([personId]);

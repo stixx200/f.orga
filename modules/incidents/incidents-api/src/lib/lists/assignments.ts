@@ -1,6 +1,6 @@
 import { Controller, Get, Inject, Injectable, NotFoundException, Param, Query } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
-import { type AuthenticatedUser, berlinDayAfter, berlinDayStart, CurrentUser, RequirePermissions } from '@forga/core-api';
+import { assertNotRestricted, type AuthenticatedUser, berlinDayAfter, berlinDayStart, CurrentUser, RequirePermissions } from '@forga/core-api';
 import type { Language } from '@forga/core-contracts';
 import type { Compensation, MyIncidents, PersonAssignment, ReportStatus } from '@forga/incidents-contracts';
 import {
@@ -61,7 +61,7 @@ export class AssignmentLines {
   async load(
     user: AuthenticatedUser,
     period: { from: string; to: string },
-    options: { releasedOnly?: boolean; departmentId?: string; personId?: string; language?: Language } = {},
+    options: { releasedOnly?: boolean; departmentId?: string; personId?: string; language?: Language; withoutRestricted?: boolean } = {},
   ): Promise<AssignmentLine[]> {
     const readable = options.personId ? {} : this.reports.readableFilter(user);
     if (!readable) return [];
@@ -85,9 +85,11 @@ export class AssignmentLines {
     ]);
     const departmentNames = new Map(departments.map((d) => [d.id, d.name]));
     const personById = new Map(persons.map((p) => [p.id, p]));
+    // Lists per person leave out persons whose processing is restricted (Art. 18).
+    const restricted = options.withoutRestricted ? await this.directory.restrictedIds([...new Set(personIds)]) : new Set<string>();
 
     return reports.flatMap((report) =>
-      report.personnel.getItems().filter((p) => !options.personId || p.personId === options.personId).map((p) => {
+      report.personnel.getItems().filter((p) => (!options.personId || p.personId === options.personId) && !(p.personId && restricted.has(p.personId))).map((p) => {
         const times = assignmentTimes(p, report);
         const person = p.personId ? personById.get(p.personId) : undefined;
         return {
@@ -157,7 +159,10 @@ export class MyIncidentsController {
 /** Assignments of one person in a year, e.g. for the tab "Einsätze" in the person file. */
 @Controller('incidents/persons')
 export class PersonAssignmentsController {
-  constructor(private readonly lines: AssignmentLines) {}
+  constructor(
+    private readonly lines: AssignmentLines,
+    @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
+  ) {}
 
   @Get(':personId/assignments')
   @RequirePermissions(READ)
@@ -166,6 +171,7 @@ export class PersonAssignmentsController {
     @Query('year') year: string | undefined,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<PersonAssignment[]> {
+    assertNotRestricted(user, await this.directory.isRestricted(personId));
     const y = Number(year) || new Date().getFullYear();
     const lines = await this.lines.load(user, { from: `${y}-01-01`, to: `${y}-12-31` });
     return lines

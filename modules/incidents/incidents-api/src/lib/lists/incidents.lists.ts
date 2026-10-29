@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { Language, ListColumn } from '@forga/core-contracts';
 import type { AuthenticatedUser, ListDefinition } from '@forga/core-api';
 import type { ReportStatus } from '@forga/incidents-contracts';
-import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
+import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { ReportEntity } from '../incidents.entities.js';
 import { ReportsService, READ } from '../reports/reports.service.js';
 import { ownerName } from '../units/units.registry.js';
@@ -48,6 +48,7 @@ export class IncidentsLists {
     private readonly reports: ReportsService,
     private readonly lines: AssignmentLines,
     @Inject(ORGANIZATION) private readonly organization: Organization,
+    @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
   ) {}
 
   definitions(): ListDefinition<never>[] {
@@ -85,10 +86,12 @@ export class IncidentsLists {
           { populate: ['incident', 'personnel', 'vehicles', 'involvedParties', 'otherAgencies'], orderBy: { alarmedAt: 'asc' } },
         );
         const rows = [];
+        // Authors whose processing is restricted (Art. 18) are not named.
+        const restricted = await this.directory.restrictedIds(reports.flatMap((r) => (r.authorPersonId ? [r.authorPersonId] : [])));
         for (const report of reports) {
           const context = await this.reports.contextFor(report);
           const findings = await this.reports.findings(em, report, context);
-          const author = report.authorPersonId ? context.persons.get(report.authorPersonId) : undefined;
+          const author = report.authorPersonId && !restricted.has(report.authorPersonId) ? context.persons.get(report.authorPersonId) : undefined;
           rows.push({
             author: author ? `${author.lastName}, ${author.firstName}` : '–',
             department: ownerName(report, new Map([...context.departments.values()].map((d) => [d.id, d.name])), this.reports.units, language),
@@ -212,7 +215,7 @@ export class IncidentsLists {
       ],
       rows: async (user, params) => {
         const p = period(params);
-        const lines = (await this.lines.load(user, p, { departmentId: params.departmentId })).filter((l) => l.personId);
+        const lines = (await this.lines.load(user, p, { departmentId: params.departmentId, withoutRestricted: true })).filter((l) => l.personId);
         const byPerson = new Map<string, typeof lines>();
         for (const line of lines) byPerson.set(line.personId as string, [...(byPerson.get(line.personId as string) ?? []), line]);
         return {
