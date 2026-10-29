@@ -40,8 +40,8 @@ export class MasterdataRetention {
       module: 'masterdata',
       name: { de: 'Personalakte Ausgeschiedener', en: 'Personnel file of former members' },
       description: {
-        de: 'Feuerwehrangehörige: Kontakt, sensible Daten, Qualifikationen, Lehrgänge, Ehrungen, Ämter, Ruhezeiten, Führerschein; dazu Atemschutz, Kleiderkammer, Beförderungen und weitere Module',
-        en: 'Fire brigade members: contact, sensitive data, qualifications, courses, honours, offices, rest periods, driving licence; also breathing apparatus, clothing, promotions and other modules',
+        de: 'Feuerwehrangehörige: Kontakt, sensible Daten, Qualifikationen, Lehrgänge, Ehrungen, Ämter, Ruhezeiten, Führerschein mit Kontrollen, Vorlagen und Transpondern; dazu Atemschutz, Kleiderkammer, Beförderungen und weitere Module',
+        en: 'Fire brigade members: contact, sensitive data, qualifications, courses, honours, offices, rest periods, driving licence with checks, requests and transponders; also breathing apparatus, clothing, promotions and other modules',
       },
       event: leaving,
       actions: ['offer-archive', 'anonymize', 'none'],

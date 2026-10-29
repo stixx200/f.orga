@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261029063838_initial extends Migration {
+export class Migration20261029065338_initial extends Migration {
 
-  override name = 'Migration20261029063838_initial';
+  override name = 'Migration20261029065338_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"masterdata\";");
@@ -16,6 +16,10 @@ export class Migration20261029063838_initial extends Migration {
     this.addSql("create index \"person_last_name_first_name_index\" on \"masterdata\".\"person\" (\"last_name\", \"first_name\");");
     this.addSql("create table \"masterdata\".\"office_assignment\" (\"id\" uuid not null, \"person_id\" uuid not null, \"office\" varchar(255) not null, \"department_id\" varchar(255) null, \"from\" date not null, \"to\" date null, \"notes\" text not null default '', primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"honor_award\" (\"id\" uuid not null, \"person_id\" uuid not null, \"honor\" varchar(255) not null, \"awarded_on\" date not null, \"notes\" text not null default '', primary key (\"id\"));");
+    this.addSql("create table \"masterdata\".\"driver_license_token\" (\"id\" uuid not null, \"person_id\" uuid not null, \"kind\" varchar(255) not null, \"code_hash\" varchar(255) not null, \"suffix\" varchar(255) not null, \"registered_at\" timestamptz not null, \"registered_by\" varchar(255) not null, \"revoked_at\" timestamptz null, \"revoked_by\" varchar(255) null, \"revoke_reason\" text null, primary key (\"id\"));");
+    this.addSql("create index \"driver_license_token_code_hash_index\" on \"masterdata\".\"driver_license_token\" (\"code_hash\");");
+    this.addSql("create table \"masterdata\".\"driver_license_request\" (\"id\" uuid not null, \"person_id\" uuid not null, \"reason\" text not null, \"due_on\" date not null, \"requested_at\" timestamptz not null, \"requested_by\" varchar(255) not null, \"completed_by_check_id\" varchar(255) null, \"withdrawn_at\" timestamptz null, \"withdrawn_by\" varchar(255) null, \"withdraw_reason\" text null, primary key (\"id\"));");
+    this.addSql("create table \"masterdata\".\"driver_license_check\" (\"id\" uuid not null, \"person_id\" uuid not null, \"checked_on\" date not null, \"method\" varchar(255) not null, \"checked_by_id\" uuid null, \"original_presented\" boolean not null default false, \"classes\" jsonb not null, \"self_declaration\" text not null default '', \"terminal_id\" varchar(255) null, \"device\" varchar(255) not null default '', \"request_id\" varchar(255) null, \"note\" text not null default '', \"recorded_at\" timestamptz not null, \"cancelled_at\" timestamptz null, \"cancelled_by\" varchar(255) null, \"cancel_reason\" text null, primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"department\" (\"id\" uuid not null, \"name\" varchar(255) not null, \"short_name\" varchar(255) not null, \"type\" varchar(255) not null, \"parent_id\" uuid null, \"special_tasks\" jsonb not null, \"commander_id\" uuid null, \"deputy_ids\" jsonb not null, \"statistics_relevant\" boolean null, \"population\" int null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"membership\" (\"id\" uuid not null, \"person_id\" uuid not null, \"department_id\" uuid not null, \"from\" date not null, \"to\" date null, \"primary\" boolean not null default false, primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"department_group\" (\"id\" uuid not null, \"department_id\" uuid not null, \"name\" varchar(255) not null, \"leader_id\" uuid null, \"member_ids\" jsonb not null, \"version\" int not null default 1, primary key (\"id\"));");
@@ -29,6 +33,10 @@ export class Migration20261029063838_initial extends Migration {
     this.addSql("alter table \"masterdata\".\"course_run\" add constraint \"course_run_course_id_foreign\" foreign key (\"course_id\") references \"masterdata\".\"course\" (\"id\");");
     this.addSql("alter table \"masterdata\".\"office_assignment\" add constraint \"office_assignment_person_id_foreign\" foreign key (\"person_id\") references \"masterdata\".\"person\" (\"id\") on delete cascade;");
     this.addSql("alter table \"masterdata\".\"honor_award\" add constraint \"honor_award_person_id_foreign\" foreign key (\"person_id\") references \"masterdata\".\"person\" (\"id\") on delete cascade;");
+    this.addSql("alter table \"masterdata\".\"driver_license_token\" add constraint \"driver_license_token_person_id_foreign\" foreign key (\"person_id\") references \"masterdata\".\"person\" (\"id\") on delete cascade;");
+    this.addSql("alter table \"masterdata\".\"driver_license_request\" add constraint \"driver_license_request_person_id_foreign\" foreign key (\"person_id\") references \"masterdata\".\"person\" (\"id\") on delete cascade;");
+    this.addSql("alter table \"masterdata\".\"driver_license_check\" add constraint \"driver_license_check_person_id_foreign\" foreign key (\"person_id\") references \"masterdata\".\"person\" (\"id\") on delete cascade;");
+    this.addSql("alter table \"masterdata\".\"driver_license_check\" add constraint \"driver_license_check_checked_by_id_foreign\" foreign key (\"checked_by_id\") references \"masterdata\".\"person\" (\"id\") on delete set null;");
     this.addSql("alter table \"masterdata\".\"department\" add constraint \"department_parent_id_foreign\" foreign key (\"parent_id\") references \"masterdata\".\"department\" (\"id\") on delete set null;");
     this.addSql("alter table \"masterdata\".\"department\" add constraint \"department_commander_id_foreign\" foreign key (\"commander_id\") references \"masterdata\".\"person\" (\"id\") on delete set null;");
     this.addSql("alter table \"masterdata\".\"membership\" add constraint \"membership_person_id_foreign\" foreign key (\"person_id\") references \"masterdata\".\"person\" (\"id\") on delete cascade;");
@@ -57,6 +65,10 @@ export class Migration20261029063838_initial extends Migration {
     this.addSql("alter table \"masterdata\".\"course_attendance\" drop constraint \"course_attendance_run_id_foreign\";");
     this.addSql("alter table \"masterdata\".\"office_assignment\" drop constraint \"office_assignment_person_id_foreign\";");
     this.addSql("alter table \"masterdata\".\"honor_award\" drop constraint \"honor_award_person_id_foreign\";");
+    this.addSql("alter table \"masterdata\".\"driver_license_token\" drop constraint \"driver_license_token_person_id_foreign\";");
+    this.addSql("alter table \"masterdata\".\"driver_license_request\" drop constraint \"driver_license_request_person_id_foreign\";");
+    this.addSql("alter table \"masterdata\".\"driver_license_check\" drop constraint \"driver_license_check_person_id_foreign\";");
+    this.addSql("alter table \"masterdata\".\"driver_license_check\" drop constraint \"driver_license_check_checked_by_id_foreign\";");
     this.addSql("alter table \"masterdata\".\"department\" drop constraint \"department_commander_id_foreign\";");
     this.addSql("alter table \"masterdata\".\"membership\" drop constraint \"membership_person_id_foreign\";");
     this.addSql("alter table \"masterdata\".\"department_group\" drop constraint \"department_group_leader_id_foreign\";");
@@ -77,6 +89,9 @@ export class Migration20261029063838_initial extends Migration {
     this.addSql("drop table if exists \"masterdata\".\"person\" cascade;");
     this.addSql("drop table if exists \"masterdata\".\"office_assignment\" cascade;");
     this.addSql("drop table if exists \"masterdata\".\"honor_award\" cascade;");
+    this.addSql("drop table if exists \"masterdata\".\"driver_license_token\" cascade;");
+    this.addSql("drop table if exists \"masterdata\".\"driver_license_request\" cascade;");
+    this.addSql("drop table if exists \"masterdata\".\"driver_license_check\" cascade;");
     this.addSql("drop table if exists \"masterdata\".\"department\" cascade;");
     this.addSql("drop table if exists \"masterdata\".\"membership\" cascade;");
     this.addSql("drop table if exists \"masterdata\".\"department_group\" cascade;");

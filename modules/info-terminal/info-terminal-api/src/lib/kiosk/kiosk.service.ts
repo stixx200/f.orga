@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { addBerlinDays, Audit, berlinDate, berlinDayAfter, ModuleStateService, SettingsService } from '@forga/core-api';
 import type { BrigadeSettings, LocalizedText } from '@forga/core-contracts';
 import {
@@ -15,6 +15,8 @@ import {
   type InfoTerminalSettings,
   type KioskAttendance,
   type KioskDepartment,
+  type KioskDriverLicense,
+  KioskDriverLicenseInput,
   type KioskEntry,
   type KioskIncident,
   KioskIncidentInput,
@@ -30,6 +32,8 @@ import {
 import {
   type Department,
   type DepartmentType,
+  MASTERDATA_LICENSE_SELF_CHECK,
+  type MasterdataLicenseSelfCheck,
   ORGANIZATION,
   type Organization,
   PERSON_DIRECTORY,
@@ -56,6 +60,8 @@ function tileStatuses(type: DepartmentType): readonly PersonStatus[] {
   return ['probation', 'active'];
 }
 
+const tooMany = () => new HttpException({ code: 'info-terminal.tooManyRequests' }, HttpStatus.TOO_MANY_REQUESTS);
+
 /** Tolerance for clocks: an alarm a few minutes in the future (clock of the device ahead) is still accepted. */
 const FUTURE_TOLERANCE_MS = 5 * 60_000;
 
@@ -68,6 +74,9 @@ export class KioskService {
   /** At most 120 changes in 10 minutes and 30 searches a minute per terminal. */
   private readonly writes = new RateLimiter(120, 10 * 60_000);
   private readonly searches = new RateLimiter(30, 60_000);
+  /** At most 10 unknown licence stickers in 10 minutes per terminal (then blocked for 10 minutes); one audit entry an hour. */
+  private readonly unknownCodes = new RateLimiter(10, 10 * 60_000, 10 * 60_000);
+  private readonly unknownCodesLogged = new RateLimiter(1, 60 * 60_000);
 
   constructor(
     private readonly settings: SettingsService,
@@ -78,6 +87,7 @@ export class KioskService {
     @Inject(INCIDENTS_TERMINAL_BOOKING) private readonly booking: IncidentsTerminalBooking,
     @Inject(INCIDENT_UNITS) private readonly units: IncidentUnits,
     @Optional() @Inject(TRAINING_TERMINAL_CHECK_IN) private readonly checkIns?: TrainingTerminalCheckIn,
+    @Optional() @Inject(MASTERDATA_LICENSE_SELF_CHECK) private readonly licenses?: MasterdataLicenseSelfCheck,
   ) {}
 
   async moduleSettings(): Promise<InfoTerminalSettings> {
@@ -135,11 +145,12 @@ export class KioskService {
   }
 
   async terminal(terminal: TerminalEntity): Promise<KioskTerminal> {
-    const [settings, station, training, brigade] = await Promise.all([
+    const [settings, station, training, brigade, driverLicenseCheck] = await Promise.all([
       this.moduleSettings(),
       this.station(terminal),
       this.trainingEnabled(terminal),
       this.settings.get<BrigadeSettings>('brigade'),
+      this.licenses?.enabled() ?? Promise.resolve(false),
     ]);
     const departments = await this.departments(terminal, training);
     return {
@@ -149,6 +160,7 @@ export class KioskService {
       departments: departments.map((d): KioskDepartment => ({ id: d.id, name: d.name, shortName: d.shortName, operational: d.type === 'operational' })),
       allowNewIncident: terminal.allowNewIncident,
       training,
+      driverLicenseCheck,
       language: terminal.language,
       idleSeconds: settings.idleSeconds,
       maxAlarmAgeHours: settings.maxAlarmAgeHours,
@@ -385,5 +397,31 @@ export class KioskService {
     const settings = await this.moduleSettings();
     await checkIns.cancel(sessionId, this.scope(terminal, department, settings), personId);
   }
-}
 
+  /**
+   * Self-check of a driving licence: shows name, classes and the latest check of the person whose sticker was scanned,
+   * and records the check once the person confirmed the self-declaration. Unknown and revoked stickers look the same.
+   */
+  async driverLicense(terminal: TerminalEntity, input: z.output<typeof KioskDriverLicenseInput>): Promise<KioskDriverLicense> {
+    if (!this.licenses) throw new ForbiddenException({ code: 'info-terminal.licenseCheckOff' });
+    if (this.unknownCodes.blocked(terminal.id)) throw tooMany();
+    const view = await this.licenses.lookup(input.code);
+    if (!view) {
+      if (!this.unknownCodes.hit(terminal.id)) throw tooMany();
+      if (this.unknownCodesLogged.hit(terminal.id)) await this.audit.log('info-terminal.unknown-license-code', { terminalId: terminal.id }, terminal.userId);
+      throw new NotFoundException({ code: 'info-terminal.licenseNotRegistered' });
+    }
+    if (!input.confirm) return { ...view, confirmed: null };
+    this.write(terminal);
+    try {
+      const confirmed = await this.licenses.confirm(input.code, { terminalId: terminal.id, device: await this.actorName(terminal), language: input.language ?? terminal.language });
+      return { ...view, confirmed };
+    } catch (error) {
+      const code = error instanceof HttpException ? (error.getResponse() as { code?: string }).code : undefined;
+      if (code === 'masterdata.inPersonRequired') throw new ConflictException({ code: 'info-terminal.licenseInPerson' });
+      if (code === 'masterdata.selfCheckOff') throw new ForbiddenException({ code: 'info-terminal.licenseCheckOff' });
+      if (code === 'masterdata.licenseNotRegistered') throw new NotFoundException({ code: 'info-terminal.licenseNotRegistered' });
+      throw error;
+    }
+  }
+}

@@ -1,5 +1,7 @@
 import type { LocalizedText } from '@forga/core-contracts';
 import type {
+  KioskDriverLicense,
+  KioskDriverLicenseInput,
   KioskEntry,
   KioskIncidentInput,
   KioskMatch,
@@ -53,6 +55,7 @@ export const kioskApi = {
   checkIn: (sessionId: string, body: CheckInBody) => send<void>('PUT', `${BASE}/sessions/${sessionId}/attendance/${body.personId}`, body),
   cancelCheckIn: (departmentId: string, sessionId: string, personId: string) =>
     send<void>('DELETE', withQuery(`${BASE}/sessions/${sessionId}/attendance/${personId}`, { departmentId })),
+  driverLicense: (body: KioskDriverLicenseInput) => send<KioskDriverLicense>('POST', `${BASE}/driver-license`, body),
 };
 
 /** Text of an error in the current language: kiosk texts first, then the common ones. */

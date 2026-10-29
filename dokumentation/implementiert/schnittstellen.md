@@ -148,7 +148,7 @@ Schemas aus `@forga/masterdata-contracts`. „Abteilungsbezogen“ heißt: Das R
 | `GET` | `/masterdata/persons?q=&departmentId=&status=&qualification=&includeLeft=` | Sichtbare Personen als `PersonSummary`, Ausgeschiedene nur mit `includeLeft=true` oder `status=left`. Personen, die nur über `masterdata.persons.directory` sichtbar sind, kommen mit Name, Status und Abteilungen und `restricted: true` |
 | `GET` | `/masterdata/persons/:id` | Person mit Mitgliedschaften, Qualifikationen, Dienstgraden, Ehrungen. Sensible Felder nur mit `masterdata.persons.sensitive`, sonst `sensitiveHidden: true`, `notes` leer, `restPeriods` leer und `exitReason` `null` |
 | `POST` | `/masterdata/persons` | Anlegen (`CreatePersonInput`, mindestens eine Mitgliedschaft). Status Standard `probation`, Probezeitende aus `masterdata.membership`. Fehler: `masterdata.personnelNumberTaken` (`409`), `masterdata.primaryMembershipRequired`, `masterdata.unknownDepartment`, `masterdata.birthDateInFuture`, `masterdata.belowMinimumAge` (laufende Mitgliedschaft in einer Einsatzabteilung unter `minimumAgeOperational`), `masterdata.belowMinimumAgeYouth` (Jugendfeuerwehr unter `minimumAgeYouth`), `masterdata.statusDoesNotFitDepartment` (Status passt nicht zum Typ der Stammabteilung), `masterdata.dateBeforeBirth`, `validation.failed` mit `bank.iban` bzw. `employer.iban` (Prüfziffer) |
-| `PUT` | `/masterdata/persons/:id` | Stammdaten ändern (`PersonInput`). Sensible Felder (auch `notes`) ohne Recht werden ignoriert. Fehler: `masterdata.birthDateInFuture`, `masterdata.dateBeforeBirth` (geändertes Geburtsdatum nach erfassten Daten bzw. geänderter Eintritt vor der Geburt) |
+| `PUT` | `/masterdata/persons/:id` | Stammdaten ändern (`PersonInput`; der Führerschein ändert sich nur über eine Kontrolle). Sensible Felder (auch `notes`) ohne Recht werden ignoriert. Fehler: `masterdata.birthDateInFuture`, `masterdata.dateBeforeBirth` (geändertes Geburtsdatum nach erfassten Daten bzw. geänderter Eintritt vor der Geburt) |
 | `PUT` | `/masterdata/persons/:id/memberships` | Alle Mitgliedschaften ersetzen (Liste von `MembershipInput`). Recht für alte und neue Abteilungen nötig. Fehler: `masterdata.membershipPeriodInvalid`, `masterdata.primaryMembershipRequired`, `masterdata.belowMinimumAge` bzw. `masterdata.belowMinimumAgeYouth` (neue laufende Mitgliedschaft), `masterdata.dateBeforeBirth`, `masterdata.statusDoesNotFitDepartment` (neue Stammabteilung passt nicht zum Status) |
 | `POST`, `PUT`, `DELETE` | `/masterdata/persons/:id/rest-periods`, `…/rest-periods/:entryId` | Ruhezeiten; zusätzlich `masterdata.persons.sensitive` |
 | `POST`, `DELETE` | `/masterdata/persons/:id/qualifications`, `…/qualifications/:entryId` | Qualifikation eintragen (`PersonQualificationInput`, `description` Pflicht bei Katalogeinträgen mit `describe`) bzw. entfernen. Löst `masterdata.person.qualification-changed` aus. Fehler: `masterdata.dateBeforeBirth`, `masterdata.descriptionRequired` |
@@ -162,6 +162,22 @@ Schemas aus `@forga/masterdata-contracts`. „Abteilungsbezogen“ heißt: Das R
 | `POST` | `/masterdata/persons/:id/transfer-to-operational` | Übernahme aus der Jugendfeuerwehr (`TransferToOperational`: `departmentId`, `on`, `probationEndsOn` oder `null` = Verzicht, `reason`, `decidedOn`). Fehler: `masterdata.transferNotAllowed`, `masterdata.wrongDepartmentType`, `masterdata.belowMinimumAge`, `masterdata.probationReasonRequired`, `masterdata.transferBeforeMembership`, `masterdata.transferInFuture` (Übernahmedatum nach heute) |
 | `POST` | `/masterdata/persons/:id/transfer-to-veterans` | Übernahme in die Altersabteilung (`TransferToVeterans`: `departmentId`, `on`, `decidedOn`), nur aus `active` oder `passive`. Fehler: `masterdata.personHoldsItems` (409, mit `modules` (Modul-IDs) und `count`), `masterdata.transferNotAllowed`, `masterdata.wrongDepartmentType`, `masterdata.transferBeforeMembership`, `masterdata.transferInFuture` |
 | `POST` | `/masterdata/persons/:id/leave` | Austritt (`Leave`), beendet offene Mitgliedschaften, löst `masterdata.person.left` aus. Fehler: `masterdata.alreadyLeft`, `masterdata.personHoldsItems` (409) |
+
+**Führerscheinkontrolle.** Lesen mit `masterdata.persons.read` oder `masterdata.licenses.check`, alles andere mit `masterdata.licenses.check`, jeweils abteilungsbezogen. Antwort der Änderungen ist der Führerschein der Person (`DriverLicenseFile`).
+
+| Methode | Pfad | Zweck |
+| --- | --- | --- |
+| `GET` | `/masterdata/persons/:id/driver-license` | Führerschein mit Klassen und Befristung, Modus, Stand, Fristen, Kontrollen, Anforderungen (Grund nur mit `masterdata.licenses.check`) und Transpondern (nur mit `masterdata.licenses.check`) |
+| `POST` | `/masterdata/persons/:id/driver-license/checks` | Kontrolle im Original (`DriverLicenseCheckInput`; optional `token`). Fehler: `masterdata.checkInFuture`, `masterdata.unknownExaminer` (`400`), `masterdata.tokenTaken` (`409`), `masterdata.noSecretKey` (`503`) |
+| `POST` | `/masterdata/persons/:id/driver-license/checks/:checkId/cancel` | Storno mit Grund (`{ reason }`). Fehler: `masterdata.checkCancelled` (`409`) |
+| `POST` | `/masterdata/persons/:id/driver-license/requests` | Erneute Vorlage anfordern (`DriverLicenseRequestInput`: `reason`, `dueOn`) |
+| `POST` | `/masterdata/persons/:id/driver-license/requests/:requestId/withdraw` | Anforderung zurücknehmen (`{ reason }`). Fehler: `masterdata.requestClosed` (`409`) |
+| `POST` | `/masterdata/persons/:id/driver-license/tokens` | Transponder registrieren (`DriverLicenseTokenInput`: `kind` `nfc`/`barcode`, `code`), sperrt den bisherigen. Fehler: `masterdata.tokenTaken` (`409`), `masterdata.noSecretKey` (`503`); Audit `masterdata.license-token-registered` |
+| `POST` | `/masterdata/persons/:id/driver-license/tokens/:tokenId/revoke` | Transponder sperren (`{ reason }`); Audit `masterdata.license-token-revoked` |
+| `GET` | `/masterdata/driver-licenses` | Personen der Zielgruppe mit Stand (`DriverLicenseOverview`) |
+| `GET` | `/masterdata/me/driver-license` | eigener Führerschein (`MyDriverLicense`, Recht `masterdata.self`) |
+
+**Einstellungsabschnitt** `masterdata.driverLicense` (`DriverLicenseSettings`): `mode`, `intervalMonths`, `monitoredClasses`, `driverQualifications`, `leadDays`, `selfCheck`, `inPersonEveryMonths`.
 
 Unbekannte Katalogschlüssel ergeben `400` mit `catalog.unknownKey`.
 
@@ -323,6 +339,7 @@ Alle Rechte gelten für die Gesamtwehr.
 | `GET` | `/info-terminal/kiosk/sessions/:sessionId?departmentId` | Dienst mit Anwesenden (`KioskSessionDetail`). Fehler: `info-terminal.trainingNotAllowed` (`403`), `info-terminal.sessionNotFound` (`404`), `training.closed` (`409`) |
 | `PUT` | `/info-terminal/kiosk/sessions/:sessionId/attendance/:personId` | Anwesenheit eintragen oder ändern (`TerminalCheckInInput` und `departmentId`), unbestätigt. Fehler: `training.unknownPerson`, `training.attendanceOutsideSession`, `info-terminal.entryLocked` |
 | `DELETE` | `/info-terminal/kiosk/sessions/:sessionId/attendance/:personId?departmentId` | Unbestätigte Eintragung vom Terminal entfernen |
+| `POST` | `/info-terminal/kiosk/driver-license` | Selbstkontrolle des Führerscheins (`KioskDriverLicenseInput`: `code`, `confirm`, `language`); Antwort `KioskDriverLicense` mit Name, Klassen, letzter Kontrolle, Stand (`allowed`, `in-person`, `off`) und nach Bestätigung `confirmed`. Fehler: `info-terminal.licenseNotRegistered` (`404`), `info-terminal.licenseCheckOff` (`403`), `info-terminal.licenseInPerson` (`409`), `info-terminal.tooManyRequests` (`429`, mehr als 10 unbekannte Codes in 10 Minuten) |
 
 **Einstellungsabschnitt** `info-terminal.general`: `afterEndMinutes`, `openEndHours`, `maxAlarmAgeHours`, `idleSeconds`, `notSeenWarningDays`.
 

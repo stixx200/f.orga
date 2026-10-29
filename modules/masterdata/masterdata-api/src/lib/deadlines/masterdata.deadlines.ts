@@ -12,7 +12,8 @@ const STALE_AFTER_DAYS = 30;
 
 /**
  * Deadlines of the masterdata module, computed from the current data:
- * probation, basic training, age limits, driving licence and expiring qualifications.
+ * probation, basic training, age limits and expiring qualifications. The driving licence checks have their own
+ * provider (`DriverLicenseDeadlines`).
  */
 @Injectable()
 export class MasterdataDeadlines implements DeadlineProvider {
@@ -60,10 +61,6 @@ export class MasterdataDeadlines implements DeadlineProvider {
         if (person.status === 'youth') {
           add(person.id, 'youth-ends', `Ende Jugendfeuerwehr (${rules.youthEndAge})`, `End of youth fire brigade (${rules.youthEndAge})`, birthday(rules.youthEndAge), 90);
         }
-      }
-
-      if (person.driverLicense?.expiresOn) {
-        add(person.id, 'driver-license-expires', 'Führerschein läuft ab', 'Driving licence expires', person.driverLicense.expiresOn, 60);
       }
 
       // Only the latest entry per qualification counts; a renewal ends the deadline.

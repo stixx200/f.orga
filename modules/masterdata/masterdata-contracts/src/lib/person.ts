@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { DepartmentType } from './department.js';
+import { DriverLicense } from './driver-license.js';
 import { isValidIban, normalizeIban } from './iban.js';
 
 export const Gender = z.enum(['female', 'male', 'diverse', 'unspecified']);
@@ -64,13 +65,6 @@ export const BankAccount = z.object({
 });
 export type BankAccount = z.infer<typeof BankAccount>;
 
-export const DriverLicense = z.object({
-  classes: z.array(z.string().trim().min(1)).default([]),
-  expiresOn: date.nullable().default(null),
-  lastCheckedOn: date.nullable().default(null),
-});
-export type DriverLicense = z.infer<typeof DriverLicense>;
-
 /**
  * Fields that need the permission `masterdata.persons.sensitive`: birth data, employer and bank account, and the
  * internal notes, the exit reason and the rest periods (e.g. dormant membership), which may reveal personal circumstances.
@@ -98,7 +92,6 @@ export const PersonInput = z.object({
   employment: Employment.default('volunteer'),
   joinedOn: date.nullable().default(null),
   musician: z.boolean().default(false),
-  driverLicense: DriverLicense.default({ classes: [], expiresOn: null, lastCheckedOn: null }),
   notes: z.string().default(''),
   /** Sensitive; ignored when the user lacks `masterdata.persons.sensitive`. */
   birthDate: date.nullable().optional(),
@@ -264,6 +257,7 @@ export const Person = z.object({
   employment: Employment,
   joinedOn: z.string().nullable(),
   musician: z.boolean(),
+  /** Classes are changed by recording a check (`masterdata.licenses.check`), not with the person. */
   driverLicense: DriverLicense,
   /** Sensitive: empty without `masterdata.persons.sensitive`. */
   notes: z.string(),

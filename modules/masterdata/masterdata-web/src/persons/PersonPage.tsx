@@ -2,7 +2,7 @@ import { Avatar, Button, Group, Stack, Tabs, Text } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
-import { isValidIban, type Person, type PersonInput } from '@forga/masterdata-contracts';
+import { classNames, isValidIban, type Person, type PersonInput } from '@forga/masterdata-contracts';
 import { apiUrl, can, extensionsOf, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ActionBar, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, today as todayDate, useCatalogNames, useDepartments, usePerson, WRITE } from '../api';
@@ -35,7 +35,6 @@ export function toForm(person: Person): PersonForm {
     employment: person.employment,
     joinedOn: person.joinedOn,
     musician: person.musician,
-    driverLicense: person.driverLicense,
     notes: person.notes,
     ...(person.sensitiveHidden ? {} : { birthDate: person.birthDate ?? null, birthPlace: person.birthPlace ?? '', employer: person.employer, bank: person.bank }),
   };
@@ -113,7 +112,7 @@ function PersonFile({ person }: { person: Person }) {
             <Group gap={4}>
               <StatusBadge tone={STATUS_TONES[person.status]}>{t(`status.${person.status}`)}</StatusBadge>
               {person.qualifications.map((q) => <StatusBadge key={q.id}>{qualificationName(q.qualification, i18n.language)}</StatusBadge>)}
-              {person.driverLicense.classes.length > 0 && <StatusBadge>{t('person.licenseBadge', { classes: person.driverLicense.classes.join(', ') })}</StatusBadge>}
+              {person.driverLicense.classes.length > 0 && <StatusBadge>{t('person.licenseBadge', { classes: classNames(person.driverLicense.classes) })}</StatusBadge>}
             </Group>
           </Stack>
         </Group>

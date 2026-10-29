@@ -1,8 +1,9 @@
-import { ActionIcon, Button, Checkbox, Group, Radio, Select, SimpleGrid, Stack, Switch, TagsInput, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Checkbox, Group, Radio, Select, SimpleGrid, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { IconTrash } from '@tabler/icons-react';
 import { type Dispatch, type ReactNode, type SetStateAction, useState } from 'react';
-import type { MembershipInput, Person } from '@forga/masterdata-contracts';
+import { classNames, type MembershipInput, type Person } from '@forga/masterdata-contracts';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import type { ActiveModule } from '@forga/core-contracts';
 import { api, ApiError, formatDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
@@ -182,6 +183,7 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
           />
           <Switch label={t('brigade.musician')} checked={form.musician} onChange={(e) => set('musician', e.currentTarget.checked)} disabled={disabled} mt="lg" />
         </SimpleGrid>
+        {!disabled && <Text size="xs" c="dimmed" mt="xs">{t('brigade.saveHint')}</Text>}
       </Panel>
 
       <Panel title={t('brigade.departments')} aside={!disabled && <Button size="xs" variant="outline" onClick={() => open('membership')}>{t('brigade.addMembership')}</Button>}>
@@ -222,13 +224,18 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
         />
       </Panel>
 
-      <Panel title={t('brigade.driverLicense')}>
-        <SimpleGrid cols={{ base: 1, sm: 3 }}>
-          <TagsInput label={t('brigade.licenseClasses')} value={form.driverLicense.classes} onChange={(v) => set('driverLicense', { ...form.driverLicense, classes: v })} disabled={disabled} data={['B', 'BE', 'C1', 'C1E', 'C', 'CE']} />
-          <DateInput label={t('brigade.licenseExpires')} value={form.driverLicense.expiresOn} onChange={(v) => set('driverLicense', { ...form.driverLicense, expiresOn: v })} valueFormat="DD.MM.YYYY" clearable disabled={disabled} />
-          <DateInput label={t('brigade.licenseChecked')} value={form.driverLicense.lastCheckedOn} onChange={(v) => set('driverLicense', { ...form.driverLicense, lastCheckedOn: v })} valueFormat="DD.MM.YYYY" clearable disabled={disabled} />
-        </SimpleGrid>
-        <Text size="xs" c="dimmed" mt="xs">{t('brigade.saveHint')}</Text>
+      <Panel title={t('brigade.driverLicense')} aside={<Button size="xs" variant="outline" component={Link} to={`/masterdata/persons/${person.id}/driver-license`}>{t('brigade.licenseOpen')}</Button>}>
+        <Stack gap={4}>
+          <Row label={t('brigade.licenseClasses')}>{classNames(person.driverLicense.classes)}</Row>
+          {[...new Set(person.driverLicense.classes.flatMap((c) => (c.expiresOn ? [c.expiresOn] : [])))].toSorted().map((expiry) => (
+            <Row key={expiry} label={t('licenses.validUntilClasses', { classes: person.driverLicense.classes.filter((c) => c.expiresOn === expiry).map((c) => c.class).join(', ') })}>
+              {formatDate(expiry, i18n.language)}
+            </Row>
+          ))}
+          <Row label={t('brigade.licenseChecked')}>
+            {person.driverLicense.lastCheckedOn && `${formatDate(person.driverLicense.lastCheckedOn, i18n.language)}${person.driverLicense.lastCheckMethod ? ` · ${t(`licenses.methods.${person.driverLicense.lastCheckMethod}`)}` : ''}`}
+          </Row>
+        </Stack>
       </Panel>
 
       {dialog === 'probation' && (

@@ -100,6 +100,8 @@ export interface KioskTerminal {
   allowNewIncident: boolean;
   /** Sessions are offered (allowed and module training active). */
   training: boolean;
+  /** Self-checks of driving licences with a registered sticker are switched on (periodic mode of the masterdata). */
+  driverLicenseCheck: boolean;
   language: 'de' | 'en';
   idleSeconds: number;
   maxAlarmAgeHours: number;
@@ -228,3 +230,31 @@ export const KioskIncidentInput = z.object({
   joinIncidentId: z.uuid().nullable().default(null),
 });
 export type KioskIncidentInput = z.input<typeof KioskIncidentInput>;
+
+/**
+ * Self-check of a driving licence: the scanned sticker ID, and `confirm` once the person confirmed the
+ * self-declaration. Without `confirm` the terminal only shows name, classes and whether a self-check is possible.
+ */
+export const KioskDriverLicenseInput = z.object({
+  code: z.string().trim().min(1).max(200),
+  confirm: z.boolean().default(false),
+  /** Language of the screen; the self-declaration is stored in it. */
+  language: Language.optional(),
+});
+export type KioskDriverLicenseInput = z.input<typeof KioskDriverLicenseInput>;
+
+/** What the terminal shows of the person whose sticker was scanned: name, classes, latest check, no more. */
+export interface KioskDriverLicense {
+  firstName: string;
+  lastName: string;
+  classes: { class: string; expiresOn: string | null }[];
+  lastCheck: { checkedOn: string; method: 'in-person' | 'transponder' | 'barcode' | 'legacy' } | null;
+  /** `allowed`: confirm now; `in-person`: the original is due (no reason given); `off`: only the state is shown. */
+  state: 'allowed' | 'in-person' | 'off';
+  /** Latest date to show the original. */
+  inPersonDueOn: string | null;
+  /** Earliest open deadline (e.g. expiry of class CE). */
+  next: { kind: string; dueOn: string; classes: string[] } | null;
+  /** After the confirmation: when it was recorded and the next due date. */
+  confirmed: { checkedAt: string; nextDueOn: string | null } | null;
+}

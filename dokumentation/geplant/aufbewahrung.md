@@ -12,7 +12,6 @@ Umgesetzt ist der Aufbewahrungsplan mit Kategorien, Vorlage „Kommunaler Aktenp
 ## Noch nicht umgesetzt
 
 - **Wirkung erst ab dem nächsten Tag:** Ein echter Lauf („Jetzt anwenden“, täglicher Lauf) nimmt die gespeicherten Regeln sofort. Vorgeschlagen war, neu gespeicherte Regeln, die direkt anonymisieren oder löschen, erst ab dem nächsten Tag automatisch anzuwenden; heute zeigt die Einstellungsseite vorher die betroffene Zahl je Zeile.
-- **Führerscheinkontrollen** ([Konzept](module/fuehrerscheinkontrolle.md)) gehören zur Personalakte: Sobald es sie gibt, entfernt die Anonymisierung der Personalakte sie mit (heute nur die Führerscheinangaben der Person).
 - **Rollenvorlage `administration`** („Verwaltung / Kasse“) bekommt `core.retention.manage` nur auf Wunsch; heute hat es nur `administrator`.
 - **Namen als Freitext anderer Benutzer** bleiben bei der Anonymisierung einer Person: Anzeigenamen von Benutzern in Prüfungen von Geräten (`recordedBy`), in Versionen von Einsatzberichten (`userName`) und in Bearbeitungsvermerken von Kostenbescheiden. Sie verweisen auf Benutzer, nicht auf Personen; ein Abgleich über den Namen ist nicht eindeutig.
 - **Kostenbescheide eines anonymisierten Einsatzes** behalten ihre eigene Kopie der Einsatzdaten (Ort, Kostenschuldner) bis zu ihrer eigenen Frist.

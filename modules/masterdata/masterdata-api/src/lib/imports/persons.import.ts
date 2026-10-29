@@ -10,7 +10,7 @@ import {
   SettingsService,
 } from '@forga/core-api';
 import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
-import { type DepartmentType, Gender, type MembershipSettings, PersonStatus, probationEnd } from '@forga/masterdata-contracts';
+import { type DepartmentType, type DriverLicense, EMPTY_DRIVER_LICENSE, Gender, readDriverLicense, type MembershipSettings, PersonStatus, probationEnd } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { Department, Membership, Person } from '../masterdata.entities.js';
 import { activeMemberships, PersonsService, SENSITIVE, WRITE } from '../persons/persons.service.js';
@@ -44,7 +44,19 @@ const FIELDS = [
   field('status', 'Status', 'Status', ['Status']),
   field('leftOn', 'Austritt', 'Left', ['Austritt', 'Austrittsdatum', 'Aktiv bis']),
   field('exitReason', 'Austrittsgrund', 'Exit reason', ['Austrittsgrund', 'Grund']),
+  field('licenseClasses', 'Führerscheinklassen', 'Driving licence classes', ['Führerschein', 'Führerscheinklassen', 'FS-Klassen', 'Fahrerlaubnis']),
+  field('licenseExpiresOn', 'Führerschein gültig bis', 'Driving licence valid until', ['Führerschein gültig bis', 'FS gültig bis', 'Führerschein Ablauf']),
 ];
+
+/**
+ * Classes like "B, BE, C1/C" with one expiry date, read like old data: the date goes to the time-limited classes
+ * C1, C1E, C and CE and is marked for verification at the first check.
+ */
+function importedLicense(classes: string | undefined, expiresOn: string | null): DriverLicense | null {
+  const names = (classes ?? '').split(/[\s,;/]+/).map((c) => c.trim()).filter(Boolean);
+  if (!names.length) return null;
+  return readDriverLicense({ classes: [...new Set(names.map((c) => c.toUpperCase()))], expiresOn });
+}
 
 const GENDERS: Record<string, Gender> = { w: 'female', weiblich: 'female', female: 'female', f: 'female', m: 'male', maennlich: 'male', male: 'male', d: 'diverse', divers: 'diverse' };
 const STATUS: Record<string, PersonStatus> = { aktiv: 'active', active: 'active', passiv: 'passive', passive: 'passive', jugend: 'youth', youth: 'youth', probezeit: 'probation', probation: 'probation', altersabteilung: 'veterans', veterans: 'veterans' };
@@ -134,7 +146,7 @@ export class PersonsImport {
 
       const dates: Record<string, string | null> = {};
       let invalidDate = false;
-      for (const key of ['birthDate', 'joinedOn', 'leftOn']) {
+      for (const key of ['birthDate', 'joinedOn', 'leftOn', 'licenseExpiresOn']) {
         if (!values[key]) continue;
         dates[key] = parseDate(values[key]);
         if (!dates[key]) invalidDate = true;
@@ -192,7 +204,8 @@ export class PersonsImport {
       for (const key of ['personnelNumber', 'salutation', 'title', 'firstName', 'lastName', 'street', 'postalCode', 'city', 'phonePrivate', 'phoneMobile', 'phoneWork', 'email']) {
         if (values[key]) fields[key] = values[key];
       }
-      const { leftOn = null, ...personDates } = dates;
+      const { leftOn = null, licenseExpiresOn = null, ...personDates } = dates;
+      const license = importedLicense(values['licenseClasses'], licenseExpiresOn);
       Object.assign(fields, personDates);
       // Leaving is only taken over for new persons; an existing member leaves through the exit dialog.
       const left = !!leftOn && leftOn <= today();
@@ -219,6 +232,11 @@ export class PersonsImport {
           continue;
         }
         const changed = Object.entries(fields).filter(([key, value]) => (person as unknown as Record<string, unknown>)[key] !== value);
+        // Classes come in only for persons without any: recorded checks are not overwritten by a file.
+        const current = readDriverLicense(person.driverLicense);
+        if (license && !current.classes.length) {
+          changed.push(['driverLicense', { ...current, classes: license.classes, documentExpiresOn: license.documentExpiresOn ?? current.documentExpiresOn, expiryToVerify: license.expiryToVerify }]);
+        }
         if (left && person.status !== 'left') messages.push({ code: 'masterdata.import.leftIgnored', params: { date: leftOn } });
         if (department && !activeMemberships(person).some((m) => m.department.id === department.id)) {
           messages.push({ code: 'masterdata.import.departmentDiffers', params: { name: department.name } });
@@ -256,7 +274,7 @@ export class PersonsImport {
         probationEndsOn: finalStatus === 'probation' ? probationEnd(from, rules.probationMonths) : null,
         leftOn: left ? leftOn : null,
         exitReason: left ? exitReason : null,
-        driverLicense: { classes: [], expiresOn: null, lastCheckedOn: null },
+        driverLicense: license ?? { ...EMPTY_DRIVER_LICENSE },
       });
       const to = left && leftOn ? (leftOn < from ? from : leftOn) : null;
       created.memberships.add(em.create(Membership, { person: created, department, from, to, primary: true }));

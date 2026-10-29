@@ -1,6 +1,6 @@
 # Mockups Release 1
 
-**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) und des [Aufbewahrungsplans](../../implementiert/aufbewahrung.md) (`shell/aufbewahrung.html`, `shell/aussonderung.html`, Karte „Aufbewahrung“ in `einsatzberichte/einsatz.html`) sind freigegeben und umgesetzt. Zur Freigabe sind die Mockups des Moduls MP-Feuer (`mp-feuer/`) und des Konzepts [Führerscheinkontrolle](../module/fuehrerscheinkontrolle.md). Die Mockups zum Datenschutz (`datenschutz/`) sind freigegeben.
+**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben, ebenso die der Führerscheinkontrolle (umgesetzt, siehe [Führerscheinkontrolle](../../implementiert/architektur.md#führerscheinkontrolle); „Mein Bereich“ zeigt abweichend von `shell/mein-fuehrerschein.html` nur den Stand, ohne Selbstkontrolle). Die Mockups des [Aufbewahrungsplans](../../implementiert/aufbewahrung.md) (`shell/aufbewahrung.html`, `shell/aussonderung.html`, Karte „Aufbewahrung“ in `einsatzberichte/einsatz.html`) sind freigegeben und umgesetzt. Zur Freigabe sind die Mockups des Moduls MP-Feuer (`mp-feuer/`). Die Mockups zum Datenschutz (`datenschutz/`) sind freigegeben.
 
 Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stammdaten und Einsatzberichte, dazu das Modul Infoterminal (Kiosk-Seite je Wache) und das Modul MP-Feuer ([Konzept](../module/mp-feuer.md)). Sie funktionieren nicht und enthalten nur erfundene Daten. Farben, Schrift, Tabellen sowie Kopf- und Fußzeile folgen `Stil.md`.
 
@@ -167,7 +167,7 @@ Die Seiten werden mit `python3 _generator/bauen.py` aus den Skripten in `_genera
 | --- | --- |
 | `rahmen.py` | Kopf, Seitenleiste, Fußzeile, Symbole und Bausteine: `tabelle()`, `dialog()`, `leer()` |
 | `shell.py`, `stammdaten.py`, `einsatzberichte.py`, `infoterminal.py`, `mpfeuer.py`, `datenschutz.py` | Seiteninhalte je App; `datenschutz.py` mit Reitern der Verwaltungsseiten (`vseite()`) und eigenen Stilen für die PDF-Vorschau; `infoterminal.py` baut die Kiosk-Seiten mit eigenem Kopf (`tk()`) ohne Seitenleiste, `mpfeuer.py` die Seiten des Moduls MP-Feuer mit Reitern (`mseite()`) |
-| `fuehrerschein.py` | Konzept zur Freigabe: Führerscheinkontrolle (Stammdaten, Infoterminal, Mein Bereich) |
+| `fuehrerschein.py` | Führerscheinkontrolle (Stammdaten, Infoterminal, Mein Bereich; freigegeben, umgesetzt) |
 | `aufbewahrung.py` | Aufbewahrung und Aussonderung (freigegeben, umgesetzt) |
 | `sicherung.py` | Modul Datensicherung (freigegeben, umgesetzt) |
 | `uebersetzung_datenschutz.py` | Englische Texte der Datenschutz-Seiten, gleiches Format wie `uebersetzung.py` (dort eingebunden) |

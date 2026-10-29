@@ -1,6 +1,6 @@
 import { Modal } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import type { KioskPerson } from '@forga/info-terminal-contracts';
 import { useTranslation } from '@forga/web-sdk';
 import { errorText, isBlocked, kioskApi } from './api';
@@ -15,6 +15,7 @@ const ICONS = {
   lock: <><rect x="5" y="11" width="14" height="10" rx="1" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>,
   terminal: <><rect x="4" y="3" width="16" height="13" rx="1" /><path d="M9 21h6M12 16v5" /><path d="M8 8h3M8 11h8" /></>,
   power: <><path d="M12 3v9" /><path d="M6.3 7.5a8 8 0 1 0 11.4 0" /></>,
+  license: <><rect x="2" y="5" width="20" height="14" rx="1" /><circle cx="8" cy="11" r="2.5" /><path d="M4.5 16.5c.5-1.8 2-2.5 3.5-2.5s3 .7 3.5 2.5M14 9h5M14 12h5M14 15h3" /></>,
 };
 
 export function Icon({ name, size = 20 }: { name: keyof typeof ICONS; size?: number }) {
@@ -167,4 +168,38 @@ export function NameChooser({ status, onPick, guestsHint }: { status: (personId:
       <p className={classes.meta}>{t('kiosk.persons.tilesHint', { seconds: terminal.idleSeconds })}</p>
     </>
   );
+}
+
+/**
+ * Hand scanners and NFC readers in keyboard mode type the code and Enter. Keys outside of input fields that end
+ * with Enter count as a scan (at least 4 characters, typed without a pause of more than half a second).
+ */
+export function useKeyboardScan(onCode: (code: string) => void, enabled: boolean): void {
+  const report = useRef(onCode);
+  useEffect(() => {
+    report.current = onCode;
+  });
+  useEffect(() => {
+    if (!enabled) return;
+    let buffer = '';
+    let last = 0;
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
+      const now = Date.now();
+      if (now - last > 500) buffer = '';
+      last = now;
+      if (event.key === 'Enter') {
+        if (buffer.length >= 4) {
+          event.preventDefault();
+          report.current(buffer);
+        }
+        buffer = '';
+      } else if (event.key.length === 1) {
+        buffer += event.key;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [enabled]);
 }

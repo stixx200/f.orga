@@ -3,6 +3,7 @@ import { EntityManager } from '@mikro-orm/core';
 import { AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, OrganizationDirectory, RetentionRegistry, RoleAssignment, SearchRegistry } from '@forga/core-api';
 import {
   CATALOG_REFERENCES,
+  MASTERDATA_LICENSE_SELF_CHECK,
   MASTERDATA_MANIFEST,
   MASTERDATA_SETTINGS,
   ORGANIZATION,
@@ -19,6 +20,11 @@ import { MasterdataCatalogUsage } from './catalog/usage.js';
 import { Course, CourseAttendance, CourseNomination, CourseRun } from './courses/course.entities.js';
 import { CoursesController } from './courses/courses.controller.js';
 import { MasterdataDeadlines } from './deadlines/masterdata.deadlines.js';
+import { DriverLicensesController } from './driver-licenses/driver-licenses.controller.js';
+import { CHECK, DriverLicensesService } from './driver-licenses/driver-licenses.service.js';
+import { DriverLicenseDeadlines } from './driver-licenses/license-deadlines.js';
+import { DriverLicenseLists } from './driver-licenses/license-lists.js';
+import { LicenseSelfCheckService } from './driver-licenses/self-check.js';
 import { OrganizationService, PersonDirectoryService } from './directory/directory.js';
 import { CareerImport } from './imports/career.import.js';
 import { MasterdataLookups } from './imports/lookups.js';
@@ -27,7 +33,7 @@ import { MasterdataLists } from './lists/masterdata.lists.js';
 import { DepartmentGroup } from './organization/group.entities.js';
 import { GroupsController } from './organization/groups.controller.js';
 import { OrganizationController } from './organization/organization.controller.js';
-import { Department, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod, Station, Vehicle } from './masterdata.entities.js';
+import { Department, DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod, Station, Vehicle } from './masterdata.entities.js';
 import { MasterdataData } from './data/masterdata.data.js';
 import { MasterdataRetention } from './data/masterdata.retention.js';
 import { OrganizationReferenceRegistry } from './organization/references.js';
@@ -37,12 +43,12 @@ import { SelfController } from './self/self.controller.js';
 import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/persons.service.js';
 
 /**
- * Global, so other modules can inject `PERSON_DIRECTORY`, `ORGANIZATION`, `ORGANIZATION_REFERENCES`, `CATALOG_REFERENCES`
- * and `PERSON_HOLDINGS` without importing this package.
+ * Global, so other modules can inject `PERSON_DIRECTORY`, `ORGANIZATION`, `ORGANIZATION_REFERENCES`, `CATALOG_REFERENCES`,
+ * `PERSON_HOLDINGS` and `MASTERDATA_LICENSE_SELF_CHECK` without importing this package.
  */
 @Global()
 @Module({
-  controllers: [CatalogController, OrganizationController, GroupsController, PersonsController, CoursesController, SelfController],
+  controllers: [CatalogController, OrganizationController, GroupsController, PersonsController, CoursesController, SelfController, DriverLicensesController],
   providers: [
     CatalogService,
     PersonsService,
@@ -62,8 +68,13 @@ import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/person
     MasterdataCatalogUsage,
     PersonHoldingsRegistry,
     { provide: PERSON_HOLDINGS, useExisting: PersonHoldingsRegistry },
+    DriverLicensesService,
+    DriverLicenseDeadlines,
+    DriverLicenseLists,
+    LicenseSelfCheckService,
+    { provide: MASTERDATA_LICENSE_SELF_CHECK, useExisting: LicenseSelfCheckService },
   ],
-  exports: [PERSON_DIRECTORY, ORGANIZATION, ORGANIZATION_REFERENCES, CATALOG_REFERENCES, PERSON_HOLDINGS],
+  exports: [PERSON_DIRECTORY, ORGANIZATION, ORGANIZATION_REFERENCES, CATALOG_REFERENCES, PERSON_HOLDINGS, MASTERDATA_LICENSE_SELF_CHECK],
 })
 export class MasterdataModule implements OnModuleInit {
   constructor(
@@ -88,6 +99,8 @@ export class MasterdataModule implements OnModuleInit {
     private readonly retentionCategories: MasterdataRetention,
     private readonly organization: OrganizationDirectory,
     private readonly auditReferences: AuditReferenceRegistry,
+    private readonly licenseDeadlines: DriverLicenseDeadlines,
+    private readonly licenseLists: DriverLicenseLists,
   ) {}
 
   /**
@@ -95,8 +108,9 @@ export class MasterdataModule implements OnModuleInit {
    * The history of a person follows the person's departments; sensitive fields need their own permission.
    */
   onModuleInit(): void {
-    for (const definition of this.masterdataLists.definitions()) this.lists.register('masterdata', definition);
+    for (const definition of [...this.masterdataLists.definitions(), ...this.licenseLists.definitions()]) this.lists.register('masterdata', definition);
     this.deadlineRegistry.register(this.deadlines);
+    this.deadlineRegistry.register(this.licenseDeadlines);
     this.imports.register('masterdata', this.personsImport.profile());
     this.imports.register('masterdata', this.careerImport.profile());
     for (const lookup of this.lookups.lookups()) this.imports.registerLookup('masterdata', lookup);
@@ -136,7 +150,12 @@ export class MasterdataModule implements OnModuleInit {
       const person = await this.em.fork().findOne(Person, id, { populate: ['memberships.department'] });
       if (!person || !this.persons.can(user, READ, person)) return { allowed: false };
       // Rest periods are sensitive as a whole: their entries are masked like the sensitive fields of the person.
-      return { allowed: true, hiddenFields: this.persons.can(user, SENSITIVE, person) ? [] : [...SENSITIVE_PERSON_FIELDS, 'masterdata.rest_period'] };
+      // Requests to present the driving licence again name reasons that only the licence checkers see.
+      const hidden = [
+        ...(this.persons.can(user, SENSITIVE, person) ? [] : [...SENSITIVE_PERSON_FIELDS, 'masterdata.rest_period']),
+        ...(this.persons.can(user, CHECK, person) ? [] : ['masterdata.driver_license_request']),
+      ];
+      return { allowed: true, hiddenFields: hidden };
     });
     this.historyAccess.registerPermission('masterdata.catalog_entry', 'masterdata.catalogs.manage');
     this.historyAccess.registerPermission('masterdata.department', 'masterdata.organization.manage');
@@ -161,6 +180,9 @@ export const masterdataModule = defineModule({
     HonorAward,
     OfficeAssignment,
     RestPeriod,
+    DriverLicenseCheck,
+    DriverLicenseRequest,
+    DriverLicenseToken,
     Course,
     CourseRun,
     CourseAttendance,
@@ -179,6 +201,9 @@ export const masterdataModule = defineModule({
     { entity: HonorAward, parent: 'person' },
     { entity: OfficeAssignment, parent: 'person' },
     { entity: RestPeriod, parent: 'person' },
+    { entity: DriverLicenseCheck, parent: 'person' },
+    { entity: DriverLicenseRequest, parent: 'person' },
+    { entity: DriverLicenseToken, parent: 'person' },
     Course,
     { entity: CourseRun, parent: 'course' },
     { entity: CourseAttendance, parent: 'person' },

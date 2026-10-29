@@ -9,6 +9,7 @@ export const audit = {
       'info-terminal.revoked': 'Infoterminal widerrufen',
       'info-terminal.incident-created': 'Einsatz am Infoterminal eingetragen',
       'info-terminal.invalid-key': 'Infoterminal mit ungültigem Link',
+      'info-terminal.unknown-license-code': 'Unbekannter Führerschein-Transponder am Infoterminal',
     },
     keys: {
       terminalId: 'Infoterminal',
@@ -27,6 +28,7 @@ export const audit = {
       'info-terminal.revoked': 'Info terminal revoked',
       'info-terminal.incident-created': 'Incident booked at info terminal',
       'info-terminal.invalid-key': 'Info terminal with invalid link',
+      'info-terminal.unknown-license-code': 'Unknown driving licence transponder at info terminal',
     },
     keys: {
       terminalId: 'Info terminal',
