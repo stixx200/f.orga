@@ -21,6 +21,8 @@ const COURSES: CourseInput[] = [
   { key: 'equipment-officer', name: { de: 'Gerätewart', en: 'Equipment officer' }, level: 'state-school', grantsQualifications: ['equipment-officer'] },
   { key: 'breathing-apparatus-officer', name: { de: 'Atemschutzgerätewart', en: 'Breathing apparatus officer' }, level: 'state-school', grantsQualifications: ['breathing-apparatus-officer'], prerequisites: ['breathing-apparatus'] },
   { key: 'youth-group-leader', name: { de: 'Jugendgruppenleiter', en: 'Youth group leader' }, level: 'district', grantsQualifications: ['youth-group-leader'] },
+  // Collective entry for courses without an own entry (e.g. first aid): the attendance names the actual course, no qualification.
+  { key: 'other-course', name: { de: 'Anderer Lehrgang', en: 'Other course' }, level: 'municipal', describe: true },
 ];
 
 export const BW_COURSE_TEMPLATE: CourseInput[] = COURSES.map((course, index) => ({

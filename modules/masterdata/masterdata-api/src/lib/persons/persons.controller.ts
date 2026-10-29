@@ -32,7 +32,6 @@ import {
   type Person as PersonDto,
   PersonInput,
   PersonQualificationInput,
-  requiresDescription,
   type PersonLeftEvent,
   type PersonSummary,
   ProbationChange,
@@ -193,9 +192,6 @@ export class PersonsController {
     const person = await this.persons.load(em, id, user, WRITE);
     const entry = await this.catalogs.requireKey('qualification', input.qualification, em);
     assertNotBeforeBirth(person.birthDate, [input.acquiredOn]);
-    // Collective entries like "other course" name the actual course in the description; other entries have none.
-    const describe = requiresDescription(entry);
-    if (describe && !input.description) throw new BadRequestException({ code: 'masterdata.descriptionRequired' });
     const months = entry.attributes['validityMonths'] as number | null | undefined;
     person.qualifications.add(
       em.create(PersonQualification, {
@@ -203,7 +199,6 @@ export class PersonsController {
         qualification: input.qualification,
         acquiredOn: input.acquiredOn,
         validUntil: input.validUntil ?? (months ? addMonths(input.acquiredOn, months) : null),
-        description: describe ? input.description : '',
         notes: input.notes,
       }),
     );

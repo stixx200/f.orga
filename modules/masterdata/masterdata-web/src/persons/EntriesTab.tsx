@@ -2,7 +2,7 @@ import { ActionIcon, Button, Group, Select, Stack, Text, TextInput } from '@mant
 import { DateInput } from '@mantine/dates';
 import { IconCertificate, IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
-import { type Person, qualificationLabel, requiresDescription } from '@forga/masterdata-contracts';
+import type { Person } from '@forga/masterdata-contracts';
 import { apiUrl, formatDate, send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { today, useCatalog, useCatalogNames } from '../api';
@@ -13,8 +13,6 @@ interface Entry {
   date: string;
   validUntil: string | null;
   fromCourse: boolean;
-  /** Actual course of a collective entry like "other course". */
-  description: string;
   notes: string;
 }
 
@@ -27,21 +25,19 @@ export function EntriesTab({ kind, person, disabled, onChanged }: { kind: 'quali
   const name = useCatalogNames(kind);
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
-  const [form, setForm] = useState({ key: null as string | null, date: today() as string | null, validUntil: null as string | null, description: '', notes: '' });
-  // Collective entries like "other course" need the actual course as description.
-  const describe = kind === 'qualification' && requiresDescription(catalog.find((c) => c.key === form.key));
+  const [form, setForm] = useState({ key: null as string | null, date: today() as string | null, validUntil: null as string | null, notes: '' });
   const path = kind === 'qualification' ? 'qualifications' : 'honors';
   const entries: Entry[] =
     kind === 'qualification'
-      ? person.qualifications.map((q) => ({ id: q.id, key: q.qualification, date: q.acquiredOn, validUntil: q.validUntil, fromCourse: Boolean(q.courseAttendanceId), description: q.description, notes: q.notes }))
-      : person.honors.map((h) => ({ id: h.id, key: h.honor, date: h.awardedOn, validUntil: null, fromCourse: false, description: '', notes: h.notes }));
+      ? person.qualifications.map((q) => ({ id: q.id, key: q.qualification, date: q.acquiredOn, validUntil: q.validUntil, fromCourse: Boolean(q.courseAttendanceId), notes: q.notes }))
+      : person.honors.map((h) => ({ id: h.id, key: h.honor, date: h.awardedOn, validUntil: null, fromCourse: false, notes: h.notes }));
   const add = useAction(
     () =>
       send<Person>(
         'POST',
         `masterdata/persons/${person.id}/${path}`,
         kind === 'qualification'
-          ? { qualification: form.key, acquiredOn: form.date, validUntil: form.validUntil, description: describe ? form.description : '', notes: form.notes }
+          ? { qualification: form.key, acquiredOn: form.date, validUntil: form.validUntil, notes: form.notes }
           : { honor: form.key, awardedOn: form.date, notes: form.notes },
       ),
     {
@@ -63,7 +59,7 @@ export function EntriesTab({ kind, person, disabled, onChanged }: { kind: 'quali
             size="xs"
             variant="outline"
             onClick={() => {
-              setForm({ key: null, date: today(), validUntil: null, description: '', notes: '' });
+              setForm({ key: null, date: today(), validUntil: null, notes: '' });
               setAdding(true);
             }}
           >
@@ -77,7 +73,7 @@ export function EntriesTab({ kind, person, disabled, onChanged }: { kind: 'quali
         rowKey={(e) => e.id}
         empty={t(`entries.${kind}.empty`)}
         columns={[
-          { key: 'name', header: t(`entries.${kind}.name`), render: (e) => <Text fw={700} size="sm">{qualificationLabel(name(e.key, i18n.language), e.description)}</Text> },
+          { key: 'name', header: t(`entries.${kind}.name`), render: (e) => <Text fw={700} size="sm">{name(e.key, i18n.language)}</Text> },
           { key: 'date', header: t(`entries.${kind}.date`), render: (e) => formatDate(e.date, i18n.language) },
           ...(kind === 'qualification'
             ? [
@@ -108,15 +104,12 @@ export function EntriesTab({ kind, person, disabled, onChanged }: { kind: 'quali
           actions={
             <Group justify="flex-end">
               <Button variant="default" onClick={() => setAdding(false)}>{common('actions.cancel')}</Button>
-              <Button loading={add.isPending} disabled={!form.key || !form.date || (describe && !form.description.trim())} onClick={() => add.mutate(undefined)}>{common('actions.save')}</Button>
+              <Button loading={add.isPending} disabled={!form.key || !form.date} onClick={() => add.mutate(undefined)}>{common('actions.save')}</Button>
             </Group>
           }
         >
           <Stack gap="sm">
             <Select label={t(`entries.${kind}.name`)} data={catalog.filter((c) => c.active).map((c) => ({ value: c.key, label: localized(c.name) }))} value={form.key} onChange={(v) => setForm({ ...form, key: v })} searchable required />
-            {describe && (
-              <TextInput label={t('entries.qualification.description')} description={t('entries.qualification.descriptionHint')} value={form.description} onChange={(e) => setForm({ ...form, description: e.currentTarget.value })} maxLength={200} required />
-            )}
             <DateInput label={t(`entries.${kind}.date`)} value={form.date} onChange={(v) => setForm({ ...form, date: v })} valueFormat="DD.MM.YYYY" required />
             {kind === 'qualification' && (
               <DateInput label={t('entries.qualification.validUntil')} description={t('entries.qualification.validHint')} value={form.validUntil} onChange={(v) => setForm({ ...form, validUntil: v })} valueFormat="DD.MM.YYYY" clearable />

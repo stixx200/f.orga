@@ -1,7 +1,7 @@
 import type { MigrationObject } from '@mikro-orm/core';
-import { Migration20261028185438_initial } from './Migration20261028185438_initial.js';
+import { Migration20261029051026_initial } from './Migration20261029051026_initial.js';
 
 // Maintained by `npm run migration:create`.
 export const RESPIRATORY_PROTECTION_MIGRATIONS: MigrationObject[] = [
-  { name: 'respiratory-protection/Migration20261028185438_initial', class: Migration20261028185438_initial },
+  { name: 'respiratory-protection/Migration20261029051026_initial', class: Migration20261029051026_initial },
 ];

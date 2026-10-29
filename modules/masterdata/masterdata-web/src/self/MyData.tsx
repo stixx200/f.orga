@@ -5,7 +5,7 @@ import type { Person, SelfContactInput } from '@forga/masterdata-contracts';
 import { ibanError } from '../persons/MasterDataTab';
 import { api, formatDate, send, useTranslation } from '@forga/web-sdk';
 import { Panel, useAction } from '@forga/web-ui';
-import { today as todayDate, useCatalogNames, useDepartments, useQualificationLabel } from '../api';
+import { today as todayDate, useCatalogNames, useDepartments } from '../api';
 
 const KEY = ['masterdata', 'me'] as const;
 
@@ -54,7 +54,7 @@ export function MyData() {
   const { data: person } = useQuery({ queryKey: KEY, queryFn: () => api<Person>('masterdata/me') });
   const { data: departments = [] } = useDepartments();
   const rank = useCatalogNames('rank');
-  const qualification = useQualificationLabel();
+  const qualification = useCatalogNames('qualification');
   const honor = useCatalogNames('honor');
   const [today] = useState(todayDate);
   if (!person) return null;
@@ -63,7 +63,7 @@ export function MyData() {
     [t('me.departments'), memberships.map((m) => departments.find((d) => d.id === m.departmentId)?.name ?? '').filter(Boolean).join(', ')],
     [t('me.rank'), person.rank ? `${rank(person.rank, i18n.language)} (${formatDate(person.ranks.at(-1)?.since, i18n.language)})` : '–'],
     [t('me.joined'), formatDate(person.joinedOn, i18n.language)],
-    [t('me.qualifications'), person.qualifications.map((q) => qualification(q, i18n.language)).join(', ') || '–'],
+    [t('me.qualifications'), person.qualifications.map((q) => qualification(q.qualification, i18n.language)).join(', ') || '–'],
     [t('me.honors'), person.honors.map((h) => `${honor(h.honor, i18n.language)} (${formatDate(h.awardedOn, i18n.language)})`).join(', ') || '–'],
   ];
   return (

@@ -3,14 +3,13 @@ import { EntityManager } from '@mikro-orm/core';
 import { z } from 'zod';
 import type { Language, ListCell, ListColumn, LocalizedText } from '@forga/core-contracts';
 import { type AuthenticatedUser, type ListDefinition, SettingsService } from '@forga/core-api';
-import { type MembershipSettings, PersonStatus, requiresDescription } from '@forga/masterdata-contracts';
+import { courseLabel, type MembershipSettings, PersonStatus } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { CourseAttendance, CourseNomination } from '../courses/course.entities.js';
 import { OPEN_NOMINATION, PLAN } from '../courses/courses.controller.js';
 import { Department, Person, Vehicle } from '../masterdata.entities.js';
 import {
   activeMemberships,
-  currentQualifications,
   currentRank,
   PersonsService,
   primaryDepartment,
@@ -339,15 +338,10 @@ export class MasterdataLists {
           .toSorted((a, b) => a.sortOrder - b.sortOrder);
         const persons = await this.filtered(user, READ, params);
         return {
-          // Collective entries like "other course" list the described courses instead of a mark.
-          columns: [
-            NAME,
-            ...qualifications.map((q) => (requiresDescription(q) ? { key: q.key, label: q.name, width: 2 } : { key: q.key, label: q.name, width: 0.8, align: 'center' as const })),
-          ],
+          columns: [NAME, ...qualifications.map((q) => ({ key: q.key, label: q.name, width: 0.8, align: 'center' as const }))],
           rows: persons.map((p) => {
             const held = new Set(validQualifications(p));
-            const described = (key: string) => [...new Set(currentQualifications(p).filter((q) => q.qualification === key).map((q) => q.description).filter(Boolean))].join(', ');
-            return { name: name(p), ...Object.fromEntries(qualifications.map((q) => [q.key, requiresDescription(q) ? described(q.key) : held.has(q.key) ? 'x' : ''])) };
+            return { name: name(p), ...Object.fromEntries(qualifications.map((q) => [q.key, held.has(q.key) ? 'x' : ''])) };
           }),
         };
       },
@@ -606,7 +600,7 @@ export class MasterdataLists {
           rows: attendances
             .filter((a) => !params.departmentId || a.person.memberships.getItems().some((m) => m.department.id === params.departmentId))
             .map((a) => ({
-              course: a.course.name[language],
+              course: courseLabel(a.course.name[language], a.description),
               startsOn: a.startsOn,
               endsOn: a.endsOn ?? null,
               location: a.location,

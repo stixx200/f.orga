@@ -11,9 +11,9 @@ import { useCourses } from '../persons/CoursesTab';
 
 type Editing = { kind: CatalogKind; entry?: CatalogEntry } | { kind: 'course'; course?: Course } | null;
 
-const ATTRIBUTE_FIELDS: Record<CatalogKind, { key: string; type: 'text' | 'number' | 'category' | 'flag' }[]> = {
+const ATTRIBUTE_FIELDS: Record<CatalogKind, { key: string; type: 'text' | 'number' | 'category' }[]> = {
   function: [{ key: 'abbreviation', type: 'text' }],
-  qualification: [{ key: 'validityMonths', type: 'number' }, { key: 'describe', type: 'flag' }],
+  qualification: [{ key: 'validityMonths', type: 'number' }],
   'vehicle-type': [{ key: 'crew', type: 'text' }, { key: 'seats', type: 'number' }, { key: 'statisticsCategory', type: 'category' }],
   honor: [],
   'exit-reason': [],
@@ -60,7 +60,7 @@ function EntryDialog({ kind, entry, onClose }: { kind: CatalogKind; entry?: Cata
           <TextInput label={t('catalogs.nameEn')} value={form.en} onChange={(e) => setForm({ ...form, en: e.currentTarget.value })} />
         </SimpleGrid>
         <SimpleGrid cols={2}>
-          {ATTRIBUTE_FIELDS[kind].filter((f) => f.type !== 'flag').map((f) =>
+          {ATTRIBUTE_FIELDS[kind].map((f) =>
             f.type === 'number' ? (
               <NumberInput key={f.key} label={t(`catalogs.attributes.${f.key}`)} value={(form.attributes[f.key] as number | null) ?? ''} onChange={(v) => attribute(f.key, v === '' ? null : Number(v))} min={0} />
             ) : f.type === 'category' ? (
@@ -79,9 +79,6 @@ function EntryDialog({ kind, entry, onClose }: { kind: CatalogKind; entry?: Cata
           )}
           <NumberInput label={t('catalogs.sortOrder')} value={form.sortOrder} onChange={(v) => setForm({ ...form, sortOrder: Number(v) || 0 })} />
         </SimpleGrid>
-        {ATTRIBUTE_FIELDS[kind].filter((f) => f.type === 'flag').map((f) => (
-          <Checkbox key={f.key} label={t(`catalogs.attributes.${f.key}`)} description={t(`catalogs.${f.key}Hint`)} checked={form.attributes[f.key] === true} onChange={(e) => attribute(f.key, e.currentTarget.checked)} />
-        ))}
         <Switch label={t('catalogs.active')} description={t('catalogs.activeHint')} checked={form.active} onChange={(e) => setForm({ ...form, active: e.currentTarget.checked })} />
       </Stack>
     </ResponsiveDialog>
@@ -105,6 +102,7 @@ function CourseDialog({ course, onClose }: { course?: Course; onClose: () => voi
     minimumAge: course?.minimumAge ?? null,
     allowedStatuses: (course?.allowedStatuses.filter((s) => s !== 'left') as Exclude<PersonStatus, 'left'>[] | undefined) ?? ['probation', 'active'],
     targets: course?.targets ?? {},
+    describe: course?.describe ?? false,
     active: course?.active ?? true,
     sortOrder: course?.sortOrder ?? 0,
   }));
@@ -148,6 +146,7 @@ function CourseDialog({ course, onClose }: { course?: Course; onClose: () => voi
           />
           <NumberInput label={t('catalogs.minimumAge')} description={t('catalogs.minimumAgeHint')} value={form.minimumAge ?? ''} onChange={(v) => setForm({ ...form, minimumAge: v === '' ? null : Number(v) })} min={0} max={99} />
         </SimpleGrid>
+        <Checkbox label={t('catalogs.describe')} description={t('catalogs.describeHint')} checked={form.describe} onChange={(e) => setForm({ ...form, describe: e.currentTarget.checked })} />
         <Text size="sm" fw={700}>{t('catalogs.targets')}</Text>
         <Text size="xs" c="dimmed">{t('catalogs.targetsHint')}</Text>
         <SimpleGrid cols={{ base: 2, sm: 3 }}>
@@ -270,7 +269,7 @@ function CatalogTable({ kind, onEdit }: { kind: CatalogKind; onEdit: (entry?: Ca
           { key: 'name', header: t('catalogs.name'), render: (e) => <Text fw={700} size="sm">{e.name.de}</Text> },
           { key: 'en', header: t('catalogs.nameEn'), render: (e) => e.name.en },
           { key: 'key', header: t('catalogs.key'), render: (e) => <code>{e.key}</code> },
-          ...ATTRIBUTE_FIELDS[kind].map((f) => ({ key: f.key, header: t(`catalogs.attributes.${f.key}`), render: (e: CatalogEntry) => (f.type === 'flag' ? (e.attributes[f.key] === true ? '✓' : '') : String(e.attributes[f.key] ?? '')) })),
+          ...ATTRIBUTE_FIELDS[kind].map((f) => ({ key: f.key, header: t(`catalogs.attributes.${f.key}`), render: (e: CatalogEntry) => String(e.attributes[f.key] ?? '') })),
           { key: 'active', header: t('catalogs.status'), render: (e) => <StatusBadge tone={e.active ? 'done' : 'neutral'}>{t(e.active ? 'catalogs.activeBadge' : 'catalogs.inactiveBadge')}</StatusBadge> },
           {
             key: 'actions',
@@ -339,6 +338,7 @@ export function CatalogsPage() {
                 { key: 'level', header: t('courses.level'), render: (c) => t(`courseLevel.${c.level}`) },
                 { key: 'grants', header: t('catalogs.grants'), render: (c) => c.grantsQualifications.join(', ') },
                 { key: 'prerequisites', header: t('catalogs.prerequisites'), render: (c) => c.prerequisites.join(', ') },
+                { key: 'describe', header: t('catalogs.describe'), render: (c) => (c.describe ? '✓' : '') },
                 { key: 'active', header: t('catalogs.status'), render: (c) => <StatusBadge tone={c.active ? 'done' : 'neutral'}>{t(c.active ? 'catalogs.activeBadge' : 'catalogs.inactiveBadge')}</StatusBadge> },
               ]}
             />

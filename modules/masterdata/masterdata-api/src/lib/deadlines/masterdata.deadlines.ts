@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { type DeadlineInput, type DeadlineProvider, SettingsService } from '@forga/core-api';
-import { type MembershipSettings, qualificationLabel } from '@forga/masterdata-contracts';
+import type { MembershipSettings } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { Person, type PersonQualification } from '../masterdata.entities.js';
 import { departmentsOf, validQualifications, WRITE } from '../persons/persons.service.js';
@@ -66,17 +66,13 @@ export class MasterdataDeadlines implements DeadlineProvider {
         add(person.id, 'driver-license-expires', 'Führerschein läuft ab', 'Driving licence expires', person.driverLicense.expiresOn, 60);
       }
 
-      // Only the latest entry per qualification counts; a renewal ends the deadline. Collective entries like "other
-      // course" count per description.
+      // Only the latest entry per qualification counts; a renewal ends the deadline.
       const latest = new Map<string, PersonQualification>();
-      for (const q of person.qualifications.getItems().toSorted((a, b) => a.acquiredOn.localeCompare(b.acquiredOn))) {
-        latest.set(q.description ? `${q.qualification}:${q.description}` : q.qualification, q);
-      }
+      for (const q of person.qualifications.getItems().toSorted((a, b) => a.acquiredOn.localeCompare(b.acquiredOn))) latest.set(q.qualification, q);
       for (const [id, q] of latest) {
         if (q.validUntil) {
           const name = qualificationNames.get(q.qualification) ?? { de: q.qualification, en: q.qualification };
-          const label = (text: string) => qualificationLabel(text, q.description);
-          add(`${person.id}:${id}`, 'qualification-expires', `Qualifikation läuft ab: ${label(name.de)}`, `Qualification expires: ${label(name.en)}`, q.validUntil, 60);
+          add(`${person.id}:${id}`, 'qualification-expires', `Qualifikation läuft ab: ${name.de}`, `Qualification expires: ${name.en}`, q.validUntil, 60);
         }
       }
     }

@@ -64,8 +64,10 @@ function RunDialog({ course, run, onClose, invalidate }: { course: string; run?:
  * Records the results of all open nominations of a run (or of those without a run) at once; persons who did not attend
  * are left out. Recorded persons are no longer open, so they are not offered again.
  */
-function ResultsDialog({ course, run, nominations, onClose, invalidate }: {
+function ResultsDialog({ course, describe, run, nominations, onClose, invalidate }: {
   course: string;
+  /** Collective course like "other course": the actual course is entered as description. */
+  describe: boolean;
   run: CourseRun | null;
   nominations: Nomination[];
   onClose: () => void;
@@ -78,6 +80,7 @@ function ResultsDialog({ course, run, nominations, onClose, invalidate }: {
   // A confirmed place is preselected as passed, the others as not attended.
   const [results, setResults] = useState<Record<string, Result>>(() => Object.fromEntries(participants.map((n) => [n.person.id, n.nomination.status === 'confirmed' ? 'passed' : 'absent'])));
   const [confirmHeld, setConfirmHeld] = useState(false);
+  const [description, setDescription] = useState('');
   const [dates, setDates] = useState({ startsOn: today() as string | null, endsOn: null as string | null, location: '' });
   const [outcome, setOutcome] = useState<CourseResultsOutcome | null>(null);
   const end = run ? (run.endsOn ?? run.startsOn) : (dates.endsOn ?? dates.startsOn ?? '');
@@ -85,7 +88,7 @@ function ResultsDialog({ course, run, nominations, onClose, invalidate }: {
   const endError = !run && dates.endsOn && dates.startsOn && dates.endsOn < dates.startsOn ? t('courses.endBeforeStart') : undefined;
   const chosen = Object.entries(results).filter(([, r]) => r !== 'absent').map(([personId, result]) => ({ personId, result }));
   const save = useAction(
-    () => send<CourseResultsOutcome>('POST', 'masterdata/course-results', { course, runId: run?.id ?? null, ...(run ? {} : dates), results: chosen, confirmHeld }),
+    () => send<CourseResultsOutcome>('POST', 'masterdata/course-results', { course, runId: run?.id ?? null, ...(run ? {} : dates), results: chosen, description, confirmHeld }),
     { success: t('planning.resultsSaved'), invalidate, onSuccess: (result) => (result.skipped.length ? setOutcome(result) : onClose()) },
   );
   const name = (id: string) => {
@@ -101,7 +104,7 @@ function ResultsDialog({ course, run, nominations, onClose, invalidate }: {
       actions={
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{outcome ? common('actions.close') : common('actions.cancel')}</Button>
-          {!outcome && <Button loading={save.isPending} disabled={!chosen.length || notFinished || Boolean(endError) || (!run && !dates.startsOn)} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>}
+          {!outcome && <Button loading={save.isPending} disabled={!chosen.length || notFinished || Boolean(endError) || (!run && !dates.startsOn) || (describe && !description.trim())} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>}
         </Group>
       }
     >
@@ -123,6 +126,9 @@ function ResultsDialog({ course, run, nominations, onClose, invalidate }: {
                 </SimpleGrid>
                 <TextInput label={t('courses.location')} value={dates.location} onChange={(e) => setDates({ ...dates, location: e.currentTarget.value })} />
               </>
+            )}
+            {describe && (
+              <TextInput label={t('courses.description')} description={t('courses.descriptionHint')} value={description} onChange={(e) => setDescription(e.currentTarget.value)} maxLength={200} required />
             )}
             {notFinished && <Notice kind="warning">{t('courses.notFinished')}</Notice>}
             <DataTable<Nomination>
@@ -447,7 +453,7 @@ function Planning({ course }: { course: string }) {
       </Panel>
 
       {runDialog && <RunDialog course={course} run={runDialog.run} onClose={() => setRunDialog(null)} invalidate={invalidate} />}
-      {results && <ResultsDialog course={course} run={results.run} nominations={planning.nominations} onClose={() => setResults(null)} invalidate={invalidate} />}
+      {results && <ResultsDialog course={course} describe={planning.course.describe} run={results.run} nominations={planning.nominations} onClose={() => setResults(null)} invalidate={invalidate} />}
       <ConfirmDialog
         opened={!!removing}
         onClose={() => setRemoving(null)}

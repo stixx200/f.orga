@@ -22,6 +22,8 @@ export const CourseSchema = defineEntity({
     allowedStatuses: p.json<PersonStatus[]>(),
     /** Target number of persons with the course per department (`departmentId → count`). */
     targets: p.json<Record<string, number>>(),
+    /** Collective entry like "other course": each attendance names the actual course in its description. */
+    describe: p.boolean().default(false),
     active: p.boolean().default(true),
     sortOrder: p.integer().default(0),
     version: p.integer().version(),
@@ -62,6 +64,8 @@ export const CourseAttendanceSchema = defineEntity({
     result: p.string().$type<CourseResult>(),
     location: p.string().default(''),
     notes: p.text().default(''),
+    /** Actual course of a collective course like "other course" (`Course.describe`); empty otherwise. */
+    description: p.string().default(''),
   },
 });
 export class CourseAttendance extends CourseAttendanceSchema.class {}
