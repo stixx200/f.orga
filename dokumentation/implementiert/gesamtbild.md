@@ -83,6 +83,7 @@ Im Frontend kommt eine vierte Stelle hinzu: die **Erweiterungspunkte**. Ein Modu
 | Einsatzleiter vom Dienst `duty-officer` | masterdata, incidents; optional compensation | Dienstplan, erwartete EvD-Berichte, Ausnahmen | `duty-officer.general` | 1 | Dienstplan (iCal) |
 | Infoterminal `info-terminal` | masterdata, incidents; optional training | Terminals (Geräte an Wachen) | `info-terminal.general` | – | – |
 | MP-Feuer `mp-feuer` | masterdata; optional incidents, training, respiratory-protection | Läufe, gelesene Zeilen je Profil, gemerkte Zuordnungen | `mp-feuer.remembered` | – | – (liest Transferdateien und gibt die Zeilen über `ImportService.runRows` an die Profile der anderen Module) |
+| Datensicherung `backup` | – | Sicherungen und Wiederherstellungen (Protokoll, nicht historisiert) | `backup.general` | – | – |
 
 Jedes Modul liefert außerdem ein Manifest mit Rechten, Rollenvorlagen und Navigation. Es meldet seine historisierten Entitäten, eine Migration `initial` und ein Frontend mit eigenen Übersetzungen.
 
@@ -90,21 +91,21 @@ Jedes Modul liefert außerdem ein Manifest mit Rechten, Rollenvorlagen und Navig
 
 Die Module melden ihre Beiträge beim Start an die Registries des Core. Die Shell und die Endpunkte des Core fassen sie zusammen.
 
-| Registry (Core) | Zusammengeführt in | masterdata | incidents | training | respiratory-protection | compensation | equipment | cost-recovery | promotions | clothing | duty-officer | info-terminal | mp-feuer |
-| --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| `PermissionRegistry` (Manifest) | Rollen, Rechteprüfung | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| Einstellungen (`settings`) | Verwaltung → Einstellungen, Einrichtungsliste | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| `HistoryAccessRegistry` | Historie je Datensatz | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| `ExportRegistry` | Vollexport | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | | |
-| `ListRegistry` | Listen (PDF, Excel, CSV) | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | | |
-| `DeadlineRegistry` | Aufgaben, Glocke, Sammel-E-Mail | ● | ● | ● | ● | ● | ● | ● | | ● | ● | | |
-| `ImportRegistry` | Import-Assistent, Läufe des Moduls MP-Feuer | ● | ● | ● | ● | | ● | ● | | | ● | | nutzt |
-| `SearchRegistry` | Globale Suche | ● | ● | ● | | | ● | ● | | ● | | | |
-| `CodeRegistry` | Code-Scan (Etiketten) | | | | | | ● | | | ● | | | |
-| `PersonDataRegistry` | Anonymisieren von Personen | ruft auf | | ● | ● | | | | ● | ● | | | |
-| `RetentionRegistry` | Täglicher Aufbewahrungslauf | ● | | | | | | | | | | | ● |
-| `Notifications` | Sofortige E-Mails | | ● | | ● | | ● | | | | | | |
-| `OrganizationDirectory` | Rechte je Abteilung, Einrichtungsliste | stellt bereit | nutzt | | | | | | | | | | |
+| Registry (Core) | Zusammengeführt in | masterdata | incidents | training | respiratory-protection | compensation | equipment | cost-recovery | promotions | clothing | duty-officer | info-terminal | mp-feuer | backup |
+| --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| `PermissionRegistry` (Manifest) | Rollen, Rechteprüfung | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| Einstellungen (`settings`) | Verwaltung → Einstellungen, Einrichtungsliste | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| `HistoryAccessRegistry` | Historie je Datensatz | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | |
+| `ExportRegistry` | Vollexport | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | | | |
+| `ListRegistry` | Listen (PDF, Excel, CSV) | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | | | |
+| `DeadlineRegistry` | Aufgaben, Glocke, Sammel-E-Mail | ● | ● | ● | ● | ● | ● | ● | | ● | ● | | | ● |
+| `ImportRegistry` | Import-Assistent, Läufe des Moduls MP-Feuer | ● | ● | ● | ● | | ● | ● | | | ● | | nutzt | |
+| `SearchRegistry` | Globale Suche | ● | ● | ● | | | ● | ● | | ● | | | | |
+| `CodeRegistry` | Code-Scan (Etiketten) | | | | | | ● | | | ● | | | | |
+| `PersonDataRegistry` | Anonymisieren von Personen | ruft auf | | ● | ● | | | | ● | ● | | | | |
+| `RetentionRegistry` | Täglicher Aufbewahrungslauf | ● | | | | | | | | | | | ● | |
+| `Notifications` | Sofortige E-Mails | | ● | | ● | | ● | | | | | | | ● |
+| `OrganizationDirectory` | Rechte je Abteilung, Einrichtungsliste | stellt bereit | nutzt | | | | | | | | | | | |
 
 ## Zusammenlauf zwischen Modulen
 

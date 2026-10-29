@@ -2,7 +2,7 @@ import { Alert, Anchor, Button, Center, Divider, Group, Paper, PasswordInput, St
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { LocalizedText } from '@forga/core-contracts';
-import { ApiError, SESSION_QUERY_KEY, send, translateCode, useLocalized, useTranslation } from '@forga/web-sdk';
+import { ApiError, SESSION_QUERY_KEY, send, takeLoginNotice, translateCode, useLocalized, useTranslation } from '@forga/web-sdk';
 import { ResponsiveDialog } from '@forga/web-ui';
 import { BrigadeLogo } from '../frame/AppFrame';
 import { LanguageSwitch } from '../frame/LanguageSwitch';
@@ -18,6 +18,8 @@ export function LoginPage({ brigadeName, oidc }: { brigadeName: string | null; o
   const { t } = useTranslation('shell');
   const localized = useLocalized();
   const [providerError] = useState(oidcError);
+  // E.g. „Wiederhergestellt aus der Sicherung vom …“ after a restore.
+  const [notice] = useState(takeLoginNotice);
   const queryClient = useQueryClient();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -46,6 +48,7 @@ export function LoginPage({ brigadeName, oidc }: { brigadeName: string | null; o
             <Title order={2} c="brand">
               {t('login.title')}
             </Title>
+            {notice && <Alert color="green">{localized(notice)}</Alert>}
             {login.error && <Alert color="brand">{(login.error as ApiError).translated()}</Alert>}
             {providerError && !login.error && <Alert color="brand">{translateCode(providerError)}</Alert>}
             <TextInput label={t('login.username')} value={username} onChange={(e) => setUsername(e.currentTarget.value)} required autoFocus autoComplete="username" />

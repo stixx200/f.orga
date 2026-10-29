@@ -9,6 +9,7 @@
     "build": "nx run-many -t build",
     "integration": "nx run-many -t integration",
     "plugin": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/plugin.mts",
+    "backup": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/backup.mts",
     "migration:create": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/migration.mts create",
     "migration:run": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/migration.mts run",
     "migration:reset": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/migration-reset.mts",

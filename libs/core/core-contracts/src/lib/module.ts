@@ -9,6 +9,11 @@ export const Permission = z.object({
   id: z.string().regex(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/),
   name: LocalizedText,
   scope: PermissionScope,
+  /**
+   * Permissions that give access to the whole data (e.g. downloading and replacing it with a backup): never granted
+   * to API tokens.
+   */
+  privileged: z.boolean().optional(),
 });
 export type Permission = z.infer<typeof Permission>;
 
@@ -69,6 +74,12 @@ export type ModuleManifest = z.input<typeof ModuleManifest>;
 /** The kiosk page of an active module (`GET /api/core/modules/kiosk/:path`, without login). */
 export const KioskFrontend = z.object({ moduleId: z.string(), remote: z.string(), exposed: z.string(), entry: z.string() });
 export type KioskFrontend = z.infer<typeof KioskFrontend>;
+
+/**
+ * Version of f.orga (core and built-in modules), raised with every release. Backups record it; a backup of a newer
+ * version is not restored.
+ */
+export const FORGA_VERSION = '0.1.0';
 
 /** Database schema of a module: its ID with dashes replaced by underscores. */
 export function schemaName(moduleId: string): string {

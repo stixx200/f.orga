@@ -7,6 +7,14 @@ export const de = {
   moduleUnavailable: 'Modul {{name}} nicht verfügbar',
   notFound: 'Diese Seite gibt es nicht.',
   kioskInactive: 'Diese Seite ist abgeschaltet: Das Modul ist nicht aktiv.',
+  maintenance: {
+    title: 'f.orga wird gerade wiederhergestellt',
+    text: 'Ein Administrator spielt eine Datensicherung ein. Bitte in einigen Minuten neu laden. Die Seite versucht es selbst alle 15 Sekunden.',
+    hint: 'Nicht gespeicherte Eingaben gehen verloren. Danach ist eine neue Anmeldung nötig.',
+    kioskTitle: 'Vorübergehend nicht verfügbar',
+    kioskText: 'f.orga wird gerade gewartet. Das Infoterminal versucht es alle 15 Sekunden erneut.',
+    reload: 'Neu laden',
+  },
   nav: {
     overview: 'Übersicht',
     start: 'Startseite',
@@ -290,6 +298,7 @@ export const de = {
       'duty-officer': 'Einsatzleiter vom Dienst: EvD-Dienstplan mit Tagespauschalen und ein EvD-Bericht für jeden Einsatz.',
       'info-terminal': 'Infoterminal an der Wache: Einsatzkräfte tragen sich nach Einsätzen und Diensten selbst ein, mit Fahrzeug, Funktion und Angaben für die Entschädigung.',
       'mp-feuer': 'Datenübernahme aus MP-Feuer-Transferdateien im Hintergrund, mit eigener Zuordnungsliste; nach der Umstellung auf f.orga abschalten.',
+      backup: 'Datensicherung: regelmäßige, verschlüsselte Sicherung in einen Ordner auf dem Server, Prüfung und Wiederherstellung ohne Konsole.',
     },
     noDescription: 'Zusatzmodul (Plugin) ohne Beschreibung.',
   },

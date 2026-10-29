@@ -89,6 +89,12 @@
     },
     {
       "path": "./modules/mp-feuer/mp-feuer-api"
+    },
+    {
+      "path": "./modules/backup/backup-contracts"
+    },
+    {
+      "path": "./modules/backup/backup-api"
     }
   ],
   "compilerOptions": {}
