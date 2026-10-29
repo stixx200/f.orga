@@ -121,7 +121,7 @@ export default defineWebModule({
 - Eine Datenbank, ein Schema je Modul (`core`, `masterdata`, `incidents`, …; Schema = Modul-ID mit `_` statt `-`). Fremdschlüssel nur auf Tabellen des eigenen Moduls oder auf **abhängige** Module (`requires`). Für optionale Module werden IDs ohne Fremdschlüssel gespeichert.
 - IDs sind UUIDv7: sortierbar, im Import/Export stabil, nicht erratbar.
 - Jede Entität hat `createdAt`, `createdBy`, `updatedAt`, `updatedBy` und eine Versionsnummer für optimistisches Sperren. Zwei Personen, die denselben Bericht bearbeiten, überschreiben sich nicht stillschweigend.
-- Löschen ist bei Stammdaten ein Archivieren (`archivedAt`). Echte Löschung nur für Fehleingaben und für die DSGVO-Löschung (siehe [Fachmodell](fachmodell.md#datenschutz)).
+- Löschen ist bei Stammdaten ein Archivieren (`archivedAt`). Echte Löschung nur für Fehleingaben und für die DSGVO-Löschung (siehe [Datenschutz](datenschutz.md#l7-betroffenenanfragen-löschung-und-einschränkung-kritisch)).
 
 ### Historie
 
