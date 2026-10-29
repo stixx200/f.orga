@@ -125,7 +125,7 @@ export class MasterdataModule implements OnModuleInit {
     // The core checks role assignments and user links against departments and persons, and extends a department
     // assignment to the departments below it (youth and veterans department of an operational department).
     this.organization.register({
-      departments: async () => (await this.em.fork().find(Department, {}, { fields: ['id', 'parent'] })).map((d) => ({ id: d.id, parentId: d.parent?.id ?? null })),
+      departments: async () => (await this.em.fork().find(Department, {}, { fields: ['id', 'parent', 'shortName'] })).map((d) => ({ id: d.id, parentId: d.parent?.id ?? null, name: d.shortName })),
       persons: async (ids) =>
         (await this.em.fork().find(Person, { id: { $in: [...ids] } }, { populate: ['memberships.department'] })).map((p) => ({
           id: p.id,
@@ -141,6 +141,10 @@ export class MasterdataModule implements OnModuleInit {
         (await this.persons.list(user, { query, includeLeft: true }))
           .slice(0, limit)
           .map((p) => ({ id: p.id, label: `${p.lastName}, ${p.firstName}${p.personnelNumber ? ` (${p.personnelNumber})` : ''}` })),
+      postalAddress: async (id) => {
+        const p = await this.em.fork().findOne(Person, id);
+        return p && { salutation: p.salutation, title: p.title, firstName: p.firstName, lastName: p.lastName, street: p.street, postalCode: p.postalCode, city: p.city };
+      },
     });
     this.search.register('masterdata', (user, query) => this.data.search(user, query));
     registerAuditReferences(this.auditReferences, this.em);

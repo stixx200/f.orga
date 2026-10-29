@@ -52,3 +52,7 @@ export * from './lib/plugins/tar.js';
 export * from './lib/stage.js';
 export * from './lib/security/http-security.js';
 export * from './lib/security/cookie-policy.js';
+export * from './lib/access-report/person-description.js';
+export * from './lib/access-report/describe-context.js';
+export * from './lib/access-report/access-report.service.js';
+export * from './lib/access-report/privacy-document.entity.js';

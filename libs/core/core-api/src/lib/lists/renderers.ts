@@ -160,6 +160,8 @@ interface Frame {
   /** Width of the text area in points. */
   width: number;
   margin: number;
+  /** Smaller title, e.g. for long titles naming a person. */
+  compactTitle?: boolean;
 }
 
 function pageHeader(frame: Frame): Record<string, unknown> {
@@ -173,7 +175,7 @@ function pageHeader(frame: Frame): Record<string, unknown> {
             width: '*',
             stack: [
               { text: frame.brigade?.name ?? '', color: SERVICE_RED, bold: true, fontSize: 8, characterSpacing: 0.3 },
-              { text: frame.title, color: SERVICE_RED, bold: true, fontSize: 15, margin: [0, 2, 0, 0] },
+              { text: frame.title, color: SERVICE_RED, bold: true, fontSize: frame.compactTitle ? 11 : 15, margin: [0, 2, 0, 0] },
             ],
             margin: [0, frame.logo ? 4 : 0, 0, 0],
           },
@@ -318,15 +320,20 @@ export interface LetterContext {
   content: unknown[];
   language: Language;
   now: Date;
+  /** Smaller title in the page header. */
+  compactTitle?: boolean;
+  /** Files embedded in the PDF (attachments), with the content as data URL. */
+  files?: Record<string, { src: string; name: string; description?: string }>;
 }
 
 export async function renderLetterPdf(context: LetterContext): Promise<Buffer> {
-  const frame: Frame = { brigade: context.brigade, logo: context.logo, title: context.title, language: context.language, now: context.now, width: 483, margin: 56 };
+  const frame: Frame = { brigade: context.brigade, logo: context.logo, title: context.title, language: context.language, now: context.now, width: 483, margin: 56, compactTitle: context.compactTitle };
   const doc = {
     pageSize: 'A4',
     pageMargins: [56, context.letterhead ? 110 : 90, 56, 62],
     defaultStyle: { font: 'Helvetica', fontSize: 10, color: TEXT, lineHeight: 1.2 },
     info: { title: context.title, creator: 'f.orga' },
+    ...(context.files ? { files: context.files } : {}),
     header: () => (context.letterhead ? { ...picture(context.letterhead, 483), width: 483, margin: [56, 20, 56, 0] } : pageHeader(frame)),
     footer: (page: number, pages: number) => pageFooter(frame, page, pages),
     content: context.content,

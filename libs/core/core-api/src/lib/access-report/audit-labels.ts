@@ -1,0 +1,41 @@
+import type { LocalizedText } from '@forga/core-contracts';
+
+/**
+ * Readable names of the audit entries concerning a user account, for the access report (the UI has its own names in the
+ * shell). Actions of modules are named by their module („Vorgang: Einsatzberichte“).
+ */
+export const AUDIT_LABELS: Record<string, LocalizedText> = {
+  'auth.login': { de: 'Anmeldung', en: 'Login' },
+  'auth.login-failed': { de: 'Anmeldung fehlgeschlagen', en: 'Login failed' },
+  'auth.oidc-failed': { de: 'Anmeldung mit Gemeinde-Konto fehlgeschlagen', en: 'Municipal sign-in failed' },
+  'auth.password-changed': { de: 'Passwort geändert', en: 'Password changed' },
+  'auth.email-changed': { de: 'E-Mail-Adresse geändert', en: 'E-mail address changed' },
+  'auth.email-change-requested': { de: 'Änderung der E-Mail-Adresse angefordert', en: 'E-mail address change requested' },
+  'auth.password-reset': { de: 'Passwort über Link gesetzt', en: 'Password set by link' },
+  'auth.password-reset-requested': { de: 'Link zum Zurücksetzen gesendet', en: 'Reset link sent' },
+  'auth.password-reset-limited': { de: 'Zurücksetzen zu oft angefordert', en: 'Reset requested too often' },
+  'auth.impersonation-started': { de: 'Anmelden als anderer Benutzer', en: 'Logged in as another user' },
+  'auth.impersonation-ended': { de: 'Anmelden als anderer Benutzer beendet', en: 'Ended login as another user' },
+  'auth.step-up': { de: 'Mit zweitem Faktor bestätigt', en: 'Confirmed with the second factor' },
+  'auth.step-up-failed': { de: 'Falscher Code beim zweiten Faktor', en: 'Wrong code for the second factor' },
+  'auth.mfa-enrolled': { de: 'Zweiten Faktor eingerichtet', en: 'Second factor set up' },
+  'auth.recovery-codes-renewed': { de: 'Wiederherstellungscodes neu erzeugt', en: 'Recovery codes renewed' },
+  'auth.mfa-reset': { de: 'Zweiten Faktor zurückgesetzt', en: 'Second factor reset' },
+  'users.created': { de: 'Benutzer angelegt', en: 'User created' },
+  'users.updated': { de: 'Benutzer geändert', en: 'User changed' },
+  'users.invited': { de: 'Benutzer eingeladen', en: 'User invited' },
+  'users.person-linked': { de: 'Benutzer mit Person verknüpft', en: 'User linked to person' },
+  'users.oidc-linked': { de: 'Gemeinde-Konto verknüpft', en: 'Municipal account linked' },
+  'users.oidc-unlinked': { de: 'Verknüpfung mit Gemeinde-Konto gelöst', en: 'Municipal account unlinked' },
+  'tokens.created': { de: 'API-Token erzeugt', en: 'API token created' },
+  'tokens.revoked': { de: 'API-Token widerrufen', en: 'API token revoked' },
+  'data.exported': { de: 'Vollexport', en: 'Full export' },
+  'data.person-exported': { de: 'Auskunft zu einer Person', en: 'Data access request' },
+  'lists.exported': { de: 'Liste exportiert', en: 'List exported' },
+  'imports.applied': { de: 'Import übernommen', en: 'Import applied' },
+  'attachments.added': { de: 'Anhang hinzugefügt', en: 'Attachment added' },
+  'attachments.removed': { de: 'Anhang entfernt', en: 'Attachment removed' },
+  'privacy.access-report-created': { de: 'Auskunft erstellt', en: 'Access report created' },
+  'privacy.access-report-downloaded': { de: 'Auskunft heruntergeladen', en: 'Access report downloaded' },
+  'privacy.access-report-handed-over': { de: 'Auskunft übergeben', en: 'Access report handed over' },
+};

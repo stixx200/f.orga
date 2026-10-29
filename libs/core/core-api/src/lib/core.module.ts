@@ -3,6 +3,11 @@ import { APP_GUARD, DiscoveryModule } from '@nestjs/core';
 import { Migrator } from '@mikro-orm/migrations';
 import { RETENTION_PERMISSION } from '@forga/core-contracts';
 import { CORE_MIGRATIONS } from '../migrations/index.js';
+import { AccessReportsController, MyAccessReportsController } from './access-report/access-report.controller.js';
+import { AccessReportService } from './access-report/access-report.service.js';
+import { AccessReportTexts } from './access-report/access-report.texts.js';
+import { CoreDescription } from './access-report/core-description.js';
+import { PrivacyDocument } from './access-report/privacy-document.entity.js';
 import { Audit, AuditController, AuditEntry } from './audit/audit.js';
 import { AuditReferenceRegistry } from './audit/audit-references.js';
 import { CoreAuditReferences } from './audit/core-references.js';
@@ -75,6 +80,7 @@ export const CORE_ENTITIES: EntityDefinition[] = [
   BrigadeAsset,
   AttachmentEntity,
   RetentionCaseEntity,
+  PrivacyDocument,
 ];
 
 function className(entity: EntityDefinition): string {
@@ -111,13 +117,18 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
     private readonly historyAccess: HistoryAccessRegistry,
     private readonly exports: ExportRegistry,
     private readonly coreExport: CoreExport,
+    private readonly coreDescription: CoreDescription,
     private readonly personData: PersonDataRegistry,
     private readonly imports: ImportRegistry,
   ) {}
 
   onModuleInit(): void {
     assertStage();
-    this.exports.register('core', { all: (user) => this.coreExport.all(user), person: (id) => this.coreExport.person(id) });
+    this.exports.register('core', {
+      all: (user) => this.coreExport.all(user),
+      person: (id) => this.coreExport.person(id),
+      describePerson: (id, ctx) => this.coreDescription.describePerson(id, ctx),
+    });
     this.personData.register('core', { anonymize: (ids) => this.coreExport.anonymize(ids) });
     this.historyAccess.registerPermission('core.user', 'core.users.manage');
     this.historyAccess.registerPermission('core.role', 'core.roles.manage');
@@ -160,6 +171,8 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         PluginsController,
         OnboardingController,
         SecurityStatusController,
+        AccessReportsController,
+        MyAccessReportsController,
       ],
       providers: [
         { provide: FORGA_CORE_OPTIONS, useValue: { ...options, modules } },
@@ -199,6 +212,9 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         RetentionExport,
         CoreRetentionCategories,
         CoreExport,
+        CoreDescription,
+        AccessReportTexts,
+        AccessReportService,
       ],
       exports: [
         FORGA_CORE_OPTIONS,

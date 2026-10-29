@@ -41,6 +41,7 @@ export async function startTestApp(options: Parameters<typeof import('../app/app
   process.env.FORGA_MAIL_TRANSPORT = 'memory';
   process.env.FORGA_DIGEST_SCHEDULER = 'off';
   process.env.FORGA_RETENTION_SCHEDULER = 'off';
+  process.env.FORGA_PRIVACY_SCHEDULER = 'off';
   process.env.FORGA_STATUS_SCHEDULER = 'off';
   process.env.FORGA_SETUP_TOKEN = SETUP_TOKEN;
   // Imported after DATABASE_URL is set: the ORM configuration is read when the module is evaluated.

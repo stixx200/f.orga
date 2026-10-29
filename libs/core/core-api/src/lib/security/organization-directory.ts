@@ -5,6 +5,8 @@ export interface DepartmentNode {
   id: string;
   /** Department this one belongs to, e.g. the operational department of a youth fire brigade. */
   parentId: string | null;
+  /** Short name, e.g. „Abt. Musterstadt“ (readable texts such as the access report). */
+  name?: string;
 }
 
 export interface PersonSummary {
@@ -15,6 +17,17 @@ export interface PersonSummary {
   email: string;
   /** Departments that decide who may see the person's data (current memberships, or the last ones after leaving). */
   departmentIds: string[];
+}
+
+/** Postal address of a person, e.g. for the cover letter of the access report. */
+export interface PostalAddress {
+  salutation: string;
+  title: string;
+  firstName: string;
+  lastName: string;
+  street: string;
+  postalCode: string;
+  city: string;
 }
 
 /**
@@ -33,6 +46,8 @@ export interface OrganizationProvider {
   linkPermission: string;
   /** Persons whose name matches the query, as far as the user may see them (pickers, e.g. list parameters). */
   searchPersons?(user: AuthenticatedUser, query: string, limit: number): Promise<{ id: string; label: string }[]>;
+  /** Postal address of a person (letters to the person); `null` for unknown persons. */
+  postalAddress?(personId: string): Promise<PostalAddress | null>;
 }
 
 @Injectable()
@@ -97,6 +112,10 @@ export class OrganizationDirectory {
   /** Permission needed to link a user to a person; `null` without a provider. */
   get linkPermission(): string | null {
     return this.provider?.linkPermission ?? null;
+  }
+
+  async postalAddress(personId: string): Promise<PostalAddress | null> {
+    return this.provider?.postalAddress ? this.provider.postalAddress(personId) : null;
   }
 
   async searchPersons(user: AuthenticatedUser, query: string, limit = 20): Promise<{ id: string; label: string }[]> {
