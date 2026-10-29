@@ -9,7 +9,7 @@ import sys
 from html.parser import HTMLParser
 
 sys.path.insert(0, os.path.dirname(__file__))
-import shell, stammdaten, einsatzberichte, infoterminal, mpfeuer, fuehrerschein, sicherung, aufbewahrung  # noqa: F401,E401  (erzeugen Seiten beim Import)
+import shell, stammdaten, einsatzberichte, infoterminal, mpfeuer  # noqa: F401,E401  (erzeugen Seiten beim Import)
 from rahmen import ZIEL, FUSS, SPRACHE, mockup_hinweis, schreiben, kopf_html
 from uebersetzung import EN, MUSTER, GLEICH
 
@@ -36,17 +36,6 @@ GRUPPEN = [
                         ('mp-feuer/verlauf.html', 'Verlauf der Läufe'), ('mp-feuer/zuordnungen.html', 'Zuordnungsliste des Moduls'),
                         ('mp-feuer/einstellungen.html', 'Einstellungen: gemerkte Auswahl'), ('mp-feuer/export.html', 'Export nach MP-Feuer (in Vorbereitung)'),
                         ('mp-feuer/tabellen-import.html', 'Tabellen-Import mit gemerkten Zuordnungen')]),
-    ('Führerscheinkontrolle (Konzept)', [('stammdaten/person-fuehrerschein.html', 'Führerschein in der Personalakte'), ('stammdaten/person-fuehrerschein.html#d-kontrolle', 'Kontrolle erfassen'),
-                      ('stammdaten/person-fuehrerschein.html#d-vorlage', 'Erneute Vorlage anfordern'), ('stammdaten/person-fuehrerschein.html#d-transponder', 'Transponder registrieren'),
-                      ('stammdaten/fuehrerscheinkontrollen.html', 'Liste Führerscheinkontrollen'), ('stammdaten/fuehrerschein-einstellungen.html', 'Einstellungen Führerscheinkontrolle'),
-                      ('infoterminal/fuehrerschein.html', 'Infoterminal: Führerschein scannen'), ('infoterminal/fuehrerschein-bestaetigen.html', 'Infoterminal: Selbsterklärung bestätigen'),
-                      ('shell/mein-fuehrerschein.html', 'Mein Bereich: Selbstkontrolle'), ('shell/start.html#aufgaben', 'Aufgabe auf der Startseite')]),
-    ('Datensicherung (Konzept)', [('sicherung/uebersicht.html', 'Übersicht'), ('sicherung/einstellungen.html', 'Einstellungen: Ziel, Zeitplan, Verschlüsselung'),
-                      ('sicherung/sicherungen.html', 'Sicherungen mit Prüfen und Wiederherstellen'), ('sicherung/sicherungen.html#d-pruefen', 'Sicherung prüfen'),
-                      ('sicherung/wiederherstellen.html', 'Wiederherstellung bestätigen'), ('sicherung/wiederherstellung-laeuft.html', 'Wiederherstellung läuft'),
-                      ('sicherung/wartung.html', 'Wartungsseite für andere Benutzer')]),
-    ('Aufbewahrung (Konzept)', [('shell/aufbewahrung.html', 'Aufbewahrungsfristen'), ('shell/aufbewahrung.html#d-vorlage', 'Vorlage Kommunaler Aktenplan'),
-                      ('shell/aussonderung.html', 'Aussonderung: Archiv anbieten'), ('shell/aussonderung.html#d-entscheidung', 'Entscheidung des Archivs')]),
 ]
 
 karten = ''.join(

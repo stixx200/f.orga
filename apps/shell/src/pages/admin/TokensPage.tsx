@@ -80,7 +80,7 @@ export function TokensPage() {
             <DateInput label={t('tokens.validUntil')} value={draft.expiresOn} onChange={(value) => setDraft({ ...draft, expiresOn: value })} valueFormat="DD.MM.YYYY" clearable minDate={today} />
             <Checkbox.Group label={t('tokens.scopes')} value={draft.scopes} onChange={(scopes) => setDraft({ ...draft, scopes })} required>
               <Stack gap={6} mt={6}>
-                {permissions.filter((p) => !p.id.startsWith('core.')).map((p) => (
+                {permissions.filter((p) => !p.id.startsWith('core.') && !p.privileged).map((p) => (
                   <Checkbox key={p.id} value={p.id} label={<><Code>{p.id}</Code> {localized(p.name)}</>} />
                 ))}
               </Stack>

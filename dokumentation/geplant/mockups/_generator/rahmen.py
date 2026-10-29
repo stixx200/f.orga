@@ -29,9 +29,6 @@ SYMBOLE = {
     'abmelden': '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
     'schliessen': '<path d="M6 6l12 12M18 6L6 18"/>',
     'terminal': '<rect x="4" y="3" width="16" height="13" rx="1"/><path d="M9 21h6M12 16v5"/><path d="M8 8h3M8 11h8"/>',
-    'fuehrerschein': '<rect x="2" y="5" width="20" height="14" rx="1"/><circle cx="8" cy="11" r="2.5"/><path d="M4.5 16.5c.5-1.8 2-2.5 3.5-2.5s3 .7 3.5 2.5M14 9h5M14 12h5M14 15h3"/>',
-    'sicherung': '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
-    'archiv': '<rect x="2" y="3" width="20" height="5"/><path d="M4 8v13h16V8M10 12h4"/>',
     'qr': '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v1M14 20h1M18 18h3v3"/>',
 }
 
@@ -56,7 +53,6 @@ NAVIGATION = [
         ('stammdaten/organisation.html', 'organisation', 'Organisation', None),
         ('stammdaten/fahrzeug.html', 'fahrzeug', 'Fahrzeuge', None),
         ('stammdaten/lehrgangsplanung.html', 'lehrgang', 'Lehrgangsplanung', None),
-        ('stammdaten/fuehrerscheinkontrollen.html', 'fuehrerschein', 'Führerscheinkontrollen', None),
         ('stammdaten/listen.html', 'listen', 'Listen', None),
         ('stammdaten/import.html', 'import', 'Import', None),
     ]),
@@ -68,8 +64,6 @@ NAVIGATION = [
         ('infoterminal/verwaltung.html', 'terminal', 'Infoterminals', None),
         ('mp-feuer/start.html', 'import', 'MP-Feuer', None),
         ('shell/einstellungen.html', 'einstellungen', 'Einstellungen', None),
-        ('sicherung/uebersicht.html', 'sicherung', 'Datensicherung', None),
-        ('shell/aussonderung.html', 'archiv', 'Aussonderung', None),
     ]),
 ]
 

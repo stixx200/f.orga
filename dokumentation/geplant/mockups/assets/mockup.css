@@ -678,8 +678,7 @@ a.tk-ereignis:hover { box-shadow: var(--e4); border-color: var(--dienst); }
   .tk-kopf .tk-uhr { font-size: 1.1rem; }
   .tk-kopf .sprache button { min-width: 40px; padding: 0 8px; }
   .tk-heim { min-height: 56px; padding: 6px 14px 6px 10px; gap: 8px; font-size: .9rem; margin-right: 0; }
-  .tk-heim .sym { width: 26px; height: 26px; flex: none; }
-  .tk-heim { flex: 0 1 auto; min-width: 0; }
+  .tk-heim .sym { width: 26px; height: 26px; }
   .tk-heim + img { display: none; }
   .tk-inhalt { padding: 16px 16px 40px; }
   .tk-titel h1 { font-size: 1.45rem; }
@@ -713,7 +712,4 @@ tbody tr.grau td { color: var(--meta); background: var(--grau); }
 .fortschritt-kopf { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
 @media (max-width: 860px) {
   .reiter a { padding: 12px 10px; min-height: 44px; }
-}
-@media (max-width: 420px) {
-  .tk-kopf .tk-uhr { display: none; }
 }

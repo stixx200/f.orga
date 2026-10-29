@@ -156,8 +156,7 @@ seite('stammdaten/person.html', 'Tobias Rief', '''
         ['Löschmeister', '12.03.2021'], ['Hauptfeuerwehrmann', '15.03.2016'], ['Oberfeuerwehrmann', '20.03.2011'], ['Feuerwehrmann', '01.04.2009'],
     ]) + '''
     <h3 style="margin-top:16px">Führerschein</h3>
-    <dl class="daten"><dt>Klassen</dt><dd>B, BE, C1, C1E, C, CE</dd><dt>C, CE gültig bis</dt><dd>16.04.2031</dd><dt>letzte Kontrolle</dt><dd>16.04.2026 · Original vorgelegt</dd></dl>
-    <a class="knopf klein" href="person-fuehrerschein.html">Führerschein und Kontrollen</a>
+    <dl class="daten"><dt>Klassen</dt><dd>B, BE, C, CE</dd><dt>gültig bis (C)</dt><dd>16.04.2031</dd><dt>letzte Kontrolle</dt><dd>05.11.2025 <span class="plakette gelb">fällig in 13 Tagen</span></dd></dl>
   </section>
 </div>
 </div>

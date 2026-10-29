@@ -77,7 +77,7 @@ Prüffristen des Fahrzeugs (HU, UVV) gehören ins Modul Geräte. Ohne dieses Mod
 | Feuerwehr | Personalnummer, Eintrittsdatum Feuerwehr („Mitglied seit“), Dienstgrad (aktueller Stand, Beförderungen als Liste), Status (Probezeit, aktiv, passiv, Jugend, Altersabteilung, ausgeschieden), Ende der Probezeit, Austrittsdatum und -grund, Kennzeichen Musiker |
 | Mitgliedschaften | Abteilung, von, bis, Stammabteilung ja/nein |
 | Kennzeichen | Atemschutzgeräteträger, Maschinist, … aus dem Qualifikationskatalog, mit Gültigkeit |
-| Führerschein | Klassen mit Befristung je Klasse (u. a. C/CE für die Jahresstatistik), Kontrollen mit Prüfer und Art; siehe [Führerscheinkontrolle](fuehrerscheinkontrolle.md) |
+| Führerschein | Klassen (u. a. C/CE für die Jahresstatistik), Ablaufdatum, Datum der letzten Kontrolle |
 | Bankverbindung | IBAN, Kontoinhaber (für Entschädigungen) |
 | Ehrungen | Ehrung (Katalog), Datum |
 | Bemerkung | Freitext |

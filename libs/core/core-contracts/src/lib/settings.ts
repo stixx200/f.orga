@@ -90,7 +90,12 @@ export const CORE_SETTINGS = {
 } as const;
 
 /** Fields that are write-only and never leave the server. */
-export const SECRET_SETTING_FIELDS: Record<string, string[]> = { smtp: ['password'], oidc: ['clientSecret'] };
+export const SECRET_SETTING_FIELDS: Record<string, string[]> = {
+  smtp: ['password'],
+  oidc: ['clientSecret'],
+  /** Backup passphrase, encrypted with the server key (module backup). */
+  'backup.general': ['passphraseEncrypted'],
+};
 
 /**
  * Who may read a settings section. By default every logged-in user may (module UIs need e.g. the incident settings);

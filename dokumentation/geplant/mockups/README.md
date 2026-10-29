@@ -1,6 +1,6 @@
 # Mockups Release 1
 
-**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben. Zur Freigabe sind die Mockups des Moduls MP-Feuer (`mp-feuer/`) und der Konzepte [Führerscheinkontrolle](../module/fuehrerscheinkontrolle.md), [Datensicherung](../module/backup.md) und [Aufbewahrung](../aufbewahrung.md).
+**Status: zur Freigabe.** Das Frontend einer App wird erst umgesetzt, wenn ihre Mockups freigegeben sind. Die Mockups des Infoterminals (`infoterminal/` und die Karte der Wache in `stammdaten/organisation.html#wache`) sind freigegeben. Die Mockups des Moduls MP-Feuer (`mp-feuer/`) sind zur Freigabe.
 
 Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stammdaten und Einsatzberichte, dazu das Modul Infoterminal (Kiosk-Seite je Wache) und das Modul MP-Feuer ([Konzept](../module/mp-feuer.md)). Sie funktionieren nicht und enthalten nur erfundene Daten. Farben, Schrift, Tabellen sowie Kopf- und Fußzeile folgen `Stil.md`.
 
@@ -86,19 +86,6 @@ Die Mockups zeigen Aufbau, Abläufe und Inhalte der Oberflächen von Shell, Stam
 | | `infoterminal/gesperrt.html` | Link ungültig oder widerrufen |
 | | `infoterminal/verwaltung.html` | Terminals je Wache mit Abteilungen und zuletzt gesehen, anlegen mit Abteilungsauswahl (`#d-link`), Link jederzeit anzeigen, kopieren und öffnen (`#d-link-anzeigen`), neuer Link, Widerruf; Menü „Verwaltung → Infoterminals“ |
 | | `stammdaten/organisation.html#wache` | Karte der Wache mit ihren Infoterminals und Abteilungen, „Öffnen“, „Link anzeigen“ und Link zur Verwaltung |
-| Führerscheinkontrolle (Konzept) | `stammdaten/person-fuehrerschein.html` | Führerschein in der Personalakte: Klassen mit Befristung je Klasse, Kontrollen mit Art und Prüfer, Transponder; Dialoge Kontrolle erfassen (`#d-kontrolle`, ohne Kopie/Foto), Erneute Vorlage anfordern (`#d-vorlage`), Transponder registrieren (`#d-transponder`) und sperren (`#d-sperren`) |
-| | `stammdaten/fuehrerscheinkontrollen.html` | Liste der Zielgruppe mit Stand (überfällig, Ersterfassung fehlt, Vorlage angefordert, Klassen fehlen), Nachweis für die Gemeinde |
-| | `stammdaten/fuehrerschein-einstellungen.html` | Modus anlassbezogen (Standard) oder zusätzlich regelmäßig, Zielgruppe, Selbstkontrolle mit Grenzen |
-| | `infoterminal/fuehrerschein.html`, `infoterminal/fuehrerschein-bestaetigen.html` | Selbstkontrolle am Infoterminal: scannen, Selbsterklärung bestätigen (`#d-kontrolliert`), unbekannter Code (`#d-unbekannt`) |
-| | `shell/mein-fuehrerschein.html` | „Mein Bereich“: eigener Führerschein, Selbstkontrolle mit NFC oder Kamera (`#d-selbst`) |
-| | `shell/start.html#aufgaben` | Aufgabe „Führerscheinkontrolle fällig“ |
-| Datensicherung (Konzept) | `sicherung/uebersicht.html` | Stand, letzte und nächste Sicherung, Ziel, Warnung zur Passphrase, „Jetzt sichern“ (`#d-jetzt`) |
-| | `sicherung/einstellungen.html` | Ziel unter `/backups`, Zeitplan, Aufbewahrung, Verschlüsselung mit Passphrase, Inhalt, Benachrichtigung |
-| | `sicherung/sicherungen.html` | Sicherungen mit Status und Prüfung; Prüfen (`#d-pruefen`) mit Wiederherstellung testen, Herunterladen und Löschen (`#d-mehr`) |
-| | `sicherung/wiederherstellen.html`, `sicherung/wiederherstellung-laeuft.html` | Assistent: Bestätigen mit Name der Feuerwehr und Zahlen, Fortschritt mit Wartungsmodus |
-| | `sicherung/wartung.html` | Wartungsseite für alle anderen Benutzer |
-| Aufbewahrung (Konzept) | `shell/aufbewahrung.html` | Einstellungen → Datenschutz: Frist und Aktion je Datenkategorie, Vorlage „Kommunaler Aktenplan (Beispiel)“ (`#d-vorlage`) |
-| | `shell/aussonderung.html` | Aussonderung: fällige Datensätze, dem Archiv anbieten (`#d-anbieten`), Entscheidung des Archivs (`#d-entscheidung`), zurückstellen (`#d-zurueck`) |
 
 ### Modul MP-Feuer
 
@@ -150,7 +137,6 @@ Die Seiten werden mit `python3 _generator/bauen.py` aus den Skripten in `_genera
 | --- | --- |
 | `rahmen.py` | Kopf, Seitenleiste, Fußzeile, Symbole und Bausteine: `tabelle()`, `dialog()`, `leer()` |
 | `shell.py`, `stammdaten.py`, `einsatzberichte.py`, `infoterminal.py`, `mpfeuer.py` | Seiteninhalte je App; `infoterminal.py` baut die Kiosk-Seiten mit eigenem Kopf (`tk()`) ohne Seitenleiste, `mpfeuer.py` die Seiten des Moduls MP-Feuer mit Reitern (`mseite()`) |
-| `fuehrerschein.py`, `sicherung.py`, `aufbewahrung.py` | Konzepte zur Freigabe: Führerscheinkontrolle (Stammdaten, Infoterminal, Mein Bereich), Modul Datensicherung, Aufbewahrung und Aussonderung |
 | `uebersetzung.py` | Englische Texte als Zeilen `Deutsch => English`. Zeilen ohne `=>` sind Daten, die gleich bleiben (Namen, Orte, Fahrzeuge, Kataloge). Dazu Muster für wiederkehrende Formen. |
 | `assets/mockup.css` | Gemeinsames Aussehen |
 | `assets/mockup.js` | Reiter und Schritte, Menü, Dialoge, bedingte Statistikfelder, Sprachumschalter |

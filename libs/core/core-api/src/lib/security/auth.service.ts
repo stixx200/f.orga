@@ -185,8 +185,10 @@ export class AuthService implements OnApplicationBootstrap {
     }
     apiToken.lastUsedAt = now;
     await em.flush();
-    // A token can do exactly what its scopes say, brigade-wide; like sessions, not in deactivated modules.
-    const grants = computeGrants(await this.activePermissions(), [{ patterns: apiToken.scopes, departmentId: null }]);
+    // A token can do exactly what its scopes say, brigade-wide; like sessions, not in deactivated modules,
+    // and never privileged permissions (e.g. downloading and replacing the data with a backup).
+    const permissions = (await this.activePermissions()).filter((p) => !p.privileged);
+    const grants = computeGrants(permissions, [{ patterns: apiToken.scopes, departmentId: null }]);
     const user = apiToken.user;
     return new AuthenticatedUser(user.id, user.username, user.displayName, null, user.language, grants, 'token');
   }
