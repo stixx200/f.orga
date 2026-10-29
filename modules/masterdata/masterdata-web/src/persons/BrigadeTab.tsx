@@ -62,7 +62,7 @@ export function BrigadeTab({ person, form, setForm, disabled, onChanged }: {
   };
   const close = () => setDialog(null);
   // Leaving and the transfer to the veterans are refused while other modules count items held; the message names them.
-  const { data: modules = [] } = useQuery({ queryKey: ['core', 'modules'], queryFn: () => api<ActiveModule[]>('core/modules'), staleTime: 5 * 60_000 });
+  const { data: modules = [] } = useQuery({ queryKey: ['core', 'modules', 'active'], queryFn: () => api<ActiveModule[]>('core/modules'), staleTime: 5 * 60_000 });
   const namingModules = async (run: () => Promise<Person>) => {
     try {
       return await run();
