@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tobias Rief · f.orga</title>
+<link rel="stylesheet" href="../assets/mockup.css">
+<script src="../assets/i18n.js" defer></script>
+<script src="../assets/mockup.js" defer></script>
+</head>
+<body>
+<a class="sprung" href="#inhalt">Zum Inhalt springen</a>
+<div class="mockup-hinweis">Mockup · nicht funktionsfähig · <a href="../index.html">Übersicht aller Mockups</a></div>
+<header class="kopf">
+  <button type="button" class="symbol-knopf menue-knopf" aria-label="Menü" aria-controls="hauptmenue" aria-expanded="false"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <a class="marke" href="../shell/start.html">
+    <img src="../assets/logo.svg" alt="Wappen">
+    <span><span class="kicker">Freiwillige Feuerwehr Musterstadt</span><span class="produkt">f.orga</span></span>
+  </a>
+  <form class="suche" role="search" action="#"><label class="unsichtbar" for="globale-suche">Suchen</label><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="globale-suche" type="search" placeholder="Personen, Fahrzeuge, Einsätze suchen"></form>
+  <div class="werkzeuge">
+    <button type="button" class="symbol-knopf such-knopf" aria-label="Suchen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></button>
+    <a class="symbol-knopf" href="../shell/start.html#aufgaben" aria-label="Aufgaben (5)" title="Aufgaben"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg><span class="zahl" aria-hidden="true">5</span></a>
+    <div class="nicht-mobil"><div class="sprache" role="group" aria-label="Sprache">
+  <button type="button" data-sprache="de" aria-pressed="true" lang="de" title="Deutsch">DE</button><button type="button" data-sprache="en" aria-pressed="false" lang="en" title="English">EN</button>
+</div></div>
+    <details class="benutzermenue nicht-mobil">
+      <summary><span class="avatar">MV</span><span class="name">M. Vogt<small>Kommandant</small></span></summary>
+      <div class="menue-liste">
+        <a href="../shell/benutzer.html">Mein Profil</a>
+        <a href="../shell/benutzer.html">Passwort ändern</a>
+        <a href="../shell/anmeldung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Abmelden</a>
+      </div>
+    </details>
+  </div>
+</header>
+<div class="rahmen">
+<nav class="seitenleiste" id="hauptmenue" aria-label="Hauptnavigation">
+<div class="nur-mobil menue-kopf">
+  <div class="benutzer-zeile"><span class="avatar">MV</span><span><strong>Markus Vogt</strong><br><span class="meta">Kommandant</span></span></div>
+  <div class="menue-sprache"><span class="meta">Sprache</span><div class="sprache" role="group" aria-label="Sprache">
+  <button type="button" data-sprache="de" aria-pressed="true" lang="de" title="Deutsch">DE</button><button type="button" data-sprache="en" aria-pressed="false" lang="en" title="English">EN</button>
+</div></div>
+  <a href="../shell/anmeldung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Abmelden</a>
+</div>
+<div class="gruppe">Übersicht</div>
+<a href="../shell/start.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Startseite</span></a>
+<div class="gruppe">Einsatzberichte</div>
+<a href="../einsatzberichte/einsaetze.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 17V7h11v10"/><path d="M13 10h5l3 4v3h-2"/><circle cx="6.5" cy="17.5" r="2"/><circle cx="16.5" cy="17.5" r="2"/></svg><span>Einsätze</span></a>
+<a href="../einsatzberichte/pruefung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 12l5 5L20 6"/></svg><span>Zur Prüfung</span><span class="zahl">4</span></a>
+<a href="../einsatzberichte/offene-berichte.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg><span>Offene Berichte</span><span class="zahl">7</span></a>
+<a href="../einsatzberichte/jahresstatistik.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V11M10 20V5M16 20v-7M2 20h20"/></svg><span>Jahresstatistik</span></a>
+<a href="../einsatzberichte/einstellungen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg><span>Einstellungen</span></a>
+<div class="gruppe">Stammdaten</div>
+<a href="../stammdaten/personen.html" class="aktiv" aria-current="page"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span>Personen</span></a>
+<a href="../stammdaten/organisation.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="5"/><rect x="3" y="16" width="6" height="5"/><rect x="15" y="16" width="6" height="5"/><path d="M12 8v4M6 16v-4h12v4"/></svg><span>Organisation</span></a>
+<a href="../stammdaten/fahrzeug.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16V8h10v8M13 11h4l4 4v1"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M5 5h6"/></svg><span>Fahrzeuge</span></a>
+<a href="../stammdaten/lehrgangsplanung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/></svg><span>Lehrgangsplanung</span></a>
+<a href="../stammdaten/fuehrerscheinkontrollen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="5" width="20" height="14" rx="1"/><circle cx="8" cy="11" r="2.5"/><path d="M4.5 16.5c.5-1.8 2-2.5 3.5-2.5s3 .7 3.5 2.5M14 9h5M14 12h5M14 15h3"/></svg><span>Führerscheinkontrollen</span></a>
+<a href="../stammdaten/listen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6h1M4 12h1M4 18h1"/></svg><span>Listen</span></a>
+<a href="../stammdaten/import.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 15v5h16v-5"/></svg><span>Import</span></a>
+<div class="gruppe">Verwaltung</div>
+<a href="../shell/benutzer.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5c2.5.5 4 2.5 4 5.5"/></svg><span>Benutzer</span></a>
+<a href="../shell/rollen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></svg><span>Rollen</span></a>
+<a href="../shell/module.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>Module</span></a>
+<a href="../shell/api-tokens.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 8l-5 4 5 4M16 8l5 4-5 4"/></svg><span>API-Tokens</span></a>
+<a href="../infoterminal/verwaltung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="4" y="3" width="16" height="13" rx="1"/><path d="M9 21h6M12 16v5"/><path d="M8 8h3M8 11h8"/></svg><span>Infoterminals</span></a>
+<a href="../mp-feuer/start.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 15v5h16v-5"/></svg><span>MP-Feuer</span></a>
+<a href="../shell/einstellungen.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg><span>Einstellungen</span></a>
+<a href="../sicherung/uebersicht.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><span>Datensicherung</span></a>
+<a href="../shell/aussonderung.html"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="5"/><path d="M4 8v13h16V8M10 12h4"/></svg><span>Aussonderung</span></a>
+</nav>
+<main class="inhalt" id="inhalt">
+<div class="seitenkopf"><div><nav class="brotkrumen" aria-label="Pfad"><span>Stammdaten</span> <span aria-hidden="true">›</span> <a href="../stammdaten/personen.html">Personen</a> <span aria-hidden="true">›</span> <span>Tobias Rief</span></nav><h1>Tobias Rief</h1></div></div>
+
+<section class="karte">
+  <div class="akte-kopf">
+    <div class="bild" aria-hidden="true">TR</div>
+    <div style="flex:1;min-width:220px">
+      <div class="neben">Löschmeister · Abt. Musterstadt (Stamm) · Führungsgruppe · Pers.-Nr. 1043</div>
+      <div class="plaketten" style="margin-top:6px"><span class="plakette ok">aktiv</span><span class="plakette">Gruppenführer</span><span class="plakette gelb">Auskunft angefragt · fällig 27.11.2026</span></div>
+    </div>
+    <button type="button" class="knopf primaer" data-dialog="d-auskunft">Auskunft erstellen …</button>
+  </div>
+</section>
+<div class="reiter" role="tablist" aria-label="Bereiche der Personenakte">
+  <a href="../stammdaten/person.html">Stammdaten</a><a href="../stammdaten/person.html">Feuerwehr</a><a href="../stammdaten/person.html">Lehrgänge</a><a href="../stammdaten/person.html">Einsätze</a><a href="../stammdaten/person.html">Historie</a><a class="aktiv" aria-current="page" href="person.html">Datenschutz</a>
+</div>
+<div class="stapel-abstand">
+<section class="karte">
+  <div class="karte-kopf"><h2>Anfragen der Person</h2><button type="button" class="knopf klein" data-dialog="d-anfrage">Anfrage erfassen …</button></div>
+<div class="tabelle-huelle"><table class="stapel"><thead><tr><th scope="col">Art</th><th scope="col">Eingegangen</th><th scope="col">Frist</th><th scope="col">Stand</th></tr></thead><tbody><tr class="warnung"><td data-label="Art"><div class="zelle"><a href="anfrage.html">Auskunft</a></div></td><td data-label="Eingegangen"><div class="zelle">27.10.2026 · Mein Bereich</div></td><td data-label="Frist"><div class="zelle">27.11.2026</div></td><td data-label="Stand"><div class="zelle"><span class="plakette gelb">in Bearbeitung</span></div></td></tr><tr><td data-label="Art"><div class="zelle">Berichtigung</div></td><td data-label="Eingegangen"><div class="zelle">03.09.2026 · E-Mail</div></td><td data-label="Frist"><div class="zelle">03.10.2026</div></td><td data-label="Stand"><div class="zelle"><span class="plakette ok">erledigt 05.09.2026</span></div></td></tr></tbody></table></div>
+  <p class="meta" style="margin-top:8px">Die Frist ist ein Monat ab Eingang (Art. 12 Abs. 3). Sie steht als Aufgabe bei allen, die Datenschutz verwalten.</p>
+</section>
+<section class="karte">
+  <div class="karte-kopf"><h2>Einwilligungen</h2><button type="button" class="knopf klein" data-dialog="d-einwilligung">Einwilligung erfassen …</button></div>
+<div class="tabelle-huelle"><table class="stapel"><thead><tr><th scope="col">Einwilligung</th><th scope="col">Stand</th><th scope="col"></th></tr></thead><tbody><tr><td data-label="Einwilligung"><div class="zelle"><strong>Fotos in der Öffentlichkeitsarbeit</strong><br><span class="meta">Fassung 2 · schriftlich 12.01.2026, erfasst von Markus Vogt</span></div></td><td data-label="Stand"><div class="zelle"><span class="plakette ok">erteilt</span></div></td><td><button type="button" class="knopf klein" data-dialog="d-widerruf">Widerruf erfassen …</button></td></tr><tr><td data-label="Einwilligung"><div class="zelle"><strong>Handynummer in der Telefonliste der Abteilung</strong><br><span class="meta">Fassung 1 · Mein Bereich 14.03.2026</span></div></td><td data-label="Stand"><div class="zelle"><span class="plakette ok">erteilt</span></div></td><td><button type="button" class="knopf klein" data-dialog="d-widerruf">Widerruf erfassen …</button></td></tr><tr><td data-label="Einwilligung"><div class="zelle"><strong>Geburtstag im Aushang</strong><br><span class="meta">widerrufen 02.05.2026 · Mein Bereich</span></div></td><td data-label="Stand"><div class="zelle"><span class="plakette grau">widerrufen</span></div></td><td></td></tr></tbody></table></div>
+</section>
+<section class="karte">
+  <h2>Information und Einschränkung</h2>
+  <dl class="daten">
+    <dt>Datenschutzhinweis</dt><dd>Fassung 3 zur Kenntnis genommen am 14.03.2026 (erste Anmeldung)</dd>
+    <dt>Information nach Art. 14</dt><dd>nach der Datenübernahme aus MP-Feuer erteilt am 20.10.2026 (Schreiben)</dd>
+    <dt>Verarbeitung</dt><dd>nicht eingeschränkt</dd>
+  </dl>
+  <div class="formular-fuss"><button type="button" class="knopf" data-dialog="d-einschraenkung">Verarbeitung einschränken …</button></div>
+</section>
+<section class="karte">
+  <h2>Erstellte Auskünfte</h2>
+<div class="tabelle-huelle"><table class="stapel"><thead><tr><th scope="col">Erstellt</th><th scope="col">Sprache</th><th scope="col">Übergabe</th><th scope="col"></th></tr></thead><tbody><tr><td data-label="Erstellt"><div class="zelle">28.10.2026 10:12 · Markus Vogt</div></td><td data-label="Sprache"><div class="zelle">Deutsch</div></td><td data-label="Übergabe"><div class="zelle"><span class="plakette gelb">noch nicht übergeben</span></div></td><td><a class="knopf klein" href="auskunft-vorschau.html">Ansehen</a></td></tr><tr><td data-label="Erstellt"><div class="zelle">11.02.2025 18:40 · Markus Vogt</div></td><td data-label="Sprache"><div class="zelle">Deutsch</div></td><td data-label="Übergabe"><div class="zelle">persönlich 12.02.2025</div></td><td><span class="meta">gelöscht nach 30 Tagen</span></td></tr></tbody></table></div>
+</section>
+</div>
+</main>
+<footer class="fuss">
+  <p>Freiwillige Feuerwehr Musterstadt · Feuerwehrstraße 1 · 12345 Musterstadt</p>
+  <p>Telefon 01234/5678-0 · Fax 01234/5678-99 · www.feuerwehr-musterstadt.example</p>
+</footer>
+</div>
+<div class="menue-schleier" aria-hidden="true"></div>
+<dialog class="dialog" id="d-auskunft" aria-labelledby="d-auskunft-titel">
+  <form method="dialog">
+    <div class="dialog-kopf"><h2 id="d-auskunft-titel">Auskunft nach Art. 15 erstellen</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dialog-inhalt">
+<div class="feld"><label for="d1">Zur Anfrage</label><select id="d1"><option>Auskunft vom 27.10.2026 (Mein Bereich) · fällig 27.11.2026</option><option>ohne Anfrage</option></select></div>
+<div class="felder zwei">
+  <div class="feld"><label for="d2">Sprache</label><select id="d2"><option>Deutsch</option><option>Englisch</option></select></div>
+  <div class="feld"><label for="d3">Übergabe</label><select id="d3"><option>Bereitstellen in Mein Bereich</option><option>Herunterladen (persönlich oder per Post)</option></select></div>
+</div>
+<p class="neben">Die Auskunft enthält immer alle Bereiche:</p>
+<div class="tabelle-huelle"><table class=""><thead><tr><th scope="col">Bereich</th><th class="zahl" scope="col">Einträge</th></tr></thead><tbody><tr><td data-label="Bereich">Stammdaten</td><td class="zahl" data-label="Einträge">42</td></tr><tr><td data-label="Bereich">Benutzerkonto und Protokolle</td><td class="zahl" data-label="Einträge">118</td></tr><tr><td data-label="Bereich">Einsätze</td><td class="zahl" data-label="Einträge">87</td></tr><tr><td data-label="Bereich">Dienste</td><td class="zahl" data-label="Einträge">64</td></tr><tr><td data-label="Bereich">Atemschutz <span class="plakette warn">Gesundheitsdaten</span></td><td class="zahl" data-label="Einträge">23</td></tr><tr><td data-label="Bereich">Entschädigung</td><td class="zahl" data-label="Einträge">151</td></tr><tr><td data-label="Bereich">Kleiderkammer</td><td class="zahl" data-label="Einträge">9</td></tr><tr><td data-label="Bereich">Geräte</td><td class="zahl" data-label="Einträge">2</td></tr></tbody></table></div>
+<label class="schalter" style="margin-top:12px"><input type="checkbox"> Maschinenlesbare Fassung (JSON) als Anhang beifügen</label>
+<div class="meldung info" style="margin-top:12px"><span class="ic">i</span><span>Andere Personen erscheinen nicht mit Namen (Art. 15 Abs. 4). Kein Versand per E-Mail: Die Auskunft enthält Gesundheitsdaten.</span></div>
+<label class="schalter"><input type="checkbox" checked> Identität der Person geprüft (angemeldet in Mein Bereich)</label></div>
+    <div class="dialog-fuss"><button class="knopf" value="abbrechen">Abbrechen</button><a class="knopf primaer" href="auskunft-vorschau.html">Auskunft erstellen</a></div>
+  </form>
+</dialog><dialog class="dialog" id="d-anfrage" aria-labelledby="d-anfrage-titel">
+  <form method="dialog">
+    <div class="dialog-kopf"><h2 id="d-anfrage-titel">Anfrage erfassen</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dialog-inhalt">
+<div class="felder zwei">
+  <div class="feld"><label for="d4" class="pflicht">Art</label><select id="d4"><option>Auskunft</option><option>Berichtigung</option><option>Löschung</option><option>Einschränkung</option><option>Widerspruch</option><option>Widerruf einer Einwilligung</option></select></div>
+  <div class="feld"><label for="d5" class="pflicht">Eingegangen am</label><input id="d5" type="date" value="2026-10-27"></div>
+  <div class="feld"><label for="d6">Weg</label><select id="d6"><option>schriftlich</option><option>E-Mail</option><option>persönlich</option><option>Mein Bereich</option></select></div>
+  <div class="feld"><label for="d7">Frist</label><input id="d7" type="date" value="2026-11-27" disabled><div class="hilfe">Ein Monat ab Eingang, verlängerbar mit Begründung.</div></div>
+</div>
+<div class="feld"><label for="d8">Inhalt der Anfrage</label><textarea id="d8" rows="3"></textarea></div>
+<label class="schalter"><input type="checkbox"> Identität geprüft</label></div>
+    <div class="dialog-fuss"><button class="knopf" value="abbrechen">Abbrechen</button><button class="knopf primaer" value="ok">Anfrage anlegen</button></div>
+  </form>
+</dialog><dialog class="dialog" id="d-einwilligung" aria-labelledby="d-einwilligung-titel">
+  <form method="dialog">
+    <div class="dialog-kopf"><h2 id="d-einwilligung-titel">Einwilligung erfassen</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dialog-inhalt">
+<div class="feld"><label for="d9" class="pflicht">Einwilligung</label><select id="d9"><option>Geburtstag im Aushang (Fassung 1)</option><option>Fotos in der Öffentlichkeitsarbeit (Fassung 2)</option></select></div>
+<div class="felder zwei">
+  <div class="feld"><label for="d10" class="pflicht">Erteilt am</label><input id="d10" type="date" value="2026-10-28"></div>
+  <div class="feld"><label for="d11">Weg</label><select id="d11"><option>schriftlich</option><option>durch Erziehungsberechtigte</option><option>persönlich</option></select></div>
+</div>
+<div class="feld"><label for="d12">Nachweis (Scan der Unterschrift)</label><input id="d12" type="file"></div>
+<p class="meta">Der Text der gewählten Fassung wird mit der Einwilligung gespeichert.</p></div>
+    <div class="dialog-fuss"><button class="knopf" value="abbrechen">Abbrechen</button><button class="knopf primaer" value="ok">Speichern</button></div>
+  </form>
+</dialog><dialog class="dialog" id="d-widerruf" aria-labelledby="d-widerruf-titel">
+  <form method="dialog">
+    <div class="dialog-kopf"><h2 id="d-widerruf-titel">Widerruf erfassen?</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dialog-inhalt">
+<p><strong>Fotos in der Öffentlichkeitsarbeit</strong> gilt ab dem Widerruf nicht mehr. Was bis dahin rechtmäßig veröffentlicht wurde, bleibt davon unberührt (Art. 7 Abs. 3).</p>
+<div class="felder zwei"><div class="feld"><label for="d13" class="pflicht">Widerrufen am</label><input id="d13" type="date" value="2026-10-28"></div>
+<div class="feld"><label for="d14">Weg</label><select id="d14"><option>schriftlich</option><option>E-Mail</option><option>persönlich</option></select></div></div></div>
+    <div class="dialog-fuss"><button class="knopf" value="abbrechen">Abbrechen</button><button class="knopf primaer" value="ok">Widerruf speichern</button></div>
+  </form>
+</dialog><dialog class="dialog gefahr" id="d-einschraenkung" aria-labelledby="d-einschraenkung-titel">
+  <form method="dialog">
+    <div class="dialog-kopf"><h2 id="d-einschraenkung-titel">Verarbeitung einschränken?</h2><button class="symbol-knopf" value="abbrechen" aria-label="Schließen"><svg class="sym" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dialog-inhalt">
+<p>Tobias Rief erscheint danach nicht mehr in Listen, Suche, Infoterminal, Personalauswahl, Fristen und E-Mails. Lesen können nur noch Benutzer mit „Datenschutz verwalten“.</p>
+<div class="felder zwei"><div class="feld"><label for="d15" class="pflicht">Grund</label><select id="d15"><option>Richtigkeit bestritten (Art. 18 Abs. 1 a)</option><option>Löschung abgelehnt, Aufbewahrungsfrist läuft</option><option>Widerspruch wird geprüft</option></select></div>
+<div class="feld"><label for="d16">Bis</label><input id="d16" type="date"></div></div></div>
+    <div class="dialog-fuss"><button class="knopf" value="abbrechen">Abbrechen</button><button class="knopf primaer" value="ok">Einschränken</button></div>
+  </form>
+</dialog>
+</body>
+</html>

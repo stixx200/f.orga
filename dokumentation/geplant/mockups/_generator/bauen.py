@@ -9,7 +9,7 @@ import sys
 from html.parser import HTMLParser
 
 sys.path.insert(0, os.path.dirname(__file__))
-import shell, stammdaten, einsatzberichte, infoterminal, mpfeuer, fuehrerschein, sicherung, aufbewahrung  # noqa: F401,E401  (erzeugen Seiten beim Import)
+import shell, stammdaten, einsatzberichte, infoterminal, mpfeuer, fuehrerschein, sicherung, aufbewahrung, datenschutz  # noqa: F401,E401  (erzeugen Seiten beim Import)
 from rahmen import ZIEL, FUSS, SPRACHE, mockup_hinweis, schreiben, kopf_html
 from uebersetzung import EN, MUSTER, GLEICH
 
@@ -47,6 +47,11 @@ GRUPPEN = [
                       ('sicherung/wartung.html', 'Wartungsseite für andere Benutzer')]),
     ('Aufbewahrung (Konzept)', [('shell/aufbewahrung.html', 'Aufbewahrungsfristen'), ('shell/aufbewahrung.html#d-vorlage', 'Vorlage Kommunaler Aktenplan'),
                       ('shell/aussonderung.html', 'Aussonderung: Archiv anbieten'), ('shell/aussonderung.html#d-entscheidung', 'Entscheidung des Archivs')]),
+    ('Datenschutz', [('datenschutz/person.html', 'Personalakte: Datenschutz, Auskunft erstellen'), ('datenschutz/auskunft-vorschau.html', 'Auskunft nach Art. 15 (PDF-Vorschau)'),
+                     ('datenschutz/anfragen.html', 'Betroffenenanfragen'), ('datenschutz/anfrage.html', 'Löschantrag mit Löschprüfung'),
+                     ('datenschutz/verzeichnis.html', 'Verzeichnis der Verarbeitungstätigkeiten'), ('datenschutz/einstellungen.html', 'Einstellungen Datenschutz'),
+                     ('datenschutz/mein-bereich.html', 'Mein Bereich: Datenschutz'), ('datenschutz/hinweis.html', 'Datenschutzhinweis'),
+                     ('datenschutz/erste-anmeldung.html', 'Hinweis bei der ersten Anmeldung'), ('datenschutz/zwei-faktor.html', 'Zwei-Faktor-Anmeldung einrichten')]),
 ]
 
 karten = ''.join(

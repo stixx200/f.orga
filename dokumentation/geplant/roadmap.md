@@ -113,6 +113,16 @@ Umgesetzt, mit Oberflächen ohne eigene Mockups: Beförderungen, Urkunden (Befö
 
 Umgesetzt, siehe [Modul MP-Feuer](../implementiert/architektur.md#modul-mp-feuer-mp-feuer) nach den freigegebenen Mockups (`mockups/mp-feuer/`): Datenübernahme im Hintergrund in Teilen, Zuordnungslisten statt Aliassen, Verlauf, Einstellungen, Export-Platzhalter. Offen sind nur die Punkte in [module/mp-feuer.md](module/mp-feuer.md).
 
+## Datenschutz (DSGVO)
+
+Konzept mit Lückenanalyse: [datenschutz.md](datenschutz.md), Mockups `mockups/datenschutz/` (zur Freigabe). Umsetzung in fünf Phasen:
+
+1. Vor dem Echtbetrieb: HTTPS mit Sicherheitsheadern, Kennzeichnung des Testsystems, Zwei-Faktor für privilegierte Konten, E-Mails ohne Gesundheitsbezug, Verletzte im Bericht nur mit Recht.
+2. Rechte der Betroffenen: Datenschutzhinweis und Hinweis bei der ersten Anmeldung, Betroffenenanfragen mit Frist, Auskunft als PDF aus allen Modulen, Einschränkung, Widerspruch.
+3. Nachweise: Verzeichnis der Verarbeitungstätigkeiten aus den Manifesten, Einwilligungen, Berichtigung in Mein Bereich, Leseprotokoll, Datenpannen.
+4. Löschen und Minimieren: Löschprüfung je Modul, vollständige Anonymisierung, Daten Dritter, abschaltbare Felder, Zweck der Listen.
+5. Härtung: Sitzungen, Infoterminal, API-Tokens, Passwörter, Anhänge, Betriebsanleitung.
+
 ## Infoterminal
 
 Umgesetzt, siehe [Modul Infoterminal](../implementiert/architektur.md#modul-infoterminal-info-terminal) nach den freigegebenen Mockups (`mockups/infoterminal/`, Karte an der Wache in `stammdaten/organisation.html`). Offen sind nur die Punkte in [module/infoterminal.md](module/infoterminal.md).
