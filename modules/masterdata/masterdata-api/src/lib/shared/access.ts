@@ -1,5 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
-import type { AuthenticatedUser } from '@forga/core-api';
+import { berlinDate, type AuthenticatedUser } from '@forga/core-api';
 
 /** Throws unless the user holds the permission for the department (or brigade-wide). */
 export function requireDepartment(user: AuthenticatedUser, permission: string, departmentId: string | null): void {
@@ -15,8 +15,7 @@ export function requireBrigade(user: AuthenticatedUser, permission: string): voi
   }
 }
 
-/** `YYYY-MM-DD` of today in local time. */
+/** `YYYY-MM-DD` of today in Europe/Berlin, independent of the server's time zone. */
 export function today(): string {
-  const now = new Date();
-  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+  return berlinDate();
 }
