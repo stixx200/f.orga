@@ -46,7 +46,11 @@ export class RespiratoryProtectionModule implements OnModuleInit {
   onModuleInit(): void {
     for (const definition of this.moduleLists.definitions()) this.lists.register('respiratory-protection', definition);
     this.deadlines.register(this.data);
-    this.exports.register('respiratory-protection', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
+    this.exports.register('respiratory-protection', {
+      all: () => this.data.exportAll(),
+      person: (id) => this.data.exportPerson(id),
+      describePerson: (id, ctx) => this.data.describePerson(id, ctx),
+    });
     this.personData.register('respiratory-protection', { anonymize: (ids) => this.data.anonymize(ids) });
     this.imports.register('respiratory-protection', this.examinations.profile());
     this.imports.register('respiratory-protection', this.stressExercises.profile());

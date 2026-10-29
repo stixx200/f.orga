@@ -44,6 +44,7 @@ export class PromotionsModule implements OnModuleInit {
         };
       },
       person: (id) => this.data.exportPerson(id),
+      describePerson: (id, ctx) => this.data.describePerson(id, ctx),
     });
     this.personData.register('promotions', { anonymize: (ids) => this.data.anonymize(ids) });
     // Rules (settings), promotion lists and exclusions refer to ranks; the rules also to qualifications and offices.

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ModulePrivacy } from './access-report.js';
 import { LocalizedText } from './i18n.js';
 
 /** Where a permission applies: the whole brigade or individual departments. */
@@ -78,6 +79,8 @@ export const ModuleManifest = z.object({
       kiosk: z.object({ path: z.string().regex(/^[a-z][a-z0-9-]*$/), exposed: z.string() }).optional(),
     })
     .optional(),
+  /** Personal data the module stores and its processing activities (access report, record of processing activities). */
+  privacy: ModulePrivacy.optional(),
 });
 export type ModuleManifest = z.input<typeof ModuleManifest>;
 

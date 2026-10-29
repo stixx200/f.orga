@@ -45,4 +45,15 @@ export const DUTY_OFFICER_MANIFEST = {
     { key: 'administration', permissions: [DUTY_OFFICER_READ, DUTY_OFFICER_ROSTER] },
   ],
   frontend: { remote: 'duty_officer_web', exposed: './Module' },
+  privacy: {
+    personData: true,
+    activities: [
+      {
+        key: 'duty-officer.roster',
+        name: { de: 'Einsatzleiter vom Dienst', en: 'Duty officer' },
+        purpose: { de: 'Dienstplan der Sonderdienste (z. B. Einsatzleiter vom Dienst) und ihre Entschädigung', en: 'Roster of special duties (e.g. duty officer) and their compensation' },
+        recipients: [{ de: 'Gemeindeverwaltung/Kämmerei (Entschädigung)', en: 'Municipal administration/treasury (compensation)' }],
+      },
+    ],
+  },
 } satisfies ModuleManifest;

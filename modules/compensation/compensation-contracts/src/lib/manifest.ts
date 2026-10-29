@@ -39,4 +39,16 @@ export const COMPENSATION_MANIFEST = {
     },
   ],
   frontend: { remote: 'compensation_web', exposed: './Module' },
+  privacy: {
+    personData: true,
+    activities: [
+      {
+        key: 'compensation.payouts',
+        name: { de: 'Entschädigung', en: 'Compensation' },
+        purpose: { de: 'Berechnung und Auszahlung der Entschädigung nach der Entschädigungssatzung', en: 'Calculating and paying compensation under the compensation statute' },
+        recipients: [{ de: 'Gemeindeverwaltung/Kämmerei (Auszahlung)', en: 'Municipal administration/treasury (payout)' }],
+        retention: ['compensation.runs'],
+      },
+    ],
+  },
 } satisfies ModuleManifest;

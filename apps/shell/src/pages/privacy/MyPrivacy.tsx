@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { Language, MyPrivacy as MyPrivacyDto } from '@forga/core-contracts';
 import { api, formatDate, send, useTranslation } from '@forga/web-sdk';
 import { DataTable, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { MY_ACCESS_REPORTS_KEY } from '../../privacy/AccessReports';
 import { STATUS_TONES } from './PrivacyPage';
 
 const KEY = ['core', 'privacy', 'me'] as const;
@@ -15,7 +16,12 @@ export function MyPrivacy() {
   const { data } = useQuery({ queryKey: KEY, queryFn: () => api<MyPrivacyDto>('core/privacy/me') });
   const [requesting, setRequesting] = useState(false);
   const [language, setLanguage] = useState<Language>(i18n.language === 'en' ? 'en' : 'de');
-  const request = useAction(() => send('POST', 'core/privacy/me/requests', { language }), { success: t('privacy.me.requested'), invalidate: [KEY], onSuccess: () => setRequesting(false) });
+  const instant = data?.selfService.mode === 'instant';
+  const request = useAction(() => send('POST', 'core/privacy/me/requests', { language }), {
+    success: t(instant ? 'privacy.me.created' : 'privacy.me.requested'),
+    invalidate: [KEY, MY_ACCESS_REPORTS_KEY],
+    onSuccess: () => setRequesting(false),
+  });
   if (!data) return null;
   const openAccess = data.requests.some((r) => r.kind === 'access' && ['received', 'in-review', 'extended'].includes(r.status));
   return (
@@ -23,7 +29,7 @@ export function MyPrivacy() {
       <Stack gap="md">
         <Text size="sm">{t('privacy.me.intro')}</Text>
         <Group>
-          <Button variant="default" disabled={openAccess} onClick={() => setRequesting(true)}>{t('privacy.me.request')}</Button>
+          <Button variant="default" disabled={openAccess} onClick={() => setRequesting(true)}>{t(instant ? 'privacy.me.createNow' : 'privacy.me.request')}</Button>
         </Group>
         <Text fw={700} size="sm">{t('privacy.me.requests')}</Text>
         <DataTable
@@ -60,11 +66,11 @@ export function MyPrivacy() {
           actions={
             <>
               <Button variant="default" onClick={() => setRequesting(false)}>{common('actions.cancel')}</Button>
-              <Button loading={request.isPending} onClick={() => request.mutate(undefined)}>{t('privacy.me.submit')}</Button>
+              <Button loading={request.isPending} onClick={() => request.mutate(undefined)}>{t(instant ? 'privacy.me.submitInstant' : 'privacy.me.submit')}</Button>
             </>
           }
         >
-          <Text size="sm">{t('privacy.me.dialogText')}</Text>
+          <Text size="sm">{t(instant ? 'privacy.me.dialogTextInstant' : 'privacy.me.dialogText')}</Text>
           <Select
             label={t('privacy.me.language')}
             allowDeselect={false}

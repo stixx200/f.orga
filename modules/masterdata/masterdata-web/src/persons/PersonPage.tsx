@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { classNames, isValidIban, type Person, type PersonInput } from '@forga/masterdata-contracts';
-import { ApiError, apiUrl, can, extensionsOf, isElevated, openAfterStepUp, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
+import { ApiError, can, extensionsOf, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ActionBar, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, StatusBadge, StepUpButton, useAction } from '@forga/web-ui';
 import { keys, today as todayDate, useCatalogNames, useDepartments, usePerson, WRITE } from '../api';
 import { BrigadeTab } from './BrigadeTab';
@@ -82,6 +82,8 @@ function PersonFile({ person }: { person: Person }) {
     person.personnelNumber ? t('persons.number', { number: person.personnelNumber }) : '',
   ].filter(Boolean).join(' · ');
   const extensions = extensionsOf('masterdata.person.tab').filter((e) => !e.permission || can(session, e.permission));
+  // Actions of other parts in the header, e.g. „Auskunft erstellen“ of the core.
+  const actions = extensionsOf('masterdata.person.actions').filter((e) => !e.permission || can(session, e.permission));
   // Deep link `?tab=<tab>`: own tabs by name, extension tabs by module ID.
   const requested = search.get('tab');
   const tab = requested && (TABS as readonly string[]).includes(requested) ? requested : requested && extensions.some((e) => e.module === requested) ? `ext:${requested}` : 'master';
@@ -98,13 +100,10 @@ function PersonFile({ person }: { person: Person }) {
         breadcrumbs={[{ label: t('module') }, { label: t('persons.title'), to: '/masterdata/persons' }, { label: `${person.firstName} ${person.lastName}` }]}
         title={`${person.firstName} ${person.lastName}`}
         actions={
-          can(session, 'core.data.export') && (
-            <Button component="a" href={apiUrl(`core/export/person/${person.id}`)} variant="default" onClick={(e) => {
-              // The data access needs the second factor: ask first instead of opening the server's error.
-              if (isElevated(session)) return;
-              e.preventDefault();
-              void openAfterStepUp(apiUrl(`core/export/person/${person.id}`));
-            }}>{t('person.dataAccess')}</Button>
+          actions.length > 0 && (
+            <Group gap="xs">
+              {actions.map((e) => <e.component key={e.module} personId={person.id} />)}
+            </Group>
           )
         }
       />

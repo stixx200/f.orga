@@ -90,4 +90,16 @@ export const INCIDENTS_MANIFEST = {
     },
   ],
   frontend: { remote: 'incidents_web', exposed: './Module' },
+  privacy: {
+    personData: true,
+    activities: [
+      {
+        key: 'incidents.reports',
+        name: { de: 'Einsatzdokumentation', en: 'Incident documentation' },
+        purpose: { de: 'Dokumentation der Einsätze, Grundlage für Entschädigung, Kostenersatz und Jahresstatistik', en: 'Documentation of incidents, basis for compensation, cost recovery and annual statistics' },
+        recipients: [{ de: 'Kreisbrandmeister und Statistikportal (Jahresstatistik, nur Zahlen ohne Namen)', en: 'District fire officer and statistics portal (annual statistics, figures only, no names)' }],
+        retention: ['incidents.incidents'],
+      },
+    ],
+  },
 } satisfies ModuleManifest;

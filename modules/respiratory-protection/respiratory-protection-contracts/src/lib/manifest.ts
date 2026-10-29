@@ -44,4 +44,15 @@ export const RESPIRATORY_PROTECTION_MANIFEST = {
     },
   ],
   frontend: { remote: 'respiratory_protection_web', exposed: './Module' },
+  privacy: {
+    personData: true,
+    activities: [
+      {
+        key: 'respiratory-protection.fitness',
+        name: { de: 'Atemschutzüberwachung', en: 'Breathing apparatus monitoring' },
+        purpose: { de: 'Überwachung der Atemschutztauglichkeit nach FwDV 7 (Untersuchungen, Übungen, Unterweisungen, Einsätze)', en: 'Monitoring the fitness for breathing apparatus (examinations, exercises, briefings, operations)' },
+        recipients: [{ de: 'Ärztin/Arzt der Eignungsuntersuchung', en: 'Physician of the medical examination' }],
+      },
+    ],
+  },
 } satisfies ModuleManifest;

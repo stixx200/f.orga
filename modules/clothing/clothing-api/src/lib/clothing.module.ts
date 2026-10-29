@@ -31,7 +31,11 @@ export class ClothingModule implements OnModuleInit {
     this.deadlines.register(this.data);
     this.search.register('clothing', (user, query) => this.data.search(user, query));
     this.codes.register('clothing', (user, code) => this.data.code(user, code));
-    this.exports.register('clothing', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
+    this.exports.register('clothing', {
+      all: () => this.data.exportAll(),
+      person: (id) => this.data.exportPerson(id),
+      describePerson: (id, ctx) => this.data.describePerson(id, ctx),
+    });
     this.personData.register('clothing', { anonymize: (ids) => this.data.anonymize(ids) });
     this.historyAccess.register('clothing.item', async (user, id) => {
       const item = await this.em.fork().findOne(ClothingItemEntity, id);

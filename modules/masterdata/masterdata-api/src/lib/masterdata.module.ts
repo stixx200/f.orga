@@ -35,6 +35,7 @@ import { GroupsController } from './organization/groups.controller.js';
 import { OrganizationController } from './organization/organization.controller.js';
 import { Department, DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod, Station, Vehicle } from './masterdata.entities.js';
 import { MasterdataData } from './data/masterdata.data.js';
+import { MasterdataDescription } from './data/masterdata.description.js';
 import { MasterdataRetention } from './data/masterdata.retention.js';
 import { OrganizationReferenceRegistry } from './organization/references.js';
 import { PersonHoldingsRegistry } from './persons/holdings.js';
@@ -61,6 +62,7 @@ import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/person
     CareerImport,
     MasterdataLookups,
     MasterdataData,
+    MasterdataDescription,
     MasterdataRetention,
     { provide: PERSON_DIRECTORY, useClass: PersonDirectoryService },
     { provide: ORGANIZATION, useClass: OrganizationService },
@@ -99,6 +101,7 @@ export class MasterdataModule implements OnModuleInit {
     private readonly exports: ExportRegistry,
     private readonly retention: RetentionRegistry,
     private readonly data: MasterdataData,
+    private readonly description: MasterdataDescription,
     private readonly retentionCategories: MasterdataRetention,
     private readonly organization: OrganizationDirectory,
     private readonly auditReferences: AuditReferenceRegistry,
@@ -131,7 +134,7 @@ export class MasterdataModule implements OnModuleInit {
     // The core checks role assignments and user links against departments and persons, and extends a department
     // assignment to the departments below it (youth and veterans department of an operational department).
     this.organization.register({
-      departments: async () => (await this.em.fork().find(Department, {}, { fields: ['id', 'parent'] })).map((d) => ({ id: d.id, parentId: d.parent?.id ?? null })),
+      departments: async () => (await this.em.fork().find(Department, {}, { fields: ['id', 'parent', 'shortName'] })).map((d) => ({ id: d.id, parentId: d.parent?.id ?? null, name: d.shortName })),
       persons: async (ids) =>
         (await this.em.fork().find(Person, { id: { $in: [...ids] } }, { populate: ['memberships.department'] })).map((p) => ({
           id: p.id,
@@ -150,13 +153,21 @@ export class MasterdataModule implements OnModuleInit {
         (await this.persons.list(user, { query, includeLeft: true }))
           .slice(0, limit)
           .map((p) => ({ id: p.id, label: `${p.lastName}, ${p.firstName}${p.personnelNumber ? ` (${p.personnelNumber})` : ''}` })),
+      postalAddress: async (id) => {
+        const p = await this.em.fork().findOne(Person, id);
+        return p && { salutation: p.salutation, title: p.title, firstName: p.firstName, lastName: p.lastName, street: p.street, postalCode: p.postalCode, city: p.city };
+      },
       // Restriction of processing (Art. 18): the core leaves these persons out of deadlines and search.
       restrictedPersonIds: () => this.personPrivacy.restrictedIds(),
       restrictProcessing: (personId, restriction) => this.personPrivacy.restrict(personId, restriction),
     });
     this.search.register('masterdata', (user, query) => this.data.search(user, query));
     registerAuditReferences(this.auditReferences, this.em);
-    this.exports.register('masterdata', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
+    this.exports.register('masterdata', {
+      all: () => this.data.exportAll(),
+      person: (id) => this.data.exportPerson(id),
+      describePerson: (id, ctx) => this.description.describePerson(id, ctx),
+    });
     this.retentionCategories.register(this.retention);
     this.historyAccess.register('masterdata.person', async (user, id) => {
       const person = await this.em.fork().findOne(Person, id, { populate: ['memberships.department'] });

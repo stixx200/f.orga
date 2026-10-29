@@ -48,7 +48,11 @@ export class TrainingModule implements OnModuleInit {
     for (const definition of this.trainingLists.definitions()) this.lists.register('training', definition);
     this.deadlines.register(this.data);
     this.search.register('training', (user, query) => this.data.search(user, query));
-    this.exports.register('training', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
+    this.exports.register('training', {
+      all: () => this.data.exportAll(),
+      person: (id) => this.data.exportPerson(id),
+      describePerson: (id, ctx) => this.data.describePerson(id, ctx),
+    });
     this.personData.register('training', { anonymize: (ids) => this.data.anonymize(ids) });
     this.retentionCategory.register(this.retention);
     this.imports.register('training', this.sessionsImport.profile());

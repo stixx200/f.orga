@@ -28,7 +28,7 @@ Umgesetzt ist (siehe [implementiert/architektur.md](../implementiert/architektur
 
 - **Rechte** je Abteilung, sensible Felder der Person nur mit `masterdata.persons.sensitive`, Untersuchungsergebnisse im Atemschutz nur mit `respiratory-protection.examinations`; Maskierung in der Historie.
 - **Protokolle:** Audit-Log (Anmeldungen, Rechte, Exporte, Importe, Impersonation mit Grund), Historie aller Änderungen.
-- **Auskunft** `GET /api/core/export/person/:personId`: JSON mit internen IDs aus allen Modulen außer Kostenersatz und Infoterminal, im Audit-Log (`data.person-exported`). Keine Angaben nach Art. 15 Abs. 1, keine lesbare Fassung.
+- **Auskunft** als lesbares PDF mit den Angaben nach Art. 15 Abs. 1 aus allen Modulen (`describePerson`), verschlüsselt 30 Tage abgelegt, Übergabe auch in „Mein Bereich“ ([implementiert/datenschutz.md](../implementiert/datenschutz.md#auskunft-nach-art-15-als-pdf-l3)); dazu weiter das JSON `GET /api/core/export/person/:personId` (`data.person-exported`).
 - **Aufbewahrung** ([Aufbewahrungsplan](../implementiert/aufbewahrung.md), Einstellung `privacy.retention`): Frist und Aktion je Datenkategorie (Grunddaten und Personalakte Ausgeschiedener, Einsätze, Dienste, ausgesonderte Geräte und Fahrzeuge, Kostenbescheide, Auszahlungsläufe, Audit-Log, Historie) mit Aussonderung und Anbietung an das Archiv; Standard nichts außer Audit-Log 2 Jahre. Import-Uploads 24 Stunden, Zeilen von MP-Feuer-Läufen 7 Tage. `PersonDataRegistry` mit Beiträgen von Core, Atemschutz, Kleiderkammer, Beförderungen, Diensten, Entschädigungen, Geräten und Einsatzleiter vom Dienst.
 - **Sicherheit:** scrypt, Sitzung 14 Tage als `HttpOnly`-Cookie, CSRF-Header, Anmeldesperre, API-Tokens als Hash mit Bereichen, OIDC, verschlüsselte Geräteschlüssel, zweiter Faktor (TOTP) als Step-up bei sensiblen Daten und Verwaltung ([Datenschutz, umgesetzt](../implementiert/datenschutz.md)).
 - **Phase 1** ([implementiert/datenschutz.md](../implementiert/datenschutz.md)): HTTPS mit Caddy, `Secure`-Cookies bei `https://`-Adresse, Sicherheitsheader, `/api/docs` nur angemeldet (L1); `FORGA_STAGE` mit Band und Sperren im Testsystem (L6); Verletzte im Bericht nur mit `incidents.injuries.read`, Hinweise an Freitexten, Entschuldigungsgrund als Auswahl (L5, Teil); E-Mails mit Gesundheitsbezug ohne Namen (L18, Teil).
@@ -37,74 +37,10 @@ Umgesetzt ist (siehe [implementiert/architektur.md](../implementiert/architektur
 
 ## Auskunft nach Art. 15 als PDF
 
-### Ablauf
+Umgesetzt (siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#auskunft-nach-art-15-als-pdf-l3)): lesbare Auskunft aus allen Modulen (`describePerson`), PDF mit Anschreiben aus Kontakten und Textbausteinen der Einstellungen „Datenschutz“, verschlüsselte Ablage mit Ablauf nach 30 Tagen, Bezug zur Betroffenenanfrage, Übergabe und Herunterladen in „Mein Bereich“, Selbstauskunft `request` und `instant`. Offen sind weitere Inhalte:
 
-1. **Antrag erfassen:** umgesetzt als [Betroffenenanfrage](../implementiert/datenschutz.md#betroffenenanfragen-l7-l19) mit Frist, Verlängerung und Erinnerung (Personalakte, Reiter „Datenschutz“, oder „Auskunft anfordern“ in Mein Bereich). Offen: Bezug der erstellten Auskunft zur Anfrage über `accessReportDocumentId` (`PrivacyRequests.attachAccessReport`).
-2. **Auskunft erstellen** (Knopf in der Personalakte, Dialog `#d-auskunft`): Sprache (Deutsch/Englisch), Anhang „maschinenlesbare Fassung (JSON)“ optional, Bezug zur Anfrage. Der Umfang ist immer **alles**: Art. 15 kennt keine Auswahl. Der Dialog zeigt je Modul, wie viele Einträge enthalten sind.
-3. Der Server erzeugt das PDF im Hintergrund (bei vielen Einsätzen mehrere Sekunden) und legt es **verschlüsselt mit Ablauf** ab (`core.privacy_document`, 30 Tage, dann gelöscht). Die Anfrage zeigt „erstellt am, von“, „übergeben am, Weg“. Audit `privacy.access-report-created`, `privacy.access-report-downloaded`, `privacy.access-report-handed-over`.
-4. **Übergabe:** Herunterladen für die persönliche Übergabe oder den Postversand; Bereitstellen in „Mein Bereich“ (die Person lädt sie dort nach Anmeldung herunter). Kein Versand als E-Mail-Anhang: Die Auskunft enthält Gesundheitsdaten. Die E-Mail an die Person sagt nur „Ihre Auskunft liegt in f.orga bereit“.
-5. „Anfrage erledigt“ setzt das Datum; die Frist verschwindet.
-
-### Aufbau des PDF
-
-Gestaltung wie die anderen PDFs (Wappen bzw. Briefkopf, Fußzeile mit Anschrift, Seite x/y, Erstellungszeit; `lists/renderers.ts`), A4 hoch, Schrift Helvetica. Kopfzeile jeder Seite „Auskunft nach Art. 15 DSGVO · Name · Stand“.
-
-**Deckblatt (Brief):** Anschrift der Person, Ort/Datum, Betreff, dann die Angaben nach Art. 15 Abs. 1 aus den Textbausteinen der Einstellungen:
-
-| Art. 15 Abs. 1 | Inhalt im PDF | Quelle |
-| --- | --- | --- |
-| Verarbeitungszwecke (a) | je Bereich, der Daten enthält, der Zweck | Verzeichnis der Verarbeitungstätigkeiten (Zweck je Tätigkeit) |
-| Kategorien (b) | je Bereich die Datenkategorien, Gesundheitsdaten gekennzeichnet | Manifest des Moduls |
-| Empfänger (c) | z. B. Gemeindeverwaltung/Kämmerei (Entschädigung), Kreisbrandmeister bzw. Statistikportal (Jahresstatistik, nur Zahlen), Leitstelle (Schnittstelle über API-Token), Ärztin/Arzt der Eignungsuntersuchung, Archiv (Aussonderung) | Empfänger im Verzeichnis; API-Tokens mit ihrer Bezeichnung |
-| Speicherdauer (d) | je Bereich die Frist aus dem Aufbewahrungsplan bzw. „bis zur Festlegung einer Frist“ | `privacy.retention` |
-| Rechte (e) | Berichtigung, Löschung, Einschränkung, Widerspruch (Titel der Art. 16, 17, 18, 21), Kontakt | Textbaustein |
-| Beschwerderecht (f) | Aufsichtsbehörde: in Baden-Württemberg der Landesbeauftragte für den Datenschutz und die Informationsfreiheit; Anschrift aus der Einstellung | Einstellung `privacy.authority` |
-| Herkunft (g) | je Bereich: eigene Erfassung, Mein Bereich, Infoterminal, Tabellen-Import (Datum), Datenübernahme aus MP-Feuer (Datum des Laufs), Schnittstelle (Name des Tokens) | Historie: erster Eintrag je Datensatz (Benutzer, technischer Benutzer, `ImportSource`) |
-| automatisierte Entscheidung (h) | Textbaustein „findet nicht statt“; Ampel und Beförderungsvorschläge sind Entscheidungshilfen | Textbaustein |
-| Abs. 2 Drittland | Textbaustein, Standard „keine Übermittlung“ | Textbaustein |
-
-Dazu Kontakt des Verantwortlichen und des DSB. Jeder Textbaustein ist bearbeitbar (de/en) und als Vorlage markiert, bis jemand ihn als geprüft bestätigt.
-
-**Danach je Bereich** (eine Überschrift je Modul, nur Bereiche mit Daten, Reihenfolge wie die Reiter der Personalakte):
-
-- Stammdaten (Person, Kontakt, Mitgliedschaften, Dienstgrade, Qualifikationen, Lehrgänge, Ehrungen, Ämter, Ruhezeiten, Führerschein, Bemerkungen)
-- Benutzerkonto (Benutzername, Rollen, Anmeldungen der letzten Monate, Impersonationen des Kontos, Einwilligungen)
-- Einsätze (Datum, Stichwort, Ort auf Ortsteil gekürzt, Funktion, Fahrzeug, Zeiten, Atemschutz, verletzt)
-- Dienste (Anwesenheit, Entschuldigungen mit Grund)
-- Atemschutz (Nachweise, Untersuchungen mit Ergebnis; Gesundheitsdaten gekennzeichnet)
-- Entschädigung (Posten mit Betrag, Läufe, Bankverbindung gekürzt auf die letzten vier Stellen)
-- Kleiderkammer, Geräte (gemeldete Mängel, durchgeführte Prüfungen), Beförderungen, Einsatzleiter vom Dienst
-- Protokolle: Änderungen an den Daten der Person (Historie, Datum, Bereich, geändert von) und Audit-Einträge des Kontos
-
-Regeln der lesbaren Fassung:
-- **Klartext statt Kennungen:** Beschriftungen in der gewählten Sprache, Daten formatiert (`21.10.2026`), Verweise aufgelöst (Abteilung, Fahrzeug, Katalogeintrag mit Namen), keine UUIDs, keine Feldnamen aus dem Code, Wahrheitswerte als ja/nein.
-- **Rechte Dritter (Art. 15 Abs. 4):** Andere Personen erscheinen nicht mit Namen. Im Einsatz steht die eigene Funktion und das Fahrzeug, nicht die übrige Besatzung; „geändert von“ nennt Benutzer nur mit Funktion („Kommandant“), außer bei eigenen Änderungen. Beteiligte eines Einsatzes (Geschädigte, Zeugen) erscheinen nie.
-- **Große Mengen** als Tabelle (Einsätze eines Jahres in einer Zeile je Einsatz), mit Summen je Jahr.
-- **Interne Bewertungen** (Bemerkungen, Gründe von Beförderungsausschlüssen) sind personenbezogene Daten der Person und gehören dazu.
-
-**Anhang (optional):** das bisherige JSON (`forga.export`) als Datei, eingebettet in das PDF (Dateianhang) bzw. als zweite Datei. Ein Recht auf Datenübertragbarkeit (Art. 20) besteht nur bei Einwilligung oder Vertrag, nicht bei Verarbeitung für eine öffentliche Aufgabe (Art. 20 Abs. 3); die maschinenlesbare Fassung ist deshalb ein Angebot.
-
-### Umsetzung in den Modulen
-
-`ExportSource` bekommt eine zweite, lesbare Methode neben `person(id)`:
-
-```ts
-describePerson?(personId: string, ctx: DescribeContext): Promise<PersonDataSection[]>;
-// DescribeContext: language, asOf, resolvePerson(id) => 'Kommandant' | eigener Name, formatDate, formatMoney
-// PersonDataSection: { key, title: LocalizedText, activity: string, categories: string[], health?: boolean,
-//                      blocks: Array<{ kind: 'fields', rows: { label, value }[] } | { kind: 'table', columns, rows } | { kind: 'text', text }> }
-```
-
-- Der Core rendert die Abschnitte mit pdfmake; die Module liefern nur Inhalte, keine Gestaltung.
-- `activity` verweist auf die Verarbeitungstätigkeit des Moduls (siehe Verzeichnis); daraus kommen Zweck, Empfänger und Frist der Abschnittsüberschrift.
-- **Vollständigkeit:** Beim Start bricht der Server ab, wenn ein Modul Personendaten meldet (`personData` im Manifest, siehe unten) aber kein `describePerson` und kein `anonymize` anbietet, wie heute bei der Historie. Ein Integrationstest erzeugt für eine Demo-Person mit Daten in jedem Modul die Auskunft und prüft, dass jeder Bereich vorkommt und keine UUID im Text steht.
-- Fehlende Beiträge heute: Kostenersatz (Daten von Mitgliedern: keine; Kostenschuldner siehe L14), Infoterminal (Eintragungen stehen im Einsatz bzw. Dienst).
-
-### Selbstauskunft in „Mein Bereich“
-
-Umgesetzt: Abschnitt „Datenschutz“ in Mein Bereich mit „Auskunft anfordern“ und „Meine Anfragen“, Einstellung `privacy.selfServiceAccess` ([implementiert](../implementiert/datenschutz.md#betroffenenanfragen-l7-l19)). Offen mit der Auskunft als PDF:
-- `request` (Standard): Die Verwaltung erstellt und gibt frei; die Person lädt das PDF in Mein Bereich herunter („Ihre Auskunft liegt bereit“).
-- `instant`: Die Person erzeugt ihre Auskunft sofort selbst, höchstens einmal je Tag. Bis dahin legt auch diese Einstellung nur eine Anfrage an.
+- Benutzerkonto: Einwilligungen (L9) und „Zugriffe auf besonders geschützte Daten“ aus dem Leseprotokoll (L15).
+- Herkunft (g) genauer aus der Datenübernahme bzw. dem Import selbst (`ImportSource` am Datensatz statt der Zeitnähe zum Audit-Eintrag).
 
 Die Inhalte von Mein Bereich (eigene Einsätze, Dienste, Entschädigung) sind kein Ersatz für die Auskunft, weil Art. 15 Abs. 1 Angaben verlangt, die dort fehlen.
 
@@ -118,7 +54,7 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 | --- | --- | --- | --- |
 | L1 | HTTPS, sichere Cookies, Sicherheitsheader | Art. 32 | kritisch (umgesetzt) |
 | L2 | Zweiter Faktor beim Öffnen sensibler Daten (Step-up) | Art. 32 | kritisch |
-| L3 | Verständliche Auskunft mit Angaben nach Art. 15 Abs. 1 | Art. 12, 15 | kritisch |
+| L3 | Verständliche Auskunft mit Angaben nach Art. 15 Abs. 1 | Art. 12, 15 | kritisch (umgesetzt) |
 | L4 | Informationspflichten: Datenschutzhinweis, erste Anmeldung, Information bei Übernahme | Art. 13, 14 | kritisch (umgesetzt bis auf Verzeichnis und Einwilligungen) |
 | L5 | Gesundheitsdaten: Zugriff, Protokoll, Weitergabe per E-Mail | Art. 9, 32 | kritisch (teilweise umgesetzt) |
 | L6 | Echtdaten nur im Echtsystem; Test- und Entwicklungsdaten | Art. 5 Abs. 1 f, 32 | kritisch (umgesetzt) |
@@ -160,9 +96,9 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L3 Verständliche Auskunft (kritisch)
 
-- **Heute:** JSON mit IDs und Feldnamen; die Angaben nach Art. 15 Abs. 1 fehlen; Kostenersatz und Infoterminal liefern nichts; andere Personen (Besatzung) könnten mitgeliefert werden.
+- **Umgesetzt:** lesbare Auskunft als PDF aus allen Modulen mit Anschreiben, verschlüsselter Ablage und Übergabe, siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#auskunft-nach-art-15-als-pdf-l3). Abweichungen vom Konzept: keine eigene Vorschauseite (das PDF lässt sich wegen `frame-ancestors 'none'` nicht einbetten, „Ansehen“ öffnet es im Browser); ein hinterlegter Briefkopf wird nicht verwendet, weil die Kopfzeile jeder Seite die Auskunft benennt; MP-Feuer ordnet Berichtszeilen über den Namen zu (keine Personen-ID).
 - **Soll:** präzise, verständlich, in klarer Sprache (Art. 12 Abs. 1), mit allen Angaben nach Art. 15 Abs. 1 und einer Kopie (Abs. 3), ohne Rechte Dritter zu verletzen (Abs. 4).
-- **Umsetzung:** siehe [Auskunft nach Art. 15 als PDF](#auskunft-nach-art-15-als-pdf).
+- **Offen:** Einwilligungen und Leseprotokoll in der Auskunft, Herkunft aus dem Datensatz; siehe [Auskunft nach Art. 15 als PDF](#auskunft-nach-art-15-als-pdf).
 - **Organisatorisch:** Textbausteine mit dem DSB prüfen; Identität vor der Herausgabe prüfen.
 
 ### L4 Informationspflichten (kritisch)
@@ -396,7 +332,7 @@ Alle Entscheidungen sind festgelegt (wie empfohlen, Nr. 2 abweichend).
 | Phase | Inhalt | Lücken |
 | --- | --- | --- |
 | 1 – vor dem Echtbetrieb | umgesetzt: zweiter Faktor als Step-up, HTTPS mit Caddy und Sicherheitsheader, `FORGA_STAGE` mit Band und Sperren im Testsystem, E-Mails ohne Gesundheitsbezug, Verletzte nur mit Recht (mit `stepUp`) ([implementiert](../implementiert/datenschutz.md)) | L1, L2, L5 (Teil), L6, L18 (Teil) |
-| 2 – Rechte der Betroffenen | umgesetzt: Datenschutzhinweis und erste Anmeldung, Anfragen mit Frist, Einschränkung, Widerspruch ([implementiert](../implementiert/datenschutz.md#datenschutzhinweis-l4)); offen: Auskunft als PDF mit `describePerson` in allen Modulen | L3; umgesetzt L4, L7 (Anfragen, Einschränkung), L19 |
+| 2 – Rechte der Betroffenen | umgesetzt: Datenschutzhinweis und erste Anmeldung, Anfragen mit Frist, Einschränkung, Widerspruch, Auskunft als PDF mit `describePerson` in allen Modulen ([implementiert](../implementiert/datenschutz.md#datenschutzhinweis-l4)) | umgesetzt L3, L4, L7 (Anfragen, Einschränkung), L19 |
 | 3 – Nachweise | Verzeichnis aus den Manifesten mit technischen Maßnahmen; Einwilligungen; Berichtigung in Mein Bereich; Leseprotokoll; Impersonation sichtbar | L8, L9, L12, L15, L20 |
 | 4 – Löschen und Minimieren | Löschprüfung je Modul; vollständige Anonymisierung mit Startprüfung; Daten Dritter; abschaltbare Felder; Zweck der Listen; Aufbewahrungsplan | L7 (Löschung), L10, L11, L13, L14, L29 |
 | 5 – Härtung | Sitzungen, Benutzer ohne Person, Infoterminal, API-Tokens, Passwörter, Anhänge, MP-Feuer-Laufberichte, Betriebsanleitung | L16, L17, L21–L28 |

@@ -44,4 +44,15 @@ export const EQUIPMENT_MANIFEST = {
     },
   ],
   frontend: { remote: 'equipment_web', exposed: './Module' },
+  privacy: {
+    personData: true,
+    activities: [
+      {
+        key: 'equipment.inspections',
+        name: { de: 'Geräteprüfung', en: 'Equipment inspection' },
+        purpose: { de: 'Prüfung und Instandhaltung der Geräte, Nachweis der Prüfungen und gemeldeten Mängel', en: 'Inspection and maintenance of equipment, evidence of inspections and reported defects' },
+        retention: ['equipment.retired'],
+      },
+    ],
+  },
 } satisfies ModuleManifest;

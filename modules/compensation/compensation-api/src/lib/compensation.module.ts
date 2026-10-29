@@ -46,7 +46,11 @@ export class CompensationModule implements OnModuleInit {
     registerAuditReferences(this.auditReferences, this.em);
     for (const definition of this.moduleLists.definitions()) this.lists.register('compensation', definition);
     this.deadlines.register(this.data);
-    this.exports.register('compensation', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
+    this.exports.register('compensation', {
+      all: () => this.data.exportAll(),
+      person: (id) => this.data.exportPerson(id),
+      describePerson: (id, ctx) => this.data.describePerson(id, ctx),
+    });
     this.retentionCategory.register(this.retention);
     this.personData.register('compensation', { anonymize: (ids) => this.retentionCategory.anonymize(ids) });
     // Function allowances paid to the holders of an office (settings) refer to the office catalog.

@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261029131725_initial extends Migration {
+export class Migration20261029134906_initial extends Migration {
 
-  override name = 'Migration20261029131725_initial';
+  override name = 'Migration20261029134906_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"core\";");
@@ -19,6 +19,9 @@ export class Migration20261029131725_initial extends Migration {
     this.addSql("create table \"core\".\"import_upload\" (\"id\" uuid not null, \"user_id\" varchar(255) not null, \"file_name\" varchar(255) not null, \"headers\" jsonb not null, \"rows\" jsonb not null, \"created_at\" timestamptz not null, primary key (\"id\"));");
     this.addSql("create table \"core\".\"import_url\" (\"user_id\" varchar(255) not null, \"url\" text not null, \"display\" varchar(255) not null, \"saved_at\" timestamptz not null, primary key (\"user_id\"));");
     this.addSql("create table \"core\".\"module\" (\"id\" varchar(255) not null, \"active\" boolean not null default true, \"granted_templates\" jsonb null, \"updated_at\" timestamptz not null, primary key (\"id\"));");
+    this.addSql("create table \"core\".\"privacy_document\" (\"id\" uuid not null, \"kind\" varchar(255) not null default 'access-report', \"person_id\" varchar(255) not null, \"language\" varchar(255) not null, \"include_json\" boolean not null default false, \"status\" varchar(255) not null default 'pending', \"error\" varchar(255) null, \"content\" bytea null, \"size\" int null, \"created_at\" timestamptz not null, \"created_by\" varchar(255) null, \"expires_at\" timestamptz not null, \"deleted_at\" timestamptz null, \"handed_over_on\" varchar(255) null, \"channel\" varchar(255) null, \"handed_over_by\" varchar(255) null, \"downloaded_by_person_at\" timestamptz null, \"request_id\" varchar(255) null, primary key (\"id\"));");
+    this.addSql("create index \"privacy_document_person_id_index\" on \"core\".\"privacy_document\" (\"person_id\");");
+    this.addSql("create index \"privacy_document_expires_at_index\" on \"core\".\"privacy_document\" (\"expires_at\");");
     this.addSql("create table \"core\".\"privacy_notice\" (\"version\" serial primary key, \"published_at\" timestamptz not null, \"sections\" jsonb not null, \"template\" boolean not null);");
     this.addSql("create table \"core\".\"privacy_request\" (\"id\" uuid not null, \"person_id\" varchar(255) not null, \"kind\" varchar(255) not null, \"received_on\" varchar(10) not null, \"channel\" varchar(255) not null, \"identity_checked\" boolean not null default false, \"identity_note\" text not null default '', \"content\" text not null default '', \"language\" varchar(255) not null default 'de', \"activity\" text not null default '', \"due_on\" varchar(10) not null, \"extended_until\" varchar(10) null, \"extension_reason\" text not null default '', \"extension_notified_on\" varchar(10) null, \"status\" varchar(255) not null default 'received', \"closed_on\" varchar(10) null, \"rejection_reason\" text not null default '', \"assignee_id\" varchar(255) null, \"notes\" text not null default '', \"recipients\" jsonb not null default '[]', \"access_report_document_id\" varchar(255) null, \"created_at\" timestamptz not null, \"created_by\" varchar(255) null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("create index \"privacy_request_person_id_index\" on \"core\".\"privacy_request\" (\"person_id\");");
@@ -68,6 +71,7 @@ export class Migration20261029131725_initial extends Migration {
     this.addSql("drop table if exists \"core\".\"import_upload\" cascade;");
     this.addSql("drop table if exists \"core\".\"import_url\" cascade;");
     this.addSql("drop table if exists \"core\".\"module\" cascade;");
+    this.addSql("drop table if exists \"core\".\"privacy_document\" cascade;");
     this.addSql("drop table if exists \"core\".\"privacy_notice\" cascade;");
     this.addSql("drop table if exists \"core\".\"privacy_request\" cascade;");
     this.addSql("drop table if exists \"core\".\"retention_case\" cascade;");

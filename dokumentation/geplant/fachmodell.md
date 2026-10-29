@@ -250,7 +250,9 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 
 | Fachbegriff | Code |
 | --- | --- |
-| Auskunft (Art. 15), lesbare Fassung | access report, `describePerson` an `ExportSource`, `PersonDataSection`; Ablage `core.privacy_document` |
+| Auskunft (Art. 15), lesbare Fassung | access report (`AccessReport`, `AccessReportService`), `describePerson` an `ExportSource` mit `DescribeContext`, Bereich `PersonDataSection` (Blöcke `fields`, `table`, `text`); Ablage `core.privacy_document` (`PrivacyDocument`) |
+| Übergabe der Auskunft (in Mein Bereich bereitgestellt, persönlich, per Post) | handover (`AccessReportHandOver`, `AccessReportChannel`: `self-service`, `in-person`, `post`) |
+| Personendaten eines Moduls (Meldung im Manifest) | `privacy.personData` im Manifest (`ModulePrivacy`), Startprüfung `assertPersonDataComplete` |
 | Betroffenenanfrage, Datenschutzanfrage (Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch, Widerruf einer Einwilligung) | data subject request (`core.privacy_request`, `PrivacyRequest`, `kind`: `access`, `rectification`, `erasure`, `restriction`, `objection`, `consent-withdrawal`) |
 | Eingegangen am, Weg | `receivedOn`, `channel` (`letter`, `email`, `in-person`, `my-area`) |
 | Stand der Anfrage (eingegangen, in Prüfung, verlängert, erledigt, abgelehnt) | `status` (`received`, `in-review`, `extended`, `done`, `rejected`), `OPEN_REQUEST_STATUSES` |
@@ -268,7 +270,7 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Hinweis bei der ersten Anmeldung, „Zur Kenntnis genommen“ | first-login notice, acknowledgement (`Session.privacyNotice.due`, `core.user.privacy_notice_version`, `privacy_notice_acknowledged_at`, `POST /api/core/privacy/notice/acknowledge`) |
 | Information nach Art. 13/14, „Information erteilt am“ | privacy information (`masterdata.person.privacy_informed_on`, `privacy_informed_via`, `PrivacyInformation`, `UninformedPerson`) |
 | Selbstauskunft in Mein Bereich, „Auskunft anfordern“ | self-service access (`privacy.selfServiceAccess`: `mode` `request`/`instant`, `contact`; `POST /api/core/privacy/me/requests`) |
-| Verzeichnis der Verarbeitungstätigkeiten, Verarbeitungstätigkeit | record of processing activities, processing activity (`privacy.activities` im Manifest und in den Einstellungen) |
+| Verzeichnis der Verarbeitungstätigkeiten, Verarbeitungstätigkeit | record of processing activities, processing activity (`ProcessingActivity` in `privacy.activities` im Manifest, `CORE_ACTIVITIES`; Ergänzungen in den Einstellungen) |
 | Verantwortlicher, Datenschutzbeauftragter, Aufsichtsbehörde | controller, data protection officer, supervisory authority (`privacy.contacts`, `PrivacyContacts`: `controller`, `dpo`, `authority`) |
 | Gesundheitsdaten (besondere Kategorie) | `health: true` an Feldern, Fristarten und Tätigkeiten |
 | Leseprotokoll | access log (`core.access_log`) |

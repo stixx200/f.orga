@@ -36,4 +36,15 @@ export const TRAINING_MANIFEST = {
     { key: 'administration', permissions: ['training.read'], permissionsAllDepartments: ['training.read'] },
   ],
   frontend: { remote: 'training_web', exposed: './Module' },
+  privacy: {
+    personData: true,
+    activities: [
+      {
+        key: 'training.sessions',
+        name: { de: 'Dienstbetrieb', en: 'Service operations' },
+        purpose: { de: 'Planung und Nachweis der Dienste und der Ausbildung, Dienstbeteiligung', en: 'Planning and evidence of sessions and training, participation' },
+        retention: ['training.sessions'],
+      },
+    ],
+  },
 } satisfies ModuleManifest;

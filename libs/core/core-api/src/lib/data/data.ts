@@ -1,6 +1,7 @@
 import { BadRequestException, Controller, Get, Injectable, NotFoundException, Param, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import type { SearchHit } from '@forga/core-contracts';
+import type { DescribeContext, PersonDataSection } from '../access-report/person-description.js';
 import { Audit } from '../audit/audit.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { OrganizationDirectory } from '../security/organization-directory.js';
@@ -66,6 +67,11 @@ export interface ExportSource {
   all(user: AuthenticatedUser): Promise<Record<string, unknown>>;
   /** Everything the module stores about a person (data access request, Art. 15 GDPR). */
   person?(personId: string): Promise<Record<string, unknown>>;
+  /**
+   * The same data in readable form for the access report (PDF): plain text, no IDs, other persons not named. Returns
+   * no sections when the module stores nothing about the person.
+   */
+  describePerson?(personId: string, ctx: DescribeContext): Promise<PersonDataSection[]>;
 }
 
 @Injectable()
@@ -74,6 +80,15 @@ export class ExportRegistry {
 
   register(module: string, source: ExportSource): void {
     this.sources.set(module, source);
+  }
+
+  /** Everything stored about a person across all modules, as JSON document (`forga.person`). */
+  async person(personId: string): Promise<Record<string, unknown>> {
+    const data: Record<string, unknown> = {};
+    for (const [module, source] of this.sources) {
+      if (source.person) data[module] = await source.person(personId);
+    }
+    return { format: 'forga.person', version: 1, personId, exportedAt: new Date().toISOString(), data };
   }
 }
 
@@ -160,13 +175,10 @@ export class DataController {
     // Without the master data module persons cannot be checked; the modules answer for the ID as given.
     const known = await this.organization.persons([personId]);
     if (known && !known.length) throw new NotFoundException({ code: 'data.unknownPerson' });
-    const data: Record<string, unknown> = {};
-    for (const [module, source] of this.exports.sources) {
-      if (source.person) data[module] = await source.person(personId);
-    }
+    const body = await this.exports.person(personId);
     await this.audit.log('data.person-exported', { personId });
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="forga-auskunft-${personId}.json"`);
-    res.send(JSON.stringify({ format: 'forga.person', version: 1, personId, exportedAt: new Date().toISOString(), data }, null, 2));
+    res.send(JSON.stringify(body, null, 2));
   }
 }

@@ -8,6 +8,7 @@ import { EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, u
 import { berlinToday, useAssignees, useRecipients, useRequest } from './api';
 import { LiftDialog, RestrictDialog, useRefreshPrivacy } from './dialogs';
 import { DeadlineBadge, Field, STATUS_TONES } from './PrivacyPage';
+import { RequestAccessReports } from '../../privacy/AccessReports';
 
 const REPLY_KEYS = PRIVACY_TEXT_KEYS.filter((key) => key.startsWith('reply'));
 
@@ -66,9 +67,7 @@ function RequestView({ request }: { request: PrivacyRequest }) {
       {['rectification', 'erasure', 'restriction'].includes(request.kind) && <RecipientsPanel request={request} />}
       {['restriction', 'objection', 'erasure', 'rectification'].includes(request.kind) && <RestrictionPanel request={request} />}
       {request.kind === 'access' && (
-        <Panel title={t('privacy.detail.accessReport')}>
-          <Text size="sm">{request.accessReportDocumentId ? t('privacy.detail.accessReportCreated') : t('privacy.detail.accessReportNone')}</Text>
-        </Panel>
+        <RequestAccessReports personId={request.personId} requestId={request.id} />
       )}
       <ReplyPanel request={request} />
     </Stack>

@@ -208,6 +208,22 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
     return request;
   }
 
+  /**
+   * Self-service `instant`: creates the member's access report right away (set by the access report service, which
+   * depends on this one).
+   */
+  instantAccessReport?: (user: AuthenticatedUser, language: Language) => Promise<void>;
+
+  /** Closes an open request as done, e.g. when its access report is handed over; closed requests stay as they are. */
+  async closeDone(requestId: string, closedOn: string): Promise<void> {
+    const em = this.em.fork();
+    const request = await this.load(em, requestId);
+    if (!OPEN_REQUEST_STATUSES.includes(request.status)) return;
+    em.assign(request, { status: 'done', closedOn: closedOn < request.receivedOn ? request.receivedOn : closedOn, rejectionReason: '' });
+    await em.flush();
+    await this.audit.log('privacy.request-closed', { requestId, personId: request.personId, status: 'done' });
+  }
+
   /** Records the access report created for a request (feature "Auskunft als PDF"). */
   async attachAccessReport(requestId: string, documentId: string): Promise<void> {
     const em = this.em.fork();
@@ -469,6 +485,11 @@ export class PrivacyRequestsController {
     const kind: PrivacyRequestKind = 'access';
     if (await this.em.fork().count(PrivacyRequestEntity, { personId: user.personId, kind, status: { $in: [...OPEN_REQUEST_STATUSES] } })) {
       throw new ConflictException({ code: 'privacy.requestOpen' });
+    }
+    // `instant`: the member creates the report right away (at most once a day), recorded as a request answered by it.
+    if (this.requests.instantAccessReport && PrivacySelfService.parse((await this.settings.get('privacy.selfServiceAccess')) ?? {}).mode === 'instant') {
+      await this.requests.instantAccessReport(user, input.language);
+      return this.me(user);
     }
     await this.requests.create(
       PrivacyRequestInput.parse({ personId: user.personId, kind, receivedOn: berlinDate(), channel: 'my-area', identityChecked: true, identityNote: '', language: input.language }),

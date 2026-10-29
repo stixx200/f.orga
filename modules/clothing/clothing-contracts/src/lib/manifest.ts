@@ -36,4 +36,14 @@ export const CLOTHING_MANIFEST = {
     { key: 'department-commander', permissions: ['clothing.read'] },
   ],
   frontend: { remote: 'clothing_web', exposed: './Module' },
+  privacy: {
+    personData: true,
+    activities: [
+      {
+        key: 'clothing.issues',
+        name: { de: 'Kleiderkammer', en: 'Clothing store' },
+        purpose: { de: 'Ausgabe, Rücknahme und Pflege der persönlichen Schutzausrüstung', en: 'Issue, return and care of personal protective equipment' },
+      },
+    ],
+  },
 } satisfies ModuleManifest;

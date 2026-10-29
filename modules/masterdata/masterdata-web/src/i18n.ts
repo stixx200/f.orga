@@ -349,7 +349,6 @@ const texts: Translations = {
     person: {
       invalidIban: 'Die IBAN ist ungültig (Prüfziffer stimmt nicht).',
       notFound: 'Diese Person gibt es nicht oder Sie dürfen sie nicht sehen.',
-      dataAccess: 'Auskunft (DSGVO)',
       anonymized: 'Diese Person wurde nach dem Ausscheiden anonymisiert.',
       restrictedBadge: 'Verarbeitung eingeschränkt',
       restricted: 'Die Verarbeitung der Daten dieser Person ist eingeschränkt (Art. 18 DSGVO). Sie erscheint nicht in Listen, Suche, Personalauswahl, Infoterminal, Fristen und E-Mails. Ändern Sie Daten nur zur Berichtigung.',
@@ -1091,7 +1090,6 @@ const texts: Translations = {
     person: {
       invalidIban: 'The IBAN is invalid (wrong check digits).',
       notFound: 'This person does not exist or you may not see them.',
-      dataAccess: 'Data access (GDPR)',
       anonymized: 'This person was anonymised after leaving.',
       restrictedBadge: 'Processing restricted',
       restricted: 'The processing of this person\'s data is restricted (Art. 18 GDPR). The person does not appear in lists, search, pickers, info terminal, deadlines and e-mails. Change data only to rectify them.',

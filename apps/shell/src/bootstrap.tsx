@@ -13,6 +13,7 @@ import { addTranslations, registerExtensions, useTranslation } from '@forga/web-
 import { forgaTheme } from '@forga/web-ui';
 import { App } from './App';
 import { shellTranslations } from './i18n';
+import { registerCoreExtensions } from './privacy/extensions';
 import { PersonPrivacyTab } from './pages/privacy/PersonPrivacyTab';
 
 addTranslations('shell', shellTranslations);
@@ -25,6 +26,7 @@ registerExtensions('privacy', {
     component: PersonPrivacyTab as ComponentType<Record<string, unknown>>,
   },
 });
+registerCoreExtensions();
 
 /** Date pickers follow the UI language (month names, first weekday). */
 function LocalizedDates({ children }: { children: ReactNode }) {

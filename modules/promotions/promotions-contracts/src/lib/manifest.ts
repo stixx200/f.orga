@@ -70,4 +70,14 @@ export const PROMOTIONS_MANIFEST = {
     },
   ],
   frontend: { remote: 'promotions_web', exposed: './Module' },
+  privacy: {
+    personData: true,
+    activities: [
+      {
+        key: 'promotions.promotions',
+        name: { de: 'Beförderungen', en: 'Promotions' },
+        purpose: { de: 'Vorbereitung und Nachweis der Beförderungen nach den Beförderungsregeln', en: 'Preparing and documenting promotions under the promotion rules' },
+      },
+    ],
+  },
 } satisfies ModuleManifest;

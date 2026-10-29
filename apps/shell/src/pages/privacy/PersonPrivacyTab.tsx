@@ -5,6 +5,7 @@ import { Link } from 'react-router';
 import type { PrivacyInformation, ProcessingRestriction } from '@forga/core-contracts';
 import { api, formatDate, formatDateTime, unlocked, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, Notice, Panel, StatusBadge, StepUpButton } from '@forga/web-ui';
+import { AccessReportsPanel } from '../../privacy/AccessReports';
 import { PRIVACY, usePersonPrivacy } from './api';
 import { InformationDialog, LiftDialog, RequestDialog, RestrictDialog } from './dialogs';
 import { DeadlineBadge, Field, STATUS_TONES } from './PrivacyPage';
@@ -56,6 +57,7 @@ function PersonPrivacyDetails({ personId }: { personId: string }) {
           <Text size="xs" c="dimmed">{t('privacy.person.deadlineHint')}</Text>
         </Stack>
       </Panel>
+      <AccessReportsPanel personId={personId} />
       <Panel title={t('privacy.person.info')}>
         <Stack gap="xs">
           <Field label={t('privacy.person.notice')}>
