@@ -1,5 +1,5 @@
 import { type DynamicModule, type MiddlewareConsumer, Module, type NestModule, type OnModuleInit } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, DiscoveryModule } from '@nestjs/core';
 import { Migrator } from '@mikro-orm/migrations';
 import { RETENTION_PERMISSION } from '@forga/core-contracts';
 import { CORE_MIGRATIONS } from '../migrations/index.js';
@@ -44,7 +44,9 @@ import { OrganizationDirectory } from './security/organization-directory.js';
 import { PermissionRegistry } from './security/permission-registry.js';
 import { RoleTemplates } from './security/role-templates.js';
 import { RolesController } from './security/roles.controller.js';
-import { ApiToken, Role, RoleAssignment, Session, User } from './security/security.entities.js';
+import { MfaController, MfaService } from './security/mfa.js';
+import { StepUpCheck } from './security/step-up-check.js';
+import { ApiToken, Role, RoleAssignment, Session, User, UserMfa } from './security/security.entities.js';
 import { TokensController } from './security/tokens.controller.js';
 import { UsersController } from './security/users.controller.js';
 import { OnboardingController } from './settings/onboarding.js';
@@ -62,6 +64,7 @@ export const CORE_ENTITIES: EntityDefinition[] = [
   RoleAssignment,
   Session,
   ApiToken,
+  UserMfa,
   ImportUploadEntity,
   ImportUrlEntity,
   ImportMappingEntity,
@@ -129,9 +132,10 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
     return {
       module: ForgaCoreModule,
       global: true,
-      imports: modules.flatMap((m) => (m.nestModule ? [m.nestModule] : [])),
+      imports: [DiscoveryModule, ...modules.flatMap((m) => (m.nestModule ? [m.nestModule] : []))],
       controllers: [
         AuthController,
+        MfaController,
         UsersController,
         RolesController,
         TokensController,
@@ -156,6 +160,8 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         { provide: FORGA_CORE_OPTIONS, useValue: { ...options, modules } },
         { provide: APP_GUARD, useClass: AuthGuard },
         AuthService,
+        MfaService,
+        StepUpCheck,
         OidcService,
         OrganizationDirectory,
         PermissionRegistry,

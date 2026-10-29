@@ -10,7 +10,7 @@ import type { Request } from 'express';
 import { UserContext } from '../user-context.js';
 import { AuthService, SESSION_COOKIE } from './auth.service.js';
 import type { AuthenticatedUser } from './authenticated-user.js';
-import { PUBLIC, REQUIRED_PERMISSIONS } from './decorators.js';
+import { PUBLIC, REQUIRED_PERMISSIONS, STEP_UP } from './decorators.js';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 /** Browsers only send custom headers same-origin, so this header proves the request came from the UI. */
@@ -18,7 +18,9 @@ export const CSRF_HEADER = 'x-forga';
 
 /**
  * Global guard: authenticates via session cookie or `Authorization: Bearer <api-token>`
- * and checks the permissions declared with `@RequirePermissions`.
+ * and checks the permissions declared with `@RequirePermissions`. A permission with `stepUp` the user holds but which
+ * waits for the second factor, and endpoints marked `@StepUp()`, answer `403 auth.stepUpRequired` until the session is
+ * confirmed.
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -45,9 +47,12 @@ export class AuthGuard implements CanActivate {
     }
 
     const required = this.reflector.getAllAndOverride<string[]>(REQUIRED_PERMISSIONS, targets) ?? [];
-    if (required.some((permission) => !user.can(permission))) {
+    if (required.some((permission) => !user.holds(permission))) {
       throw new ForbiddenException({ code: 'auth.forbidden', permissions: required });
     }
+    if (required.some((permission) => !user.can(permission))) throw user.stepUpRequired();
+    const stepUp = this.reflector.getAllAndOverride<boolean>(STEP_UP, targets) ?? false;
+    if (stepUp && !user.elevatedUntil) throw user.stepUpRequired();
     return true;
   }
 

@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  ForbiddenException,
   Get,
   Inject,
   Injectable,
@@ -95,7 +94,7 @@ export class SettingsService {
    */
   async getVisible(section: string, user: AuthenticatedUser): Promise<Record<string, unknown> | null> {
     this.schema(section);
-    if (!this.mayRead(user, section)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: this.managerPermissions(section) });
+    if (!this.mayRead(user, section)) throw user.denied(this.managerPermissions(section));
     const value = await this.get(section);
     return value && this.redact(section, value, user);
   }
@@ -134,7 +133,7 @@ export class SettingsController {
   /** `core.settings.manage` for every section; `<module>.settings.manage` for the sections of that module. */
   @Put(':section')
   async set(@Param('section') section: string, @Body() body: unknown, @CurrentUser() user: AuthenticatedUser) {
-    if (!this.settings.isManager(user, section)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: this.settings.managerPermissions(section) });
+    if (!this.settings.isManager(user, section)) throw user.denied(this.settings.managerPermissions(section));
     const value = new ZodPipe(this.settings.schema(section)).transform(body) as Record<string, unknown>;
     await this.settings.set(section, value);
     return this.settings.getVisible(section, user);

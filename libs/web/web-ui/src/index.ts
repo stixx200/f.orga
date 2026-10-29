@@ -15,3 +15,4 @@ export * from './lib/components/useAction';
 export * from './lib/components/Attachments';
 export * from './lib/components/UnmatchedValues';
 export * from './lib/components/RememberedMappings';
+export * from './lib/components/StepUpButton';

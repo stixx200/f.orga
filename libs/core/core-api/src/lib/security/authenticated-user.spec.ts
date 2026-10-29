@@ -67,3 +67,26 @@ describe('AuthenticatedUser.can', () => {
     expect(u.canAnythingIn('incidents')).toBe(false);
   });
 });
+
+const locked = () =>
+  new AuthenticatedUser('u', 'user', 'User', null, 'de', new Map([['masterdata.persons.read', 'brigade']]), 'session', new Map([['masterdata.persons.sensitive', ['ahornfeld']]]));
+
+describe('AuthenticatedUser with permissions waiting for the step-up', () => {
+  it('treats them as missing but held', () => {
+    const u = locked();
+    expect(u.can('masterdata.persons.sensitive')).toBe(false);
+    expect(u.grant('masterdata.persons.sensitive')).toBeNull();
+    expect(u.holds('masterdata.persons.sensitive', 'ahornfeld')).toBe(true);
+    expect(u.heldGrant('masterdata.persons.sensitive')).toEqual(['ahornfeld']);
+    expect(u.needsStepUp('masterdata.persons.sensitive', 'ahornfeld')).toBe(true);
+    expect(u.needsStepUp('masterdata.persons.sensitive', 'weidenhain')).toBe(false);
+    expect(u.needsStepUp('masterdata.persons.read')).toBe(false);
+  });
+
+  it('answers auth.stepUpRequired only where the step-up would help', () => {
+    const u = locked();
+    u.mfaEnrolled = true;
+    expect(u.denied(['masterdata.persons.sensitive'], 'ahornfeld').getResponse()).toEqual({ code: 'auth.stepUpRequired', enrolled: true });
+    expect(u.denied(['masterdata.persons.sensitive'], 'weidenhain').getResponse()).toEqual({ code: 'auth.forbidden', permissions: ['masterdata.persons.sensitive'] });
+  });
+});

@@ -165,7 +165,12 @@ export const FitnessStatus = z.object({
 export type FitnessStatus = z.infer<typeof FitnessStatus>;
 
 /** Person file tab: status and the evidence the user may see. */
-export const PersonRespiratoryProtection = z.object({ status: FitnessStatus, evidence: z.array(Evidence) });
+export const PersonRespiratoryProtection = z.object({
+  status: FitnessStatus,
+  evidence: z.array(Evidence),
+  /** Examinations are left out only until the session is confirmed with the second factor (step-up). */
+  stepUpAvailable: z.boolean().default(false),
+});
 export type PersonRespiratoryProtection = z.infer<typeof PersonRespiratoryProtection>;
 
 /**

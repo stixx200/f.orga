@@ -111,14 +111,23 @@ export class PersonsService {
     return departmentsOf(person).some((id) => user.can(permission, id));
   }
 
+  /** Would the step-up (second factor) give the permission for the person? */
+  needsStepUp(user: AuthenticatedUser, permission: string, person: Person): boolean {
+    if (this.can(user, permission, person)) return false;
+    return user.heldGrant(permission) === 'brigade' || departmentsOf(person).some((id) => user.needsStepUp(permission, id));
+  }
+
+  /** The error for a missing permission on the person: `auth.stepUpRequired` if the step-up would give it. */
+  denied(user: AuthenticatedUser, permission: string, person: Person) {
+    return this.needsStepUp(user, permission, person) ? user.stepUpRequired() : new ForbiddenException({ code: 'auth.forbidden', permissions: [permission] });
+  }
+
   /** Loads a person with all child lists and checks the permission. */
   async load(em: EntityManager, id: string, user: AuthenticatedUser, permission: string): Promise<Person> {
     const person = await em.findOne(Person, id, { populate: POPULATE });
     if (!person) throw new NotFoundException();
     if (!this.can(user, READ, person)) throw new NotFoundException();
-    if (!this.can(user, permission, person)) {
-      throw new ForbiddenException({ code: 'auth.forbidden', permissions: [permission] });
-    }
+    if (!this.can(user, permission, person)) throw this.denied(user, permission, person);
     return person;
   }
 
@@ -273,6 +282,7 @@ export class PersonsService {
         notes: o.notes,
       })),
       sensitiveHidden: !sensitive,
+      stepUpAvailable: !sensitive && this.needsStepUp(user, SENSITIVE, person),
       anonymizedAt: person.anonymizedAt ? person.anonymizedAt.toISOString() : null,
       version: person.version,
     };

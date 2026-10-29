@@ -11,6 +11,7 @@ import { GlobalSearch } from './GlobalSearch';
 import { LanguageSwitch } from './LanguageSwitch';
 import { Sidebar } from './Sidebar';
 import { TasksBell } from './TasksBell';
+import { ElevationBadge } from '../auth/StepUp';
 
 export function useBrigade() {
   return useQuery({ queryKey: ['core', 'settings', 'brigade'], queryFn: () => api<BrigadeSettings | null>('core/settings/brigade') });
@@ -132,6 +133,7 @@ export function AppFrame({ modules, session }: { modules: LoadedModule[]; sessio
           </Group>
           {!phone && <GlobalSearch />}
           <Group wrap="nowrap" gap="sm">
+            {!phone && <ElevationBadge session={session} />}
             <TasksBell />
             {!phone && <LanguageSwitch loggedIn receiveDigest={session.user.receiveDigest} />}
             <UserMenu session={session} />
@@ -149,6 +151,7 @@ export function AppFrame({ modules, session }: { modules: LoadedModule[]; sessio
       </AppShell.Navbar>
       <AppShell.Main id="content">
         {session.impersonator && <ImpersonationBanner session={session} />}
+        {phone && <Group mb="sm"><ElevationBadge session={session} /></Group>}
         {modules
           .filter((m) => m.error)
           .map((m) => (

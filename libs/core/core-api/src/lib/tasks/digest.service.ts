@@ -114,7 +114,8 @@ export class DigestService implements OnApplicationBootstrap, OnApplicationShutd
     let failed = 0;
     for (const user of users) {
       if (already.has(user.id) && !options.resend) continue;
-      const authenticated = await this.auth.load(em, user, 'session');
+      // The weekly e-mail lists all deadlines of the user's permissions, as before the step-up existed (no session).
+      const authenticated = await this.auth.load(em, user, 'session', true);
       const deadlines = await this.deadlines.forUser(authenticated, asOf);
       if (!deadlines.length || !user.email) continue;
       try {
