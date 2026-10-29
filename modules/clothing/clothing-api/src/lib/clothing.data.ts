@@ -222,7 +222,10 @@ export class ClothingData implements DeadlineProvider {
       columns: [col('person', 'Person', 'Person', 2), col('article', 'Artikel', 'Article', 2), col('number', 'Inventar-Nr.', 'Inventory no.'), col('size', 'Größe', 'Size', 0.6), col('issuedOn', 'Ausgegeben', 'Issued')],
       rows: async (user, params, language) => {
         const names = await this.names();
-        const items = (await this.clothing.items(user, { status: 'issued' })).filter((i) => !params.departmentId || i.departmentId === params.departmentId);
+        const issued = (await this.clothing.items(user, { status: 'issued' })).filter((i) => !params.departmentId || i.departmentId === params.departmentId);
+        // Persons whose processing is restricted (Art. 18) are left out.
+        const restricted = await this.directory.restrictedIds([...new Set(issued.map((i) => i.holderId!))]);
+        const items = issued.filter((i) => !restricted.has(i.holderId!));
         const persons = new Map((await this.directory.snapshots([...new Set(items.map((i) => i.holderId!))])).map((p) => [p.id, `${p.lastName}, ${p.firstName}`]));
         return {
           rows: items
@@ -246,7 +249,10 @@ export class ClothingData implements DeadlineProvider {
         const until = params.until ?? berlinDate(new Date(Date.now() + 30 * 86_400_000));
         const names = await this.names();
         const items = (await this.clothing.items(user, {})).filter((i) => !params.departmentId || i.departmentId === params.departmentId);
-        const persons = new Map((await this.directory.snapshots([...new Set(items.flatMap((i) => (i.holderId ? [i.holderId] : [])))])).map((p) => [p.id, `${p.lastName}, ${p.firstName}`]));
+        const holders = [...new Set(items.flatMap((i) => (i.holderId ? [i.holderId] : [])))];
+        // The piece is due anyway; a holder whose processing is restricted (Art. 18) is not named.
+        const restricted = await this.directory.restrictedIds(holders);
+        const persons = new Map((await this.directory.snapshots(holders)).filter((p) => !restricted.has(p.id)).map((p) => [p.id, `${p.lastName}, ${p.firstName}`]));
         const what = { impregnation: { de: 'Waschen und imprägnieren', en: 'Wash and impregnate' }, inspection: { de: 'Prüfung', en: 'Inspection' } };
         return {
           subtitle: `≤ ${until}`,

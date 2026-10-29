@@ -5,7 +5,6 @@ import type { Session } from '@forga/core-contracts';
 import { api, can, useLocalized, useTranslation } from '@forga/web-sdk';
 import type { LoadedModule } from '../modules';
 import classes from './frame.module.css';
-import { mySections } from '../pages/MyAreaPage';
 import { NAV_ICONS } from './icons';
 
 interface Entry {
@@ -65,7 +64,8 @@ export function Sidebar({ modules, session, onNavigate }: { modules: LoadedModul
   const { data: codeModules = [] } = useQuery({ queryKey: ['core', 'codes', 'modules'], queryFn: () => api<string[]>('core/codes/modules'), staleTime: Infinity });
   const overview: Entry[] = [
     { to: '/', label: t('nav.start'), icon: 'home', end: true },
-    ...(session.user.personId && mySections(session).length ? [{ to: '/me', label: t('me.title'), icon: 'user' }] : []),
+    // "My area" always has the data protection section.
+    ...(session.user.personId ? [{ to: '/me', label: t('me.title'), icon: 'user' }] : []),
     { to: '/lists', label: t('nav.lists'), icon: 'list' },
     ...(codeModules.length ? [{ to: '/scan', label: t('nav.scan'), icon: 'barcode' }] : []),
     ...(Object.keys(session.permissions).some((p) => p.endsWith('.write') || p.endsWith('.manage')) ? [{ to: '/import', label: t('nav.import'), icon: 'import' }] : []),
@@ -79,6 +79,12 @@ export function Sidebar({ modules, session, onNavigate }: { modules: LoadedModul
     can(session, 'core.settings.manage') && { to: '/admin/settings', label: t('nav.settings'), icon: 'settings' },
     can(session, 'core.audit.read') && { to: '/admin/audit', label: t('nav.audit'), icon: 'audit' },
     can(session, 'core.retention.manage') && { to: '/admin/retention', label: t('nav.retention'), icon: 'retention' },
+    // Managers of the settings find security and retention there as well.
+    (can(session, 'core.privacy.manage') || can(session, 'core.settings.manage')) && {
+      to: can(session, 'core.privacy.manage') ? '/admin/privacy' : '/admin/privacy/settings',
+      label: t('nav.privacy'),
+      icon: 'privacy',
+    },
     // Global settings of the modules, e.g. catalogs of the master data.
     ...modules.flatMap((m) =>
       m.info.navigation

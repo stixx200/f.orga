@@ -91,9 +91,11 @@ export class TerminalCheckInService implements TrainingTerminalCheckIn {
   async session(sessionId: string, scope: TerminalSessionScope, now = new Date()) {
     const { session, summary } = await this.open(this.em.fork(), sessionId, scope, now);
     if (!this.inScope(session, scope)) throw new NotFoundException({ code: 'info-terminal.sessionNotFound' });
+    // Persons whose processing is restricted (Art. 18) never appear at the info terminal.
+    const restricted = await this.directory.restrictedIds(session.attendance.getItems().map((a) => a.personId));
     const attendance: TerminalAttendance[] = session.attendance
       .getItems()
-      .filter((a) => a.status === 'present')
+      .filter((a) => a.status === 'present' && !restricted.has(a.personId))
       .map((a) => ({ personId: a.personId, role: a.role ?? null, breathingApparatus: a.breathingApparatus, from: iso(a.from), to: iso(a.to), editable: TerminalCheckInService.editable(a) }));
     return { session: summary, attendance };
   }
@@ -101,7 +103,7 @@ export class TerminalCheckInService implements TrainingTerminalCheckIn {
   async checkIn(sessionId: string, scope: TerminalSessionScope, raw: TerminalCheckInInput, now = new Date()): Promise<void> {
     const input = TerminalCheckInInput.parse(raw);
     const [person] = await this.directory.snapshots([input.personId]);
-    if (!person || person.status === 'left') throw new BadRequestException({ code: 'training.unknownPerson', personId: input.personId });
+    if (!person || person.status === 'left' || (await this.directory.isRestricted(person.id))) throw new BadRequestException({ code: 'training.unknownPerson', personId: input.personId });
     await this.em.fork().transactional(async (em) => {
       const { session } = await this.open(em, sessionId, scope, now, true);
       // Own times inside the session, give or take the tolerance, like the attendance list.

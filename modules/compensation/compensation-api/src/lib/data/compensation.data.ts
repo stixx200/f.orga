@@ -45,6 +45,7 @@ export class CompensationData implements DeadlineProvider {
       kind: 'compensation-amount-missing',
       title: { de: 'Verdienstausfall: Betrag eintragen', en: 'Loss of earnings: enter amount' },
       subject: { type: 'compensation.item', id: i.id, label: i.label },
+      personId: i.personId,
       dueOn: i.date,
       leadDays: 0,
       departmentIds: [],

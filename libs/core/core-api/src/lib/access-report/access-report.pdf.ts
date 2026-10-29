@@ -2,7 +2,7 @@ import type { BrigadeSettings, Language } from '@forga/core-contracts';
 import { columnWidths, PDF_TABLE_LAYOUT, pdfHeaderCell, renderLetterPdf } from '../lists/renderers.js';
 import type { PostalAddress } from '../security/organization-directory.js';
 import type { AccessReportLetterTexts } from './access-report.texts.js';
-import { formatDay } from './describe-context.js';
+import { formatReportDay } from './describe-context.js';
 import type { PersonDataBlock, PersonDataSection } from './person-description.js';
 
 const SERVICE_RED = '#8C1D18';
@@ -117,7 +117,7 @@ function blockContent(block: PersonDataBlock, width: number): unknown[] {
 export async function renderAccessReport(doc: AccessReportDocument): Promise<Buffer> {
   const { language } = doc;
   const l = (key: keyof typeof L) => L[key][language];
-  const today = formatDay(doc.now.toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }), language);
+  const today = formatReportDay(doc.now.toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }), language);
   const a = doc.address;
   const addressLines = a
     ? [a.salutation, [a.title, a.firstName, a.lastName].filter(Boolean).join(' '), a.street, [a.postalCode, a.city].filter(Boolean).join(' ')].filter(Boolean)
@@ -142,7 +142,7 @@ export async function renderAccessReport(doc: AccessReportDocument): Promise<Buf
     { stack: addressLines.map((line) => ({ text: line })), margin: [0, 6, 0, 18] },
     { text: [doc.brigade?.city, today].filter(Boolean).join(', '), alignment: 'right', margin: [0, 0, 0, 14] },
     { text: l('subject'), bold: true },
-    ...(doc.requestDate ? [{ text: `${l('request')} ${formatDay(doc.requestDate, language)}`, margin: [0, 2, 0, 0] }] : []),
+    ...(doc.requestDate ? [{ text: `${l('request')} ${formatReportDay(doc.requestDate, language)}`, margin: [0, 2, 0, 0] }] : []),
     { text: salutation(a, doc.personName, language), margin: [0, 14, 0, 8] },
     { text: doc.letter.introduction, margin: [0, 0, 0, 6] },
     ...(doc.letter.template ? [{ text: l('template'), style: 'small', color: SERVICE_RED, margin: [0, 0, 0, 6] }] : []),

@@ -19,6 +19,8 @@ export type SearchSource = (user: AuthenticatedUser, query: string) => Promise<S
 export class SearchRegistry {
   private readonly sources: { module: string; source: SearchSource }[] = [];
 
+  constructor(private readonly organization: OrganizationDirectory) {}
+
   register(module: string, source: SearchSource): void {
     this.sources.push({ module, source });
   }
@@ -27,7 +29,9 @@ export class SearchRegistry {
     const results = await Promise.all(
       this.sources.filter((s) => user.canAnythingIn(s.module)).map((s) => s.source(user, query).catch((): SearchHit[] => [])),
     );
-    return results.flat();
+    // Hits about persons whose processing is restricted (Art. 18) never show up.
+    const restricted = await this.organization.restrictedPersonIds();
+    return results.flat().filter((hit) => !hit.personId || !restricted.has(hit.personId));
   }
 }
 

@@ -45,6 +45,7 @@ export class MasterdataData {
         title: `${p.lastName}, ${p.firstName}`,
         description: p.restricted ? (departments.get(p.primaryDepartmentId ?? '') ?? undefined) : (p.personnelNumber ?? undefined),
         to: p.restricted ? `/masterdata/persons?q=${encodeURIComponent(`${p.firstName} ${p.lastName}`)}` : `/masterdata/persons/${p.id}`,
+        personId: p.id,
       }));
     const vehicles = await this.em.fork().find(Vehicle, wordsWhere(query, ['designation', 'radioCallSign', 'licensePlate']) ?? {}, { limit: 5 });
     return [

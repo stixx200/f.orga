@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
-import { type AuthenticatedUser, wordsWhere } from '@forga/core-api';
+import { assertNotRestricted, type AuthenticatedUser, wordsWhere } from '@forga/core-api';
+import type { ProcessingRestriction } from '@forga/core-contracts';
 import { type Person as PersonDto, type PersonSnapshot, type PersonSummary, readDriverLicense } from '@forga/masterdata-contracts';
 import { today } from '../shared/access.js';
 import { HonorAward, Membership, Person, PersonQualification, RankAssignment, OfficeAssignment, RestPeriod } from '../masterdata.entities.js';
@@ -70,20 +71,24 @@ export function recordedDates(person: Person): string[] {
   ];
 }
 
-/** A visibility condition for all persons (`{}`). */
-const all = (where: FilterQuery<Person> | null) => !!where && !Object.keys(where).length;
+/** A visibility condition for all (not restricted) persons. */
+const all = (where: FilterQuery<Person> | null) => !!where && Object.keys(where).length === 1 && 'restrictedAt' in where;
 
 @Injectable()
 export class PersonsService {
   constructor(private readonly em: EntityManager) {}
 
-  /** Restricts a query to the persons the user may see with the permission. */
+  /**
+   * Restricts a query to the persons the user may see with the permission. Persons whose processing is restricted
+   * (Art. 18) never appear in lists, search and pickers; their file opens only by ID (`load`).
+   */
   visibleWhere(user: AuthenticatedUser, permission: string): FilterQuery<Person> | null {
     const grant = user.grant(permission);
     if (!grant) return null;
-    if (grant === 'brigade') return {};
+    if (grant === 'brigade') return { restrictedAt: null };
     const date = today();
     return {
+      restrictedAt: null,
       $or: [
         {
           memberships: {
@@ -127,8 +132,17 @@ export class PersonsService {
     const person = await em.findOne(Person, id, { populate: POPULATE });
     if (!person) throw new NotFoundException();
     if (!this.can(user, READ, person)) throw new NotFoundException();
+    this.assertReadable(user, person);
     if (!this.can(user, permission, person)) throw this.denied(user, permission, person);
     return person;
+  }
+
+  /**
+   * A person whose processing is restricted is readable (and correctable) only with `core.privacy.manage`:
+   * `privacy.processingRestricted`, or `auth.stepUpRequired` if the step-up would give the permission.
+   */
+  assertReadable(user: AuthenticatedUser, person: Person): void {
+    assertNotRestricted(user, Boolean(person.restrictedAt));
   }
 
   async list(
@@ -284,6 +298,8 @@ export class PersonsService {
       sensitiveHidden: !sensitive,
       stepUpAvailable: !sensitive && this.needsStepUp(user, SENSITIVE, person),
       anonymizedAt: person.anonymizedAt ? person.anonymizedAt.toISOString() : null,
+      processingRestriction: processingRestriction(person),
+      privacyInformation: person.privacyInformedOn && person.privacyInformedVia ? { informedOn: person.privacyInformedOn, via: person.privacyInformedVia } : null,
       version: person.version,
     };
     if (sensitive) {
@@ -295,6 +311,13 @@ export class PersonsService {
     }
     return dto;
   }
+}
+
+/** The restriction of processing of the person, `null` if none. */
+export function processingRestriction(person: Person): ProcessingRestriction | null {
+  return person.restrictedAt && person.restrictionReason
+    ? { restrictedAt: person.restrictedAt.toISOString(), reason: person.restrictionReason, until: person.restrictedUntil ?? null, requestId: person.restrictionRequestId ?? null }
+    : null;
 }
 
 function sortBy<T>(items: T[], key: (item: T) => string): T[] {

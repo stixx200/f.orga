@@ -1255,6 +1255,31 @@ async function promotions(): Promise<void> {
   console.log(`  Beförderungsliste mit ${list.entries.length} Vorschlägen`);
 }
 
+/** Data protection: fictitious contacts, recipients, information after the transfer and two requests. Texts stay templates. */
+async function privacy(persons: PersonRef[]): Promise<void> {
+  await call('PUT', 'core/settings/privacy.contacts', {
+    controller: { name: 'Stadt Musterstadt (Beispiel)', address: 'Marktplatz 1, 12345 Musterstadt', representedBy: 'Bürgermeisterin' },
+    dpo: { name: 'Datenschutzbeauftragter der Stadt Musterstadt (Beispiel)', address: 'Marktplatz 1, 12345 Musterstadt', email: 'datenschutz@musterstadt.example', phone: '' },
+    authority: {},
+  });
+  await call('PUT', 'core/settings/privacy.selfServiceAccess', { mode: 'request', contact: 'Kommandant der Feuerwehr Musterstadt' });
+  await call('PUT', 'core/settings/privacy.recipients', { recipients: [{ id: 'treasury', name: 'Stadtkasse Musterstadt (Beispiel)', note: 'Bankverbindung, Entschädigung' }] });
+  const active = persons.filter((p) => p.status !== 'left');
+  // Information after the transfer: given to most members, a few are still open.
+  const informed = active.slice(0, Math.max(0, active.length - 12)).map((p) => p.id);
+  if (informed.length) await call('POST', 'masterdata/privacy/information', { personIds: informed, informedOn: day(-20), via: 'letter' });
+  if ((await call<unknown[]>('GET', 'core/privacy/requests?state=all')).length) return;
+  const [first, second] = active.slice(-2);
+  if (first) await call('POST', 'core/privacy/requests', { personId: first.id, kind: 'access', receivedOn: day(-24), channel: 'letter', identityChecked: true, identityNote: 'Unterschrift und Anschrift', content: 'Bitte um Auskunft über meine gespeicherten Daten.' });
+  if (second) await call('POST', 'core/privacy/requests', { personId: second.id, kind: 'rectification', receivedOn: day(-5), channel: 'email', content: 'Der Lehrgang Maschinist fehlt in meinen Daten.' });
+  console.log(`  Information für ${informed.length} Personen, 2 Anfragen`);
+}
+
+/** The day `offset` days from today, `YYYY-MM-DD` (Europe/Berlin). */
+function day(offset: number): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date(Date.now() + offset * 86_400_000));
+}
+
 async function main(): Promise<void> {
   console.log(`f.orga seed → ${BASE}`);
   await login();
@@ -1322,6 +1347,9 @@ async function main(): Promise<void> {
 
   console.log('Beförderungen …');
   await promotions();
+
+  console.log('Datenschutz …');
+  await privacy(await call<PersonRef[]>('GET', 'masterdata/persons'));
 
   console.log('Fertig.');
 }

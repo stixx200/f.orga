@@ -10,6 +10,8 @@ export const SearchHit = z.object({
   description: z.string().optional(),
   /** Route in the shell, e.g. `/masterdata/persons/<id>`. */
   to: z.string(),
+  /** The hit is about this person: hidden while the processing of the person is restricted (Art. 18). */
+  personId: z.string().optional(),
 });
 export type SearchHit = z.infer<typeof SearchHit>;
 

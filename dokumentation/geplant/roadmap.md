@@ -119,7 +119,7 @@ Umgesetzt, siehe [Modul MP-Feuer](../implementiert/architektur.md#modul-mp-feuer
 Konzept mit Lückenanalyse: [datenschutz.md](datenschutz.md), Konzept und Mockups `mockups/datenschutz/` freigegeben. Umsetzung in fünf Phasen:
 
 1. Vor dem Echtbetrieb: HTTPS mit Sicherheitsheadern, Kennzeichnung des Testsystems, zweiter Faktor beim Öffnen sensibler Daten (Step-up), E-Mails ohne Gesundheitsbezug, Verletzte im Bericht nur mit Recht.
-2. Rechte der Betroffenen: Datenschutzhinweis und Hinweis bei der ersten Anmeldung, Betroffenenanfragen mit Frist und Bezug der Auskunft (die Auskunft als PDF aus allen Modulen ist umgesetzt), Einschränkung, Widerspruch.
+2. Rechte der Betroffenen (umgesetzt): Datenschutzhinweis und Hinweis bei der ersten Anmeldung, Betroffenenanfragen mit Frist, Auskunft als PDF aus allen Modulen, Einschränkung, Widerspruch.
 3. Nachweise: Verzeichnis der Verarbeitungstätigkeiten aus den Manifesten, Einwilligungen, Berichtigung in Mein Bereich, Leseprotokoll, Datenpannen.
 4. Löschen und Minimieren: Löschprüfung je Modul, vollständige Anonymisierung, Daten Dritter, abschaltbare Felder, Zweck der Listen.
 5. Härtung: Sitzungen, Infoterminal, API-Tokens, Passwörter, Anhänge, Betriebsanleitung.

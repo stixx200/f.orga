@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { LocalizedText } from './i18n.js';
 import { RetentionRule } from './retention.js';
+import { PRIVACY_PERMISSION, PrivacyContacts, PrivacyRecipients, PrivacySelfService, PrivacyTexts } from './privacy.js';
 import { SecuritySettings } from './stage.js';
 import { ReminderSettings } from './tasks.js';
 
@@ -95,6 +96,10 @@ export const CORE_SETTINGS = {
   privacy: PrivacySettings,
   oidc: OidcSettings,
   security: SecuritySettings,
+  'privacy.contacts': PrivacyContacts,
+  'privacy.texts': PrivacyTexts,
+  'privacy.selfServiceAccess': PrivacySelfService,
+  'privacy.recipients': PrivacyRecipients,
 } as const;
 
 /** Fields that are write-only and never leave the server. */
@@ -114,6 +119,13 @@ export interface SettingsAccess {
   managersOnly?: boolean;
   /** Fields only the managers see, e.g. the secret part of a calendar feed address. */
   managerFields?: string[];
+  /**
+   * Permissions that manage the section instead of the default (`core.settings.manage`, `<module>.settings.manage`),
+   * e.g. `core.privacy.manage` for the data protection sections.
+   */
+  managers?: string[];
+  /** Changed only through its own endpoint (e.g. versioned text blocks); `PUT /api/core/settings/:section` refuses it. */
+  dedicatedEndpoint?: boolean;
 }
 
 /**
@@ -132,7 +144,11 @@ export type OnboardingItem = z.infer<typeof OnboardingItem>;
 export const CORE_SETTINGS_ACCESS: Record<string, SettingsAccess> = {
   smtp: { managersOnly: true },
   oidc: { managersOnly: true },
-  privacy: { managersOnly: true },
+  privacy: { managersOnly: true, managers: ['core.settings.manage', PRIVACY_PERMISSION] },
   reminders: { managersOnly: true },
-  security: { managersOnly: true },
+  security: { managersOnly: true, managers: ['core.settings.manage', PRIVACY_PERMISSION] },
+  'privacy.contacts': { managersOnly: true, managers: [PRIVACY_PERMISSION] },
+  'privacy.texts': { managersOnly: true, managers: [PRIVACY_PERMISSION], dedicatedEndpoint: true },
+  'privacy.selfServiceAccess': { managersOnly: true, managers: [PRIVACY_PERMISSION] },
+  'privacy.recipients': { managersOnly: true, managers: [PRIVACY_PERMISSION] },
 };

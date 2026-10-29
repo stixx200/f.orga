@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import type { z } from 'zod';
-import { assertVersion, Audit, type AuthenticatedUser, berlinDate, brigadeLogoDataUrl, type Certificate, DomainEvents, renderCertificatesPdf, SettingsService } from '@forga/core-api';
+import { assertNotRestricted, assertVersion, Audit, type AuthenticatedUser, berlinDate, brigadeLogoDataUrl, type Certificate, DomainEvents, renderCertificatesPdf, SettingsService } from '@forga/core-api';
 import type { BrigadeSettings } from '@forga/core-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonCareer, type PersonDirectory } from '@forga/masterdata-contracts';
 import {
@@ -162,8 +162,9 @@ export class PromotionsService {
   /** Lists with the counts of the entries the user may see (as in `list`). */
   async lists(user: AuthenticatedUser): Promise<PromotionListSummary[]> {
     const lists = await this.em.fork().find(PromotionListEntity, {}, { orderBy: { referenceDate: 'desc', createdAt: 'desc' } });
+    const restricted = await this.persons.restrictedIds();
     return lists.map((l) => {
-      const entries = this.visibleEntries(user, l.entries);
+      const entries = this.visibleEntries(user, l.entries, restricted);
       return {
         id: l.id,
         title: l.title,
@@ -177,15 +178,18 @@ export class PromotionsService {
   }
 
   /** Entries of the departments the user may read (all with the brigade-wide permission). */
-  private visibleEntries(user: AuthenticatedUser, entries: ListEntry[]): ListEntry[] {
-    return user.grant(READ) === 'brigade' ? entries : entries.filter((e) => user.can(READ, e.departmentId));
+  private visibleEntries(user: AuthenticatedUser, entries: ListEntry[], restricted: ReadonlySet<string>): ListEntry[] {
+    // Persons whose processing is restricted (Art. 18) are not shown.
+    const shown = entries.filter((e) => !restricted.has(e.personId));
+    return user.grant(READ) === 'brigade' ? shown : shown.filter((e) => user.can(READ, e.departmentId));
   }
 
   /** A list with the entries the user may see (department commanders: their departments). */
   async list(user: AuthenticatedUser, id: string): Promise<PromotionList> {
     const list = await this.load(this.em.fork(), id);
     const dto = { ...toListDto(list), excluded: list.status === 'draft' ? await this.excludedOn(user, list.referenceDate) : [] };
-    return { ...dto, entries: this.visibleEntries(user, dto.entries) };
+    const restricted = await this.persons.restrictedIds(dto.entries.map((e) => e.personId));
+    return { ...dto, entries: this.visibleEntries(user, dto.entries, restricted) };
   }
 
   /** Excluded persons the rules would propose on the date (candidates are already limited to visible persons). */
@@ -316,7 +320,7 @@ export class PromotionsService {
     const list = await this.draft(em, id, input.version);
     if (list.entries.some((e) => e.personId === input.personId)) throw new ConflictException({ code: 'promotions.alreadyListed' });
     const [career] = await this.persons.careers([input.personId]);
-    if (!career) throw new NotFoundException();
+    if (!career || (await this.persons.isRestricted(input.personId))) throw new NotFoundException();
     const order = await this.rankOrder();
     const facts = careerFacts(career);
     if (!order.includes(input.targetRank) || order.indexOf(input.targetRank) <= order.indexOf(facts.rank ?? '')) throw new BadRequestException({ code: 'promotions.rankNotHigher' });
@@ -469,6 +473,7 @@ export class PromotionsService {
     const [career] = await this.persons.careers([personId]);
     if (!career) throw new NotFoundException();
     if (!this.visible(user, READ)(career.departmentIds)) throw new ForbiddenException();
+    assertNotRestricted(user, await this.persons.isRestricted(personId));
     const facts = careerFacts(career);
     const eligible = (await this.config()).eligibleStatuses as string[];
     const [next] = eligible.includes(career.status) ? await this.candidates(user, berlinDate(), [personId]) : [];
@@ -513,8 +518,11 @@ export class PromotionsService {
   }
 
   async exclusions(): Promise<Exclusion[]> {
-    const list = await this.em.fork().find(ExclusionEntity, {}, { orderBy: { from: 'desc' } });
-    const persons = new Map((await this.persons.summaries([...new Set(list.map((e) => e.personId))])).map((p) => [p.id, p]));
+    const all = await this.em.fork().find(ExclusionEntity, {}, { orderBy: { from: 'desc' } });
+    const ids = [...new Set(all.map((e) => e.personId))];
+    const restricted = await this.persons.restrictedIds(ids);
+    const list = all.filter((e) => !restricted.has(e.personId));
+    const persons = new Map((await this.persons.summaries(ids)).map((p) => [p.id, p]));
     return list.map((e) => this.toExclusion(e, persons.get(e.personId)));
   }
 

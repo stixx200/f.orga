@@ -233,7 +233,10 @@ export class IncidentsController {
     const owner = { departmentId: query.departmentId ?? null, unit: query.unit ?? null };
     if (!this.reports.canWrite(user, owner)) throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE] });
     const writers = await this.writers.index();
-    return [...(owner.departmentId ? writers.of(owner.departmentId) : writers.ofUnit(owner.unit as string))];
+    const ids = [...(owner.departmentId ? writers.of(owner.departmentId) : writers.ofUnit(owner.unit as string))];
+    // Persons whose processing is restricted (Art. 18) are not offered.
+    const restricted = await this.directory.restrictedIds(ids);
+    return ids.filter((id) => !restricted.has(id));
   }
 
   @Get('incidents/:id')
@@ -446,7 +449,10 @@ export class IncidentsController {
       { populate: ['report.incident'], orderBy: { report: { alarmedAt: 'desc' } }, limit: 1 },
     );
     if (!latest) return none;
-    const crew = await em.find(ReportPersonnelEntity, { report: latest.report, vehicleId, personId: { $ne: null } });
+    const all = await em.find(ReportPersonnelEntity, { report: latest.report, vehicleId, personId: { $ne: null } });
+    // Persons whose processing is restricted (Art. 18) are not suggested again.
+    const restricted = await this.directory.restrictedIds(all.map((p) => p.personId as string));
+    const crew = all.filter((p) => !restricted.has(p.personId as string));
     return {
       reportId: latest.report.id,
       dispatchNumber: latest.report.incident.dispatchNumber,
@@ -528,7 +534,9 @@ export class IncidentsController {
     const em = this.em.fork();
     const reports = await em.find(ReportEntity, { status: 'draft', authorPersonId: { $in: input.personIds } }, { populate: REPORT_POPULATE, orderBy: { alarmedAt: 'asc' } });
     const visible = reports.filter((r) => this.reports.canReview(user, r));
-    const authors = await this.directory.summaries(input.personIds);
+    // No e-mails to persons whose processing is restricted (Art. 18).
+    const restricted = await this.directory.restrictedIds(input.personIds);
+    const authors = (await this.directory.summaries(input.personIds)).filter((a) => !restricted.has(a.id));
     const departments = new Map((await this.organization.departments()).map((d) => [d.id, d.name]));
     const sent: string[] = [];
     const missingEmail: string[] = [];
@@ -611,6 +619,7 @@ export class IncidentsController {
   private async tellAuthor(report: ReportEntity, comment: string, user: AuthenticatedUser): Promise<void> {
     if (!report.authorPersonId) return;
     try {
+      if (await this.directory.isRestricted(report.authorPersonId)) return;
       const [author] = await this.directory.summaries([report.authorPersonId]);
       if (!author?.email) return;
       const language = await this.languageOf(author.id);

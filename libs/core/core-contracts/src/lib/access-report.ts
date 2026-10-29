@@ -1,11 +1,9 @@
 import { z } from 'zod';
 import { Language, LocalizedText } from './i18n.js';
+import { PRIVACY_PERMISSION } from './privacy.js';
 
-/**
- * TEMPORARY: permission for creating and handing over access reports until `core.privacy.manage` (with step-up) exists.
- * Replace by `core.privacy.manage` once the data subject requests are merged.
- */
-export const ACCESS_REPORT_PERMISSION = 'core.data.export';
+/** Creating, viewing and handing over access reports: managing data protection (with step-up). */
+export const ACCESS_REPORT_PERMISSION = PRIVACY_PERMISSION;
 
 /** Days an access report stays stored (encrypted) before its file is deleted. */
 export const ACCESS_REPORT_DAYS = 30;
@@ -75,6 +73,8 @@ export const AccessReportHandOver = z.object({
   channel: AccessReportChannel,
   /** Day of the handover, `YYYY-MM-DD`; default today. */
   date: z.iso.date().optional(),
+  /** „Anfrage damit erledigt“: closes the data subject request of the report as done. */
+  closeRequest: z.boolean().default(false),
 });
 export type AccessReportHandOver = z.input<typeof AccessReportHandOver>;
 
@@ -113,6 +113,8 @@ export type AccessReportSectionSummary = z.infer<typeof AccessReportSectionSumma
 /** An access report provided to the person in "Mein Bereich". */
 export const MyAccessReport = z.object({
   id: z.uuid(),
+  /** `pending` while a report created by the member (`instant`) is generated. */
+  status: AccessReportStatus,
   language: Language,
   createdAt: z.string(),
   expiresAt: z.string(),

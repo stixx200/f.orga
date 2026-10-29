@@ -24,7 +24,7 @@ function toDate(value: Date | string): { day: string } | { instant: Date } | nul
 }
 
 /** Formats a day: `21.10.2026` in German, `21 Oct 2026` in English. */
-export function formatDay(day: string, language: Language): string {
+export function formatReportDay(day: string, language: Language): string {
   const [year, month, date] = day.split('-');
   if (language === 'de') return `${date}.${month}.${year}`;
   return new Date(Date.UTC(Number(year), Number(month) - 1, Number(date))).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -70,7 +70,7 @@ export function createDescribeContext(options: DescribeContextOptions): Describe
     if (isEmpty(value)) return EMPTY;
     const parsed = toDate(value!);
     if (!parsed) return EMPTY;
-    return formatDay('day' in parsed ? parsed.day : dayOf(parsed.instant), language);
+    return formatReportDay('day' in parsed ? parsed.day : dayOf(parsed.instant), language);
   };
 
   return {
@@ -85,7 +85,7 @@ export function createDescribeContext(options: DescribeContextOptions): Describe
       if (isEmpty(value)) return EMPTY;
       const parsed = toDate(value!);
       if (!parsed) return EMPTY;
-      return 'day' in parsed ? formatDay(parsed.day, language) : `${formatDay(dayOf(parsed.instant), language)} ${timeOf(parsed.instant)}`;
+      return 'day' in parsed ? formatReportDay(parsed.day, language) : `${formatReportDay(dayOf(parsed.instant), language)} ${timeOf(parsed.instant)}`;
     },
     time(value) {
       if (isEmpty(value)) return EMPTY;

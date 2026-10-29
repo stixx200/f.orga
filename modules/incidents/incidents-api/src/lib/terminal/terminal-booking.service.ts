@@ -116,16 +116,18 @@ export class TerminalBookingService implements IncidentsTerminalBooking {
     const em = this.em.fork();
     const report = await this.open(em, reportId, departmentId, settings, now);
     const siblings = await em.find(ReportEntity, { incident: report.incident, id: { $ne: report.id } }, { populate: ['personnel'] });
+    // Persons whose processing is restricted (Art. 18) never appear at the info terminal.
+    const restricted = await this.directory.restrictedIds([...report.personnel.getItems(), ...siblings.flatMap((s) => s.personnel.getItems())].flatMap((p) => (p.personId ? [p.personId] : [])));
     const elsewhere: TerminalReportDetail['elsewhere'] = {};
     for (const sibling of siblings) {
       for (const p of sibling.personnel.getItems()) {
-        if (p.personId) elsewhere[p.personId] = { departmentId: sibling.departmentId ?? null, unit: sibling.unit ?? null };
+        if (p.personId && !restricted.has(p.personId)) elsewhere[p.personId] = { departmentId: sibling.departmentId ?? null, unit: sibling.unit ?? null };
       }
     }
     return {
       ...this.summary(report, settings, await this.reports.ledExternally(report)),
       departmentId,
-      entries: report.personnel.getItems().filter((p) => p.personId).map(toEntry),
+      entries: report.personnel.getItems().filter((p) => p.personId && !restricted.has(p.personId)).map(toEntry),
       elsewhere,
     };
   }
@@ -140,8 +142,8 @@ export class TerminalBookingService implements IncidentsTerminalBooking {
   ): Promise<TerminalEntry> {
     const input = TerminalBookingInput.parse(raw);
     const [person] = await this.directory.snapshots([input.personId]);
-    // Only persons of the master data who have not left; guests are entered by the author.
-    if (!person || person.status === 'left') throw new BadRequestException({ code: 'incidents.unknownPerson' });
+    // Only persons of the master data who have not left and whose processing is not restricted; guests are entered by the author.
+    if (!person || person.status === 'left' || (await this.directory.isRestricted(person.id))) throw new BadRequestException({ code: 'incidents.unknownPerson' });
     if (input.vehicleId) {
       const vehicle = (await this.organization.vehicles()).find((v) => v.id === input.vehicleId);
       if (!vehicle || vehicle.status !== 'in-service') throw new BadRequestException({ code: 'incidents.unknownVehicle' });

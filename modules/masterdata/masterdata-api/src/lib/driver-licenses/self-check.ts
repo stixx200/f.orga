@@ -29,7 +29,8 @@ export class LicenseSelfCheckService implements MasterdataLicenseSelfCheck {
   async lookup(code: string): Promise<LicenseSelfCheckView | null> {
     const em = this.em.fork();
     const token = await this.licenses.activeToken(em, code);
-    if (!token) return null;
+    // A person whose processing is restricted does not exist for the info terminal.
+    if (!token || token.person.restrictedAt) return null;
     const person = token.person;
     const [settings, records] = await Promise.all([this.licenses.settings(), this.licenses.records(em, [person.id])]);
     const status = this.licenses.status(person, records, settings);
@@ -48,7 +49,7 @@ export class LicenseSelfCheckService implements MasterdataLicenseSelfCheck {
   async confirm(code: string, origin: { terminalId: string; device: string; language: Language }): Promise<LicenseSelfCheckResult> {
     const em = this.em.fork();
     const token = await this.licenses.activeToken(em, code);
-    if (!token) throw new NotFoundException({ code: 'masterdata.licenseNotRegistered' });
+    if (!token || token.person.restrictedAt) throw new NotFoundException({ code: 'masterdata.licenseNotRegistered' });
     const settings = await this.licenses.settings();
     if (!selfCheckEnabled(settings)) throw new ForbiddenException({ code: 'masterdata.selfCheckOff' });
     const status = this.licenses.status(token.person, await this.licenses.records(em, [token.person.id]), settings);

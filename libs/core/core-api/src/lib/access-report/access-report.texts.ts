@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import type { BrigadeSettings, Language } from '@forga/core-contracts';
+import { fillPlaceholders, type BrigadeSettings, type Language, type PrivacyTextKey } from '@forga/core-contracts';
+import { PrivacyNoticeService } from '../privacy/privacy-notice.js';
+import { formatDay, lines } from '../privacy/privacy-text.js';
 import { SettingsService } from '../settings/settings.js';
 
 /** Contacts and text blocks of the cover letter (Art. 15 para. 1 GDPR). */
 export interface AccessReportLetterTexts {
-  /** At least one text is still a template („Vorlage“) not confirmed by anyone. */
+  /** At least one text block of the letter is still a template („Vorlage“) not confirmed as reviewed. */
   template: boolean;
   controller: string;
   dataProtectionOfficer: string;
@@ -20,48 +22,38 @@ export interface AccessReportLetterTexts {
   closing: string;
 }
 
-const TEMPLATE = { de: 'Vorlage', en: 'Template' } as const;
+/** Text blocks of the cover letter; the letter is a template while one of them is not reviewed. */
+const LETTER_BLOCKS: PrivacyTextKey[] = ['accessReportIntro', 'rights', 'automatedDecisions', 'thirdCountry'];
 
 /**
- * Where the cover letter gets its contacts and text blocks from. Until the settings „Datenschutz“ (`privacy.contacts`,
- * `privacy.texts`) exist, it uses example texts that are marked as template („Vorlage“): they name only the titles of
- * the articles and placeholders and have to be checked with the data protection officer of the municipality.
+ * The contacts (`privacy.contacts`) and text blocks (`privacy.texts`) of the settings „Datenschutz“ for the cover letter;
+ * missing contacts appear as placeholder in square brackets.
  */
 @Injectable()
 export class AccessReportTexts {
-  constructor(private readonly settings: SettingsService) {}
+  constructor(
+    private readonly settings: SettingsService,
+    private readonly notices: PrivacyNoticeService,
+  ) {}
 
-  async letter(language: Language): Promise<AccessReportLetterTexts> {
-    const brigade = await this.settings.get<BrigadeSettings>('brigade');
+  /** `receivedOn`: day the request came in (`YYYY-MM-DD`), or the day of the report without a request. */
+  async letter(language: Language, values: { name: string; receivedOn: string }): Promise<AccessReportLetterTexts> {
+    const [brigade, contacts, texts] = await Promise.all([this.settings.get<BrigadeSettings>('brigade'), this.notices.contacts(), this.notices.texts()]);
     const de = language === 'de';
-    const mark = (text: string) => `[${TEMPLATE[language]}] ${text}`;
-    const municipality = brigade?.municipality || (de ? '[Gemeinde]' : '[municipality]');
-    const name = brigade?.name ?? '';
+    const missing = de ? '[in den Einstellungen Datenschutz eintragen]' : '[enter in the data protection settings]';
+    const inline = (...parts: (string | null | undefined)[]) => lines(...parts).replaceAll('\n', ', ') || missing;
+    const filled = (key: PrivacyTextKey) =>
+      fillPlaceholders(texts[key].text[language], { brigade: brigade?.name ?? '', name: values.name, receivedOn: formatDay(values.receivedOn, language) });
+    const { controller, dpo, authority } = contacts;
     return {
-      template: true,
-      controller: de
-        ? `${municipality}, für die ${name} [Anschrift und Vertretung in den Einstellungen Datenschutz eintragen]`
-        : `${municipality}, for the ${name} [enter address and representative in the data protection settings]`,
-      dataProtectionOfficer: de
-        ? `Datenschutzbeauftragter der ${municipality} [Kontakt in den Einstellungen Datenschutz eintragen]`
-        : `Data protection officer of ${municipality} [enter contact in the data protection settings]`,
-      authority: de
-        ? 'Der Landesbeauftragte für den Datenschutz und die Informationsfreiheit Baden-Württemberg [Anschrift in den Einstellungen eintragen]'
-        : 'The State Commissioner for Data Protection and Freedom of Information Baden-Württemberg [enter address in the settings]',
-      introduction: mark(
-        de
-          ? 'Sie haben Auskunft über die personenbezogenen Daten verlangt, die wir über Sie verarbeiten. Auf den folgenden Seiten finden Sie die Angaben nach Art. 15 DSGVO und eine Kopie Ihrer Daten. [Textbaustein „Einleitung“ – mit dem Datenschutzbeauftragten der Gemeinde abzustimmen.]'
-          : 'You have asked for access to the personal data we process about you. The following pages contain the information under Art. 15 GDPR and a copy of your data. [Text block "introduction" – to be agreed with the data protection officer of the municipality.]',
-      ),
-      rights: de
-        ? 'Recht auf Berichtigung (Art. 16 DSGVO), Recht auf Löschung (Art. 17 DSGVO), Recht auf Einschränkung der Verarbeitung (Art. 18 DSGVO), Widerspruchsrecht (Art. 21 DSGVO)'
-        : 'Right to rectification (Art. 16 GDPR), right to erasure (Art. 17 GDPR), right to restriction of processing (Art. 18 GDPR), right to object (Art. 21 GDPR)',
-      automatedDecision: mark(
-        de
-          ? 'Eine automatisierte Entscheidungsfindung einschließlich Profiling (Art. 22 DSGVO) findet nicht statt. Hinweise der Anwendung (z. B. Ampeln, Beförderungsvorschläge) sind Entscheidungshilfen.'
-          : 'There is no automated decision-making including profiling (Art. 22 GDPR). Hints of the application (e.g. traffic lights, promotion proposals) only support decisions.',
-      ),
-      thirdCountry: mark(de ? 'Eine Übermittlung in Drittländer findet nicht statt.' : 'There is no transfer to third countries.'),
+      template: LETTER_BLOCKS.some((key) => !texts[key].reviewedAt),
+      controller: inline(controller.name, controller.address, controller.representedBy && (de ? `vertreten durch ${controller.representedBy}` : `represented by ${controller.representedBy}`)),
+      dataProtectionOfficer: inline(dpo.name, dpo.address, dpo.email, dpo.phone),
+      authority: inline(authority.name, authority.address, authority.website),
+      introduction: filled('accessReportIntro'),
+      rights: filled('rights'),
+      automatedDecision: filled('automatedDecisions'),
+      thirdCountry: filled('thirdCountry'),
       closing: de ? 'Mit freundlichen Grüßen' : 'Kind regards',
     };
   }

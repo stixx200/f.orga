@@ -12,3 +12,4 @@ export * from './lib/attachments.js';
 export * from './lib/audit.js';
 export * from './lib/stage.js';
 export * from './lib/access-report.js';
+export * from './lib/privacy.js';

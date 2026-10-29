@@ -24,7 +24,7 @@ function HiddenTasksPanel({ session, modules }: { session: Session; modules: Loa
   const toggle = (key: string, hide: boolean) => save.mutate(hide ? [...hidden, key] : [...hidden].filter((k) => k !== key));
   const moduleName = (id: string) => {
     const module = modules.find((m) => m.info.id === id);
-    return module ? localized(module.info.name) : id;
+    return module ? localized(module.info.name) : id === 'core' ? t('nav.administration') : id;
   };
   const kinds = new Map<string, Map<string, LocalizedText>>();
   for (const task of tasks) {

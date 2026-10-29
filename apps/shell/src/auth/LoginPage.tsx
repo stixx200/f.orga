@@ -66,6 +66,7 @@ export function LoginPage({ brigadeName, oidc }: { brigadeName: string | null; o
               <LanguageSwitch loggedIn={false} />
               <Anchor component="button" type="button" size="sm" onClick={() => setForgotten(true)}>{t('login.forgotten')}</Anchor>
             </Group>
+            <Anchor href="/privacy" size="xs" c="dimmed">{t('privacy.notice.link')}</Anchor>
           </Stack>
         </form>
       </Paper>

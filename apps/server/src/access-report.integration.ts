@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EntityManager } from '@mikro-orm/core';
-import { AccessReportService, AuditEntry, ExportRegistry, MailService, PrivacyDocument, sectionTexts, UUID_PATTERN, type PersonDataSection } from '@forga/core-api';
+import { AccessReportService, AccessReportTexts, AuditEntry, ExportRegistry, MailService, PrivacyDocument, sectionTexts, UUID_PATTERN, type PersonDataSection } from '@forga/core-api';
 import { INSTALLED_MODULES } from './app/installed-modules';
 import { createFixture, OTHER_NAMES, type AccessReportFixture, type SeedResult } from './testing/access-report/fixture';
 import { SEEDS } from './testing/access-report/seeds';
@@ -202,5 +202,57 @@ describe('access report documents', () => {
     const report = (await fx.post('/core/privacy/access-reports', { personId: other }).expect(202)).body;
     await service().idle();
     expect((await fx.post(`/core/privacy/access-reports/${report.id}/hand-over`, { channel: 'self-service' }).expect(400)).body.code).toBe('privacy.noAccount');
+  });
+});
+
+const request = async (kind = 'access', personId = fx.ids.person) =>
+  (await fx.post('/core/privacy/requests', { personId, kind, receivedOn: '2026-10-20', channel: 'letter', identityChecked: true, identityNote: 'Unterschrift' }).expect(201)).body as { id: string };
+
+describe('access reports for data subject requests', () => {
+  let requestId: string;
+
+  it('links the report to the access request it answers', async () => {
+    requestId = (await request()).id;
+    const created = (await fx.post('/core/privacy/access-reports', { personId: fx.ids.person, requestId }).expect(202)).body;
+    expect(created.requestId).toBe(requestId);
+    await service().idle();
+    expect((await fx.get(`/core/privacy/requests/${requestId}`).expect(200)).body.accessReportDocumentId).toBe(created.id);
+    // Only an access request of the same person.
+    const objection = await request('objection');
+    expect((await fx.post('/core/privacy/access-reports', { personId: fx.ids.person, requestId: objection.id }).expect(400)).body.code).toBe('privacy.requestMismatch');
+    expect((await fx.post('/core/privacy/access-reports', { personId: fx.ids.otherPerson, requestId }).expect(400)).body.code).toBe('privacy.requestMismatch');
+
+    // „Anfrage damit erledigt“ with the handover.
+    await fx.post(`/core/privacy/access-reports/${created.id}/hand-over`, { channel: 'in-person', date: '2026-10-28', closeRequest: true }).expect(201);
+    expect((await fx.get(`/core/privacy/requests/${requestId}`).expect(200)).body).toMatchObject({ status: 'done', closedOn: '2026-10-28' });
+  });
+
+  it('writes the cover letter from the contacts and text blocks of the settings', async () => {
+    await fx.put('/core/settings/privacy.contacts', { controller: { name: 'Stadt Musterstadt', address: 'Marktplatz 1, 12345 Musterstadt', representedBy: 'Bürgermeisterin' }, dpo: { name: 'Datenschutzbeauftragter der Stadt', email: 'datenschutz@musterstadt.example' } }).expect(200);
+    const letter = await test.app.get(AccessReportTexts).letter('de', { name: 'Tobias Probe', receivedOn: '2026-10-20' });
+    expect(letter.controller).toBe('Stadt Musterstadt, Marktplatz 1, 12345 Musterstadt, vertreten durch Bürgermeisterin');
+    expect(letter.dataProtectionOfficer).toContain('datenschutz@musterstadt.example');
+    expect(letter.authority).toContain('Baden-Württemberg');
+    expect(letter.introduction).toContain('20.10.2026');
+    expect(letter.introduction).not.toContain('{');
+    // Text blocks not reviewed yet: the letter is a template.
+    expect(letter.template).toBe(true);
+  });
+
+  it('lets the member create the own report right away with `instant`, at most once a day', async () => {
+    await fx.put('/core/settings/privacy.selfServiceAccess', { mode: 'instant', contact: '' }).expect(200);
+    try {
+      await fx.post('/core/privacy/me/requests', { language: 'de' }, fx.member).expect(201);
+      await service().idle();
+      const mine = (await fx.get('/core/me/access-reports', fx.member).expect(200)).body as { id: string; status: string }[];
+      expect(mine[0]).toMatchObject({ status: 'ready' });
+      await fx.get(`/core/me/access-reports/${mine[0].id}/file`, fx.member).expect(200);
+      // Recorded as an access request of the channel "Mein Bereich", answered by the report and done.
+      const requests = (await fx.get(`/core/privacy/requests?state=all&personId=${fx.ids.person}`).expect(200)).body as { channel: string; status: string; accessReportDocumentId: string | null }[];
+      expect(requests.find((r) => r.channel === 'my-area')).toMatchObject({ status: 'done', accessReportDocumentId: mine[0].id });
+      expect((await fx.post('/core/privacy/me/requests', { language: 'de' }, fx.member).expect(409)).body.code).toBe('privacy.accessReportToday');
+    } finally {
+      await fx.put('/core/settings/privacy.selfServiceAccess', { mode: 'request', contact: '' }).expect(200);
+    }
   });
 });

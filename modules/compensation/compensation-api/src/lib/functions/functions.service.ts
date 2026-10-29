@@ -22,7 +22,10 @@ export class FunctionsService {
   async list(): Promise<FunctionHolder[]> {
     const config = await this.items.config();
     const linked = new Set(config.functionAllowances.filter((f) => f.office).map((f) => f.key));
-    const own = (await this.em.fork().find(FunctionHolderEntity, {}, { orderBy: { functionKey: 'asc', from: 'asc' } })).filter((h) => !linked.has(h.functionKey)).map(toDto);
+    const stored = await this.em.fork().find(FunctionHolderEntity, {}, { orderBy: { functionKey: 'asc', from: 'asc' } });
+    // Persons whose processing is restricted (Art. 18) are left out, like the office holders of the person files.
+    const restricted = await this.directory.restrictedIds([...new Set(stored.map((h) => h.personId))]);
+    const own = stored.filter((h) => !linked.has(h.functionKey) && !restricted.has(h.personId)).map(toDto);
     return [...own, ...(await this.fromOffices())].toSorted((a, b) => a.functionKey.localeCompare(b.functionKey) || a.from.localeCompare(b.from));
   }
 

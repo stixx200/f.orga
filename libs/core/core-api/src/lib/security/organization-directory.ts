@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { ProcessingRestrictionReason } from '@forga/core-contracts';
 import type { AuthenticatedUser, SubDepartments } from './authenticated-user.js';
 
 export interface DepartmentNode {
@@ -17,6 +18,10 @@ export interface PersonSummary {
   email: string;
   /** Departments that decide who may see the person's data (current memberships, or the last ones after leaving). */
   departmentIds: string[];
+  /** Postal address, e.g. for reply letters to data protection requests. */
+  street?: string;
+  postalCode?: string;
+  city?: string;
 }
 
 /** Postal address of a person, e.g. for the cover letter of the access report. */
@@ -48,6 +53,12 @@ export interface OrganizationProvider {
   searchPersons?(user: AuthenticatedUser, query: string, limit: number): Promise<{ id: string; label: string }[]>;
   /** Postal address of a person (letters to the person); `null` for unknown persons. */
   postalAddress?(personId: string): Promise<PostalAddress | null>;
+  /**
+   * Persons whose processing is restricted (Art. 18): they disappear from deadlines, search and e-mails of the core.
+   */
+  restrictedPersonIds?(): Promise<string[]>;
+  /** Restricts the processing of a person (a request with `restrict`); `false` if the person is unknown. */
+  restrictProcessing?(personId: string, restriction: { reason: ProcessingRestrictionReason; until: string | null; requestId: string | null }): Promise<boolean>;
 }
 
 @Injectable()
@@ -116,6 +127,16 @@ export class OrganizationDirectory {
 
   async postalAddress(personId: string): Promise<PostalAddress | null> {
     return this.provider?.postalAddress ? this.provider.postalAddress(personId) : null;
+  }
+
+  /** Persons whose processing is restricted (Art. 18); empty without a provider. */
+  async restrictedPersonIds(): Promise<Set<string>> {
+    return new Set(this.provider?.restrictedPersonIds ? await this.provider.restrictedPersonIds() : []);
+  }
+
+  /** Restricts the processing of a person; `false` without a provider or for an unknown person. */
+  async restrictProcessing(personId: string, restriction: { reason: ProcessingRestrictionReason; until: string | null; requestId: string | null }): Promise<boolean> {
+    return this.provider?.restrictProcessing ? this.provider.restrictProcessing(personId, restriction) : false;
   }
 
   async searchPersons(user: AuthenticatedUser, query: string, limit = 20): Promise<{ id: string; label: string }[]> {

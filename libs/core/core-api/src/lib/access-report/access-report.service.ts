@@ -21,6 +21,7 @@ import {
   CORE_ACTIVITIES,
   type Language,
   type MyAccessReport,
+  PrivacyRequestInput,
   type ProcessingActivity,
   RetentionRule,
   retentionRuleKey,
@@ -41,6 +42,8 @@ import { SettingsService } from '../settings/settings.js';
 import { MailService } from '../tasks/mail.service.js';
 import { Notifications } from '../tasks/notifications.js';
 import { renderAccessReport, type SectionInfo } from './access-report.pdf.js';
+import { PrivacyRequestEntity } from '../privacy/privacy.entities.js';
+import { PrivacyRequests } from '../privacy/privacy-requests.js';
 import { AccessReportTexts } from './access-report.texts.js';
 import { assertPersonDataComplete } from './completeness.js';
 import { createDescribeContext, type DescribedAccount } from './describe-context.js';
@@ -71,7 +74,7 @@ interface Collected {
 export class AccessReportService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(AccessReportService.name);
   private timer?: ReturnType<typeof setInterval>;
-  private readonly running = new Set<Promise<void>>();
+  private readonly running = new Set<Promise<unknown>>();
 
   constructor(
     private readonly em: EntityManager,
@@ -86,6 +89,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     private readonly mail: MailService,
     private readonly notifications: Notifications,
     private readonly texts: AccessReportTexts,
+    private readonly requests: PrivacyRequests,
   ) {}
 
   /**
@@ -94,6 +98,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
    */
   async onApplicationBootstrap(): Promise<void> {
     this.assertComplete();
+    this.requests.instantAccessReport = (user, language) => this.createInstant(user, language);
     await this.em.fork().nativeUpdate(PrivacyDocument, { status: 'pending' }, { status: 'failed', error: 'privacy.generationInterrupted' });
     if (process.env.FORGA_PRIVACY_SCHEDULER === 'off') return;
     const run = () =>
@@ -228,6 +233,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
   }
 
   /** The PDF of the report, without storing it. */
+  /** `requestDate`: day the data subject request came in, if the report answers one. */
   async render(personId: string, language: Language, includeJson: boolean, requestDate: string | null = null): Promise<Buffer> {
     const now = new Date();
     const { personName, sections, origins, ctx } = await this.collect(personId, language, now);
@@ -257,7 +263,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
       logo: await brigadeLogoDataUrl(em),
       personName,
       address: await this.organization.postalAddress(personId),
-      letter: await this.texts.letter(language),
+      letter: await this.texts.letter(language, { name: personName, receivedOn: requestDate ?? berlinDate(now) }),
       purposes: unique(described.map((d) => d.info.purpose ?? '')),
       categories,
       recipients: unique([...described.flatMap((d) => d.info.recipients), ...tokenRecipients]),
@@ -307,6 +313,18 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     const key = this.key();
     const persons = await this.organization.persons([input.personId]);
     if (persons && !persons.length) throw new NotFoundException({ code: 'data.unknownPerson' });
+    if (input.requestId) {
+      // Only an access request of the same person can be answered by the report.
+      const request = await this.em.fork().findOne(PrivacyRequestEntity, input.requestId);
+      if (!request || request.personId !== input.personId || request.kind !== 'access') throw new BadRequestException({ code: 'privacy.requestMismatch' });
+    }
+    const document = await this.store(input, user.id, null);
+    await this.audit.log('privacy.access-report-created', { personId: input.personId, documentId: document.id, language: input.language, includeJson: input.includeJson, requestId: input.requestId });
+    this.track(this.generate(document.id, key));
+    return this.dto(document, new Map([[user.id, user.displayName]]));
+  }
+
+  private async store(input: Required<AccessReportCreate>, createdBy: string, selfService: string | null): Promise<PrivacyDocument> {
     const em = this.em.fork();
     const now = new Date();
     const document = em.create(PrivacyDocument, {
@@ -316,17 +334,43 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
       includeJson: input.includeJson,
       status: 'pending',
       createdAt: now,
-      createdBy: user.id,
+      createdBy,
       expiresAt: new Date(now.getTime() + ACCESS_REPORT_DAYS * DAY_MS),
       requestId: input.requestId,
+      // Created by the member itself (`instant`): provided in "Mein Bereich" right away.
+      ...(selfService ? { channel: 'self-service' as const, handedOverOn: selfService, handedOverBy: createdBy } : {}),
     });
     await em.flush();
-    await this.audit.log('privacy.access-report-created', { personId: input.personId, documentId: document.id, language: input.language, includeJson: input.includeJson });
-    this.track(this.generate(document.id, key));
-    return this.dto(document, new Map([[user.id, user.displayName]]));
+    if (input.requestId) await this.requests.attachAccessReport(input.requestId, document.id);
+    return document;
   }
 
-  private track(job: Promise<void>): void {
+  /**
+   * Self-service `instant` (setting `privacy.selfServiceAccess`): the member creates the own report in "Mein Bereich",
+   * at most once a day. It is recorded as an access request of the channel "Mein Bereich", answered by the report.
+   */
+  async createInstant(user: AuthenticatedUser, language: Language): Promise<void> {
+    const key = this.key();
+    if (!user.personId) throw new BadRequestException({ code: 'privacy.noPerson' });
+    const since = new Date(Date.now() - DAY_MS);
+    if (await this.em.fork().count(PrivacyDocument, { personId: user.personId, createdBy: user.id, status: { $ne: 'failed' }, createdAt: { $gt: since } })) {
+      throw new ConflictException({ code: 'privacy.accessReportToday' });
+    }
+    const today = berlinDate();
+    const request = await this.requests.create(
+      PrivacyRequestInput.parse({ personId: user.personId, kind: 'access', receivedOn: today, channel: 'my-area', identityChecked: true, identityNote: '', language }),
+      user.id,
+    );
+    const document = await this.store({ personId: user.personId, language, includeJson: false, requestId: request.id }, user.id, today);
+    await this.audit.log('privacy.access-report-created', { personId: user.personId, documentId: document.id, language, includeJson: false, requestId: request.id, selfService: true });
+    this.track(
+      this.generate(document.id, key).then(async (ready) => {
+        if (ready) await this.requests.closeDone(request.id, berlinDate());
+      }),
+    );
+  }
+
+  private track(job: Promise<unknown>): void {
     this.running.add(job);
     void job.finally(() => this.running.delete(job));
   }
@@ -336,11 +380,13 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     while (this.running.size) await Promise.all(this.running);
   }
 
-  private async generate(id: string, key: Buffer): Promise<void> {
+  /** Renders and stores the PDF; `true` if it is ready. */
+  private async generate(id: string, key: Buffer): Promise<boolean> {
     const em = this.em.fork();
     const document = await em.findOneOrFail(PrivacyDocument, id);
     try {
-      const pdf = await this.render(document.personId, document.language, document.includeJson);
+      const request = document.requestId ? await em.findOne(PrivacyRequestEntity, document.requestId) : null;
+      const pdf = await this.render(document.personId, document.language, document.includeJson, request?.receivedOn ?? null);
       document.content = encryptBytes(pdf, key);
       document.size = pdf.length;
       document.status = 'ready';
@@ -350,6 +396,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
       document.error = 'privacy.generationFailed';
     }
     await em.flush();
+    return document.status === 'ready';
   }
 
   async list(personId: string): Promise<AccessReport[]> {
@@ -399,6 +446,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     document.handedOverBy = user.id;
     await em.flush();
     await this.audit.log('privacy.access-report-handed-over', { personId: document.personId, documentId: document.id, channel: input.channel });
+    if (input.closeRequest && document.requestId) await this.requests.closeDone(document.requestId, document.handedOverOn);
     if (account?.email) await this.notifyReady(account, document);
     return (await this.dtos([document]))[0];
   }
@@ -423,10 +471,10 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     if (!user.personId) return [];
     const documents = await this.em.fork().find(
       PrivacyDocument,
-      { personId: user.personId, channel: 'self-service', status: 'ready', deletedAt: null, expiresAt: { $gt: new Date() } },
+      { personId: user.personId, channel: 'self-service', status: { $in: ['ready', 'pending'] }, deletedAt: null, expiresAt: { $gt: new Date() } },
       { orderBy: { createdAt: 'desc' } },
     );
-    return documents.map((d) => ({ id: d.id, language: d.language, createdAt: d.createdAt.toISOString(), expiresAt: d.expiresAt.toISOString(), providedOn: d.handedOverOn ?? null }));
+    return documents.map((d) => ({ id: d.id, status: d.status, language: d.language, createdAt: d.createdAt.toISOString(), expiresAt: d.expiresAt.toISOString(), providedOn: d.handedOverOn ?? null }));
   }
 
   /** Deletes the files of expired reports; the rows stay as record of creation and handover. */

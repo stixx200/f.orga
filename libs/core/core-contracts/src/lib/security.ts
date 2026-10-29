@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Language, LocalizedText } from './i18n.js';
+import { SessionPrivacyNotice } from './privacy.js';
 import type { Permission, RoleTemplate } from './module.js';
 
 /** Permissions of the core itself. Modules declare their own in their manifest. */
@@ -13,6 +14,13 @@ export const CORE_PERMISSIONS = [
   { id: 'core.audit.read', name: { de: 'Audit-Log lesen', en: 'Read audit log' }, scope: 'brigade', stepUp: true },
   { id: 'core.retention.manage', name: { de: 'Aussonderung bearbeiten (Archiv anbieten, Fristablauf ausführen)', en: 'Process retention (offer to the archive, execute expiry)' }, scope: 'brigade', stepUp: true },
   { id: 'core.data.export', name: { de: 'Vollexport und Auskunft (DSGVO)', en: 'Full export and data access requests' }, scope: 'brigade', stepUp: true },
+  {
+    id: 'core.privacy.manage',
+    name: { de: 'Datenschutz verwalten (Anfragen, Einschränkung, Datenschutzhinweis)', en: 'Manage data protection (requests, restriction, privacy notice)' },
+    scope: 'brigade',
+    privileged: true,
+    stepUp: true,
+  },
 ] as const satisfies readonly Permission[];
 
 /**
@@ -147,6 +155,8 @@ export const Session = z.object({
    * sign-in at the OIDC provider with its second factor (setting `oidc.stepUpViaProvider`, linked account).
    */
   mfa: z.object({ enrolled: z.boolean(), available: z.boolean(), passwordRequired: z.boolean(), recoveryCodesLeft: z.number().int(), viaProvider: z.boolean() }),
+  /** Privacy notice: version and whether the shell asks the user to acknowledge it (first sign-in, new version). */
+  privacyNotice: SessionPrivacyNotice,
 });
 export type Session = z.infer<typeof Session>;
 
