@@ -1,32 +1,104 @@
 import { createHmac } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { type Browser, expect, type Page } from '@playwright/test';
+import { dirname } from 'node:path';
+import { type APIResponse, type Browser, type BrowserContext, type Download, expect, type Page, test as base } from '@playwright/test';
+
+export { expect } from '@playwright/test';
+
+/** Browser contexts opened by `login` and `openTerminal` in the running test; closed after it. */
+const contexts = new Set<BrowserContext>();
+
+async function newPage(browser: Browser): Promise<Page> {
+  const context = await browser.newContext();
+  contexts.add(context);
+  return context.newPage();
+}
+
+/** `test` of Playwright that closes the browser contexts of `login` and `openTerminal` after each test. */
+export const test = base.extend<{ closeContexts: void }>({
+  closeContexts: [
+    // Depends on the browser, whose contexts it closes.
+    async ({ browser: _browser }, use) => {
+      await use();
+      await Promise.all([...contexts].map((context) => context.close()));
+      contexts.clear();
+    },
+    { auto: true },
+  ],
+});
+
+// ----- Users of the demo data -----------------------------------------------------------------------------------------
+
+/** The administrator created by the initial setup of `npm run seed`. */
+export const ADMIN = { username: process.env['FORGA_ADMIN_USER'] ?? 'admin', password: process.env['FORGA_ADMIN_PASSWORD'] ?? 'sehr-geheim-123' };
 
 /** Password of the users created by `npm run seed`, one per standard role. */
 export const PASSWORD = process.env['FORGA_SEED_PASSWORD'] ?? 'demo-passwort-2026';
 
-/** Opens a new browser context and logs the user in; returns the page on the start page. */
-export async function login(browser: Browser, username: string, password = PASSWORD): Promise<Page> {
-  const page = await (await browser.newContext()).newPage();
+/**
+ * Usernames of the demo users: one per standard role, named like the role's template key. Department roles
+ * (department commander, group leader, member) apply to Abteilung Musterstadt.
+ */
+export const USERS = {
+  admin: ADMIN.username,
+  commander: 'commander',
+  departmentCommander: 'department-commander',
+  groupLeader: 'group-leader',
+  courseCoordinator: 'course-coordinator',
+  breathingApparatusOfficer: 'breathing-apparatus-officer',
+  equipmentOfficer: 'equipment-officer',
+  clothingOfficer: 'clothing-officer',
+  dutyOfficer: 'duty-officer',
+  administration: 'administration',
+  member: 'member',
+} as const;
+
+export interface LoginOptions {
+  password?: string;
+  /** Confirms the session with the second factor when the user has sensitive permissions (default `true`). */
+  stepUp?: boolean;
+  /** Acknowledges the privacy notice when it is due at the first sign-in (default `true`). */
+  acknowledgePrivacyNotice?: boolean;
+}
+
+/**
+ * Opens a new browser context and logs the user in; returns the page on the start page. The administrator's password
+ * is known; all other users have the seed password.
+ */
+export async function login(browser: Browser, username: string, options: LoginOptions | string = {}): Promise<Page> {
+  const { password = username === ADMIN.username ? ADMIN.password : PASSWORD, stepUp: confirm = true, acknowledgePrivacyNotice = true } =
+    typeof options === 'string' ? { password: options } : options;
+  const page = await newPage(browser);
   await page.goto('/');
   await page.getByLabel('Benutzername').fill(username);
   await page.getByLabel('Passwort').fill(password);
   await page.getByRole('button', { name: 'Anmelden' }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toContainText(/Guten (Morgen|Tag|Abend)/);
-  await confirmStepUp(page, username, password);
+  const greeting = page.getByRole('heading', { level: 1 }).filter({ hasText: /Guten (Morgen|Tag|Abend)/ });
+  const notice = page.getByRole('heading', { name: 'Bevor Sie beginnen', level: 1 });
+  await expect(greeting.or(notice)).toBeVisible();
+  if (acknowledgePrivacyNotice && (await notice.isVisible())) {
+    await page.getByRole('checkbox', { name: /Datenschutzhinweis \(Fassung \d+\) zur Kenntnis genommen/ }).check();
+    await page.getByRole('button', { name: 'Weiter' }).click();
+    await expect(greeting).toBeVisible();
+  }
+  if (confirm) await stepUp(page, username, password);
   return page;
 }
 
-/** Secrets of the second factor of the demo users (`npm run seed` writes the administrator's). */
-const TOTP_FILE = 'tmp/seed-totp.json';
-const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+// ----- Second factor (step-up) ----------------------------------------------------------------------------------------
 
-function totpCode(secret: string, at = Date.now()): string {
+/** Secrets of the second factor of the demo users; `npm run seed` writes the administrator's, `login` the others. */
+const TOTP_FILE = process.env['FORGA_TOTP_FILE'] ?? 'tmp/seed-totp.json';
+const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+const PERIOD_MS = 30_000;
+const CSRF = { 'x-forga': '1' };
+
+function hotp(secret: string, step: number): string {
   let bits = '';
   for (const char of secret.replace(/[\s=]/g, '').toUpperCase()) bits += BASE32.indexOf(char).toString(2).padStart(5, '0');
   const key = Buffer.from((bits.match(/.{8}/g) ?? []).map((b) => parseInt(b, 2)));
   const counter = Buffer.alloc(8);
-  counter.writeBigUInt64BE(BigInt(Math.floor(at / 30_000)));
+  counter.writeBigUInt64BE(BigInt(step));
   const hash = createHmac('sha1', key).update(counter).digest();
   const offset = hash[hash.length - 1] & 0x0f;
   return String((hash.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, '0');
@@ -40,41 +112,118 @@ function secrets(): Record<string, string> {
   }
 }
 
+/** Last time step used per user: the server accepts each code only once, and the next one up to a step early. */
+const usedSteps = new Map<string, number>();
+
 /**
- * Users with sensitive permissions confirm their session with the second factor (step-up), as the tests are about
- * other features: through the API of the page's session, setting up the factor on first use (secret kept in
- * `tmp/seed-totp.json`).
+ * The next unused TOTP code of a demo user whose factor is set up (e.g. to type it into the step-up dialog).
+ * Waits for the next time step only when the current and the next one are used already.
  */
-async function confirmStepUp(page: Page, username: string, password: string): Promise<void> {
-  const headers = { 'x-forga': '1' };
+export async function totpCode(username: string): Promise<string> {
+  const secret = secrets()[username];
+  if (!secret) throw new Error(`Second factor of ${username} unknown: missing in ${TOTP_FILE}.`);
+  const current = Math.floor(Date.now() / PERIOD_MS);
+  const step = Math.max(current, (usedSteps.get(username) ?? -1) + 1);
+  // The server accepts one step ahead: wait until the step is at most one ahead of the clock.
+  if (step > current + 1) await new Promise((r) => setTimeout(r, (step - 1) * PERIOD_MS - Date.now() + 100));
+  usedSteps.set(username, step);
+  return hotp(secret, step);
+}
+
+/**
+ * Confirms the session of the page with the second factor (step-up) through the API when the user has sensitive
+ * permissions, setting the factor up on first use (secret kept in `FORGA_TOTP_FILE`).
+ */
+export async function stepUp(page: Page, username: string, password = username === ADMIN.username ? ADMIN.password : PASSWORD): Promise<void> {
   const session = (await (await page.request.get('/api/core/session')).json()) as { stepUpPermissions: string[]; mfa: { enrolled: boolean } };
   if (!session.stepUpPermissions.length) return;
-  let secret = secrets()[username];
   if (!session.mfa.enrolled) {
-    secret = ((await (await page.request.post('/api/core/mfa/enrolment', { headers, data: { password } })).json()) as { secret: string }).secret;
-    mkdirSync('tmp', { recursive: true });
+    const { secret } = (await (await page.request.post('/api/core/mfa/enrolment', { headers: CSRF, data: { password } })).json()) as { secret: string };
+    mkdirSync(dirname(TOTP_FILE), { recursive: true });
     writeFileSync(TOTP_FILE, JSON.stringify({ ...secrets(), [username]: secret }, null, 2));
-    expect((await page.request.post('/api/core/mfa/enrolment/confirm', { headers, data: { code: totpCode(secret) } })).ok()).toBe(true);
+    await expectOk(page.request.post('/api/core/mfa/enrolment/confirm', { headers: CSRF, data: { code: await totpCode(username) } }));
     return;
   }
-  if (!secret) throw new Error(`Second factor of ${username} unknown: missing in ${TOTP_FILE}.`);
+  // A step used elsewhere (e.g. by the seed) is refused once; the next one is accepted.
   for (let attempt = 0; ; attempt++) {
-    const response = await page.request.post('/api/core/step-up', { headers, data: { code: totpCode(secret) } });
+    const response = await page.request.post('/api/core/step-up', { headers: CSRF, data: { code: await totpCode(username) } });
     if (response.ok()) return;
-    // A code counts only once: wait for the next one.
-    if (attempt > 0) throw new Error(`Step-up of ${username} failed: ${response.status()}`);
-    await page.waitForTimeout(31_000);
+    if (attempt > 0) throw new Error(`Step-up of ${username} failed: ${response.status()} ${await response.text()}`);
   }
 }
+
+// ----- API ------------------------------------------------------------------------------------------------------------
+
+async function expectOk(response: Promise<APIResponse>): Promise<APIResponse> {
+  const result = await response;
+  if (!result.ok()) throw new Error(`${result.url()}: ${result.status()} ${await result.text()}`);
+  return result;
+}
+
+/** Calls the API with the session of the page (e.g. to prepare data); fails on an error status. */
+export async function api<T = unknown>(page: Page, method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, data?: unknown): Promise<T> {
+  const response = await expectOk(page.request.fetch(`/api/${path}`, { method, headers: CSRF, data }));
+  const text = await response.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
+/**
+ * Waits until a background job is done, e.g. a data transfer run or a generated document: polls `path` until `done`
+ * returns true for the answer (default timeout 60 s).
+ */
+export async function waitForApi<T>(page: Page, path: string, done: (value: T) => boolean, timeout = 60_000): Promise<T> {
+  let last: T | undefined;
+  await expect
+    .poll(async () => {
+      last = await api<T>(page, 'GET', path);
+      return done(last);
+    }, { timeout, intervals: [250, 500, 1000, 2000] })
+    .toBe(true);
+  return last as T;
+}
+
+// ----- Navigation, downloads ------------------------------------------------------------------------------------------
+
+/** Opens an entry of the main menu by its label (exact, or a pattern like `/^Zur Prüfung/` for entries with a count). */
+export async function navigate(page: Page, label: string | RegExp): Promise<void> {
+  await page.getByRole('navigation', { name: 'Menü' }).getByRole('link', { name: label, exact: typeof label === 'string' }).click();
+}
+
+/** Starts a download with `action` (e.g. clicking a link) and returns the file name and the content. */
+export async function download(page: Page, action: () => Promise<unknown>): Promise<{ name: string; content: Buffer; download: Download }> {
+  const [file] = await Promise.all([page.waitForEvent('download'), action()]);
+  const path = await file.path();
+  return { name: file.suggestedFilename(), content: readFileSync(path), download: file };
+}
+
+// ----- Info terminal --------------------------------------------------------------------------------------------------
+
+/**
+ * Sets up an info terminal at a station (default: the station of Abteilung Musterstadt) with the session of `admin`
+ * (a page of a user with `info-terminal.manage`) and opens its link in a new browser context, like a tablet in the
+ * station. Returns the kiosk page.
+ */
+export async function openTerminal(browser: Browser, admin: Page, options: { station?: string; name?: string } = {}): Promise<Page> {
+  const stations = await api<{ id: string; name: string }[]>(admin, 'GET', 'masterdata/stations');
+  const station = stations.find((s) => s.name === (options.station ?? 'Feuerwehrhaus Musterstadt'));
+  if (!station) throw new Error(`Station ${options.station} not found.`);
+  const { url } = await api<{ url: string }>(admin, 'POST', 'info-terminal/terminals', { stationId: station.id, name: options.name ?? `E2E-Terminal ${Date.now()}` });
+  const kiosk = await newPage(browser);
+  const link = new URL(url);
+  await kiosk.goto(`${link.pathname}${link.hash}`);
+  return kiosk;
+}
+
+// ----- Forms ----------------------------------------------------------------------------------------------------------
 
 /** A field label as exact match; required fields carry an asterisk in their accessible name. */
 const fieldLabel = (label: string | RegExp) => (typeof label === 'string' ? new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( \\*)?$`) : label);
 
-/** Chooses an option of a Mantine select by its label and the text of the option. */
 /** The select with this label (not e.g. a tab panel labelled like it). */
 const selectField = (page: Page, label: string | RegExp) =>
   page.getByRole('combobox', { name: fieldLabel(label) }).or(page.getByRole('textbox', { name: fieldLabel(label) })).first();
 
+/** Chooses an option of a Mantine select by its label and the text of the option. */
 export async function choose(page: Page, label: string | RegExp, option: string | RegExp): Promise<void> {
   await selectField(page, label).click();
   await page.getByRole('option', { name: option }).first().click();
@@ -92,4 +241,23 @@ export async function section(page: Page, title: string): Promise<void> {
 }
 
 /** The table row that contains the text, e.g. a dispatch number. */
-export const row = (page: Page, text: string) => page.getByRole('row').filter({ hasText: text });
+export const row = (page: Page, text: string | RegExp) => page.getByRole('row').filter({ hasText: text });
+
+// ----- Dates ----------------------------------------------------------------------------------------------------------
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/** A date relative to today as `YYYY-MM-DD` (local time), e.g. `isoDate(30)` in 30 days. */
+export const isoDate = (days = 0) => {
+  const d = new Date(Date.now() + days * 86_400_000);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+/** A date relative to today as shown in the interface, `DD.MM.YYYY`. */
+export const germanDate = (days = 0) => isoDate(days).split('-').toReversed().join('.');
+
+/** A moment relative to now for `datetime-local` fields, `YYYY-MM-DDTHH:mm` (local time). */
+export const localDateTime = (minutes = 0) => {
+  const d = new Date(Date.now() + minutes * 60_000);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};

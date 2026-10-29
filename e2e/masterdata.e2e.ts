@@ -1,11 +1,8 @@
-import { expect, test } from '@playwright/test';
-import { login } from './support';
-
-const ADMIN = { username: process.env['FORGA_ADMIN_USER'] ?? 'admin', password: process.env['FORGA_ADMIN_PASSWORD'] ?? 'sehr-geheim-123' };
+import { ADMIN, expect, login, test } from './support';
 
 /** Vehicles, course planning and catalogs open, show data and can be edited. */
 test('administrator uses vehicles, course planning and catalogs', async ({ browser }) => {
-  const page = await login(browser, ADMIN.username, ADMIN.password);
+  const page = await login(browser, ADMIN.username);
 
   await page.goto('/masterdata/vehicles');
   await expect(page.getByRole('heading', { name: 'Fahrzeuge', level: 1 })).toBeVisible();

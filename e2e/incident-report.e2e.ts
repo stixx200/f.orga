@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { choose, chooseFirst, login, row, section } from './support';
+import { choose, expect, login, row, section, test } from './support';
 
 /**
  * Scenario "write an incident report" with the two roles of the demo data:
@@ -29,12 +28,12 @@ test('group leader writes a report, commander reviews and releases it', async ({
 
   // Personnel: a vehicle with three persons.
   await section(gf, 'Personal & Fahrzeuge');
-  await choose(gf, 'Fahrzeug', /^HLF 20/);
-  await gf.getByRole('button', { name: '+ Fahrzeug' }).click();
-  for (let i = 0; i < 3; i++) {
-    await chooseFirst(gf, 'Person suchen');
-    await gf.getByRole('button', { name: 'HLF 20' }).click();
-  }
+  await choose(gf, 'Fahrzeug oder Bereitschaft', /^HLF 20/);
+  // Several persons at once: the list hides the chosen ones, so the first option is always a new person.
+  await gf.getByRole('combobox', { name: 'Personen', exact: true }).click();
+  for (let i = 0; i < 3; i++) await gf.getByRole('option').first().click();
+  await gf.keyboard.press('Escape');
+  await gf.getByRole('button', { name: '3 Personen hinzufügen' }).click();
   await expect(gf.getByText('3 von 9 Plätzen')).toBeVisible();
 
   // One person under breathing apparatus: the equipment card suggests an apparatus, a mask and a cylinder of the HLF.
@@ -52,9 +51,14 @@ test('group leader writes a report, commander reviews and releases it', async ({
   await gf.getByLabel('Lage bei Eintreffen').fill('Brennender Müllcontainer neben Garage');
   await gf.getByLabel('Maßnahmen / Verlauf').fill('Ablöschen mit 1 C-Rohr, Nachkontrolle mit Wärmebildkamera');
 
+  // The end of the incident is a default (alarm + 1 hour) until confirmed.
+  await section(gf, 'Zeiten & Ort');
+  await gf.getByRole('button', { name: 'Ende bestätigen' }).click();
+  await expect(gf.getByRole('button', { name: 'Ende bestätigen' })).toHaveCount(0);
+
   // Statistics of the incident (on the incident page): accept the suggestion from the keyword, then the fire size.
   await section(gf, 'Prüfen');
-  await expect(gf.getByText(/^Die Statistikmerkmale des Einsatzes fehlen/).first()).toBeVisible();
+  await expect(gf.getByRole('alert').filter({ hasText: 'Die Statistikmerkmale des Einsatzes fehlen.' })).toBeVisible();
   await gf.getByRole('link', { name: 'Zum Einsatz' }).first().click();
   await expect(gf).toHaveURL(/\/incidents\/incidents\//);
   await gf.getByRole('button', { name: 'Vorschlag übernehmen' }).click();

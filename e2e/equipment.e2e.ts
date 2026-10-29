@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { choose, chooseFirst, login } from './support';
+import { choose, chooseFirst, expect, login, test } from './support';
 
 /**
  * The equipment officer inspects a breathing apparatus, a group leader reports a defect via the item page

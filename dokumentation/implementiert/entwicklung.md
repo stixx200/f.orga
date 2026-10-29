@@ -45,14 +45,15 @@ npm run dev
 | Demodaten einspielen (Server muss laufen) | `npm run seed` |
 | Plugin-Schlüssel erzeugen, Plugin-Paket bauen und signieren | `npm run plugin -- keygen <name>`, `npm run plugin -- pack <ordner> --key <datei>` |
 | Plugins in der Entwicklung | `FORGA_PLUGIN_DIR=<ordner> FORGA_PLUGINS_ALLOW_UNSIGNED=true npm run dev` |
-| E2E-Tests (Anwendung läuft mit Demodaten) | `npm run e2e` |
+| E2E-Tests gegen eine frische Instanz (bauen, Datenbank neu, Server, Demodaten, Tests) | `npm run e2e:fresh` |
+| E2E-Tests gegen eine laufende Instanz mit Demodaten | `npm run e2e` |
 | Projektgraph | `npx nx graph` |
 
 ## Demodaten
 
 `npm run seed` (`tools/seed.mts`) füllt eine laufende Instanz über die API mit erfundenen Daten. Echte Personen kommen nicht vor. Für die Ersteinrichtung einer leeren Datenbank nimmt es den Einrichtungsschlüssel aus `FORGA_SETUP_TOKEN` oder aus `apps/server/.env` (Entwicklung: `dev-setup-token`).
 
-Verwaltung und sensible Daten verlangen den zweiten Faktor ([Step-up](datenschutz.md#zweiter-faktor-bei-sensiblen-daten-step-up)). Beim ersten Lauf richtet das Skript den Faktor des Administrators ein, gibt das Geheimnis aus (zum Eintragen in eine Authenticator-App) und legt es in `tmp/seed-totp.json` ab; spätere Läufe nehmen es von dort oder aus `FORGA_ADMIN_TOTP_SECRET`. Nach dem Neuanlegen der Datenbank die Datei löschen. Demobenutzer mit sensiblen Rechten (z. B. `commander`, `administration`) richten ihren Faktor beim ersten Öffnen sensibler Daten im Browser ein; im Testsystem setzt ihn der Administrator in der Benutzerverwaltung zurück.
+Verwaltung und sensible Daten verlangen den zweiten Faktor ([Step-up](datenschutz.md#zweiter-faktor-bei-sensiblen-daten-step-up)). Beim ersten Lauf richtet das Skript den Faktor des Administrators ein, gibt das Geheimnis aus (zum Eintragen in eine Authenticator-App) und legt es in `tmp/seed-totp.json` ab (anderer Ort über `FORGA_TOTP_FILE`); spätere Läufe nehmen es von dort oder aus `FORGA_ADMIN_TOTP_SECRET`. Nach dem Neuanlegen der Datenbank die Datei löschen. Demobenutzer mit sensiblen Rechten (z. B. `commander`, `administration`) richten ihren Faktor beim ersten Öffnen sensibler Daten im Browser ein; im Testsystem setzt ihn der Administrator in der Benutzerverwaltung zurück.
 
 - Ersteinrichtung, falls nötig: „Freiwillige Feuerwehr Musterstadt“, Administrator aus `FORGA_ADMIN_USER` / `FORGA_ADMIN_PASSWORD` (Vorgabe `admin` / `sehr-geheim-123`). Server-Adresse aus `FORGA_URL` (Vorgabe `http://localhost:3000`). Die Ersteinrichtung braucht den Einrichtungsschlüssel in `FORGA_SETUP_TOKEN` (aus dem Protokoll des Servers oder derselbe Wert, mit dem der Server gestartet wurde).
 - Einstellungen der Feuerwehr, BW-Vorlagen (Kataloge, Lehrgänge, Alarmstichworte, Vorlagewerte der Feuerwehrsatzung) und die Standardrollen.
@@ -79,26 +80,8 @@ Ein fester Zufallsstartwert je Schritt erzeugt bei jedem Lauf dieselben Daten. E
 | --- | --- | --- |
 | Unit-Tests | Jest | `*.spec.ts` |
 | Integrationstests | Vitest mit `unplugin-swc` (Decorator-Metadaten für NestJS) und `supertest` | `apps/server/src/*.integration.ts` |
+| E2E-Tests | Playwright gegen eine laufende Instanz, siehe [E2E-Tests](#e2e-tests) | `e2e/*.e2e.ts` |
 
-- **E2E-Tests** (Playwright, `e2e/*.e2e.ts`, Konfiguration `e2e/playwright.config.ts`) laufen gegen eine laufende Anwendung mit Demodaten (`FORGA_E2E_URL`, Vorgabe `http://localhost:4200`). Lokal nutzen sie das installierte Chrome, in CI das Playwright-Chromium. Sie melden sich mit den Benutzern aus `npm run seed` an.
-  - `incident-report.e2e.ts`: Der Gruppenführer der Abteilung Musterstadt legt einen Einsatz an, teilt drei Personen auf ein Fahrzeug ein (eine unter Atemschutz; die vorgeschlagenen Atemschutzgeräte werden übernommen), füllt Lage, Verlauf und Statistik aus und meldet fertig. Der Kommandant gibt zurück, der Gruppenführer ergänzt die Ursache und meldet erneut, der Kommandant gibt zur Entschädigung und dann zur Abrechnung frei. Danach ist der Bericht für den Gruppenführer gesperrt.
-  - `organization.e2e.ts`: Der Administrator legt eine Führungseinheit mit Wache und Fahrzeug an, ändert sie, versucht sie mit Wache zu löschen (abgelehnt) und löscht dann Fahrzeug, Wache und Einheit.
-  - `persons.e2e.ts`: Der Kommandant legt eine Person in Probezeit an, pflegt Stammdaten, trägt einen bestandenen Lehrgang ein (Qualifikation entsteht), nimmt endgültig auf, befördert, trägt ein Amt ein, ergänzt eine zweite Abteilung und erfasst den Austritt.
-  - `masterdata.e2e.ts`: Fahrzeuge, Lehrgangsplanung (Kandidat vormerken) und Kataloge (Eintrag anlegen und deaktivieren).
-  - `incident-admin.e2e.ts`: Der Kommandant nutzt Offene Berichte, Entschädigung, EvD-Dienst (Dienst anlegen und löschen), Jahresstatistik (Wert korrigieren und Korrektur entfernen) und die Einstellungen.
-  - `impersonation.e2e.ts`: Der Administrator meldet sich als Gruppenführer an, sieht den Hinweis und das eingeschränkte Menü und kehrt zurück; das Audit-Log enthält das Ende.
-  - `roles.e2e.ts`: Der Administrator stellt für eine Rolle ein, ob eine Berechtigung im zugewiesenen Bereich oder in allen Abteilungen gilt, und setzt die Standardrolle auf die Vorlage zurück.
-  - `training.e2e.ts`: Der Kommandant plant einen laufenden Dienst für die Abteilung Musterstadt (Reiter „Geräte“ des Moduls Geräte), der Gruppenführer trägt sich über den Code des QR-Codes ein, der Kommandant ergänzt die Anwesenheit, speichert, schließt den Dienst ab, öffnet ihn aus Monats- und Wochenkalender und öffnet die Dienstbeteiligung.
-  - `respiratory-protection.e2e.ts`: Der Atemschutzgerätewart filtert die Tauglichkeit nach Rot, öffnet eine Person, trägt im Reiter „Atemschutz“ eine Unterweisung ein und erfasst in der Schnellerfassung eine Belastungsübung für zwei Geräteträger.
-  - `compensation.e2e.ts`: Die Verwaltung/Kasse erfasst einen Posten von Hand, legt einen Lauf an, sieht Personen, Posten und Hinweise, löscht den Entwurf und den Posten wieder und erzeugt die Funktionspauschalen.
-  - `cost-recovery.e2e.ts`: Der Kommandant erstellt für einen kostenpflichtigen Einsatz einen Bescheid, ergänzt Material, gibt ihn zur Prüfung, erlässt ihn und hebt ihn wieder auf.
-  - `equipment.e2e.ts`: Der Gerätewart prüft einen Pressluftatmer der Abteilung Musterstadt mit Checkliste, der Gruppenführer meldet über die Geräteseite einen Mangel, der Gerätewart behebt ihn; fällige Prüfungen, QR-Etiketten, ein PDF als Anhang einer Prüfung und eine Unterkategorie im Kategorienbaum.
-  - `promotions.e2e.ts`: Der Kommandant prüft die Vorschau mit Erklärung, legt eine Beförderungsliste an, entscheidet einen Eintrag mit Kommentar, beschließt, lädt die Urkunden, öffnet wieder und löscht; Regeln in Worten.
-  - `self-service.e2e.ts`: Ein Mitglied öffnet „Mein Bereich“, ändert die Mobilnummer (und zurück), entschuldigt sich für den nächsten Dienst und nimmt es zurück, sucht ein Gerät für eine Mangelmeldung.
-  - `shell.e2e.ts`: „Passwort vergessen?“, Seite zum Zurücksetzen (ungültiger Link), globale Suche, Datenschutz-Prüfung, Vollexport, Wappen und Einwohnerzahl in den Einstellungen, Reiter „Anmeldung“ (OIDC).
-  - Die Tests laufen nacheinander (`workers: 1`), weil sie dieselbe Instanz nutzen.
-  - Jeder Lauf legt einen Einsatz mit der Leitstellennummer `E2E-<Zeitstempel>` an. Personen aus früheren Läufen erzeugen Doppelungswarnungen, die der Test begründet.
-  - Ergebnisse und Traces liegen in `dist/e2e-results`, der Bericht in `dist/e2e-report`.
 - Die Integrationstests laufen gegen die Datenbank aus `TEST_DATABASE_URL`. Ohne Angabe nutzen sie `forga_test` auf der Entwicklungsdatenbank (Port 5433).
 - Vor jeder Testdatei löscht `resetTestDatabase()` (`apps/server/src/testing/test-database.ts`) die f.orga-Schemas und spielt alle Migrationen neu ein.
 - `testing/test-app.ts` startet die komplette Nest-Anwendung gegen die leere Testdatenbank (`startTestApp`) und führt die Ersteinrichtung aus (`setUp`). Dabei sammelt sie E-Mails nur im Speicher (`FORGA_MAIL_TRANSPORT=memory`) und schaltet den automatischen Versand der Sammel-E-Mail, die tägliche Aufbewahrungsprüfung und die tägliche Ampelprüfung ab (`FORGA_DIGEST_SCHEDULER=off`, `FORGA_RETENTION_SCHEDULER=off`, `FORGA_STATUS_SCHEDULER=off`).
@@ -129,6 +112,76 @@ Ein fester Zufallsstartwert je Schritt erzeugt bei jedem Lauf dieselben Daten. E
   - `retention.integration.ts`: Aufbewahrungsplan: ohne Fristen wird nichts gelöscht, Rechte (`core.retention.manage`, Probelauf mit eigenen Regeln nur für Verwalter der Einstellungen), Vorlage „Kommunaler Aktenplan (Beispiel)“ erst mit Speichern (wirksame Frist der Grunddaten), Probelauf je Unterart mit „30 Jahre aufbewahren (Sonderfall)“ (Rechte, Audit, Historie), Anonymisieren von Einsätzen ohne Änderung der Jahresstatistik, Anbieten mit ZIP-Export (Anhänge, Verzeichnis, CSV, JSON), Kassation und Löschen samt Anhängen, Zurückstellen, Übernahme und Anonymisieren der Personalakte (auch Daten anderer Module), Blockade durch offenen Kostenbescheid, Aufräumen fälliger Fälle, Historie in einem Zug löschen
   - `setup.integration.ts`: gleichzeitige Ersteinrichtung legt genau einen Administrator an
   - `shell-foundations.integration.ts`: Personenimport mit MP-Feuer-Überschriften (Vorschläge, Probelauf, Anlegen fehlender Abteilungen, Idempotenz), Listen als JSON, PDF, Excel und CSV, Fristen und Sammel-E-Mail
+
+## E2E-Tests
+
+Playwright-Tests (`e2e/*.e2e.ts`, Konfiguration `e2e/playwright.config.ts`) bedienen die Oberfläche wie die Benutzer aus `npm run seed`. Sie brauchen eine laufende Instanz mit Demodaten und laufen nacheinander (`workers: 1`), weil sie diese teilen.
+
+### Ausführen
+
+```bash
+npx playwright install chromium        # einmalig: der Browser der Tests
+npm run e2e:fresh                      # alles: bauen, frische Instanz, Demodaten, alle Tests
+npm run e2e:fresh -- e2e/shell.e2e.ts --headed   # weitere Argumente gehen an Playwright
+```
+
+`npm run e2e:fresh` (`tools/e2e.mts`) arbeitet wie das Docker-Image, nur ohne Container:
+
+1. Server, Shell und Modul-Frontends bauen (`nx run-many -t build`, mit Nx-Cache; `--no-build` überspringt das).
+2. Die Datenbank `forga_e2e` auf der Entwicklungsdatenbank löschen und neu anlegen (`FORGA_E2E_DATABASE_URL`, Vorgabe `postgresql://forga:forga@localhost:5433/forga_e2e`; die Datenbank `forga` lehnt das Skript ab).
+3. Den gebauten Server (`apps/server/dist/main.js`) auf Port 3100 starten (`FORGA_E2E_PORT`). Er liefert die gebauten Frontends selbst aus (`FORGA_WEB_DIR` mit `shell` und `modules/<id>`, Verweise auf die Build-Ordner in einem temporären Ordner des Systems), mit `NODE_ENV=production`, `FORGA_STAGE=development` (`FORGA_E2E_STAGE`), neuem `FORGA_SECRET_KEY` und Einrichtungsschlüssel, `FORGA_PUBLIC_URL` (Links der Infoterminals), E-Mails nur im Speicher und ohne geplante Hintergrundläufe (Sammel-E-Mail, Aufbewahrung, Ampel, Datenschutz, Sicherung).
+4. `npm run seed` gegen diese Instanz.
+5. `playwright test` und danach den Server beenden.
+
+Server-Protokoll, Server-Schlüssel und die Geheimnisse des zweiten Faktors liegen in `dist/e2e`, Ergebnisse und Traces in `dist/e2e-results`, der HTML-Bericht in `dist/e2e-report` (`npx playwright show-report dist/e2e-report`, einzelner Trace: `npx playwright show-trace <trace.zip>`).
+
+Zum Schreiben neuer Tests die Instanz stehen lassen und einzelne Tests wiederholen:
+
+```bash
+npm run e2e:fresh -- --serve           # frische Instanz mit Demodaten, läuft bis Strg+C
+npm run e2e:fresh -- --serve --reuse   # später: dieselben Daten wieder starten (ohne neue Datenbank und Seed)
+FORGA_E2E_URL=http://localhost:3100 FORGA_TOTP_FILE=dist/e2e/totp.json TZ=Europe/Berlin npm run e2e -- e2e/shell.e2e.ts --ui
+```
+
+`npm run e2e` allein testet gegen `FORGA_E2E_URL` (Vorgabe `http://localhost:4200`, die Entwicklungsumgebung aus `npm run dev` mit `npm run seed`; Geheimnisse des zweiten Faktors dann aus `tmp/seed-totp.json`). Browser ist das Playwright-Chromium, lokal wie in CI; `FORGA_E2E_CHANNEL=chrome` nimmt das installierte Chrome. `TZ=Europe/Berlin` hält die im Test berechneten Daten in der Zeitzone des Browsers.
+
+### CI
+
+Der Job `e2e` in `.github/workflows/ci.yml` läuft parallel zu den anderen Jobs mit einem eigenen PostgreSQL-17-Dienst: `npm ci`, `npx playwright install --with-deps chromium`, `npm run e2e:fresh`. Schlägt er fehl, hängt er HTML-Bericht, Traces, Bildschirmfotos und das Server-Protokoll als Artefakt `e2e-report` an (14 Tage). Ein Lauf dauert lokal rund 4 Minuten für die Demodaten und 7 Minuten für die Tests.
+
+### Tests schreiben
+
+- `test` und `expect` aus `./support` importieren, nicht aus `@playwright/test`: Dieses `test` schließt nach jedem Test die Browser-Kontexte, die `login` und `openTerminal` geöffnet haben.
+- Hilfen in `e2e/support.ts`:
+  - `login(browser, USERS.commander)` öffnet einen neuen Browser-Kontext und meldet an. `USERS` nennt einen Benutzer je Standardrolle (Passwort `PASSWORD`, beim Administrator `ADMIN`). Ist der Datenschutzhinweis fällig, bestätigt `login` ihn (`acknowledgePrivacyNotice: false` lässt die Seite stehen). Hat der Benutzer Rechte mit zweitem Faktor, bestätigt `login` die Sitzung über die API (`stepUp: false` lässt das aus, z. B. um den Step-up-Dialog zu testen); beim ersten Mal richtet es den Faktor ein.
+  - `stepUp(page, username)` bestätigt eine Sitzung erneut, `totpCode(username)` liefert den nächsten gültigen Code zum Eintippen in den Dialog. Jeder Code gilt nur einmal; die Hilfen wählen den nächsten freien Zeitschritt und warten nur, wenn auch der schon verbraucht ist.
+  - `navigate(page, 'Einsätze')` öffnet einen Eintrag des Menüs, `choose`, `chooseFirst` wählen in Mantine-Auswahlfeldern, `section` öffnet einen Abschnitt des Berichtseditors, `row` findet eine Tabellenzeile.
+  - `download(page, () => link.click())` liefert Dateiname und Inhalt eines Downloads.
+  - `api(page, 'POST', 'masterdata/…', body)` ruft die API mit der Sitzung der Seite auf (Testdaten vorbereiten), `waitForApi(page, path, done)` wartet auf das Ende eines Hintergrundlaufs (z. B. Datenübernahme, Auskunft als PDF) statt fester Pausen.
+  - `openTerminal(browser, adminPage)` legt ein Infoterminal an einer Wache an und öffnet seinen Link in einem eigenen Kontext wie ein Tablet in der Fahrzeughalle.
+  - `isoDate(tage)`, `germanDate(tage)`, `localDateTime(minuten)` rechnen relativ zu heute, damit Tests nicht von einem festen Datum abhängen.
+- Selektoren über Rollen und Beschriftungen (`getByRole`, `getByLabel`), sichtbare Texte deutsch; keine CSS-Klassen und keine festen Wartezeiten (`waitForTimeout`), stattdessen `expect(…)` auf den erwarteten Zustand.
+- Tests müssen mehrfach gegen dieselbe Instanz laufen können: Namen mit `Date.now()` eindeutig machen und angelegte Daten wenn möglich wieder entfernen. Sie dürfen sich nicht auf die Reihenfolge der Dateien verlassen.
+- Neue Testdateien unten in der Liste beschreiben.
+
+### Testdateien
+
+- - `incident-report.e2e.ts`: Der Gruppenführer der Abteilung Musterstadt legt einen Einsatz an, teilt drei Personen auf einmal auf ein Fahrzeug ein (eine unter Atemschutz; die vorgeschlagenen Atemschutzgeräte werden übernommen), bestätigt das Ende, füllt Lage, Verlauf und Statistik aus und meldet fertig. Der Kommandant gibt zurück, der Gruppenführer ergänzt die Ursache und meldet erneut, der Kommandant gibt zur Entschädigung und dann zur Abrechnung frei. Danach ist der Bericht für den Gruppenführer gesperrt.
+- - `organization.e2e.ts`: Der Administrator legt eine Führungseinheit mit Wache und Fahrzeug an, ändert sie, versucht sie mit Wache zu löschen (abgelehnt) und löscht dann Fahrzeug, Wache und Einheit.
+- - `persons.e2e.ts`: Der Kommandant legt eine Person in Probezeit an, pflegt Stammdaten, trägt einen bestandenen Lehrgang ein (Qualifikation entsteht), nimmt vorzeitig mit Begründung endgültig auf, befördert, trägt ein Amt ein, ergänzt eine zweite Abteilung und erfasst den Austritt.
+- - `masterdata.e2e.ts`: Fahrzeuge, Lehrgangsplanung (Kandidat vormerken) und Kataloge (Eintrag anlegen und deaktivieren).
+- - `incident-admin.e2e.ts`: Der Kommandant nutzt Offene Berichte, Entschädigung, EvD-Dienst (Dienst anlegen und löschen), Jahresstatistik (Wert korrigieren und Korrektur entfernen) und die Einstellungen.
+- - `impersonation.e2e.ts`: Der Administrator meldet sich als Gruppenführer an, sieht den Hinweis und das eingeschränkte Menü und kehrt zurück; das Audit-Log enthält das Ende.
+- - `roles.e2e.ts`: Der Administrator stellt für eine Rolle ein, ob eine Berechtigung im zugewiesenen Bereich oder in allen Abteilungen gilt, und setzt die Standardrolle auf die Vorlage zurück.
+- - `training.e2e.ts`: Der Kommandant plant einen laufenden Dienst für die Abteilung Musterstadt (Reiter „Geräte“ des Moduls Geräte), der Gruppenführer trägt sich über den Code des QR-Codes ein, der Kommandant ergänzt die Anwesenheit, speichert, schließt den Dienst ab, öffnet ihn aus Monats- und Wochenkalender und öffnet die Dienstbeteiligung.
+- - `respiratory-protection.e2e.ts`: Der Atemschutzgerätewart filtert die Tauglichkeit nach Rot, öffnet eine Person, trägt im Reiter „Atemschutz“ eine Unterweisung ein und erfasst in der Schnellerfassung eine Belastungsübung für zwei Geräteträger.
+- - `compensation.e2e.ts`: Die Verwaltung/Kasse erfasst einen Posten von Hand, legt einen Lauf an, sieht Personen, Posten und Hinweise, löscht den Entwurf und den Posten wieder und erzeugt die Funktionspauschalen.
+- - `cost-recovery.e2e.ts`: Der Kommandant erstellt für einen kostenpflichtigen Einsatz einen Bescheid, ergänzt Material, gibt ihn zur Prüfung, erlässt ihn und hebt ihn wieder auf.
+- - `equipment.e2e.ts`: Der Gerätewart prüft einen Pressluftatmer der Abteilung Musterstadt mit Checkliste, der Gruppenführer meldet über die Geräteseite einen Mangel, der Gerätewart behebt ihn; fällige Prüfungen, QR-Etiketten, ein PDF als Anhang einer Prüfung und eine Unterkategorie im Kategorienbaum.
+- - `promotions.e2e.ts`: Der Kommandant prüft die Vorschau mit Erklärung, legt eine Beförderungsliste an, entscheidet einen Eintrag mit Kommentar, beschließt, lädt die Urkunden, öffnet wieder und löscht; Regeln in Worten.
+- - `self-service.e2e.ts`: Ein Mitglied öffnet „Mein Bereich“, ändert die Mobilnummer (und zurück), entschuldigt sich für den nächsten Dienst und nimmt es zurück, sucht ein Gerät für eine Mangelmeldung.
+- - `shell.e2e.ts`: „Passwort vergessen?“, Seite zum Zurücksetzen (ungültiger Link), globale Suche, Datenschutz-Prüfung, Vollexport, Wappen und Einwohnerzahl in den Einstellungen, Reiter „Anmeldung“ (OIDC).
+- Jeder Lauf legt einen Einsatz mit der Leitstellennummer `E2E-<Zeitstempel>` an. Personen aus früheren Läufen erzeugen Doppelungswarnungen, die der Test begründet.
 
 ## Projektverweise
 
@@ -171,11 +224,12 @@ Indizes, die MikroORM nicht aus Eigenschaften ableiten kann (z. B. partielle Ind
 `.github/workflows/ci.yml` läuft bei jedem Push auf `main` und bei Pull Requests:
 
 1. Lint und Modulgrenzen
-2. Typprüfung
+2. Typprüfung (auch der E2E-Tests, `e2e/tsconfig.json`)
 3. Unit-Tests
 4. Integrationstests mit einem PostgreSQL-17-Dienst
 5. Build
 6. Bau des Docker-Images
+7. Parallel dazu im Job `e2e`: die [E2E-Tests](#e2e-tests) gegen eine frische Instanz mit Demodaten
 
 ## Neues Modul anlegen
 

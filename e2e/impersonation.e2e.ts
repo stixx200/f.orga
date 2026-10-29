@@ -1,11 +1,8 @@
-import { expect, test } from '@playwright/test';
-import { login } from './support';
-
-const ADMIN = { username: process.env['FORGA_ADMIN_USER'] ?? 'admin', password: process.env['FORGA_ADMIN_PASSWORD'] ?? 'sehr-geheim-123' };
+import { ADMIN, expect, login, test } from './support';
 
 /** The administrator logs in as the group leader, sees the banner and returns to the own account. */
 test('administrator impersonates the group leader', async ({ browser }) => {
-  const page = await login(browser, ADMIN.username, ADMIN.password);
+  const page = await login(browser, ADMIN.username);
   await page.goto('/admin/users');
   await page.getByRole('cell', { name: 'group-leader', exact: true }).click();
   await page.getByRole('button', { name: 'Anmelden als …' }).click();
@@ -21,5 +18,5 @@ test('administrator impersonates the group leader', async ({ browser }) => {
   await expect(page.getByText(/Impersonation durch/)).toHaveCount(0);
 
   await page.goto('/admin/audit');
-  await expect(page.getByText('auth.impersonation-ended').first()).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Anmelden als anderer Benutzer beendet', exact: true }).first()).toBeVisible();
 });

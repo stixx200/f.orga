@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { login } from './support';
+import { expect, login, test } from './support';
 
 /**
  * The administration (treasury) checks a payout run, records a manual item and looks at the
@@ -28,7 +27,7 @@ test('payout run, manual item and function allowances', async ({ browser }) => {
 
   // A draft run for the previous month with persons, items and notes (a draft left by an aborted run is removed first).
   await page.goto('/compensation/runs');
-  await expect(page.getByRole('heading', { name: 'Auszahlungsläufe', level: 1 })).toBeVisible();
+  await expect(page.getByText('Ausgezahlt').first()).toBeVisible();
   if (await page.getByRole('button', { name: 'Offenen Entwurf öffnen' }).isVisible()) {
     await page.getByRole('button', { name: 'Offenen Entwurf öffnen' }).click();
     await page.getByRole('button', { name: 'Entwurf löschen' }).click();

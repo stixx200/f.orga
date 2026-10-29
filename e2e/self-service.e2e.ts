@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { login } from './support';
+import { expect, login, test } from './support';
 
 /**
  * A member opens "My area": own file, contact details, next sessions with an excuse (withdrawn again),
@@ -24,7 +23,9 @@ test('my area of a member', async ({ browser }) => {
   // Excuse for the next session and withdraw it again.
   const upcoming = page.getByRole('region', { name: 'Meine Dienste' });
   const excuse = upcoming.getByRole('button', { name: 'Entschuldigen' }).first();
-  if (await excuse.count()) {
+  // Without a session in the next eight weeks (e.g. at the end of the year) there is nothing to excuse.
+  await expect(excuse.or(upcoming.getByText('In den nächsten acht Wochen sind keine Dienste geplant.'))).toBeVisible();
+  if (await excuse.isVisible()) {
     await excuse.click();
     await page.getByRole('dialog').getByRole('radio', { name: 'beruflich' }).check();
     await page.getByRole('dialog').getByLabel('Bemerkung').fill('E2E: Spätdienst');

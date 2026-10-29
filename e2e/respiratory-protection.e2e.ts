@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { login } from './support';
+import { expect, login, test } from './support';
 
 /**
  * The breathing apparatus officer checks the traffic light, records a briefing for a person who is not fit
