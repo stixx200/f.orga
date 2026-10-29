@@ -61,17 +61,19 @@ export class ErasureService {
     };
   }
 
-  private async load(em: EntityManager, requestId: string): Promise<{ request: PrivacyRequestEntity; name: string }> {
+  private async load(em: EntityManager, requestId: string): Promise<{ request: PrivacyRequestEntity; personId: string; name: string }> {
     const request = await this.requests.load(em, requestId);
     if (request.kind !== 'erasure') throw new BadRequestException({ code: 'privacy.notErasure' });
+    // A third party is no person of the master data: its data is erased at the chosen places (third-party erasure, L14).
+    if (!request.personId) throw new BadRequestException({ code: 'privacy.erasureThirdParty' });
     const person = (await this.organization.persons([request.personId]))?.[0];
     if (!person) throw new BadRequestException({ code: 'privacy.personUnknown' });
-    return { request, name: `${person.firstName} ${person.lastName}` };
+    return { request, personId: request.personId, name: `${person.firstName} ${person.lastName}` };
   }
 
   async check(requestId: string): Promise<ErasureCheck> {
-    const { request, name } = await this.load(this.em.fork(), requestId);
-    const areas = await this.registry.erasure(request.personId, await this.context());
+    const { request, personId, name } = await this.load(this.em.fork(), requestId);
+    const areas = await this.registry.erasure(personId, await this.context());
     return { personName: name, areas, restrictUntil: restrictionEnd(areas), executed: request.erasure ?? null };
   }
 
@@ -81,17 +83,17 @@ export class ErasureService {
    */
   async execute(requestId: string, input: ErasureConfirmation): Promise<ErasureCheck> {
     const em = this.em.fork();
-    const { request, name } = await this.load(em, requestId);
+    const { request, personId, name } = await this.load(em, requestId);
     if (!OPEN_REQUEST_STATUSES.includes(request.status)) throw new ConflictException({ code: 'privacy.requestClosed' });
     if (request.erasure) throw new ConflictException({ code: 'privacy.erasureExecuted' });
     if (comparable(input.confirmName) !== comparable(name)) throw new BadRequestException({ code: 'privacy.erasureConfirmation' });
     const ctx = await this.context();
-    const areas = await this.registry.erasure(request.personId, ctx);
-    await this.registry.erase(request.personId, ctx);
+    const areas = await this.registry.erasure(personId, ctx);
+    await this.registry.erase(personId, ctx);
     const kept = areas.filter((a) => a.outcome === 'keep');
     const restrictedUntil = restrictionEnd(areas);
-    if (kept.length && (await this.organization.restrictProcessing(request.personId, { reason: 'retention', until: restrictedUntil, requestId }))) {
-      await this.audit.log('privacy.restricted', { personId: request.personId, reason: 'retention', requestId });
+    if (kept.length && (await this.organization.restrictProcessing(personId, { reason: 'retention', until: restrictedUntil, requestId }))) {
+      await this.audit.log('privacy.restricted', { personId, reason: 'retention', requestId });
     }
     const execution: ErasureExecution = {
       executedAt: new Date().toISOString(),

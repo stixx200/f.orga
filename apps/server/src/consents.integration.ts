@@ -56,7 +56,7 @@ beforeAll(async () => {
 
   const role = async (name: string, permissions: string[]) => (await post('/core/roles', { name, permissions }).expect(201)).body.id as string;
   const privacyRole = await role('Datenschutz', ['core.privacy.manage', 'masterdata.persons.read']);
-  const commanderRole = await role('Abteilungskommandant A', ['core.privacy.consents', 'masterdata.persons.read', 'masterdata.persons.write', 'masterdata.persons.sensitive']);
+  const commanderRole = await role('Abteilungskommandant A', ['core.privacy.consents', 'masterdata.persons.read', 'masterdata.persons.write', 'masterdata.persons.sensitive', 'masterdata.lists.contact']);
   const writerRole = await role('Schreiber B', ['masterdata.persons.read', 'masterdata.persons.write']);
   const auditorRole = await role('Prüfer', ['core.audit.read']);
   const memberRole = await role('Mitglied EW', ['masterdata.self']);

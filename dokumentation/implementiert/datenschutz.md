@@ -1,6 +1,6 @@
 # Datenschutz (umgesetzter Stand)
 
-Was vom [Datenschutzkonzept](../geplant/datenschutz.md) im Code existiert: Phase 1 (L1, L2, L5 teilweise, L6, L18 teilweise), aus Phase 2 Datenschutzhinweis und Information (L4), Betroffenenanfragen mit Frist und Einschränkung der Verarbeitung (L7) sowie Widerspruch (L19) und die Auskunft als PDF (L3), aus Phase 3 Verzeichnis der Verarbeitungstätigkeiten mit technischen Maßnahmen (L8), Einwilligungen (L9), Berichtigung (L12), Leseprotokoll und Transparenz der Impersonation (L15) sowie Datenpannen (L20), aus Phase 4 die Löschprüfung je Modul (L7) und die vollständige Anonymisierung über alle Module (L13). Offene Punkte stehen dort. Weitere umgesetzte Bausteine: Rechte je Abteilung, sensible Felder, Historie und Audit-Log ([Architektur](architektur.md#sicherheit)), Auskunft als JSON und Aufbewahrungsplan ([Aufbewahrung](aufbewahrung.md)).
+Was vom [Datenschutzkonzept](../geplant/datenschutz.md) im Code existiert: Phase 1 (L1, L2, L5 teilweise, L6, L18 teilweise), aus Phase 2 Datenschutzhinweis und Information (L4), Betroffenenanfragen mit Frist und Einschränkung der Verarbeitung (L7) sowie Widerspruch (L19) und die Auskunft als PDF (L3), aus Phase 3 Verzeichnis der Verarbeitungstätigkeiten mit technischen Maßnahmen (L8), Einwilligungen (L9), Berichtigung (L12), Leseprotokoll und Transparenz der Impersonation (L15) sowie Datenpannen (L20), aus Phase 4 die Löschprüfung je Modul (L7), die vollständige Anonymisierung über alle Module (L13), abschaltbare Felder der Personalakte (L10), Zweck der Listen und Exporte (L11), Daten Dritter (L14) und die Aufbewahrung der Protokolle und Laufberichte (L29). Offene Punkte stehen dort. Weitere umgesetzte Bausteine: Rechte je Abteilung, sensible Felder, Historie und Audit-Log ([Architektur](architektur.md#sicherheit)), Auskunft als JSON und Aufbewahrungsplan ([Aufbewahrung](aufbewahrung.md)).
 
 ## Zweiter Faktor bei sensiblen Daten (Step-up)
 
@@ -218,7 +218,7 @@ Tabelle `core.access_log` (`AccessLogEntity`): Benutzer, Person (`null` = alle P
 | `respiratory-protection.examinations` „Eignungsuntersuchungen (Gesundheitsdaten)“ | Atemschutz der Person, wenn Untersuchungen dabei sind und der Leser sie sehen darf |
 | `core.access-report` „Auskunft nach Art. 15“ | Erstellen und Herunterladen durch die Verwaltung |
 | `core.export` „Vollexport bzw. Auskunft als JSON“ | Vollexport eines Moduls (Person „alle“) und JSON je Person |
-| `masterdata.lists` „Listen mit Kontakt- oder sensiblen Daten“ | Mitgliederliste, Telefonliste, Komplettdaten, Geburtstage, Altersgrenzen: je Person der Liste, auch in der Vorschau |
+| `masterdata.lists` „Listen mit Kontakt- oder sensiblen Daten“ | Mitgliederliste (außer mit dem Zweck „Übersicht“ ohne Kontaktdaten), Telefonliste, Komplettdaten, Geburtstage, Altersgrenzen: je Person der Liste, auch in der Vorschau |
 
 - Eigene Daten werden nicht protokolliert. Während einer Impersonation ist der Administrator der Leser. Ein Fehler beim Schreiben hält die Anfrage nicht auf (nur Server-Log).
 - **Dienst** `AccessLog` (aus `@forga/core-api`): `record(user, personIds, area)`, `registerArea(key, label)` für Module, `query({ from, to, userId, personId, area, limit })` und `forPerson(personId)` für andere Funktionen (z. B. die Hilfen bei Datenpannen).
@@ -236,6 +236,72 @@ Tabelle `core.access_log` (`AccessLogEntity`): Benutzer, Person (`null` = alle P
 ### Tests
 
 `apps/server/src/consents.integration.ts`: Recht und Vorlagen, Katalog mit Fassungen und Prüfung, Erfassen in der eigenen Abteilung mit Nachweis, Minderjährige und Erziehungsberechtigte, Mein Bereich und erste Anmeldung, Impersonation, Wirkung in Telefonliste (Abteilung, Führungskräfte) und Geburtstagsliste (Aushang), Widerruf über eine Anfrage, neue Fassung, Auskunft und Export; Berichtigung mit Frist, Aufgabe der Abteilung, Nachweis, Vermerk und Fehlerfällen; Wert in der Historie unkenntlich machen; Leseprotokoll für Personalakte, Listen, Exporte und Untersuchungen mit Recht, Step-up, Aufbewahrung und Auskunft; E-Mail und Liste „Anmeldungen als Sie“ mit Einstellung.
+
+## Felder der Personalakte (L10)
+
+Datenminimierung (Art. 5 Abs. 1 c, Art. 25 DSGVO): Eine Feuerwehr schaltet optionale Felder ab, für die sie keinen Zweck hat. Seite „Verwaltung → Module → Stammdaten → Felder der Personalakte“ (`/masterdata/settings/person-fields`, Recht `masterdata.settings.manage`; kein eigenes Mockup, aufgebaut wie die Seite „Feuerwehrsatzung“).
+
+- **Felder** (`OPTIONAL_PERSON_FIELDS`): Anrede, Titel, Rufname, Geburtsort, Geschlecht, Telefon privat, Telefon dienstlich, Arbeitgeber mit Anschrift und IBAN, private Bankverbindung, Bemerkung. Je Feld steht „Wofür?“ (`PERSON_FIELD_PURPOSES`, z. B. Arbeitgeber: Verdienstausfall und Freistellung; Geburtsort: Urkunden, Lehrgangsanmeldung) und „Gespeichert bei n Personen“. Standard: alle an.
+- **Einstellung** `masterdata.personFields` (`PersonFieldSettings`: `disabled`), gespeichert über `PUT /api/core/settings/masterdata.personFields` (historisiert wie jede Einstellung).
+- **Wirkung** (`PersonFields` in `persons/person-fields.ts`): Abgeschaltete Felder liefert die Personalakte leer bzw. ohne Arbeitgeber und Bankverbindung, auch in „Mein Bereich“; Personalakte, Neuanlage und „Mein Bereich“ zeigen sie nicht. Gesendete Werte werden nicht gespeichert (der gespeicherte Wert bleibt bis zum Löschen), der Personenimport übernimmt sie nicht (damit auch die Datenübernahme aus MP-Feuer). Telefonliste und Komplettdaten lassen die Spalten weg. Die Auskunft nach Art. 15 nennt weiter, was noch gespeichert ist.
+- **Gespeicherte Werte löschen** (Warnung „Bei n Personen sind noch Werte abgeschalteter Felder gespeichert“, Bestätigung mit Feldern und Zahlen): `POST /api/masterdata/person-fields/clear` (`PersonFieldsClear`: `fields`) leert die Felder bei allen Personen und entfernt sie aus der Historie der Personen (Einträge, die nur diese Felder änderten, fallen weg). Nur abgeschaltete Felder (`400 masterdata.fieldEnabled`). Antwort `{ counts }` je Feld; Audit `masterdata.person-fields-cleared` mit Feldern und Zahlen, ohne Werte. `GET /api/masterdata/person-fields` liefert `PersonFieldState[]` (Feld, aktiv, gespeichert bei).
+- **Freitexte:** Hinweis „Keine Gesundheitsangaben eintragen.“ wie bisher an Bemerkung, Ruhezeit und Entschuldigung; dazu im Berichtseditor bei den Beteiligten „Nur Angaben, die für Kostenersatz, Versicherung oder Polizei nötig sind“ (L14).
+
+## Zweck der Listen und Exporte (L11)
+
+Listen tragen die Art ihrer Personendaten und Zwecke (`ListDefinition.personalData`, `purposes`; Verträge `ListPersonalData`, `ListPurpose`, `ListInfo.purposes`, `purposeRequired`):
+
+- **Pflicht beim Export:** Listen mit Kontakt-, sensiblen oder Gesundheitsdaten (`contact`, `sensitive`, `health`) lassen sich nur mit Zweck exportieren (`?purpose=`, sonst `400 lists.purposeRequired`). Neben den Zwecken der Liste gibt es immer „Anderer Zweck (bitte angeben)“ (`other` mit `purposeNote`, mindestens 3 Zeichen, sonst `400 lists.purposeNoteRequired`); ein unbekannter Zweck `400 lists.unknownPurpose`. Die Vorschau nimmt ohne Angabe den ersten Zweck.
+- **Nur die Spalten des Zwecks:** Ein Zweck nennt die Spalten, die er braucht; die Liste zeigt und exportiert nur diese.
+- **Eigenes Recht für Kontaktlisten:** `masterdata.lists.contact` („Listen mit Kontaktdaten ausgeben“, Abteilung; Rollenvorlagen `commander` über `masterdata.*`, `department-commander`). Die Telefonliste verlangt es, ebenso der Zweck „Kontaktaufnahme“ der Mitgliederliste (sonst `403 lists.purposeForbidden`; nicht angeboten). Die Excel-Ausgabe der Personentabelle (Spalte Handynummer) gibt es nur mit diesem Recht.
+- **Kennzeichnung:** PDF und Excel einer Liste mit Personen tragen „Personenbezogene Daten – nur für den Dienstgebrauch, nach Gebrauch vernichten“ (PDF in der Fußzeile jeder Seite, Excel als letzte Zeile und in der Fußzeile des Ausdrucks) und unter dem Untertitel „Zweck: …“. Die Vorschau zeigt beides.
+- **Audit:** `lists.exported` mit `purpose` und gegebenenfalls `purposeNote` und den genannten Personen.
+- Oberfläche „Listen“: Auswahl „Zweck“ (Pflicht bei diesen Listen, vorbelegt mit dem ersten Zweck) und bei „Anderer Zweck“ das Feld „Zweck beschreiben“. Kein eigenes Mockup.
+
+| Liste | Daten | Zwecke |
+| --- | --- | --- |
+| Mitgliederliste `masterdata.members` | Kontakt | Übersicht (Name, Abteilung, Dienstgrad, Status, Eintritt), Kontaktaufnahme (mit Handy und E-Mail, `masterdata.lists.contact`) |
+| Telefonliste `masterdata.phones` | Kontakt | Abteilung (Handynummer nur mit Einwilligung), Führungskräfte ([Einwilligungen](#wirkung)) |
+| Komplettdaten `masterdata.complete` | sensibel | Personalverwaltung (alle Spalten), Anschriftenliste (Name, Anschrift, Abteilung) |
+| Geburtstage `masterdata.birthdays` | sensibel | intern, Aushang (nur mit Einwilligung; ohne Alter) |
+| Altersgrenzen `masterdata.age-limits` | sensibel | Planung der Übertritte (ohne Geburtsdatum) |
+| Fällige Eignungsuntersuchungen `respiratory-protection.examinations-due` | Gesundheit | Termine vereinbaren (ohne letzte Untersuchung), Übersicht |
+| Atemschutznachweis `respiratory-protection.record` | Gesundheit | Nachweis nach FwDV 7 |
+| Abrechnungsübersicht `compensation.statement` | Kontakt (Anschrift) | Abrechnung für Kasse bzw. Personen |
+
+Die übrigen Listen über Personen (`names`) brauchen keinen Zweck, tragen aber die Kennzeichnung und melden ihre Personen (`personIds`): Stammdaten (Unterschriften, Dienstjubiläen, Qualifikationen, Atemschutzgeräteträger, Probezeit, Lehrgangsvormerkungen, Lehrgänge im Jahr, Führerscheinkontrollen), Dienste (Dienstplan, Dienstbuch, Dienstbeteiligung, Teilnehmer, Unterschriften, Ausbilderstunden), Atemschutz (Tauglichkeit, Einsatzzeiten, Übungsstrecke, fehlende Nachweise), Entschädigung (Jahressummen), Beförderungen (Liste, Vorschau), Kleiderkammer (ausgegebene Schutzausrüstung, fällige Wäsche und Prüfungen), Geräte (Prüfhistorie und Prüfprotokoll mit Prüfern aus den Stammdaten, offene Mängel), Einsätze (offene Berichte, Einsatzstunden je Person). Einsatzleiter vom Dienst hat keine Listen.
+
+## Daten Dritter (L14)
+
+Personen, die keine `Person` der Stammdaten sind, haben dieselben Rechte (Art. 14–18): Beteiligte von Einsätzen (Geschädigte, Verursacher, Zeugen, Anrufer, Eigentümer, Halter) und Kostenschuldner.
+
+- **Quellen** (`ThirdPartyRegistry` aus `@forga/core-api`, `register({ key, module, search, describe, erase })`): `incidents.involved-parties` (Beteiligte der Berichte) und `cost-recovery.debtors` (Kostenschuldner der Bescheide und das Adressbuch des Kostenersatzes). Eine Fundstelle ist `ThirdPartyRef` (`source`, `id`).
+- **Suche** `GET /api/core/privacy/third-parties?q=` (`core.privacy.manage`, ab 2 Zeichen, je Quelle höchstens 100): Name, Anschrift, Telefon oder Kennzeichen; Treffer `ThirdPartyHit` mit Fundstelle („Einsatz 2026-104950 · TH1 …“, „Kostenbescheid KE-2026-014“, „Adressbuch Kostenersatz“), Rolle, Datum, Anschrift und Angaben zum Unterscheiden gleicher Namen. Abweichung vom Konzept: eigene Suche statt einer Quelle `privacy.third-parties` der globalen Suche, damit Dritte nicht in der Alltagssuche der Verwaltung erscheinen.
+- **Anfragen Dritter:** Eine Anfrage hat statt `personId` eine andere Person (`thirdParty`: Name, „Wo kommt die Person vor?“); Arten Auskunft, Berichtigung, Löschung, Widerspruch (`THIRD_PARTY_REQUEST_KINDS`; sonst Prüfungsfehler, ebenso Person und Dritter zugleich), keine Einschränkung (`privacy.restrictNotForKind`). Frist, Antwortschreiben (an den Namen), Bearbeitung wie sonst; Liste und Seite zeigen „Name (andere Person)“. Das Audit nennt `thirdParty: true`, nie den Namen.
+- **Auskunft** `POST /api/core/privacy/third-parties/access-reports` (`ThirdPartyAccessReportCreate`: Name und Anschrift des Schreibens, Fundstellen, Sprache, optional Anfrage auf Auskunft einer anderen Person, sonst `400 privacy.requestMismatch`): dieselbe PDF-Auskunft (Anschreiben mit Art. 15 Abs. 1, verschlüsselte Ablage 30 Tage) mit den Abschnitten „Einsätze, an denen Sie beteiligt waren“ (Alarm, Stichwort, Ortsteil bzw. Gemeinde, Rolle, gespeicherte Angaben) und „Kostenbescheide“ (Bescheid, Datum, Einsatz, Stand, Betrag, gespeicherte Angaben; Eintrag im Adressbuch). Einsatzkräfte und andere Beteiligte erscheinen nicht (Art. 15 Abs. 4); kein Protokoll der Änderungen und kein JSON. `PrivacyDocument` hat dafür `personId: null` und `thirdParty` (Name, Anschrift, Fundstellen), `AccessReport.thirdPartyName`. Übergabe nur persönlich oder per Post (`privacy.noAccount`); kein Leseprotokoll (keine Person der Stammdaten). `GET /api/core/privacy/access-reports?requestId=` listet die Auskünfte einer Anfrage.
+- **Löschung** `POST /api/core/privacy/third-parties/erasure` (`ThirdPartyErasureInput`: Fundstellen, Grund mindestens 10 Zeichen, optional Anfrage auf Löschung einer anderen Person): Ergebnis je Fundstelle (`ThirdPartyErasureResult`: `anonymized`, `deleted`, `kept` mit Grund). Beteiligte: Name, Anschrift, Telefon, Kennzeichen und Notizen geleert (Rolle bleibt), auch in den früheren Fassungen des Berichts und in den Historieneinträgen der Beteiligten, die die Person nennen. Adressbuch: Eintrag mit Historie gelöscht. Kostenschuldner eines Entwurfs: geleert (samt Historie); erlassene, bezahlte, aufgehobene oder verworfene Bescheide bleiben als Kassenunterlage bis zur Frist von `cost-recovery.notices` (`privacy.thirdPartyFinancialRecord`). Audit `privacy.third-party-erased` mit Zahlen, Quellen, Grund und Anfrage, ohne Namen.
+- **Aufbewahrung:** eigene Kategorie `incidents.involved-parties` „Angaben zu Beteiligten von Einsätzen“ (Frist ab Alarm, Aktionen anonymisieren oder nichts, Standard nichts): leert die Angaben der Beteiligten früher als der Einsatz selbst anonymisiert wird, mit Fassungen und Historie; Einsatz, Rolle und Statistik bleiben.
+- **Verzeichnis:** Tätigkeiten mit `thirdParties: true` (Einsatzdokumentation, Kostenersatz) zeigen „Daten Dritter: Information nach Art. 14 DSGVO durch die Feuerwehr; Auskunft und Löschung über „Auskunft zu einer anderen Person““ (`THIRD_PARTY_HINT`), auch im PDF und in Excel.
+- **Oberfläche** (Mockup `anfragen.html`, `#d-dritte`): Knopf „Auskunft zu einer anderen Person …“ auf dem Reiter Anfragen mit Suche, Auswahl der Fundstellen, Name und Anschrift des Schreibens (vorbelegt aus der ersten Fundstelle), Sprache und „Auskunft erstellen“; danach Stand und Herunterladen im Dialog. „Anfrage erfassen …“ wählt zwischen „Person aus den Stammdaten“ und „andere Person“. Die Seite einer Anfrage einer anderen Person zeigt „Daten der Person in den Modulen“ (Suche mit dem Namen vorbelegt) mit „Auskunft erstellen“ bzw. „Löschen …“ (Grund, Ergebnis je Fundstelle) und die Auskünfte der Anfrage.
+
+## Aufbewahrung der Protokolle und Laufberichte (L29)
+
+Kategorien des [Aufbewahrungsplans](aufbewahrung.md#kategorien) mit Standardregel, weil ein Protokoll lang genug für den Nachweis, aber nicht selbst ein dauerhafter Datenbestand sein soll:
+
+| Kategorie | Inhalt | Frist ab | Standard |
+| --- | --- | --- | --- |
+| `core.audit` | Audit-Log | Eintrag | 2 Jahre, löschen (wie bisher) |
+| `core.access-log` | Leseprotokoll | Tag des Zugriffs | 1 Jahr, löschen (wie bisher) |
+| `core.access-reports` | Nachweise der Auskünfte (Zeilen von `core.privacy_document`; die Datei geht nach 30 Tagen) | Erstellung | 3 Jahre, löschen |
+| `core.privacy-breaches` | Dokumentation abgeschlossener Datenpannen mit Historie (Art. 33 Abs. 5) | Abschluss | 5 Jahre, löschen, „Sonderfall prüfen“ (jeder Fall wird vorgelegt) |
+| `mp-feuer.run-reports` | Laufberichte der Datenübernahme mit den Zeilen mit Meldungen | Ende des Laufs | 1 Jahr, löschen |
+| `backup.run-log` | Einträge gelöschter und fehlgeschlagener Sicherungen und abgeschlossener Wiederherstellungen; Einträge vorhandener Sicherungen bleiben | Löschung bzw. Ende | 1 Jahr, löschen (ersetzt das feste Löschen nach einem Jahr) |
+
+Der Tabellen-Import speichert keinen Bericht über den Tag hinaus (Hochladen 24 Stunden, Ergebnis im Audit `imports.applied`); er folgt damit dem Audit-Log. Die Tätigkeiten `core.accounts` und `mp-feuer.transfer` nennen die neuen Kategorien als Speicherdauer.
+
+### Tests
+
+`apps/server/src/minimisation.integration.ts`: Felder abschalten mit Personalakte, Speichern, Neuanlage und Import, Löschen der gespeicherten Werte samt Historie und Audit, Spalten der Telefonliste und Komplettdaten; Zwecke mit Spalten, Pflicht und Fehlern, Recht für Kontaktlisten, Zweck und Kennzeichnung in Excel, Audit mit Zweck und Personen, Personen der Liste eines anderen Moduls, Gesundheitsliste; Suche Dritter über Beteiligte, Bescheide und Adressbuch, Anfragen Dritter, Auskunft ohne andere Personen mit PDF und Übergabe, Löschung mit Fassungen, Historie und Kassenunterlage, Kennzeichen im Verzeichnis, Kategorie „Angaben zu Beteiligten“; Standardregeln der Protokolle mit Fall für Datenpannen. `retention.integration.ts` prüft die Standardregeln aller Kategorien.
 
 ## HTTPS und Sicherheitsheader (L1)
 
@@ -589,7 +655,7 @@ Reiter „Datenpannen“ (`/admin/privacy/breaches`) und Seite einer Datenpanne 
 
 - **Protokolle exportieren** (`GET protocols.xlsx?from=&to=&userId=&breachId=&language=`): je Protokoll ein Blatt für den Zeitraum (Tage in Europe/Berlin) und optional einen Benutzer (auch als Administrator bei „Anmelden als“); das Audit-Log mit Zeitpunkt, Benutzer, „Angemeldet als durch“, Vorgang lesbar und als Code, Details (höchstens 50 000 Zeilen) und das Leseprotokoll (`AccessLog.query`: Tag, Benutzer, Person bzw. „alle Personen“, Bereich, Zugriffe, erster und letzter Zugriff; höchstens 2000 Zeilen). Weitere Protokolle melden sich am `ProtocolRegistry` an (`ProtocolSource`: `key`, `title`, `columns`, `rows(filter, language)`); `GET protocols` nennt sie. Audit `privacy.breach-protocol-exported`. `GET accounts` liefert alle Konten zur Auswahl (auch technische und gesperrte).
 - **Betroffene Personen ermitteln** (`GET sources?from=&to=&userId=` listet die Audit-Einträge `lists.exported`, `data.exported`, `data.person-exported`, `privacy.access-report-created`, `privacy.access-report-downloaded` mit lesbarem Namen und Zahl der Personen; `POST affected` mit `{ source: 'audit', auditId }` oder `{ source: 'account', userId }`, Ergebnis `AffectedPersons`):
-  - **Liste exportiert:** Das Audit `lists.exported` enthält die Parameter (`params`) und die IDs der genannten Personen (`personIds`), wenn die Liste sie liefert (`ListContent.personIds`; Stammdaten: Mitglieder, Unterschriften, Telefon, Komplettdaten, Geburtstage, Dienstjubiläen, Qualifikationen, Atemschutzgeräteträger, Probezeit, Altersgrenzen). Ergebnis mit dem Stand des Exports (`basis: recorded`). Die Audit-Seite zeigt `personIds` nur als Zahl.
+  - **Liste exportiert:** Das Audit `lists.exported` enthält die Parameter (`params`), den Zweck und die IDs der genannten Personen (`personIds`), wenn die Liste sie liefert (`ListContent.personIds`; alle Listen über Personen, siehe [Zweck der Listen](#zweck-der-listen-und-exporte-l11)). Ergebnis mit dem Stand des Exports (`basis: recorded`). Die Audit-Seite zeigt `personIds` nur als Zahl.
   - **Auskunft, Auskunft als JSON:** die Person des Eintrags.
   - **Vollexport** (`data.exported`): alle Personen, berechnet aus den heutigen Daten (`basis: current`).
   - **Benutzerkonto:** die Personen, die das Konto heute mit `masterdata.persons.read` lesen kann (ohne eingeschränkte; technische Benutzer mit den Rechten ihres Tokens), `basis: current`.

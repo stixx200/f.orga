@@ -9,9 +9,10 @@ import { MpFeuerMappingEntity, MpFeuerRunDatasetEntity, MpFeuerRunEntity } from 
 import { MpFeuerMappings } from './runs/mp-feuer-mappings.js';
 import { MpFeuerController, RunsController } from './runs/runs.controller.js';
 import { RunPersonData } from './runs/run-person-data.js';
+import { RunReportsRetention } from './runs/run-reports.retention.js';
 import { MpFeuerRuns } from './runs/runs.service.js';
 
-@Module({ controllers: [RunsController, MpFeuerController], providers: [MpFeuerRuns, MpFeuerMappings, MpFeuerExports, RunPersonData] })
+@Module({ controllers: [RunsController, MpFeuerController], providers: [MpFeuerRuns, MpFeuerMappings, MpFeuerExports, RunPersonData, RunReportsRetention] })
 export class MpFeuerModule implements OnModuleInit {
   constructor(
     private readonly historyAccess: HistoryAccessRegistry,
@@ -21,6 +22,7 @@ export class MpFeuerModule implements OnModuleInit {
     private readonly em: EntityManager,
     private readonly exports: ExportRegistry,
     private readonly personData: RunPersonData,
+    private readonly runReports: RunReportsRetention,
     private readonly personDataRegistry: PersonDataRegistry,
   ) {}
 
@@ -41,6 +43,8 @@ export class MpFeuerModule implements OnModuleInit {
       erase: (id, _areas, ctx) => this.personData.anonymize([id], ctx),
     });
     this.retention.register('mp-feuer.rows', { run: (_settings, dryRun) => this.runs.expireRows(dryRun) });
+    // The reports name persons from MP-Feuer: retention category with a default of one year (L29).
+    this.runReports.register(this.retention);
   }
 }
 

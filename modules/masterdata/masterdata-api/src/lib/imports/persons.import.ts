@@ -10,9 +10,10 @@ import {
   SettingsService,
 } from '@forga/core-api';
 import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
-import { type DepartmentType, type DriverLicense, EMPTY_DRIVER_LICENSE, Gender, readDriverLicense, type MembershipSettings, PersonStatus, probationEnd } from '@forga/masterdata-contracts';
+import { type DepartmentType, type DriverLicense, EMPTY_DRIVER_LICENSE, Gender, readDriverLicense, type MembershipSettings, type OptionalPersonField, PersonStatus, probationEnd } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { Department, Membership, Person } from '../masterdata.entities.js';
+import { PersonFields } from '../persons/person-fields.js';
 import { activeMemberships, PersonsService, SENSITIVE, WRITE } from '../persons/persons.service.js';
 import { today } from '../shared/access.js';
 
@@ -101,6 +102,7 @@ export class PersonsImport {
     private readonly em: EntityManager,
     private readonly persons: PersonsService,
     private readonly settings: SettingsService,
+    private readonly fields: PersonFields,
   ) {}
 
   profile(): ImportProfile {
@@ -133,6 +135,7 @@ export class PersonsImport {
     const byKey = new Map(departments.map((d) => [departmentKey(d), d]));
     const existing = await em.find(Person, {}, { populate: ['memberships.department', 'qualifications', 'ranks', 'honors', 'offices', 'restPeriods'] });
     const sensitive = user.grant(SENSITIVE) !== null;
+    const disabled = await this.fields.disabled();
     // Sensitive values (birth dates) wait for the second factor instead of being ignored.
     if (!sensitive && user.heldGrant(SENSITIVE) !== null && rows.some(({ values }) => values['birthDate'])) throw user.stepUpRequired();
     const results: ImportRowResult[] = [];
@@ -206,7 +209,8 @@ export class PersonsImport {
 
       const fields: Record<string, unknown> = {};
       for (const key of ['personnelNumber', 'salutation', 'title', 'firstName', 'lastName', 'street', 'postalCode', 'city', 'phonePrivate', 'phoneMobile', 'phoneWork', 'email']) {
-        if (values[key]) fields[key] = values[key];
+        // Switched-off fields of the person file are not imported (L10), also not from MP-Feuer.
+        if (values[key] && !disabled.has(key as OptionalPersonField)) fields[key] = values[key];
       }
       const { leftOn = null, licenseExpiresOn = null, ...personDates } = dates;
       const license = importedLicense(values['licenseClasses'], licenseExpiresOn);
@@ -221,7 +225,7 @@ export class PersonsImport {
           : (EXIT_REASONS.find(([pattern, key]) => pattern.test(values['exitReason']) && exitReasons.has(key))?.[1] ?? context.mapped('exit-reason', values['exitReason']) ?? null);
       const gender =
         GENDERS[normalizeHeading(values['gender'] ?? '')] ?? SALUTATION_GENDER[normalizeHeading(values['salutation'] ?? '')];
-      if (gender) fields['gender'] = gender;
+      if (gender && !disabled.has('gender')) fields['gender'] = gender;
       const status = values['status'] ? STATUS[normalizeHeading(values['status'])] : undefined;
       if (values['status'] && !status) messages.push({ code: 'masterdata.import.unknownStatus', params: { value: values['status'] } });
 

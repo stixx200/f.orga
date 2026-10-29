@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DriverLicenseSettings } from './driver-license.js';
+import { PersonFieldSettings } from './person-fields.js';
 
 /** Allowed range of the ages in the membership rules (years); keeps out typos such as negative values or 170 instead of 17. */
 export const MEMBERSHIP_AGE_BOUNDS = {
@@ -76,4 +77,5 @@ export const MASTERDATA_SETTINGS = {
   'masterdata.membership': MembershipSettings,
   'masterdata.certificates': CertificateSettings,
   'masterdata.driverLicense': DriverLicenseSettings,
+  'masterdata.personFields': PersonFieldSettings,
 } as const;

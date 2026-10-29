@@ -30,6 +30,7 @@ export const MP_FEUER_MANIFEST = {
         legalBasisHint: { de: 'wie die übernommenen Daten (Personalverwaltung, Einsätze, Dienste)', en: 'as the transferred data (personnel administration, incidents, sessions)' },
         name: { de: 'Datenübernahme aus MP-Feuer', en: 'Data transfer from MP-Feuer' },
         purpose: { de: 'Übernahme der Daten aus der bisherigen Anwendung MP-Feuer und Nachweis der Übernahme', en: 'Transfer of the data from the previous application MP-Feuer and evidence of the transfer' },
+        retention: ['mp-feuer.run-reports'],
       },
     ],
   },

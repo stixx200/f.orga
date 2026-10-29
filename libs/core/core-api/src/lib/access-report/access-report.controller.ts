@@ -44,9 +44,11 @@ export class AccessReportsController {
     return this.reports.preview(validPerson(personId), parsed.success ? parsed.data : 'de');
   }
 
+  /** Reports about a person (`personId`) or of a data subject request (`requestId`, also of a third party). */
   @Get()
-  list(@Query('personId') personId: string | undefined): Promise<AccessReport[]> {
-    return this.reports.list(validPerson(personId));
+  list(@Query('personId') personId: string | undefined, @Query('requestId') requestId: string | undefined): Promise<AccessReport[]> {
+    if (requestId && UUID.test(requestId)) return this.reports.list({ requestId });
+    return this.reports.list({ personId: validPerson(personId) });
   }
 
   @Post()

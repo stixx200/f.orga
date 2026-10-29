@@ -1,6 +1,6 @@
 import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Attachments, AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry, RetentionRegistry, SearchRegistry } from '@forga/core-api';
+import { Attachments, AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry, RetentionRegistry, SearchRegistry, ThirdPartyRegistry } from '@forga/core-api';
 import { INCIDENT_UNITS, INCIDENTS_LOOKUP, INCIDENTS_MANIFEST, INCIDENTS_SETTINGS, INCIDENTS_TERMINAL_BOOKING, INCIDENTS_UNIT_REPORTS } from '@forga/incidents-contracts';
 import { CATALOG_REFERENCES, type CatalogReferences, ORGANIZATION, type Organization, ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
 import { INCIDENTS_MIGRATIONS } from '../migrations/index.js';
@@ -9,6 +9,7 @@ import { ExternalController } from './api/external.controller.js';
 import { IncidentsData } from './data/incidents.data.js';
 import { IncidentsLookupService } from './data/incidents.lookup.js';
 import { IncidentsRetention } from './data/incidents.retention.js';
+import { InvolvedParties } from './data/involved-parties.js';
 import { IncidentsPersonData } from './data/incidents.person-data.js';
 import { IncidentsDeadlines } from './deadlines/incidents.deadlines.js';
 import { FUNCTION_TARGETS } from './imports/function-targets.js';
@@ -45,7 +46,7 @@ import { TerminalBookingService } from './terminal/terminal-booking.service.js';
 @Module({
   controllers: [KeywordsController, IncidentsController, PersonAssignmentsController, MyIncidentsController, ExternalController, CompensationExportController, StatisticsController, UnitsController],
   providers: [
-    IncidentsData, IncidentsRetention, IncidentsPersonData, ReportContextLoader, ReportsService, ReportPdf, ReportWriters, IncidentsDeadlines, AssignmentLines, IncidentsLists, PersonnelImport, CompensationChecker,
+    IncidentsData, IncidentsRetention, IncidentsPersonData, InvolvedParties, ReportContextLoader, ReportsService, ReportPdf, ReportWriters, IncidentsDeadlines, AssignmentLines, IncidentsLists, PersonnelImport, CompensationChecker,
     IncidentsLookupService, { provide: INCIDENTS_LOOKUP, useExisting: IncidentsLookupService },
     IncidentUnitsRegistry, { provide: INCIDENT_UNITS, useExisting: IncidentUnitsRegistry },
     UnitReportsService, { provide: INCIDENTS_UNIT_REPORTS, useExisting: UnitReportsService },
@@ -74,6 +75,8 @@ export class IncidentsModule implements OnModuleInit {
     @Inject(ORGANIZATION) private readonly organization: Organization,
     private readonly retention: RetentionRegistry,
     private readonly retentionCategory: IncidentsRetention,
+    private readonly thirdParties: ThirdPartyRegistry,
+    private readonly involvedParties: InvolvedParties,
     private readonly personData: PersonDataRegistry,
     private readonly incidentsPersonData: IncidentsPersonData,
   ) {}
@@ -104,6 +107,8 @@ export class IncidentsModule implements OnModuleInit {
       describePerson: (id, ctx) => this.data.describePerson(id, ctx),
     });
     this.retentionCategory.register(this.retention);
+    // Persons involved are no persons of the master data: access, erasure and retention of their own (L14).
+    this.involvedParties.register(this.thirdParties, this.retention);
     this.personData.register('incidents', this.incidentsPersonData);
     this.historyAccess.register('incidents.report', async (user, id) => {
       const report = await this.em.fork().findOne(ReportEntity, id);

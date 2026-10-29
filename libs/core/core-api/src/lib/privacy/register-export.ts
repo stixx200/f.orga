@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import type { BrigadeSettings, Language, LocalizedText, ProcessingRegister, RegisterActivity } from '@forga/core-contracts';
+import { type BrigadeSettings, type Language, type LocalizedText, type ProcessingRegister, type RegisterActivity, THIRD_PARTY_HINT } from '@forga/core-contracts';
 import { PDF_TABLE_LAYOUT, pdfHeaderCell, renderLetterPdf } from '../lists/renderers.js';
 import { addStyledSheet } from '../lists/workbook.js';
 import { formatDay, lines } from './privacy-text.js';
@@ -29,6 +29,7 @@ const T = {
   subjects: { de: 'Betroffene', en: 'Data subjects' },
   categories: { de: 'Daten', en: 'Data' },
   special: { de: 'Besondere Kategorien (Art. 9)', en: 'Special categories (Art. 9)' },
+  thirdParties: { de: 'Daten Dritter', en: 'Data of third parties' },
   recipients: { de: 'Empfänger', en: 'Recipients' },
   thirdCountry: { de: 'Drittland', en: 'Third country' },
   none: { de: 'keine', en: 'none' },
@@ -68,6 +69,7 @@ function rows(activity: RegisterActivity, language: Language): [string, string][
     [t(T.subjects), join(activity.subjects, language) || '–'],
     [t(T.categories), join(activity.categories, language) || '–'],
     [t(T.special), activity.health ? (activity.healthNote?.[language] ?? t(T.special)) : '–'],
+    [t(T.thirdParties), activity.thirdParties ? t(THIRD_PARTY_HINT) : '–'],
     [t(T.recipients), activity.recipients.map((r) => (r.note ? `${r.name[language]} (${r.note})` : r.name[language])).join('; ') || '–'],
     [t(T.thirdCountry), record.thirdCountry || t(T.none)],
     [t(T.retention), t(activity.retention)],
@@ -76,7 +78,7 @@ function rows(activity: RegisterActivity, language: Language): [string, string][
 }
 
 /** Column headers of the fields of `rows`. */
-const FIELDS = [T.purpose, T.subjects, T.categories, T.special, T.recipients, T.thirdCountry, T.retention, T.legalBasis];
+const FIELDS = [T.purpose, T.subjects, T.categories, T.special, T.thirdParties, T.recipients, T.thirdCountry, T.retention, T.legalBasis];
 
 function reviewed(activity: RegisterActivity, language: Language): string {
   const { reviewedAt, reviewedBy } = activity.record;

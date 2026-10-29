@@ -68,6 +68,7 @@ export class TrainingLists {
       name: { de: 'Dienstplan', en: 'Training schedule' },
       description: { de: 'Alle Dienste eines Jahres mit Zeit, Ort und Verantwortlichem, je Abteilung oder gesamt', en: 'All sessions of a year with time, place and person responsible, per department or in total' },
       permission: READ,
+      personalData: 'names',
       parameters: [
         { key: 'year', label: { de: 'Jahr', en: 'Year' }, type: 'year' },
         { key: 'departmentId', label: { de: 'Abteilung', en: 'Department' }, type: 'department' },
@@ -92,6 +93,7 @@ export class TrainingLists {
         const time = (d: Date) => d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' });
         return {
           subtitle: [String(year), department?.name].filter(Boolean).join(' · '),
+          personIds: [...names.keys()],
           rows: sessions.map((s) => ({
             date: s.startsAt.toLocaleDateString(locale, { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Berlin' }),
             time: `${time(s.startsAt)} – ${time(s.endsAt)}`,
@@ -111,6 +113,7 @@ export class TrainingLists {
       id: 'training.service-book',
       name: { de: 'Dienstbuch', en: 'Service book' },
       permission: READ,
+      personalData: 'names',
       parameters: periodParameters,
       schema: Period,
       orientation: 'landscape',
@@ -120,6 +123,7 @@ export class TrainingLists {
         const names = await this.names(sessions.flatMap((s) => s.instructorIds));
         return {
           subtitle: `${from} – ${to}`,
+          personIds: [...names.keys()],
           rows: sessions.map((s) => ({
             date: dateTime(s.startsAt, language),
             type: types.get(s.type)?.name[language] ?? s.type,
@@ -138,6 +142,7 @@ export class TrainingLists {
       id: 'training.participation',
       name: { de: 'Dienstbeteiligung', en: 'Participation' },
       permission: READ,
+      personalData: 'names',
       parameters: periodParameters,
       schema: Period,
       // The rate counts the sessions of the person's departments while a member, not all sessions of the brigade.
@@ -162,6 +167,7 @@ export class TrainingLists {
         const shortNames = new Map(departments.map((d) => [d.id, d.shortName]));
         return {
           subtitle: `${from} – ${to} · ${counted.length}`,
+          personIds: rows.map((r) => r.personId).filter((id) => names.has(id)),
           rows: rows
             .map((r) => ({ name: names.get(r.personId) ?? '', department: shortNames.get(r.departmentId ?? '') ?? '', sessions: r.sessions, present: r.present, excused: r.excused, rate: r.rate, hours: r.hours }))
             .toSorted((a, b) => String(a.name).localeCompare(String(b.name))),
@@ -195,6 +201,7 @@ export class TrainingLists {
       id: 'training.participants',
       name: { de: 'Teilnehmerliste', en: 'Participants' },
       permission: READ,
+      personalData: 'names',
       parameters: [this.sessionParameter()],
       schema: SessionParam,
       columns: [col('name', 'Name', 'Name', 2), col('status', 'Status', 'Status'), col('role', 'Funktion', 'Role'), col('ba', 'Atemschutz', 'BA', 0.8, 'center')],
@@ -204,6 +211,7 @@ export class TrainingLists {
         const status = { present: { de: 'anwesend', en: 'present' }, excused: { de: 'entschuldigt', en: 'excused' }, absent: { de: 'unentschuldigt', en: 'absent' } };
         return {
           subtitle: `${session.title} · ${dateTime(session.startsAt, language)}`,
+          personIds: [...names.keys()],
           rows: session.attendance
             .getItems()
             .filter((a) => names.has(a.personId))
@@ -219,6 +227,7 @@ export class TrainingLists {
       id: 'training.signatures',
       name: { de: 'Unterschriftenliste Dienst', en: 'Signature list (session)' },
       permission: READ,
+      personalData: 'names',
       parameters: [this.sessionParameter()],
       schema: SessionParam,
       signatureColumn: true,
@@ -230,6 +239,7 @@ export class TrainingLists {
         const departments = new Map((await this.organization.departments()).map((d) => [d.id, d.shortName]));
         return {
           subtitle: `${session.title} · ${dateTime(session.startsAt, language)}`,
+          personIds: members.map((p) => p.id),
           rows: members
             .map((p) => ({ name: `${p.lastName}, ${p.firstName}`, department: departments.get(p.primaryDepartmentId ?? '') ?? '' }))
             .toSorted((a, b) => a.name.localeCompare(b.name)),
@@ -243,6 +253,7 @@ export class TrainingLists {
       id: 'training.instructor-hours',
       name: { de: 'Ausbilderstunden', en: 'Instructor hours' },
       permission: READ,
+      personalData: 'names',
       parameters: periodParameters,
       schema: Period,
       columns: [col('name', 'Name', 'Name', 2), col('sessions', 'Dienste', 'Sessions', 1, 'right'), col('hours', 'Stunden', 'Hours', 1, 'right')],
@@ -258,7 +269,7 @@ export class TrainingLists {
           }
         }
         const names = await this.names([...totals.keys()]);
-        return { subtitle: `${from} – ${to}`, rows: [...totals].filter(([id]) => names.has(id)).map(([id, t]) => ({ name: names.get(id) ?? '', sessions: t.sessions, hours: Math.round(t.hours * 10) / 10 })) };
+        return { subtitle: `${from} – ${to}`, personIds: [...names.keys()], rows: [...totals].filter(([id]) => names.has(id)).map(([id, t]) => ({ name: names.get(id) ?? '', sessions: t.sessions, hours: Math.round(t.hours * 10) / 10 })) };
       },
     };
   }

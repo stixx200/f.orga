@@ -36,6 +36,7 @@ Umgesetzt ist (siehe [implementiert/architektur.md](../implementiert/architektur
 - **Phase 3, Teil 1** ([implementiert/datenschutz.md](../implementiert/datenschutz.md#verzeichnis-der-verarbeitungstätigkeiten-l8)): Verzeichnis der Verarbeitungstätigkeiten als Entwurf aus den Manifesten mit Ergänzungen der Gemeinde, technischen Maßnahmen und Export als PDF und Excel (L8); Widerspruch und Empfänger nach Art. 19 aus dem Verzeichnis; Datenpannen mit 72-Stunden-Frist, Meldungen, betroffenen Personen, Kontaktliste, Protokollen und „Alle Sitzungen beenden“ (L20).
 - **Phase 3, Teil 2** ([implementiert/datenschutz.md](../implementiert/datenschutz.md#einwilligungen-l9)): Katalog der Einwilligungen mit Fassungen und Vorlagen, Einwilligungen an der Person mit Nachweis und Widerruf, Wirkung in Telefonliste und Geburtstagsliste, Mein Bereich und erste Anmeldung (L9); „Berichtigung beantragen“ mit Aufgabe für die Abteilung, Wert in der Historie unkenntlich machen (L12); Leseprotokoll mit eigener Aufbewahrung, „Anmeldungen als Sie“ mit E-Mail (L15).
 - **Phase 4, Teil A** ([implementiert/datenschutz.md](../implementiert/datenschutz.md#löschprüfung-l7)): Löschprüfung je Modul mit Ausführen und Einschränkung des Aufzubewahrenden (L7); vollständige Anonymisierung über alle Module mit Namensersetzung und Startprüfung (L13).
+- **Phase 4, Teil B** ([implementiert/datenschutz.md](../implementiert/datenschutz.md#felder-der-personalakte-l10)): abschaltbare Felder der Personalakte mit Löschen gespeicherter Werte (L10); Zweck der Listen mit Spalten je Zweck, Pflichtzweck beim Export, Recht `masterdata.lists.contact`, Kennzeichnung und Personen aller Listen im Audit (L11); Daten Dritter mit Suche, Anfragen, Auskunft und Löschung, eigener Aufbewahrung der Beteiligten und Hinweis im Verzeichnis (L14); Aufbewahrung der Protokolle und Laufberichte mit Standardregeln (L29).
 - **Mein Bereich:** Kontakt und Bankverbindung selbst ändern, eigene Dienste, Einsätze, Entschädigung, Atemschutz, Schutzausrüstung, Einwilligungen, Berichtigung beantragen, Anmeldungen als Sie.
 
 ## Auskunft nach Art. 15 als PDF
@@ -63,11 +64,11 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 | L7 | Betroffenenanfragen mit Frist; Löschung und Einschränkung je Person | Art. 12, 17, 18 | kritisch (umgesetzt bis auf das Kennzeichen in Datensätzen anderer Module) |
 | L8 | Verzeichnis der Verarbeitungstätigkeiten und technische Maßnahmen | Art. 30, 32 | wichtig (umgesetzt) |
 | L9 | Einwilligungen erfassen, nachweisen, widerrufen (auch Minderjährige) | Art. 6, 7, 8 | wichtig (umgesetzt) |
-| L10 | Datenminimierung der Felder und Freitexte | Art. 5 Abs. 1 c, 25 | wichtig |
-| L11 | Zweckbindung der Listen und Exporte | Art. 5 Abs. 1 b, 25 | wichtig |
+| L10 | Datenminimierung der Felder und Freitexte | Art. 5 Abs. 1 c, 25 | wichtig (umgesetzt bis auf Längen der Freitexte) |
+| L11 | Zweckbindung der Listen und Exporte | Art. 5 Abs. 1 b, 25 | wichtig (umgesetzt) |
 | L12 | Berichtigung durch die Person; falsche Werte in der Historie | Art. 16, 19 | wichtig (umgesetzt) |
 | L13 | Vollständige Anonymisierung über alle Module | Art. 5 Abs. 1 e, 17 | wichtig (umgesetzt) |
-| L14 | Daten Dritter (Beteiligte, Kostenschuldner, Anrufer) | Art. 14, 15, 17 | wichtig |
+| L14 | Daten Dritter (Beteiligte, Kostenschuldner, Anrufer) | Art. 14, 15, 17 | wichtig (umgesetzt) |
 | L15 | Protokollierung von Lesezugriffen; Transparenz der Impersonation | Art. 5 Abs. 2, 32 | wichtig (umgesetzt) |
 | L16 | Sitzungen: Leerlauf-Abmeldung, Geräteübersicht | Art. 32 | wichtig |
 | L17 | Verschlüsselung der Sicherungen und der gespeicherten Daten | Art. 32 | wichtig |
@@ -82,7 +83,7 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 | L26 | Datenschutz-Folgenabschätzung | Art. 35 | empfohlen |
 | L27 | Anhänge (Fotos) | Art. 5, 9 | empfohlen |
 | L28 | MP-Feuer-Übernahme und Dateien aus MP-Feuer | Art. 5, 14, 32 | empfohlen |
-| L29 | Aufbewahrung von Protokollen und Laufberichten | Art. 5 Abs. 1 e | empfohlen |
+| L29 | Aufbewahrung von Protokollen und Laufberichten | Art. 5 Abs. 1 e | empfohlen (umgesetzt) |
 
 ### L1 HTTPS, sichere Cookies, Sicherheitsheader (kritisch)
 
@@ -153,17 +154,16 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L10 Datenminimierung (wichtig)
 
-- **Heute:** Die Personalakte hat Felder, deren Zweck nicht jede Feuerwehr hat: Geburtsort, Titel, Rufname, Arbeitgeber mit Anschrift und IBAN, private Bankverbindung, Telefon dienstlich, Bemerkung. Freitexte (Bemerkung, Entschuldigung, Beteiligte, Lage) können beliebiges enthalten.
 - **Soll:** nur, was für den Zweck nötig ist (Art. 5 Abs. 1 c); Voreinstellungen datenschutzfreundlich (Art. 25 Abs. 2).
-- **Umsetzung:** Einstellung „Felder der Personalakte“: optionale Felder abschaltbar (abgeschaltete werden nicht angezeigt, nicht importiert und nach Bestätigung geleert). Je Feld ein Hinweis „Wofür?“ (z. B. Arbeitgeber: Verdienstausfall und Freistellung; Geburtsort: Urkunden, Lehrgangsanmeldung). Die MP-Feuer-Übernahme übernimmt nur aktive Felder. Freitexte bekommen eine Längenbegrenzung und den Hinweis aus L5.
+- **Umgesetzt:** Einstellung „Felder der Personalakte“ mit „Wofür?“ je Feld, abgeschaltete Felder nicht angezeigt, nicht gespeichert, nicht importiert (auch nicht aus MP-Feuer), gespeicherte Werte mit Bestätigung samt Historie gelöscht; Hinweis an den Beteiligten im Berichtseditor; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#felder-der-personalakte-l10). Abweichung: Standard bleibt „alle Felder an“, damit bestehende Daten und Abläufe (Verdienstausfall, Auszahlung, Jahresstatistik) nicht unbemerkt wegfallen; die Seite fordert zur Prüfung mit dem DSB auf.
+- **Offen:** Längenbegrenzung der Freitexte (Bemerkung, Entschuldigung, Lage, Notizen der Beteiligten).
 - **Organisatorisch:** Feldliste mit dem DSB durchgehen; nicht benötigte Felder abschalten.
 
 ### L11 Zweckbindung der Listen und Exporte (wichtig)
 
-- **Heute:** Die Telefonliste und die Mitgliederliste mit Kontakt darf jeder mit `masterdata.persons.read` ausgeben (z. B. Gruppenführer); Geburtstage und Komplettdaten brauchen `sensitive`. Exporte stehen im Audit-Log, ohne Zweck. Die Excel-Ausgabe jeder Tabelle (`DataTable`) geht an allen Listen vorbei.
 - **Soll:** Daten nur für festgelegte Zwecke; Ausdrucke verlassen kontrolliert das System.
-- **Umgesetzt (Teil):** Telefonliste und Geburtstage haben einen Parameter „Zweck“ mit der Wirkung der Einwilligungen (L9); Listen mit Kontakt- oder sensiblen Daten stehen im Leseprotokoll (L15).
-- **Umsetzung:** Listen tragen im Manifest einen Zweck und optional eine Einwilligung (L9); Listen mit Kontakt- oder sensiblen Daten bekommen ein eigenes Recht `masterdata.lists.contact` (Standard Kommandant, Abteilungskommandant). Fußzeile von PDF und Excel: „Personenbezogene Daten – nur für den Dienstgebrauch, nach Gebrauch vernichten“. Beim Export von Listen mit Kontakt- oder Gesundheitsdaten Pflichtfeld „Zweck“ (Audit). Excel-Ausgabe der Tabellen nur für Tabellen ohne Kontaktspalten bzw. mit demselben Recht.
+- **Umgesetzt:** Zwecke je Liste mit den Spalten, die sie brauchen, Pflichtzweck beim Export von Listen mit Kontakt-, sensiblen oder Gesundheitsdaten (mit „Anderer Zweck“ und Beschreibung), Recht `masterdata.lists.contact` für Telefonliste und Kontaktaufnahme, Kennzeichnung „nur für den Dienstgebrauch“ in PDF und Excel, Zweck und Personen im Audit `lists.exported` für alle Listen über Personen; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#zweck-der-listen-und-exporte-l11). Abweichungen: Zwecke stehen an der Listenvorlage im Code statt im Manifest (sie gehören zu den Spalten der Liste); der Zweck der Telefon- und Geburtstagsliste ist kein Parameter mehr, sondern ein Zweck mit derselben Wirkung; nur die Mitgliederliste mit Kontakt und die Telefonliste verlangen `masterdata.lists.contact`, Listen mit sensiblen Daten weiter `masterdata.persons.sensitive`.
+- **Offen:** Excel-Ausgabe der übrigen Tabellen der Oberfläche (`DataTable`) mit Kontaktspalten nur mit `masterdata.lists.contact` (umgesetzt für die Personenliste).
 - **Organisatorisch:** Dienstanweisung zum Umgang mit Ausdrucken und Messenger-Gruppen.
 
 ### L12 Berichtigung (wichtig)
@@ -179,9 +179,9 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L14 Daten Dritter (wichtig)
 
-- **Heute:** Einsatzberichte speichern Beteiligte (Name, Anschrift, Telefon, Kennzeichen, Rolle Geschädigter/Verursacher/Zeuge/Anrufer); der Kostenersatz Kostenschuldner mit Adressbuch und Bescheiden. Diese Personen sind keine `Person` der Stammdaten: Weder Auskunft noch Löschung noch Information sind abgebildet.
 - **Soll:** Auch Dritte haben die Rechte nach Art. 14–18; Fristen gelten auch für sie.
-- **Umsetzung:** „Auskunft zu einer anderen Person“ auf der Seite Anfragen: Suche nach Name, Anschrift oder Kennzeichen über Beteiligte und Kostenschuldner (`SearchRegistry` mit eigener Quelle `privacy.third-parties`, nur `core.privacy.manage`); dieselbe PDF-Auskunft mit den Abschnitten „Einsätze, an denen Sie beteiligt waren“ (Datum, Stichwort, Rolle, gespeicherte Angaben zu Ihnen) und „Kostenbescheide“. Anonymisierung der Beteiligten über den Aufbewahrungsplan (Einsätze anonymisieren). Hinweis im Berichtseditor: nur Angaben, die für Kostenersatz, Versicherung oder Polizei nötig sind.
+- **Umgesetzt:** Suche über Beteiligte, Kostenschuldner und Adressbuch, Anfragen anderer Personen, Auskunft als PDF mit „Einsätze, an denen Sie beteiligt waren“ und „Kostenbescheide“, Löschung je Fundstelle (Kassenunterlagen bleiben), eigene Aufbewahrungskategorie „Angaben zu Beteiligten“, Hinweis im Verzeichnis und im Berichtseditor; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#daten-dritter-l14). Abweichungen: eigene Suche (`ThirdPartyRegistry`) statt einer Quelle der globalen Suche, damit Dritte nicht in der Alltagssuche erscheinen; Anfragen Dritter kennen keine Einschränkung (keine Person der Stammdaten).
+- **Offen:** Namen Dritter in Freitexten (Lage, Maßnahmen, Bemerkungen) findet die Suche nicht; sie gehen erst mit der Anonymisierung des Einsatzes. Das erlassene PDF eines Kostenbescheids behält den Kostenschuldner bis zur Frist des Bescheids.
 - **Organisatorisch:** Informationspflicht nach Art. 14 gegenüber Beteiligten (Ausnahmen mit dem DSB klären), Hinweis im Kostenbescheid.
 
 ### L15 Lesezugriffe und Impersonation (wichtig)
@@ -218,7 +218,6 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 - **Umgesetzt:** „Datenpanne erfassen“ unter Datenschutz mit 72-Stunden-Frist als Aufgabe und E-Mail ohne Inhalt, Meldung an die Aufsichtsbehörde (Datum, Aktenzeichen) oder Begründung ohne Meldung, Benachrichtigung der Personen (Datum, Weg), Abschluss; Hilfen: Audit-Log eines Zeitraums oder Benutzers als Excel, betroffene Personen aus einem Listenexport (`lists.exported` mit Parametern und Personen), Vollexport, Auskunft oder Konto, Kontaktliste als Excel, „Alle Sitzungen beenden und alle Tokens widerrufen“ mit Step-up und Grund; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#datenpannen-l20). Abweichungen: Personen eines Listenexports stehen im Audit-Eintrag (`personIds`), statt die Liste mit den gespeicherten Parametern erneut zu erzeugen, weil nur so der Stand des Exports erhalten bleibt; Vollexport und Konto werden aus den heutigen Daten berechnet (so gekennzeichnet); die eigene Sitzung bleibt beim Notfall bestehen.
 - **Offen:**
-  - Personen in den Listen der anderen Module (Dienste, Atemschutz, Entschädigung, Beförderungen); heute liefern die Personenlisten der Stammdaten `personIds`.
   - Geräteschlüssel der Infoterminals beim Notfall sperren.
   - Dokumentation einer Datenpanne als PDF.
 - **Organisatorisch:** Meldung an die Aufsichtsbehörde, Dokumentation (Art. 33 Abs. 5).
@@ -269,8 +268,8 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L29 Aufbewahrung von Protokollen (empfohlen)
 
-- **Heute:** Audit-Log 24 Monate (einstellbar), Historie unbegrenzt; Laufberichte des MP-Feuer-Moduls unbegrenzt.
-- **Umsetzung:** Über den [Aufbewahrungsplan](aufbewahrung.md) (`core.history`, `core.audit` und das Leseprotokoll `core.access-log` sind umgesetzt), dazu Laufberichte (L28). Ausgewogen: Das Protokoll muss lang genug sein, um Missbrauch nachzuweisen, und kurz genug, um nicht selbst ein Datenbestand über das Verhalten der Benutzer zu werden.
+- **Umgesetzt:** Kategorien des Aufbewahrungsplans mit Standardregel für Nachweise der Auskünfte (3 Jahre), Datenpannen (5 Jahre, mit „Sonderfall prüfen“), Laufberichte von MP-Feuer (1 Jahr) und das Protokoll der Datensicherung (1 Jahr), neben Audit-Log, Historie und Leseprotokoll; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#aufbewahrung-der-protokolle-und-laufberichte-l29). Abweichung: Der Tabellen-Import hat keinen eigenen Bericht über den Tag hinaus (Audit `imports.applied`), also keine eigene Kategorie. Die kürzere Frist für Zeilen mit Meldungen in Laufberichten (90 Tage, L28) gehört zur Härtung.
+- **Ausgewogen:** Das Protokoll muss lang genug sein, um Missbrauch nachzuweisen, und kurz genug, um nicht selbst ein Datenbestand über das Verhalten der Benutzer zu werden; die Standardwerte sind Vorschläge und mit dem DSB abzustimmen.
 
 ## Step-up: zweiter Faktor bei sensiblen Daten
 
@@ -290,11 +289,7 @@ Umgesetzt: Seite „Verwaltung → Datenschutz“ mit den Reitern Anfragen, Info
 
 ## Rechte und Rollen
 
-| Recht | Bereich | Zweck | Vorlage |
-| --- | --- | --- | --- |
-| `masterdata.lists.contact` | Abteilung | Listen mit Kontaktdaten ausgeben | `commander`, `department-commander` |
-
-`core.privacy.manage` (Gesamtwehr, privilegiert, `stepUp`, Vorlage `administrator`; [implementiert](../implementiert/datenschutz.md#recht-und-seite-datenschutz)) und `core.privacy.consents` (Abteilung, Vorlagen `commander`, `department-commander`; [implementiert](../implementiert/datenschutz.md#einwilligung-an-der-person)) sind umgesetzt; `core.privacy.manage` deckt Auskünfte, Verzeichnis, Datenpannen und die Löschung ab. Die Vorlage `administration` bekommt es nur auf Wunsch.
+`masterdata.lists.contact` (Abteilung, Vorlagen `commander`, `department-commander`; [implementiert](../implementiert/datenschutz.md#zweck-der-listen-und-exporte-l11)), `core.privacy.manage` (Gesamtwehr, privilegiert, `stepUp`, Vorlage `administrator`; [implementiert](../implementiert/datenschutz.md#recht-und-seite-datenschutz)) und `core.privacy.consents` (Abteilung, Vorlagen `commander`, `department-commander`; [implementiert](../implementiert/datenschutz.md#einwilligung-an-der-person)) sind umgesetzt; `core.privacy.manage` deckt Auskünfte, Verzeichnis, Datenpannen und die Löschung ab, auch für andere Personen (Daten Dritter). Die Vorlage `administration` bekommt es nur auf Wunsch.
 
 ## Entscheidungen
 
@@ -318,7 +313,7 @@ Alle Entscheidungen sind festgelegt (wie empfohlen, Nr. 2 abweichend).
 | 1 – vor dem Echtbetrieb | umgesetzt: zweiter Faktor als Step-up, HTTPS mit Caddy und Sicherheitsheader, `FORGA_STAGE` mit Band und Sperren im Testsystem, E-Mails ohne Gesundheitsbezug, Verletzte nur mit Recht (mit `stepUp`) ([implementiert](../implementiert/datenschutz.md)) | L1, L2, L5 (Teil), L6, L18 (Teil) |
 | 2 – Rechte der Betroffenen | umgesetzt: Datenschutzhinweis und erste Anmeldung, Anfragen mit Frist, Einschränkung, Widerspruch, Auskunft als PDF mit `describePerson` in allen Modulen ([implementiert](../implementiert/datenschutz.md#datenschutzhinweis-l4)) | umgesetzt L3, L4, L7 (Anfragen, Einschränkung), L19 |
 | 3 – Nachweise | umgesetzt: Verzeichnis aus den Manifesten mit technischen Maßnahmen, Datenpannen ([implementiert](../implementiert/datenschutz.md#verzeichnis-der-verarbeitungstätigkeiten-l8)), Einwilligungen, Berichtigung in Mein Bereich, Leseprotokoll, Impersonation sichtbar ([implementiert](../implementiert/datenschutz.md#einwilligungen-l9)) | umgesetzt L8, L9, L12, L15, L20 |
-| 4 – Löschen und Minimieren | umgesetzt: Löschprüfung je Modul, vollständige Anonymisierung mit Startprüfung ([implementiert](../implementiert/datenschutz.md#löschprüfung-l7)); offen: Daten Dritter; abschaltbare Felder; Zweck der Listen; Aufbewahrungsplan | L7 (Löschung), L10, L11, L13, L14, L29 |
+| 4 – Löschen und Minimieren | umgesetzt: Löschprüfung je Modul, vollständige Anonymisierung mit Startprüfung ([implementiert](../implementiert/datenschutz.md#löschprüfung-l7)); Daten Dritter, abschaltbare Felder, Zweck der Listen, Aufbewahrung der Protokolle ([implementiert](../implementiert/datenschutz.md#felder-der-personalakte-l10)) | umgesetzt L7 (Löschung), L10, L11, L13, L14, L29 |
 | 5 – Härtung | Sitzungen, Benutzer ohne Person, Infoterminal, API-Tokens, Passwörter, Anhänge, MP-Feuer-Laufberichte, Betriebsanleitung | L16, L17, L21–L28 |
 
 Phase 1 ist klein und senkt das größte Risiko; Phase 2 erfüllt die Pflichten, die jedes Mitglied direkt einfordern kann. Die Mockups in `mockups/datenschutz/` sind freigegeben.

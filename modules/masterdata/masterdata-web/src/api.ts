@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { CatalogEntry, Department, DepartmentGroup, MembershipSettings, Person, PersonSummary, Station, Vehicle } from '@forga/masterdata-contracts';
+import { type CatalogEntry, type Department, type DepartmentGroup, type MembershipSettings, type OptionalPersonField, type Person, PersonFieldSettings, type PersonSummary, type Station, type Vehicle } from '@forga/masterdata-contracts';
 import { api, withQuery } from '@forga/web-sdk';
 
 export const MANAGE = 'masterdata.organization.manage';
@@ -25,6 +25,19 @@ export function useMembershipRules() {
 }
 
 export { probationEnd } from '@forga/masterdata-contracts';
+
+export const PERSON_FIELDS_KEY = ['core', 'settings', 'masterdata.personFields'] as const;
+
+/** Fields of the person file switched off in the settings (L10): forms leave them out. */
+export function useDisabledFields(): Set<OptionalPersonField> {
+  const { data } = useQuery({
+    queryKey: PERSON_FIELDS_KEY,
+    queryFn: () => api<unknown>('core/settings/masterdata.personFields'),
+    select: (value) => new Set(PersonFieldSettings.parse(value ?? {}).disabled),
+    staleTime: 60_000,
+  });
+  return data ?? new Set();
+}
 
 export function useStations() {
   return useQuery({ queryKey: keys.stations, queryFn: () => api<Station[]>('masterdata/stations') });

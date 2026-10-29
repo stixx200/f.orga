@@ -110,10 +110,12 @@ describe('lists', () => {
     expect(pdf.headers['content-type']).toBe('application/pdf');
     expect((pdf.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
 
-    const xlsx = await get('/core/lists/masterdata.members/export/xlsx').buffer(true).parse(binary as never).expect(200);
+    // Lists with contact or sensitive data need a purpose for the export (L11).
+    await get('/core/lists/masterdata.members/export/xlsx').expect(400);
+    const xlsx = await get('/core/lists/masterdata.members/export/xlsx?purpose=contact').buffer(true).parse(binary as never).expect(200);
     expect((xlsx.body as Buffer).subarray(0, 2).toString()).toBe('PK');
 
-    const csv = await get('/core/lists/masterdata.birthdays/export/csv?from=2026-01-01&to=2026-12-31&lang=de').expect(200);
+    const csv = await get('/core/lists/masterdata.birthdays/export/csv?from=2026-01-01&to=2026-12-31&lang=de&purpose=internal').expect(200);
     expect(csv.text).toContain('Geburtstag;Name;Alter;Rund;Abteilung');
     expect(csv.text).toContain('12.03.2026;Brenner, Lena;36');
 

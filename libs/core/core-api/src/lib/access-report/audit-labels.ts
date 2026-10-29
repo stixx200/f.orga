@@ -53,4 +53,5 @@ export const AUDIT_LABELS: Record<string, LocalizedText> = {
   'privacy.consent-withdrawn': { de: 'Einwilligung widerrufen', en: 'Consent withdrawn' },
   'privacy.rectification-corrected': { de: 'Berichtigung vermerkt', en: 'Rectification recorded' },
   'privacy.history-redacted': { de: 'Wert in der Historie unkenntlich gemacht', en: 'Value removed from the history' },
+  'privacy.third-party-erased': { de: 'Daten einer anderen Person gelöscht', en: 'Data of another person erased' },
 };

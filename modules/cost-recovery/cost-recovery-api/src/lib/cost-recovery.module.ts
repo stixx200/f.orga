@@ -1,5 +1,5 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
-import { AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, RetentionRegistry, SearchRegistry } from '@forga/core-api';
+import { AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, RetentionRegistry, SearchRegistry, ThirdPartyRegistry } from '@forga/core-api';
 import { COST_RECOVERY_MANIFEST, COST_RECOVERY_SETTINGS } from '@forga/cost-recovery-contracts';
 import { EntityManager, wrap } from '@mikro-orm/core';
 import { COST_RECOVERY_MIGRATIONS } from '../migrations/index.js';
@@ -8,6 +8,7 @@ import { AddressBookEntity, IncidentOffenseEntity, NoticeEntity } from './cost-r
 import { PaymentsImport } from './imports/payments.import.js';
 import { CostRecoveryLists } from './lists/cost-recovery.lists.js';
 import { TreasuryHandover } from './notices/handover.js';
+import { DebtorsThirdParty } from './notices/debtors.third-party.js';
 import { NoticesController } from './notices/notices.controller.js';
 import { NoticesService } from './notices/notices.service.js';
 import { NoticesRetention } from './notices/notices.retention.js';
@@ -15,7 +16,7 @@ import { OverdueNotices } from './notices/overdue.deadlines.js';
 
 @Module({
   controllers: [NoticesController],
-  providers: [NoticesService, NoticesRetention, TreasuryHandover, OverdueNotices, CostRecoveryLists, PaymentsImport],
+  providers: [NoticesService, NoticesRetention, TreasuryHandover, OverdueNotices, CostRecoveryLists, PaymentsImport, DebtorsThirdParty],
 })
 export class CostRecoveryModule implements OnModuleInit {
   constructor(
@@ -33,6 +34,8 @@ export class CostRecoveryModule implements OnModuleInit {
     private readonly auditReferences: AuditReferenceRegistry,
     private readonly retention: RetentionRegistry,
     private readonly noticesRetention: NoticesRetention,
+    private readonly thirdParties: ThirdPartyRegistry,
+    private readonly debtors: DebtorsThirdParty,
   ) {}
 
   onModuleInit(): void {
@@ -45,6 +48,8 @@ export class CostRecoveryModule implements OnModuleInit {
     this.search.register('cost-recovery', (user, query) => this.notices.search(user, query));
     this.deadlines.register(this.overdue);
     this.noticesRetention.register(this.retention);
+    // Debtors are no persons of the master data: access and erasure for "another person" (L14).
+    this.debtors.register(this.thirdParties);
     this.exports.register('cost-recovery', {
       all: async () => {
         const em = this.em.fork();

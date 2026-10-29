@@ -87,12 +87,20 @@ export const RegisterActivity = z.object({
   health: z.boolean(),
   healthNote: LocalizedText.nullable(),
   legalBasisHint: LocalizedText.nullable(),
+  /** Stores data of third parties (no persons of the master data, L14): hint at Art. 14 and „Auskunft zu einer anderen Person“. */
+  thirdParties: z.boolean(),
   recipients: z.array(RegisterRecipientView),
   /** Retention periods from `privacy.retention`, e.g. „Personalakte: 30 Jahre nach Austritt“. */
   retention: LocalizedText,
   record: ActivityRecord,
 });
 export type RegisterActivity = z.infer<typeof RegisterActivity>;
+
+/** Hint of the register at activities with data of third parties (L14). */
+export const THIRD_PARTY_HINT: LocalizedText = {
+  de: 'Daten Dritter (keine Mitglieder): Information nach Art. 14 DSGVO durch die Feuerwehr; Auskunft und Löschung über „Auskunft zu einer anderen Person“ (Anfragen)',
+  en: 'Data of third parties (no members): information under Art. 14 GDPR by the brigade; access and erasure via "Access report for another person" (requests)',
+};
 
 /** `ok`: in place; `warning`: missing or weak (e.g. HTTPS: no); `info`: description only. */
 export const MeasureTone = z.enum(['ok', 'warning', 'info']);

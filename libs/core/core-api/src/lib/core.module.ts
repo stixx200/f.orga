@@ -20,6 +20,9 @@ import { RetentionTexts } from './privacy/retention-texts.js';
 import { CoreMeasures, TechnicalMeasureRegistry } from './privacy/technical-measures.js';
 import { PrivacyNoticeController, PrivacyNoticeService } from './privacy/privacy-notice.js';
 import { PrivacyAssignees, PrivacyRequests, PrivacyRequestsController } from './privacy/privacy-requests.js';
+import { PrivacyRetentionCategories } from './privacy/privacy-retention.js';
+import { ThirdPartiesController } from './privacy/third-parties.js';
+import { ThirdPartyRegistry } from './privacy/third-party-registry.js';
 import { PrivacyTextsController } from './privacy/privacy-texts.js';
 import { AccessLog, AccessLogController, AccessLogEntity } from './privacy/access-log.js';
 import { ConsentEntity, ConsentsController, ConsentService } from './privacy/consents.js';
@@ -224,6 +227,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         RectificationsController,
         AccessLogController,
         ImpersonationsController,
+        ThirdPartiesController,
       ],
       providers: [
         { provide: FORGA_CORE_OPTIONS, useValue: { ...options, modules } },
@@ -282,8 +286,11 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         Rectifications,
         AccessLog,
         Impersonations,
+        ThirdPartyRegistry,
+        PrivacyRetentionCategories,
       ],
       exports: [
+        ThirdPartyRegistry,
         TechnicalMeasureRegistry,
         ProtocolRegistry,
         PrivacyRegister,

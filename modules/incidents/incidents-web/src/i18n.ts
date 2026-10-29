@@ -302,6 +302,7 @@ const texts: Translations = {
     other: {
       parties: 'Beteiligte',
       noParties: 'Keine Beteiligten erfasst.',
+      partiesHint: 'Nur Angaben, die für Kostenersatz, Versicherung oder Polizei nötig sind. Keine Gesundheitsangaben eintragen.',
       name: 'Name',
       role: 'Rolle',
       roles: { 'injured-party': 'Geschädigte/r', causer: 'Verursacher/in', witness: 'Zeuge/Zeugin', owner: 'Eigentümer/in', 'vehicle-keeper': 'Fahrzeughalter/in', caller: 'Anrufer/in', other: 'Sonstige' },
@@ -921,6 +922,7 @@ const texts: Translations = {
     other: {
       parties: 'Involved parties',
       noParties: 'No parties entered.',
+      partiesHint: 'Only data needed for cost recovery, insurance or police. Do not enter health data.',
       name: 'Name',
       role: 'Role',
       roles: { 'injured-party': 'Injured party', causer: 'Causer', witness: 'Witness', owner: 'Owner', 'vehicle-keeper': 'Vehicle keeper', caller: 'Caller', other: 'Other' },

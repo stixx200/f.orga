@@ -19,3 +19,6 @@ export function requireBrigade(user: AuthenticatedUser, permission: string): voi
 export function today(): string {
   return berlinDate();
 }
+
+/** Lists with contact details of many members (phone list, member list for contacting; L11). */
+export const LISTS_CONTACT = 'masterdata.lists.contact';

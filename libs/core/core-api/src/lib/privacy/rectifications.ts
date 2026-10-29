@@ -62,15 +62,18 @@ export class Rectifications implements DeadlineProvider, OnModuleInit {
     return (await this.organization.persons([personId]))?.[0]?.departmentIds ?? [];
   }
 
-  async mayCorrect(user: AuthenticatedUser, personId: string): Promise<boolean> {
-    if (user.can(PRIVACY_PERMISSION) || user.grant(RECTIFICATION_PERMISSION) === 'brigade') return true;
+  /** Rectifications of third parties (no person of the master data) are handled by data protection only. */
+  async mayCorrect(user: AuthenticatedUser, personId: string | null | undefined): Promise<boolean> {
+    if (user.can(PRIVACY_PERMISSION)) return true;
+    if (!personId) return false;
+    if (user.grant(RECTIFICATION_PERMISSION) === 'brigade') return true;
     return (await this.departmentsOf(personId)).some((id) => user.can(RECTIFICATION_PERMISSION, id));
   }
 
   /** Open rectifications not yet corrected: a task of the persons responsible for the person's data (no name in it). */
   async deadlines(): Promise<DeadlineInput[]> {
     const open = (await this.em.fork().find(PrivacyRequestEntity, { kind: 'rectification', status: { $in: [...OPEN_REQUEST_STATUSES] } })).filter(
-      (r) => r.rectification && !r.rectification.correctedAt,
+      (r): r is typeof r & { personId: string } => Boolean(r.rectification && !r.rectification.correctedAt && r.personId),
     );
     const persons = new Map(((await this.organization.persons([...new Set(open.map((r) => r.personId))])) ?? []).map((p) => [p.id, p.departmentIds]));
     return open.map((r) => {
@@ -106,12 +109,12 @@ export class Rectifications implements DeadlineProvider, OnModuleInit {
     const request = await this.em.fork().findOne(PrivacyRequestEntity, id);
     if (!request?.rectification) throw new NotFoundException({ code: 'privacy.requestUnknown' });
     if (!(await this.mayCorrect(user, request.personId))) throw new NotFoundException({ code: 'privacy.requestUnknown' });
-    const person = (await this.organization.persons([request.personId]))?.[0];
+    const person = request.personId ? (await this.organization.persons([request.personId]))?.[0] : undefined;
     const correctedBy = request.rectification.correctedBy;
     const users = new Map(correctedBy ? (await this.em.fork().find(User, { id: correctedBy }, { fields: ['id', 'displayName'] })).map((u) => [u.id, u.displayName]) : []);
     return {
       id: request.id,
-      personId: request.personId,
+      personId: request.personId ?? '',
       personName: person ? `${person.lastName}, ${person.firstName}` : null,
       receivedOn: request.receivedOn,
       deadline: request.extendedUntil ?? request.dueOn,
