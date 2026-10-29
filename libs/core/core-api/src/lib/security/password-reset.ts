@@ -10,6 +10,8 @@ import { ZodPipe } from '../zod.pipe.js';
 import { Public } from './decorators.js';
 import { assertEmailFree, usersWithEmail } from './emails.js';
 import { generateSecret, hashPassword, hashSecret } from './password.js';
+import { assertPasswordAllowed } from './password-policy.js';
+import { RateLimits } from './rate-limits.js';
 import { Session, User } from './security.entities.js';
 
 const RESET_VALID_MS = 60 * 60_000;
@@ -17,10 +19,9 @@ const INVITATION_VALID_DAYS = 7;
 const EMAIL_VALID_MS = 24 * 60 * 60_000;
 const WINDOW_MS = 15 * 60_000;
 /** Requests per address within the window; generous, since behind a proxy many users may share one address. */
-const MAX_PER_ADDRESS = 20;
+const PER_ADDRESS = { limit: 20, windowMs: WINDOW_MS };
 /** Links sent per account within the window. */
-const MAX_PER_ACCOUNT = 3;
-const MAX_TRACKED = 10_000;
+const PER_ACCOUNT = { limit: 3, windowMs: WINDOW_MS };
 
 /** What a one-time link does: set a password (reset, invitation) or confirm a new e-mail address. */
 export type LinkPurpose = 'reset' | 'invitation' | 'email';
@@ -45,31 +46,9 @@ export const PasswordResetSchema = defineEntity({
 export class PasswordReset extends PasswordResetSchema.class {}
 PasswordResetSchema.setClass(PasswordReset);
 
-/** Counts events per key within a sliding window, bounded in size. */
-class RateLimit {
-  private readonly hits = new Map<string, number[]>();
-
-  constructor(private readonly max: number) {}
-
-  /** Records an attempt; `false` if the key has used up its attempts. */
-  take(key: string): boolean {
-    const now = Date.now();
-    const recent = (this.hits.get(key) ?? []).filter((t) => t > now - WINDOW_MS);
-    if (recent.length >= this.max) {
-      this.hits.set(key, recent);
-      return false;
-    }
-    if (!this.hits.has(key) && this.hits.size >= MAX_TRACKED) this.hits.delete(this.hits.keys().next().value!);
-    this.hits.set(key, [...recent, now]);
-    return true;
-  }
-}
-
 @Injectable()
 export class PasswordResetService {
   private readonly logger = new Logger('PasswordReset');
-  private readonly perAddress = new RateLimit(MAX_PER_ADDRESS);
-  private readonly perAccount = new RateLimit(MAX_PER_ACCOUNT);
   /** The processing of the last request; tests wait for it. */
   pending: Promise<void> = Promise.resolve();
 
@@ -78,6 +57,7 @@ export class PasswordResetService {
     private readonly mail: MailService,
     private readonly settings: SettingsService,
     private readonly audit: Audit,
+    private readonly rateLimits: RateLimits,
   ) {}
 
   /**
@@ -107,7 +87,7 @@ export class PasswordResetService {
    * after the response. An e-mail address shared by several accounts resets none of them (no random account).
    */
   async request(login: string, address: string): Promise<void> {
-    if (!this.perAddress.take(address)) throw new HttpException({ code: 'auth.resetRateLimited' }, HttpStatus.TOO_MANY_REQUESTS);
+    if (!(await this.rateLimits.hit('password-reset.address', address, PER_ADDRESS))) throw new HttpException({ code: 'auth.resetRateLimited' }, HttpStatus.TOO_MANY_REQUESTS);
     const base = await this.baseUrl();
     this.pending = this.send(login, base).catch((error: unknown) => {
       this.logger.warn(`Password reset e-mail failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -123,7 +103,7 @@ export class PasswordResetService {
       return;
     }
     const user = candidates[0];
-    if (!this.perAccount.take(user.id)) {
+    if (!(await this.rateLimits.hit('password-reset.account', user.id, PER_ACCOUNT))) {
       await this.audit.log('auth.password-reset-limited', {}, user.id);
       return;
     }
@@ -242,6 +222,7 @@ export class PasswordResetService {
       throw new BadRequestException({ code: 'auth.resetInvalid' });
     }
     const user = await em.findOneOrFail(User, reset.user.id, { populate: ['passwordHash'] });
+    assertPasswordAllowed(password, [user.username, user.displayName, user.email]);
     user.passwordHash = await hashPassword(password);
     reset.usedAt = new Date();
     await em.nativeDelete(Session, { user });

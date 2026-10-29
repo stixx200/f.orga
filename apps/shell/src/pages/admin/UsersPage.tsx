@@ -2,7 +2,7 @@ import { ActionIcon, Button, Grid, Group, MultiSelect, PasswordInput, Select, St
 import { IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import type { BulkUserInvitationResult, LocalizedText, Role, User, UserInput } from '@forga/core-contracts';
-import { can, currentLanguage, formatDateTime, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
+import { can, currentLanguage, formatDate, formatDateTime, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, DataTable, matchesSearch, notifySuccess, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { type DepartmentOption, personLabel, USERS_KEY, useDepartments, usePersons, useRoles, useUsers } from './data';
 
@@ -289,9 +289,12 @@ export function UsersPage() {
                   key: 'status',
                   header: t('users.status'),
                   render: (u) => (
-                    <StatusBadge tone={u.technical || (u.active && !u.passwordSet) ? 'neutral' : u.active ? 'done' : 'warning'}>
-                      {t(u.technical ? 'users.technical' : !u.active ? 'users.locked' : u.passwordSet ? 'users.active' : 'users.pending')}
-                    </StatusBadge>
+                    <>
+                      <StatusBadge tone={u.technical || (u.active && !u.passwordSet) ? 'neutral' : u.active ? 'done' : 'warning'}>
+                        {t(u.technical ? 'users.technical' : !u.active ? 'users.locked' : u.passwordSet ? 'users.active' : 'users.pending')}
+                      </StatusBadge>
+                      {!u.active && u.lockedAt && <Text size="xs" c="dimmed">{t('hardening.users.lockedSince', { date: formatDate(u.lockedAt, i18n.language) })}</Text>}
+                    </>
                   ),
                 },
               ]}

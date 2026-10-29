@@ -161,7 +161,8 @@ export const BreachLockdownInput = z.object({
 });
 export type BreachLockdownInput = z.input<typeof BreachLockdownInput>;
 
-export const BreachLockdownResult = z.object({ sessions: z.number().int(), tokens: z.number().int() });
+/** Ended sessions, revoked API tokens and devices blocked by modules (e.g. the device keys of the info terminals). */
+export const BreachLockdownResult = z.object({ sessions: z.number().int(), tokens: z.number().int(), devices: z.number().int() });
 export type BreachLockdownResult = z.infer<typeof BreachLockdownResult>;
 
 /** A user account to choose in the helpers (also technical users of API tokens and disabled accounts). */

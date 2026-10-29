@@ -316,7 +316,8 @@ export class OidcController {
     const em = this.em.fork();
     const user = await em.findOneOrFail(User, result.user.id);
     // A second factor at the provider (`amr`) confirms the session until `auth_time` + 30 minutes.
-    res.cookie(SESSION_COOKIE, await this.auth.openSession(em, user, result.elevatedUntil), sessionCookieOptions(await this.cookies.secure(req)));
+    const { token } = await this.auth.openSession(em, user, result.elevatedUntil, { ip: req.ip, userAgent: req.headers['user-agent'] });
+    res.cookie(SESSION_COOKIE, token, sessionCookieOptions(await this.cookies.secure(req)));
     await this.audit.log('auth.login', { via: 'oidc', ...(result.elevatedUntil ? { stepUp: 'provider' } : {}) }, user.id);
     res.redirect(302, '/');
   }

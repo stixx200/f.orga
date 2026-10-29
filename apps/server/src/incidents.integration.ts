@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SAMPLE_STATUTE } from '@forga/compensation-contracts';
 import { DomainEvents, MailService } from '@forga/core-api';
 import { INCIDENTS_EVENTS, INCIDENTS_LOOKUP, type IncidentsLookup, type ReportReleasedEvent, type ReportUnlockedEvent } from '@forga/incidents-contracts';
-import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
+import { setUp, startTestApp, type TestApp, UI, TOKEN_FIELDS } from './testing/test-app';
 
 let test: TestApp;
 let admin: string;
@@ -309,7 +309,7 @@ describe('incidents and reports', () => {
 describe('API for external systems', () => {
   it('creates and completes incidents idempotently by dispatch number', async () => {
     await put(`/masterdata/persons/${ids.max}`, { firstName: 'Max', lastName: 'Test', personnelNumber: '9001' }).expect(200);
-    const token = await post('/core/tokens', { name: 'Alarmfax', scopes: ['incidents.api.create'] }).expect(201);
+    const token = await post('/core/tokens', { ...TOKEN_FIELDS, name: 'Alarmfax', scopes: ['incidents.api.create'] }).expect(201);
     const bearer = { Authorization: `Bearer ${token.body.token}` };
     const payload = {
       dispatchNumber: '2026-200001',
@@ -969,7 +969,7 @@ describe('reports of operational departments only', () => {
     const created = (await post('/incidents/incidents', { ...incident, departmentIds: [ids.musterstadt] }).expect(201)).body;
     expect((await post(`/incidents/incidents/${created.id}/reports`, { departmentId: veterans }).expect(400)).body.code).toBe('incidents.departmentNotOperational');
 
-    const token = await post('/core/tokens', { name: 'Alarmfax 2', scopes: ['incidents.api.create'] }).expect(201);
+    const token = await post('/core/tokens', { ...TOKEN_FIELDS, name: 'Alarmfax 2', scopes: ['incidents.api.create'] }).expect(201);
     const result = await test.http
       .post('/api/incidents/v1/incidents')
       .set({ Authorization: `Bearer ${token.body.token}` })

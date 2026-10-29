@@ -314,6 +314,23 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | E-Mails ohne Namen | Einstellung `security` (`mailHealthWithoutNames`, `mailAllWithoutNames`) |
 | Verletzte und Getötete im Personal sehen | Recht `incidents.injuries.read`, `Report.injuries` (`hidden`, `injured`, `killed`), `canSeeInjuries` |
 | Reverse Proxy mit HTTPS | Dienst `caddy` (Profile `https`, `https-internal`), `docker/Caddyfile` |
+| Abmeldung ohne Bedienung (Leerlaufzeit) | idle logout (`core.session.last_activity_at`, Einstellung `security.idleMinutesPrivileged`, `idleMinutesOther`, Kopfzeile `x-forga-idle`, Audit `auth.session-idle-ended`) |
+| Angemeldet bleiben | persistent session (`remember` beim Login, `core.session.persistent`, Einstellung `security.allowRemember`) |
+| Privilegiertes Konto (für die Sitzungsregeln) | `PermissionRegistry.isPrivilegedAccount` (Rechte mit `stepUp` oder `privileged`) |
+| Angemeldete Geräte, anderes Gerät abmelden | own sessions (`MySession`, `/api/core/me/sessions`, `ref`, `shortUserAgent`, `shortAddress`) |
+| Anfragebegrenzung, Anmeldesperre | rate limit (`RateLimits`, `core.rate_limit`, Bereiche wie `login`, `password-reset.address`, `info-terminal.search`) |
+| Häufiges bzw. persönliches Passwort | `passwordProblem`, `assertPasswordAllowed`, Fehlercodes `auth.passwordCommon`, `auth.passwordPersonal` |
+| Verschlüsselte Zugangsdaten (SMTP-Passwort, Client-Secret) | `ENCRYPTED_SETTING_FIELDS`, Präfix `enc:`, `SettingsService.secretState` |
+| Datenbankrolle der Anwendung | `forga_app` (`docker/db/10-app-role.sh`, `FORGA_DB_APP_PASSWORD`) |
+| Inhaltsverzeichnis der Sicherung prüfen | `forbiddenEntries`, `BackupsService.readList`, Fehlercode `backup.dumpForbidden` |
+| Gesperrt seit | `core.user.locked_at`, `User.lockedAt`; Aufbewahrungskategorie `core.locked-accounts` |
+| Empfänger/System, Zweck, erlaubte Adressen eines API-Tokens | `ApiToken.recipient`, `purpose`, `allowedAddresses`; `tokenRecipientName`, Aufgabe `api-token-expiry` |
+| Technische Empfänger und Auftragsverarbeiter | processors (`ProcessorRegistry`, `ProcessorSource`, Quelle `processor`) |
+| Angaben für eine Datenschutz-Folgenabschätzung | DPIA export (`GET /api/core/privacy/register/export/:format?scope=dpia`) |
+| Geräteschlüssel sperren (Notfall) | `LockdownRegistry`, `BreachLockdownResult.devices`, Audit `info-terminal.keys-blocked` |
+| Metadaten von Fotos entfernen | `stripImageMetadata`, `ATTACHMENT_MAX_PER_RECORD` |
+| Zeilen mit Meldungen entfernen, Umstellung abgeschlossen | `MpFeuerRuns.removeMessages`, `messagesRemovedAt`, `MESSAGES_KEEP_DAYS`, Regel `mp-feuer.messages` |
+| Kalender-Abo je Abteilung | `departmentFeedToken`, `GET /api/training/feed-links` (`TrainingFeedLinks`) |
 
 ### Kleiderkammer
 

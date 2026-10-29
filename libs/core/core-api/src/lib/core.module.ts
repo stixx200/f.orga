@@ -13,7 +13,10 @@ import { AuditReferenceRegistry } from './audit/audit-references.js';
 import { CoreAuditReferences } from './audit/core-references.js';
 import { DomainEvents } from './events/domain-events.js';
 import { PrivacyBreachEntity, PrivacyNoticeEntity, PrivacyRequestEntity } from './privacy/privacy.entities.js';
-import { BreachTools, BreachToolsController, ProtocolRegistry } from './privacy/breach-tools.js';
+import { BreachTools, BreachToolsController, LockdownRegistry, ProtocolRegistry } from './privacy/breach-tools.js';
+import { ProcessorRegistry } from './privacy/processors.js';
+import { RateLimitEntity, RateLimits } from './security/rate-limits.js';
+import { MySessionsController } from './security/sessions.controller.js';
 import { PrivacyBreaches, PrivacyBreachesController } from './privacy/breaches.js';
 import { PrivacyRegister, PrivacyRegisterController } from './privacy/register.js';
 import { RetentionTexts } from './privacy/retention-texts.js';
@@ -68,7 +71,7 @@ import { RolesController } from './security/roles.controller.js';
 import { MfaController, MfaService } from './security/mfa.js';
 import { StepUpCheck } from './security/step-up-check.js';
 import { ApiToken, Role, RoleAssignment, Session, User, UserMfa } from './security/security.entities.js';
-import { TokensController } from './security/tokens.controller.js';
+import { TokenDeadlines, TokensController } from './security/tokens.controller.js';
 import { UsersController } from './security/users.controller.js';
 import { OnboardingController } from './settings/onboarding.js';
 import { Setting, SettingsController, SettingsService } from './settings/settings.js';
@@ -99,6 +102,7 @@ export const CORE_ENTITIES: EntityDefinition[] = [
   PrivacyBreachEntity,
   ConsentEntity,
   AccessLogEntity,
+  RateLimitEntity,
 ];
 
 function className(entity: EntityDefinition): string {
@@ -218,6 +222,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         RectificationsController,
         AccessLogController,
         ImpersonationsController,
+        MySessionsController,
       ],
       providers: [
         { provide: FORGA_CORE_OPTIONS, useValue: { ...options, modules } },
@@ -275,8 +280,15 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         Rectifications,
         AccessLog,
         Impersonations,
+        RateLimits,
+        TokenDeadlines,
+        LockdownRegistry,
+        ProcessorRegistry,
       ],
       exports: [
+        RateLimits,
+        LockdownRegistry,
+        ProcessorRegistry,
         TechnicalMeasureRegistry,
         ProtocolRegistry,
         PrivacyRegister,

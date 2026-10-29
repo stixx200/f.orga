@@ -14,6 +14,11 @@ export const InfoTerminalSettings = z
     idleSeconds: z.number().int().min(15).max(600).default(60),
     /** The administration marks terminals not seen for this many days. */
     notSeenWarningDays: z.number().int().min(1).max(365).default(30),
+    /**
+     * The name search finds all persons of the brigade; by default (`false`) only persons of the terminal's departments and
+     * the departments below them (L22).
+     */
+    searchAllPersons: z.boolean().default(false),
   })
   .refine((s) => s.maxAlarmAgeHours <= s.openEndHours, { message: 'At most openEndHours', path: ['maxAlarmAgeHours'] });
 export type InfoTerminalSettings = z.infer<typeof InfoTerminalSettings>;

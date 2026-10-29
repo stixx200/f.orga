@@ -1,3 +1,4 @@
+import { activityHeaders } from './activity';
 import { i18n } from './i18n';
 import { reportMaintenance } from './maintenance';
 import { isStepUpPath, requestStepUp } from './step-up';
@@ -88,7 +89,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     fetch(`/api/${path.replace(/^\//, '')}`, {
       credentials: 'include',
       ...init,
-      headers: { 'Content-Type': 'application/json', 'x-forga': '1', ...init.headers },
+      headers: { 'Content-Type': 'application/json', 'x-forga': '1', ...activityHeaders(), ...init.headers },
     }),
   );
   if (!response.ok) throw failure(response, body);
@@ -125,7 +126,7 @@ export const send = <T>(method: 'POST' | 'PUT' | 'DELETE', path: string, body?: 
 export async function upload<T>(path: string, file: File, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
   const form = new FormData();
   form.append('file', file);
-  const { response, body } = await withStepUp(path, method, () => fetch(`/api/${path.replace(/^\//, '')}`, { method, credentials: 'include', headers: { 'x-forga': '1' }, body: form }));
+  const { response, body } = await withStepUp(path, method, () => fetch(`/api/${path.replace(/^\//, '')}`, { method, credentials: 'include', headers: { 'x-forga': '1', ...activityHeaders() }, body: form }));
   if (!response.ok) throw failure(response, body);
   return body as T;
 }
@@ -134,7 +135,7 @@ export async function upload<T>(path: string, file: File, method: 'POST' | 'PUT'
 export async function uploadFiles<T>(path: string, files: readonly File[]): Promise<T> {
   const form = new FormData();
   for (const file of files) form.append('files', file);
-  const { response, body } = await withStepUp(path, 'POST', () => fetch(`/api/${path.replace(/^\//, '')}`, { method: 'POST', credentials: 'include', headers: { 'x-forga': '1' }, body: form }));
+  const { response, body } = await withStepUp(path, 'POST', () => fetch(`/api/${path.replace(/^\//, '')}`, { method: 'POST', credentials: 'include', headers: { 'x-forga': '1', ...activityHeaders() }, body: form }));
   if (!response.ok) throw failure(response, body);
   return body as T;
 }

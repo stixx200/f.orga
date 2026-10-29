@@ -122,7 +122,7 @@ Konzept mit Lückenanalyse: [datenschutz.md](datenschutz.md), Konzept und Mockup
 2. Rechte der Betroffenen (umgesetzt): Datenschutzhinweis und Hinweis bei der ersten Anmeldung, Betroffenenanfragen mit Frist, Auskunft als PDF aus allen Modulen, Einschränkung, Widerspruch.
 3. Nachweise (umgesetzt): Verzeichnis der Verarbeitungstätigkeiten aus den Manifesten, Datenpannen, Einwilligungen, Berichtigung in Mein Bereich, Leseprotokoll und „Anmeldungen als Sie“.
 4. Löschen und Minimieren: Löschprüfung je Modul, vollständige Anonymisierung, Daten Dritter, abschaltbare Felder, Zweck der Listen.
-5. Härtung: Sitzungen, Infoterminal, API-Tokens, Passwörter, Anhänge, Betriebsanleitung.
+5. Härtung (umgesetzt): Sitzungen mit Leerlauf-Abmeldung und Geräteübersicht, Verschlüsselung der Zugangsdaten und Sicherungen, gesperrte Benutzer, Infoterminal, API-Tokens, Passwörter und Anfragebegrenzung, Auftragsverarbeiter und Betriebsanleitung, Folgenabschätzung, Anhänge, MP-Feuer-Laufberichte.
 
 ## Infoterminal
 

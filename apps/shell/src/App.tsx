@@ -156,7 +156,7 @@ function Main() {
   }
   if (!setup.data || session.data === undefined) return <Loader m="xl" />;
   if (setup.data.required) return <SetupPage />;
-  if (!session.data) return <LoginPage brigadeName={setup.data.brigadeName} oidc={setup.data.oidc} />;
+  if (!session.data) return <LoginPage brigadeName={setup.data.brigadeName} oidc={setup.data.oidc} rememberAllowed={setup.data.rememberAllowed} />;
   return <LoggedIn session={session.data} />;
 }
 

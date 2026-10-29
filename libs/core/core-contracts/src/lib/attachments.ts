@@ -14,3 +14,5 @@ export interface Attachment {
 /** Accepted file types: photos and PDF. */
 export const ATTACHMENT_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'] as const;
 export const ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024;
+/** At most this many attachments per record (`attachments.tooMany`). */
+export const ATTACHMENT_MAX_PER_RECORD = 50;

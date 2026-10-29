@@ -18,10 +18,11 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { defineEntity, EntityManager, p } from '@mikro-orm/core';
 import type { Response } from 'express';
 import { v7 as uuidv7 } from 'uuid';
-import { ATTACHMENT_MAX_SIZE, ATTACHMENT_TYPES, type Attachment } from '@forga/core-contracts';
+import { ATTACHMENT_MAX_PER_RECORD, ATTACHMENT_MAX_SIZE, ATTACHMENT_TYPES, type Attachment } from '@forga/core-contracts';
 import { Audit } from '../audit/audit.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { CurrentUser } from '../security/decorators.js';
+import { stripImageMetadata } from './image-metadata.js';
 
 export const AttachmentSchema = defineEntity({
   name: 'Attachment',
@@ -154,11 +155,14 @@ export class AttachmentsController {
     if (!file) throw new BadRequestException({ code: 'imports.fileMissing' });
     if (!(ATTACHMENT_TYPES as readonly string[]).includes(file.mimetype) || !matchesType(file.buffer, file.mimetype)) throw new BadRequestException({ code: 'attachments.type' });
     const em = this.em.fork();
+    if ((await em.count(AttachmentEntity, { ownerType, ownerId })) >= ATTACHMENT_MAX_PER_RECORD) throw new BadRequestException({ code: 'attachments.tooMany', max: ATTACHMENT_MAX_PER_RECORD });
     // Browsers send the name as Latin-1; restore UTF-8 umlauts and keep only the base name.
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8').split(/[\\/]/).pop()!.slice(0, 200) || 'datei';
-    const attachment = em.create(AttachmentEntity, { ownerType, ownerId, fileName, contentType: file.mimetype, size: file.buffer.length, data: file.buffer, createdBy: user.displayName });
+    // Position, camera and time of photos are not stored (L27).
+    const data = stripImageMetadata(file.buffer, file.mimetype);
+    const attachment = em.create(AttachmentEntity, { ownerType, ownerId, fileName, contentType: file.mimetype, size: data.length, data, createdBy: user.displayName });
     await em.flush();
-    await this.audit.log('attachments.added', { ownerType, ownerId, fileName, size: file.buffer.length });
+    await this.audit.log('attachments.added', { ownerType, ownerId, fileName, size: data.length, metadataRemoved: data.length !== file.buffer.length });
     return toDto(attachment);
   }
 

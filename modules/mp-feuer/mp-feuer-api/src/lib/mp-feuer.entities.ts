@@ -37,6 +37,8 @@ export const RunSchema = defineEntity({
     checkedSignature: p.text().nullable(),
     /** Mappings of the run kept in the module's list. */
     rememberedCount: p.integer().default(0),
+    /** When the rows with messages were removed (90 days after the end, or „Umstellung abgeschlossen“); counts stay. */
+    messagesRemovedAt: p.datetime().nullable(),
     createdAt: p.datetime(),
     startedAt: p.datetime().nullable(),
     finishedAt: p.datetime().nullable(),
@@ -48,7 +50,7 @@ RunSchema.setClass(MpFeuerRunEntity);
 
 /**
  * The rows an import profile gets from the archives of a run. The rows are removed after the apply, at the latest
- * after 7 days (retention run); counts and the rows with messages stay for the report.
+ * after 7 days (retention run); the rows with messages after 90 days or at the end of the transition, counts stay.
  */
 export const RunDatasetSchema = defineEntity({
   name: 'MpFeuerRunDatasetEntity',

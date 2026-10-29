@@ -87,6 +87,8 @@ export class AuthenticatedUser {
   elevatedUntil: Date | null = null;
   /** Has the user (during an impersonation: the administrator) set up a second factor? */
   mfaEnrolled = false;
+  /** Sessions only: „Angemeldet bleiben“ and the idle time in minutes (`null` without idle logout). */
+  session: { persistent: boolean; idleMinutes: number | null } | null = null;
 
   /**
    * Without a department: does the user have the permission anywhere?

@@ -86,8 +86,13 @@ export const Password = z.string().min(10).max(200);
 export const Login = z.object({
   username: z.string().trim().min(1),
   password: z.string().min(1),
+  /**
+   * „Angemeldet bleiben“: the session survives closing the browser and is not ended after inactivity, for at most
+   * 14 days. Only for accounts without privileged permissions (setting `security.allowRemember`); ignored otherwise.
+   */
+  remember: z.boolean().default(false),
 });
-export type Login = z.infer<typeof Login>;
+export type Login = z.input<typeof Login>;
 
 /** First start: creates the brigade settings and the first administrator. */
 export const Setup = z.object({
@@ -163,6 +168,11 @@ export const Session = z.object({
   mfa: z.object({ enrolled: z.boolean(), available: z.boolean(), passwordRequired: z.boolean(), recoveryCodesLeft: z.number().int(), viaProvider: z.boolean() }),
   /** Privacy notice: version and whether the shell asks the user to acknowledge it (first sign-in, new version). */
   privacyNotice: SessionPrivacyNotice,
+  /**
+   * The session itself: „Angemeldet bleiben“ (`persistent`) and after how many minutes without input it ends
+   * (`idleMinutes`, `null` for persistent sessions).
+   */
+  current: z.object({ persistent: z.boolean(), idleMinutes: z.number().int().nullable() }),
 });
 export type Session = z.infer<typeof Session>;
 
@@ -234,6 +244,8 @@ export const User = z.object({
   active: z.boolean(),
   technical: z.boolean(),
   lastLogin: z.string().nullable(),
+  /** When the account was locked (`active` false); the retention plan anonymises locked accounts without person. */
+  lockedAt: z.string().nullable(),
   /** Linked to an account of the OIDC provider. */
   oidcLinked: z.boolean(),
   /** `false` for invited users who have not set their password yet. */
@@ -316,17 +328,38 @@ export const Role = z.object({
 });
 export type Role = z.infer<typeof Role>;
 
+/** API tokens end after at most this many days (2 years). */
+export const API_TOKEN_MAX_DAYS = 730;
+/** The tokens page and the tasks remind of the expiry this many days before. */
+export const API_TOKEN_REMINDER_DAYS = 30;
+
+/** An IPv4 or IPv6 address, optionally with a prefix length (`10.0.0.0/8`, `2001:db8::/32`). */
+export const AllowedAddress = z
+  .string()
+  .trim()
+  .regex(/^(\d{1,3}(\.\d{1,3}){3}|[0-9a-fA-F:]+:[0-9a-fA-F:.]*)(\/\d{1,3})?$/, { message: 'IP address or network' });
+
 export const ApiTokenInput = z.object({
-  name: z.string().trim().min(1),
+  name: z.string().trim().min(1).max(100),
+  /** Who receives data through the token (system and operator), e.g. „Alarmierungsdienst XY (Firma Z)“; register and access report. */
+  recipient: z.string().trim().min(3).max(200),
+  /** What the receiving system does with the data; register and access report. */
+  purpose: z.string().trim().min(3).max(500),
   /** Permission IDs the token may use, always brigade-wide. */
   scopes: z.array(z.string()).min(1),
-  expiresOn: z.iso.date().nullable().default(null),
+  /** Last day the token works (Europe/Berlin); required, at most 2 years ahead (`tokens.expiryTooLate`). */
+  expiresOn: z.iso.date(),
+  /** Only requests from these addresses or networks are accepted; empty = any address. */
+  allowedAddresses: z.array(AllowedAddress).max(20).default([]),
 });
 export type ApiTokenInput = z.input<typeof ApiTokenInput>;
 
 export const ApiToken = z.object({
   id: z.string(),
   name: z.string(),
+  recipient: z.string(),
+  purpose: z.string(),
+  allowedAddresses: z.array(z.string()),
   scopes: z.array(z.string()),
   prefix: z.string(),
   createdAt: z.string(),
@@ -361,3 +394,20 @@ export type PasswordResetRequest = z.infer<typeof PasswordResetRequest>;
 
 export const PasswordResetConfirm = z.object({ token: z.string().min(10), password: Password });
 export type PasswordResetConfirm = z.infer<typeof PasswordResetConfirm>;
+
+/** A session of the own account („Angemeldete Geräte“ in the profile); impersonations are not listed. */
+export const MySession = z.object({
+  /** Public reference of the session (not the cookie value). */
+  id: z.string(),
+  /** Browser and system from the user agent, e.g. „Firefox auf Windows“; `null` if unknown. */
+  browser: z.string().nullable(),
+  /** Shortened address the session was opened from, e.g. `203.0.113.x`. */
+  address: z.string().nullable(),
+  createdAt: z.string(),
+  lastActivityAt: z.string(),
+  /** „Angemeldet bleiben“. */
+  persistent: z.boolean(),
+  /** The session of this request. */
+  current: z.boolean(),
+});
+export type MySession = z.infer<typeof MySession>;

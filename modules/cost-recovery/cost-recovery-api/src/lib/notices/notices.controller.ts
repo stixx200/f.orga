@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Put, Query, Res } from '@nestjs/common';
+import { Body, Controller, ParseUUIDPipe, Delete, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Put, Query, Res } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import type { Response } from 'express';
 import { z } from 'zod';
@@ -232,9 +232,13 @@ export class NoticesController {
 
   // ----- Incident page -----
 
-  /** Readable for everyone who reads the incident; the card on the incident shows it. */
+  /**
+   * Readable for everyone who reads a report of the incident (or the costs of incidents, or cost notices); the card on
+   * the incident shows it. Others get `404` like for an unknown incident.
+   */
   @Get('incidents/:incidentId/offense')
-  async offense(@Param('incidentId') incidentId: string): Promise<{ offenseKey: string | null }> {
+  async offense(@Param('incidentId', new ParseUUIDPipe({ errorHttpStatusCode: 404 })) incidentId: string, @CurrentUser() user: AuthenticatedUser): Promise<{ offenseKey: string | null }> {
+    if (!(await this.notices.mayReadIncident(user, incidentId))) throw new NotFoundException({ code: 'cost-recovery.unknownIncident' });
     return { offenseKey: (await this.notices.chosenOffenses([incidentId])).get(incidentId) ?? null };
   }
 

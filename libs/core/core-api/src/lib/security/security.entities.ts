@@ -19,6 +19,8 @@ export const UserSchema = defineEntity({
     /** Tasks the user hides in the bell and on the start page: modules (`training`) or kinds (`training:excuse-open`). */
     hiddenTasks: p.json<string[]>().defaultRaw("'[]'::jsonb").onCreate(() => []),
     active: p.boolean().default(true),
+    /** When the account was locked; locked accounts without person are anonymised after the retention period (L21). */
+    lockedAt: p.datetime().nullable(),
     /** Technical users never log in; they carry API tokens. */
     technical: p.boolean().default(false),
     lastLogin: p.datetime().nullable(),
@@ -77,9 +79,19 @@ export const SessionSchema = defineEntity({
   properties: {
     /** SHA-256 of the cookie value. */
     id: p.string().primary(),
+    /** Public reference for „Angemeldete Geräte“ (the cookie hash never leaves the server). */
+    ref: p.uuid().unique().onCreate(() => uuidv7()),
     user: () => p.manyToOne(User).deleteRule('cascade'),
     createdAt: p.datetime(),
     expiresAt: p.datetime().index(),
+    /** Last input of the user (updated at most once a minute); the session ends after the idle time (L16). */
+    lastActivityAt: p.datetime().onCreate(() => new Date()),
+    /** „Angemeldet bleiben“: no idle logout, cookie kept for the whole lifetime (only accounts that are not privileged). */
+    persistent: p.boolean().default(false),
+    /** User agent of the browser, shortened; for „Angemeldete Geräte“. */
+    userAgent: p.string().nullable(),
+    /** Shortened address the session was opened from (last part removed), e.g. `203.0.113.x`. */
+    address: p.string().nullable(),
     /** Impersonation: the administrator acting as `user`, and why. */
     impersonator: () => p.manyToOne(User).nullable().deleteRule('cascade'),
     impersonationReason: p.text().nullable(),
@@ -97,6 +109,12 @@ export const ApiTokenSchema = defineEntity({
   properties: {
     id: p.uuid().primary().onCreate(() => uuidv7()),
     name: p.string(),
+    /** Receiving system and its operator (register, access report). */
+    recipient: p.string().default(''),
+    /** What the receiving system does with the data. */
+    purpose: p.text().default(''),
+    /** Accepted client addresses or networks; empty = any. */
+    allowedAddresses: p.json<string[]>().defaultRaw("'[]'::jsonb").onCreate(() => []),
     user: () => p.manyToOne(User).deleteRule('cascade'),
     scopes: p.json<string[]>(),
     /** First characters of the token, to recognise it in lists. */

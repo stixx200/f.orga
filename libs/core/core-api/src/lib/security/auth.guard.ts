@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { UserContext } from '../user-context.js';
-import { AuthService, SESSION_COOKIE } from './auth.service.js';
+import { AuthService, IDLE_HEADER, SESSION_COOKIE } from './auth.service.js';
 import type { AuthenticatedUser } from './authenticated-user.js';
 import { PUBLIC, REQUIRED_PERMISSIONS, STEP_UP } from './decorators.js';
 
@@ -39,12 +39,13 @@ export class AuthGuard implements CanActivate {
       request.user = user;
       UserContext.set(user.id, user.impersonator?.id ?? null);
     }
-    if (isPublic) return true;
-    if (!user) throw new UnauthorizedException({ code: 'auth.required' });
-
-    if (user.via === 'session' && !SAFE_METHODS.has(request.method) && request.headers[CSRF_HEADER] !== '1') {
+    // Changes from a browser always carry the header, also without a session (login, setup, password reset): a form of
+    // another site cannot sign the browser in to an account of the attacker (login CSRF). API tokens need no header.
+    if (!isPublic && !user) throw new UnauthorizedException({ code: 'auth.required' });
+    if (user?.via !== 'token' && !SAFE_METHODS.has(request.method) && request.headers[CSRF_HEADER] !== '1') {
       throw new ForbiddenException({ code: 'auth.csrf' });
     }
+    if (isPublic || !user) return true;
 
     const required = this.reflector.getAllAndOverride<string[]>(REQUIRED_PERMISSIONS, targets) ?? [];
     if (required.some((permission) => !user.holds(permission))) {
@@ -58,8 +59,10 @@ export class AuthGuard implements CanActivate {
 
   private async authenticate(request: Request): Promise<AuthenticatedUser | null> {
     const header = request.headers.authorization;
-    if (header?.startsWith('Bearer ')) return this.auth.userFromApiToken(header.slice(7).trim());
+    if (header?.startsWith('Bearer ')) return this.auth.userFromApiToken(header.slice(7).trim(), request.ip ?? null);
     const cookie = (request.cookies as Record<string, string> | undefined)?.[SESSION_COOKIE];
-    return cookie ? this.auth.userFromSession(cookie) : null;
+    if (!cookie) return null;
+    const idle = Number(request.headers[IDLE_HEADER]);
+    return this.auth.userFromSession(cookie, Number.isFinite(idle) ? idle : null);
   }
 }

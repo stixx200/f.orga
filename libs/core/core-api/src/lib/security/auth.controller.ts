@@ -36,6 +36,7 @@ import { CookiePolicy } from './cookie-policy.js';
 import { CurrentUser, Public, RequirePermissions } from './decorators.js';
 import { assertEmailFree, sameEmail } from './emails.js';
 import { hashPassword, hashSecret, verifyPassword } from './password.js';
+import { assertPasswordAllowed } from './password-policy.js';
 import { PasswordResetService } from './password-reset.js';
 import { RoleTemplates } from './role-templates.js';
 import { MfaService } from './mfa.js';
@@ -75,6 +76,7 @@ export class AuthController {
       oidc: oidc?.enabled && oidc.issuer && oidc.clientId && publicUrl ? { label: oidc.buttonLabel } : null,
       // The test system shows the band "Testsystem – nur Demodaten" on every page, also before the sign-in.
       stage: forgaStage(),
+      rememberAllowed: (await this.auth.securitySettings()).allowRemember,
     };
   }
 
@@ -91,6 +93,7 @@ export class AuthController {
       throw new ForbiddenException({ code: 'setup.invalidToken' });
     }
 
+    assertPasswordAllowed(input.password, [input.username, input.displayName, input.email]);
     const em = this.em.fork();
     const passwordHash = await hashPassword(input.password);
     // Serialized and checked again inside the transaction: two simultaneous requests cannot both create an administrator.
@@ -107,7 +110,7 @@ export class AuthController {
     await this.settings.set('brigade', { name: input.brigadeName });
     await this.audit.log('setup.completed', {}, user.id);
 
-    await this.setCookie(req, res, await this.auth.openSession(em, user));
+    await this.setCookie(req, res, (await this.auth.openSession(em, user, null, this.origin(req))).token);
     return { ok: true };
   }
 
@@ -115,11 +118,11 @@ export class AuthController {
   @Post('login')
   @HttpCode(200)
   async login(@Body(new ZodPipe(Login)) input: Login, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const result = await this.auth.login(input.username, input.password, req.ip ?? '');
+    const result = await this.auth.login(input.username, input.password, { ...this.origin(req), remember: input.remember });
     if (result === 'locked') throw new HttpException({ code: 'auth.locked' }, HttpStatus.TOO_MANY_REQUESTS);
     if (!result) throw new UnauthorizedException({ code: 'auth.invalidCredentials' });
-    await this.setCookie(req, res, result.token);
-    return { ok: true };
+    await this.setCookie(req, res, result.token, result.persistent);
+    return { ok: true, persistent: result.persistent };
   }
 
   @Public()
@@ -166,6 +169,7 @@ export class AuthController {
         viaProvider: Boolean(!user.impersonator && stored.oidcSubject && oidc?.enabled && oidc.stepUpViaProvider),
       },
       privacyNotice: await this.notices.sessionState(user),
+      current: user.session ?? { persistent: false, idleMinutes: null },
     };
   }
 
@@ -245,6 +249,7 @@ export class AuthController {
     if (!user.passwordHash || !(await verifyPassword(input.current, user.passwordHash))) {
       throw new UnauthorizedException({ code: 'auth.invalidCredentials' });
     }
+    assertPasswordAllowed(input.new, [user.username, user.displayName, user.email]);
     user.passwordHash = await hashPassword(input.new);
     const own = (req.cookies as Record<string, string> | undefined)?.[SESSION_COOKIE] ?? '';
     await em.nativeDelete(Session, { user, id: { $ne: hashSecret(own) } });
@@ -258,11 +263,16 @@ export class AuthController {
   }
 
   /** `Secure` with `FORGA_SECURE_COOKIES`, over HTTPS or with an `https://` address of f.orga. */
-  private async cookieOptions(req: Request) {
-    return sessionCookieOptions(await this.cookies.secure(req));
+  private async cookieOptions(req: Request, persistent = false) {
+    return sessionCookieOptions(await this.cookies.secure(req), persistent);
   }
 
-  private async setCookie(req: Request, res: Response, token: string): Promise<void> {
-    res.cookie(SESSION_COOKIE, token, await this.cookieOptions(req));
+  private async setCookie(req: Request, res: Response, token: string, persistent = false): Promise<void> {
+    res.cookie(SESSION_COOKIE, token, await this.cookieOptions(req, persistent));
+  }
+
+  /** Address and browser of a new session („Angemeldete Geräte“). */
+  private origin(req: Request) {
+    return { ip: req.ip ?? null, userAgent: req.headers['user-agent'] ?? null };
   }
 }

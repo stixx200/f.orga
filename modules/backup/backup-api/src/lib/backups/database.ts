@@ -63,6 +63,39 @@ export function stdinSink(child: ChildProcessWithoutNullStreams, tolerateEarlyEx
   };
 }
 
+/**
+ * Kinds of objects a dump of f.orga contains: schemas, tables with data, sequences, defaults, constraints and indexes.
+ * Anything else (functions, triggers, extensions, roles, event triggers, privileges …) would run code or change rights
+ * when restored, and is refused (`backup.dumpForbidden`).
+ */
+const ALLOWED_KINDS = ['TABLE DATA', 'FK CONSTRAINT', 'SEQUENCE OWNED BY', 'SEQUENCE SET', 'SEQUENCE', 'CONSTRAINT', 'DEFAULT', 'SCHEMA', 'TABLE', 'INDEX', 'COMMENT'];
+/** Schemas of core and modules (lower case with `_`) and `public` (migrations table); never system schemas. */
+const ALLOWED_SCHEMA = /^(?!pg_)(?!information_schema$)[a-z][a-z0-9_]*$/;
+
+/**
+ * Entries of the table of contents (`pg_restore --list`) that a dump of f.orga never contains; an uploaded file with
+ * such entries is not restored. Returns the offending lines (at most 20).
+ */
+export function forbiddenEntries(output: string): string[] {
+  const forbidden: string[] = [];
+  for (const line of output.split('\n')) {
+    if (!line.trim() || line.startsWith(';')) continue;
+    const match = /^\d+; \d+ \d+ (.+)$/.exec(line.trim());
+    const rest = match?.[1] ?? '';
+    const kind = ALLOWED_KINDS.find((k) => rest.startsWith(`${k} `));
+    if (!kind) {
+      forbidden.push(line.trim());
+      continue;
+    }
+    const schema = rest.slice(kind.length + 1).split(' ')[0];
+    // Schemas name themselves in the name column (schema `-`).
+    const name = kind === 'SCHEMA' ? rest.slice(kind.length + 1).split(' ')[1] : schema;
+    if (!name || !ALLOWED_SCHEMA.test(name)) forbidden.push(line.trim());
+    if (forbidden.length >= 20) break;
+  }
+  return forbidden;
+}
+
 /** Number of objects and schemas in the output of `pg_restore --list`. */
 export function summarizeList(output: string): { objects: number; schemas: number } {
   const lines = output.split('\n').filter((line) => line.trim() && !line.startsWith(';'));

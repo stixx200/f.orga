@@ -31,7 +31,7 @@ import { writeBackupFile } from '../format/backup-file.js';
 import { backupEnvironment } from '../runtime/environment.js';
 import { OutputTail, PgTools, quoteIdent } from '../runtime/pg-tools.js';
 import { BackupSettingsService, type LoadedSettings } from '../settings/backup-settings.service.js';
-import { COUNT_SQL, parseCounts, stampedDatabase, stdinSink, summarizeList } from './database.js';
+import { COUNT_SQL, forbiddenEntries, parseCounts, stampedDatabase, stdinSink, summarizeList } from './database.js';
 import { backupFileName, ensureTarget, isBackupFileName, type RetentionCandidate, selectForPruning } from './rules.js';
 
 /** Who triggered something; `null` for the scheduler. */
@@ -464,8 +464,40 @@ export class BackupsService {
    */
   async verify(path: string, passphrase: string | null, options: { restoreTest: boolean }): Promise<Verification> {
     const result: Verification = { ok: false, checkedAt: new Date().toISOString(), error: null, objects: null, schemas: null, compatible: null, missingModules: [], restoreTested: false, restoredCounts: null };
-    let manifest: BackupManifest | null = null;
     try {
+      const { list, manifest } = await this.readList(path, passphrase);
+      Object.assign(result, summarizeList(list));
+      const compatibility = this.compatibility(manifest);
+      result.compatible = !compatibility.newer && !compatibility.missingModules.length;
+      result.missingModules = compatibility.missingModules;
+      if (options.restoreTest) {
+        const database = stampedDatabase(this.pg.database, 'restoretest');
+        try {
+          await this.pg.sql([`create database ${quoteIdent(database)} template template0`], 'postgres', 'backup.restoreTestFailed');
+          await this.restoreInto(path, passphrase, database, false, list);
+          result.restoredCounts = parseCounts((await this.pg.sql([COUNT_SQL], database, 'backup.restoreTestFailed')).trim());
+          result.restoreTested = true;
+          const expected = manifest.counts;
+          if (JSON.stringify(result.restoredCounts) !== JSON.stringify(expected)) throw new BackupError('backup.restoreTestMismatch');
+        } finally {
+          await this.pg.sql([`drop database if exists ${quoteIdent(database)} with (force)`]).catch((error: unknown) => this.logger.error(`Dropping ${database} failed`, String(error)));
+        }
+      }
+      result.ok = true;
+    } catch (error) {
+      result.error = errorCode(error, 'backup.verifyFailed');
+      this.logger.warn(`Verifying ${path} failed: ${errorDetail(error)}`);
+    }
+    return result;
+  }
+
+  /**
+   * Decrypts a backup and reads the table of contents of its dump (`pg_restore --list`) with the manifest. A dump with
+   * entries f.orga never writes (functions, triggers, extensions, roles, privileges, system schemas) is refused with
+   * `backup.dumpForbidden`: an uploaded file must not run code in the database or change rights.
+   */
+  async readList(path: string, passphrase: string | null): Promise<{ list: string; manifest: BackupManifest }> {
+    {
       const opened = await openBackupFile(path, passphrase);
       const manifestSink = bufferSink(1024 * 1024);
       const listing = this.pg.spawn('pg_restore', ['--list']);
@@ -490,42 +522,25 @@ export class BackupsService {
       }
       await exit;
       if (!dumpSeen) throw new BackupError('backup.corrupt', 'no database dump');
-      manifest = BackupManifest.parse(JSON.parse(manifestSink.data().toString('utf8')));
-      Object.assign(result, summarizeList(list));
-      const compatibility = this.compatibility(manifest);
-      result.compatible = !compatibility.newer && !compatibility.missingModules.length;
-      result.missingModules = compatibility.missingModules;
-      if (options.restoreTest) {
-        const database = stampedDatabase(this.pg.database, 'restoretest');
-        try {
-          await this.pg.sql([`create database ${quoteIdent(database)} template template0`], 'postgres', 'backup.restoreTestFailed');
-          await this.restoreInto(path, passphrase, database, false);
-          result.restoredCounts = parseCounts((await this.pg.sql([COUNT_SQL], database, 'backup.restoreTestFailed')).trim());
-          result.restoreTested = true;
-          const expected = manifest.counts;
-          if (JSON.stringify(result.restoredCounts) !== JSON.stringify(expected)) throw new BackupError('backup.restoreTestMismatch');
-        } finally {
-          await this.pg.sql([`drop database if exists ${quoteIdent(database)} with (force)`]).catch((error: unknown) => this.logger.error(`Dropping ${database} failed`, String(error)));
-        }
-      }
-      result.ok = true;
-    } catch (error) {
-      result.error = errorCode(error, 'backup.verifyFailed');
-      this.logger.warn(`Verifying ${path} failed: ${errorDetail(error)}`);
+      const manifest = BackupManifest.parse(JSON.parse(manifestSink.data().toString('utf8')));
+      const forbidden = forbiddenEntries(list);
+      if (forbidden.length) throw new BackupError('backup.dumpForbidden', forbidden.join('\n'));
+      return { list, manifest };
     }
-    return result;
   }
 
   /**
    * Restores the database dump of a backup into a database (`clean`: replacing the contents of the running one in a
    * single transaction). Returns the manifest and the plugins of the backup.
    */
-  async restoreInto(path: string, passphrase: string | null, database: string, clean: boolean): Promise<{ manifest: BackupManifest; plugins: Buffer | null }> {
+  async restoreInto(path: string, passphrase: string | null, database: string, clean: boolean, checkedList?: string): Promise<{ manifest: BackupManifest; plugins: Buffer | null }> {
+    // The table of contents is checked before anything is restored (also for backups made by f.orga itself).
+    if (checkedList === undefined) await this.readList(path, passphrase);
     const opened = await openBackupFile(path, passphrase);
     const manifestSink = bufferSink(1024 * 1024);
     const pluginsSink = bufferSink(MAX_PLUGINS * 2);
     let plugins = false;
-    const restore = this.pg.spawn('pg_restore', ['--no-owner', '--exit-on-error', ...(clean ? ['--clean', '--if-exists', '--single-transaction'] : []), '--dbname', database], database);
+    const restore = this.pg.spawn('pg_restore', ['--no-owner', '--no-privileges', '--exit-on-error', ...(clean ? ['--clean', '--if-exists', '--single-transaction'] : []), '--dbname', database], database);
     const stderr = new OutputTail();
     restore.stdout.resume();
     restore.stderr.on('data', (chunk: Buffer) => stderr.add(chunk));

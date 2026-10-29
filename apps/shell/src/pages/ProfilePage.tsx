@@ -6,6 +6,7 @@ import { api, send, SESSION_QUERY_KEY, useLocalized, useTranslation } from '@for
 import { Notice, notifySuccess, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { MfaPanel } from '../auth/StepUp';
 import { ImpersonationsPanel } from '../privacy/Impersonations';
+import { DevicesPanel } from '../privacy/Devices';
 import { LanguageSwitch } from '../frame/LanguageSwitch';
 import type { LoadedModule } from '../modules';
 
@@ -189,6 +190,7 @@ export function ProfilePage({ session, modules }: { session: Session; modules: L
         </Panel>
         <MfaPanel session={session} />
         <HiddenTasksPanel session={session} modules={modules} />
+        <DevicesPanel session={session} />
         <ImpersonationsPanel />
         {setup?.oidc && (
           <Panel title={t('profile.oidc')}>

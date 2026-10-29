@@ -87,6 +87,8 @@ export class CoreMeasures implements OnModuleInit {
     const oidc = OidcSettings.parse((await this.settings.get('oidc')) ?? {});
     const security = SecuritySettings.parse((await this.settings.get('security')) ?? {});
     const retention = await this.retention.localized();
+    const secrets = await Promise.all([this.settings.secretState('smtp', 'password'), this.settings.secretState('oidc', 'clientSecret')]);
+    const unreadableSecrets = secrets.includes('unreadable');
     const https = context.https || context.publicUrlHttps;
     const smtpTls = smtp.starttls || smtp.port === 465;
     return [
@@ -122,10 +124,19 @@ export class CoreMeasures implements OnModuleInit {
         key: 'core.passwords',
         title: { de: 'Anmeldung', en: 'Sign-in' },
         value: {
-          de: `Passwörter als scrypt-Hash, mindestens 10 Zeichen, Sperre nach Fehlversuchen; Sitzung als HttpOnly-Cookie${oidc.enabled ? '; Anmeldung mit dem Konto der Gemeinde (OIDC)' : ''}`,
-          en: `Passwords as scrypt hash, at least 10 characters, lock after failed attempts; session as HttpOnly cookie${oidc.enabled ? '; sign-in with the municipal account (OIDC)' : ''}`,
+          de: `Passwörter als scrypt-Hash, mindestens 10 Zeichen, keine häufigen Passwörter; Sperre nach Fehlversuchen und Anfragebegrenzung in der Datenbank; Sitzung als HttpOnly-Cookie${oidc.enabled ? '; Anmeldung mit dem Konto der Gemeinde (OIDC)' : ''}`,
+          en: `Passwords as scrypt hash, at least 10 characters, no frequent passwords; lock after failed attempts and rate limits in the database; session as HttpOnly cookie${oidc.enabled ? '; sign-in with the municipal account (OIDC)' : ''}`,
         },
         tone: 'info',
+      },
+      {
+        key: 'core.sessions',
+        title: { de: 'Sitzungen', en: 'Sessions' },
+        value: {
+          de: `Abmeldung ohne Bedienung nach ${security.idleMinutesPrivileged} Minuten (Konten mit Verwaltungsrechten) bzw. ${security.idleMinutesOther} Minuten; „Angemeldet bleiben“ (höchstens 14 Tage) ${security.allowRemember ? 'nur für Konten ohne Verwaltungsrechte' : 'abgeschaltet'}; Übersicht „Angemeldete Geräte“ im Profil`,
+          en: `Sign-out without input after ${security.idleMinutesPrivileged} minutes (accounts with administrative permissions) or ${security.idleMinutesOther} minutes; "stay signed in" (at most 14 days) ${security.allowRemember ? 'only for accounts without administrative permissions' : 'switched off'}; overview "signed-in devices" in the profile`,
+        },
+        tone: 'ok',
       },
       {
         key: 'core.protocols',
@@ -148,10 +159,15 @@ export class CoreMeasures implements OnModuleInit {
       {
         key: 'core.encryption',
         title: { de: 'Verschlüsselung', en: 'Encryption' },
-        value: key
-          ? { de: `Auskünfte, Geheimnisse des zweiten Faktors und Schlüssel verschlüsselt (AES-256-GCM, FORGA_SECRET_KEY); Auskünfte ${ACCESS_REPORT_DAYS} Tage`, en: `Access reports, second-factor secrets and keys encrypted (AES-256-GCM, FORGA_SECRET_KEY); access reports ${ACCESS_REPORT_DAYS} days` }
-          : { de: 'FORGA_SECRET_KEY fehlt: keine verschlüsselte Ablage möglich', en: 'FORGA_SECRET_KEY missing: no encrypted storage possible' },
-        tone: key ? 'ok' : 'warning',
+        value: !key
+          ? { de: 'FORGA_SECRET_KEY fehlt: keine verschlüsselte Ablage möglich, Zugangsdaten für E-Mail und Anmeldedienst unverschlüsselt', en: 'FORGA_SECRET_KEY missing: no encrypted storage possible, credentials for e-mail and sign-in service unencrypted' }
+          : unreadableSecrets
+            ? { de: 'Zugangsdaten für E-Mail oder Anmeldedienst mit einem anderen FORGA_SECRET_KEY verschlüsselt – neu eingeben', en: 'Credentials for e-mail or sign-in service encrypted with another FORGA_SECRET_KEY – enter them again' }
+            : {
+                de: `Auskünfte, Geheimnisse des zweiten Faktors, Schlüssel und Zugangsdaten für E-Mail und Anmeldedienst verschlüsselt (AES-256-GCM, FORGA_SECRET_KEY); Auskünfte ${ACCESS_REPORT_DAYS} Tage; Datenbank und Anhänge nur mit verschlüsseltem Datenträger des Servers`,
+                en: `Access reports, second-factor secrets, keys and credentials for e-mail and sign-in service encrypted (AES-256-GCM, FORGA_SECRET_KEY); access reports ${ACCESS_REPORT_DAYS} days; database and attachments only with an encrypted disk of the server`,
+              },
+        tone: key && !unreadableSecrets ? 'ok' : 'warning',
       },
       {
         key: 'core.mail',

@@ -4,7 +4,7 @@ Je Datenkategorie eine Aufbewahrungsfrist ab einem Ereignis und eine Aktion nach
 
 ## Grundsatz
 
-- **Es wird nichts automatisch gelöscht, bis ein Administrator Fristen und Aktionen wählt.** Standard aller Kategorien ist `none`, außer dem Audit-Log (2 Jahre, löschen) und dem Leseprotokoll (1 Jahr, löschen). Import-Uploads und Datenübernahmen werden wie bisher nach 24 Stunden gelöscht (`core.imports`), die Zeilen alter Läufe des Moduls MP-Feuer nach 7 Tagen (`mp-feuer.rows`); beides hat keine Einstellung.
+- **Es wird nichts automatisch gelöscht, bis ein Administrator Fristen und Aktionen wählt.** Standard aller Kategorien ist `none`, außer dem Audit-Log (2 Jahre, löschen), dem Leseprotokoll (1 Jahr, löschen) und gesperrten Benutzern ohne Person (2 Jahre nach der Sperre, anonymisieren). Import-Uploads und Datenübernahmen werden wie bisher nach 24 Stunden gelöscht (`core.imports`), die Zeilen alter Läufe des Moduls MP-Feuer nach 7 Tagen (`mp-feuer.rows`), deren Zeilen mit Meldungen nach 90 Tagen (`mp-feuer.messages`) und die Zähler der Anfragebegrenzung einen Tag nach der letzten Nutzung (`core.rate-limits`); diese Regeln haben keine Einstellung.
 - f.orga liefert keine rechtlich geprüften Werte. Die Vorlage „Kommunaler Aktenplan (Beispiel)“ enthält nur die Fristen, die die Feuerwehr genannt hat; welche Unterlagen archivwürdig sind, entscheidet das Archiv.
 - Anhänge folgen immer ihrem Datensatz: Sie gehen mit in den Export für das Archiv und werden mit dem Datensatz anonymisiert bzw. gelöscht. Abhängige Datensätze (Bericht ohne Einsatz, Prüfung ohne Gerät) werden nie für sich ausgesondert.
 - Anonymisieren und Löschen entfernen auch die Historie der Datensätze, weil sie die früheren Werte enthält.
@@ -26,6 +26,7 @@ Module melden ihre Kategorien beim `RetentionRegistry` an (`registerCategory`): 
 | `core.audit` | Audit-Log (Datenerfassungsprotokoll) | Eintrag | löschen | – | Core |
 | `core.history` | Historie und Versionen; der aktuelle Stand bleibt | Eintrag | löschen, nichts | – | Core |
 | `core.access-log` | Leseprotokoll: Zugriffe auf besonders geschützte Daten je Benutzer, Person, Bereich und Tag ([Datenschutz](datenschutz.md#leseprotokoll)) | Tag des Zugriffs | löschen | – | Core |
+| `core.locked-accounts` | gesperrte Benutzer ohne verknüpfte Person (z. B. externer Administrator, Kämmerei); Konten mit Person folgen der Person ([Datenschutz](datenschutz.md#gesperrte-benutzer-ohne-person-l21)) | Sperre | anonymisieren, nichts | – | Core |
 
 - **Unterarten:** Bei Einsätzen ist jede Unterart eine eigene Zeile (`subtypeMode: 'fixed'`); der Schlüssel der Kategorie gilt für die übrigen Einsätze. Ein Einsatz mit Besonderheiten ohne eigene Regel fällt nicht auf die Regel der übrigen zurück. Bei Diensten kommen Zeilen je Art nur bei Bedarf dazu (`optional`); Dienste einer Art ohne eigene Zeile folgen der Regel der Kategorie („Übrige Dienste“).
 - **Einsätze mit Besonderheiten:** eigene Kräfte verletzt oder getötet, ein Beteiligter in der Rolle „Geschädigter“ oder Tote in der Statistik (Grund „Verletzte oder Tote“), kostenpflichtig („Kostenersatz“), Kat-Einsatz in der Statistik („Kat-Einsatz“), oder am Einsatz das Kennzeichen **„30 Jahre aufbewahren (Sonderfall)“** (`retentionSpecial`, z. B. Großbrand ohne Verletzte). Das Kennzeichen geht vor; die Liste „Aussonderung“ zeigt den Grund.

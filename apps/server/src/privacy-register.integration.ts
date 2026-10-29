@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EntityManager } from '@mikro-orm/core';
 import { MailService, PrivacyRegister, Setting } from '@forga/core-api';
 import type { AffectedPersons, BreachSourceEntry, PrivacyBreach, PrivacyRequest, ProcessingRegister, RecipientOption } from '@forga/core-contracts';
-import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
+import { setUp, startTestApp, type TestApp, UI, TOKEN_FIELDS } from './testing/test-app';
 
 /**
  * Data protection, phase 3 part 1 (concept `dokumentation/geplant/datenschutz.md`): register of processing activities
@@ -98,16 +98,16 @@ describe('register of processing activities (L8)', () => {
   });
 
   it('names API tokens, the e-mail server and the sign-in service as recipients', async () => {
-    const token = (await post('/core/tokens', { name: 'Leitstelle (Beispiel)', scopes: ['incidents.reports.read'] }).expect(201)).body;
+    const token = (await post('/core/tokens', { ...TOKEN_FIELDS, name: 'Leitstelle (Beispiel)', scopes: ['incidents.reports.read'] }).expect(201)).body;
     ids.token = token.id;
     ids.tokenSecret = token.token;
     await put('/core/settings/smtp', { host: 'mail.example.org', port: 587, starttls: true, username: '', sender: 'forga@example.org' }).expect(200);
     await put('/core/settings/oidc', { enabled: true, issuer: 'https://login.example.org/realm', clientId: 'forga', clientSecret: 'geheim' }).expect(200);
     const r = await register();
-    expect(activity(r, 'incidents.reports').recipients).toContainEqual({ id: `token:${token.id}`, name: { de: 'Schnittstelle „Leitstelle (Beispiel)“', en: 'Interface "Leitstelle (Beispiel)"' }, note: '', source: 'token' });
+    expect(activity(r, 'incidents.reports').recipients).toContainEqual({ id: `token:${token.id}`, name: { de: 'Schnittstelle „Leitstelle (Beispiel)“ – Testsystem (Beispiel)', en: 'Interface "Leitstelle (Beispiel)" – Testsystem (Beispiel)' }, note: 'Integrationstest', source: 'token' });
     expect(activity(r, 'masterdata.persons').recipients.some((x) => x.source === 'token')).toBe(false);
-    expect(r.processors.map((p) => p.id)).toEqual(['processor:smtp', 'processor:oidc']);
-    expect(r.processors[1].name.de).toContain('login.example.org');
+    expect(r.processors.map((p) => p.id)).toEqual(['processor:hosting', 'processor:smtp', 'processor:oidc']);
+    expect(r.processors[2].name.de).toContain('login.example.org');
     expect(activity(r, 'core.accounts').recipients.map((x) => x.id)).toEqual(expect.arrayContaining(['processor:smtp', 'processor:oidc']));
   });
 
@@ -263,7 +263,7 @@ describe('data breaches (L20)', () => {
     expect(affected.persons.map((p) => p.id).toSorted()).toEqual([ids.tobias, ids.sandra].toSorted());
 
     // A technical user reads with the scopes of its token, brigade-wide.
-    await post('/core/tokens', { name: 'Alarmierung (Beispiel)', scopes: ['masterdata.persons.read'] }).expect(201);
+    await post('/core/tokens', { ...TOKEN_FIELDS, name: 'Alarmierung (Beispiel)', scopes: ['masterdata.persons.read'] }).expect(201);
     const accounts = (await get('/core/privacy/breach-tools/accounts', privacy).expect(200)).body as { id: string; displayName: string; technical: boolean }[];
     const technical = accounts.find((a) => a.displayName === 'Alarmierung (Beispiel)')!;
     expect(technical.technical).toBe(true);
@@ -326,6 +326,6 @@ describe('data breaches (L20)', () => {
     await get('/core/session', admin).expect(401);
     await test.http.get('/api/core/session').set(bearer).expect(401);
     admin = await test.login();
-    expect((await audit('privacy.breach-lockdown'))[0].details).toEqual({ reason: 'Verdacht auf ein abgeflossenes Passwort', sessions: result.sessions, tokens: 2, breachId: breach.id });
+    expect((await audit('privacy.breach-lockdown'))[0].details).toEqual({ reason: 'Verdacht auf ein abgeflossenes Passwort', sessions: result.sessions, tokens: 2, devices: 0, breachId: breach.id });
   });
 });

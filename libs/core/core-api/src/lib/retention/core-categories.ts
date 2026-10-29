@@ -2,7 +2,9 @@ import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import type { PrivacySettings } from '@forga/core-contracts';
 import { AuditEntry } from '../audit/audit.js';
+import { anonymizeAccounts } from '../data/core-export.js';
 import { HistoryEntry } from '../history/history.entity.js';
+import { User } from '../security/security.entities.js';
 import { SettingsService } from '../settings/settings.js';
 import type { RetentionCandidate, RetentionCategoryDefinition, RetentionQuery } from './retention-registry.js';
 import { RetentionRegistry } from './retention-registry.js';
@@ -10,6 +12,9 @@ import { RetentionRegistry } from './retention-registry.js';
 type Log = typeof AuditEntry | typeof HistoryEntry;
 
 const older = (cutoff: Date) => ({ timestamp: { $lt: cutoff } });
+
+/** Retention category of locked accounts without person (L21). */
+export const LOCKED_ACCOUNTS = 'core.locked-accounts';
 
 /**
  * The audit log and the history of the core: many small entries, processed in bulk. With „Sonderfall prüfen“ the entries
@@ -40,6 +45,52 @@ export class CoreRetentionCategories implements OnModuleInit {
       },
       actions: ['delete', 'none'],
     });
+    this.registry.registerCategory({
+      key: LOCKED_ACCOUNTS,
+      module: 'core',
+      name: { de: 'Gesperrte Benutzer ohne Person', en: 'Locked users without person' },
+      description: {
+        de: 'Konten ohne verknüpfte Person (z. B. externer Administrator, Kämmerei) nach der Sperre; verknüpfte Konten folgen der Person',
+        en: 'Accounts without a linked person (e.g. external administrator, treasury) after the lock; linked accounts follow the person',
+      },
+      event: { de: 'Sperre', en: 'Lock' },
+      actions: ['anonymize', 'none'],
+      defaultRule: { years: 2, action: 'anonymize' },
+      candidates: (query) => this.lockedAccounts(query.cutoff),
+      export: async (ids) => {
+        const users = await this.em.fork().find(User, { id: { $in: [...ids] } });
+        return users.map((u) => ({
+          id: u.id,
+          title: u.displayName,
+          fields: [
+            { label: { de: 'Benutzername', en: 'Username' }, value: u.username },
+            { label: { de: 'Gesperrt seit', en: 'Locked since' }, value: u.lockedAt?.toISOString().slice(0, 10) ?? '' },
+          ],
+          data: { username: u.username, displayName: u.displayName, email: u.email ?? null, lockedAt: u.lockedAt?.toISOString() ?? null, lastLogin: u.lastLogin?.toISOString() ?? null },
+          attachments: [],
+        }));
+      },
+      execute: (ids) => anonymizeAccounts(this.em, ids),
+      bulk: {
+        count: async (query) => (await this.lockedAccounts(query.cutoff)).length,
+        run: async (query) => anonymizeAccounts(this.em, (await this.lockedAccounts(query.cutoff)).map((c) => c.id)),
+      },
+    });
+  }
+
+  /** Locked accounts without person, not technical and not yet anonymised, locked before the cutoff. */
+  private async lockedAccounts(cutoff: Date): Promise<RetentionCandidate[]> {
+    const users = await this.em.fork().find(
+      User,
+      { active: false, technical: false, personId: null, lockedAt: { $lt: cutoff } },
+      { orderBy: { lockedAt: 'asc' } },
+    );
+    return users.filter((u) => !u.username.startsWith('anonymized-')).map((u) => ({
+      id: u.id,
+      label: `${u.displayName} (${u.username})`,
+      neutralLabel: `Benutzerkonto, gesperrt ${u.lockedAt!.toISOString().slice(0, 10)}`,
+      eventDate: u.lockedAt!.toISOString().slice(0, 10),
+    }));
   }
 
   private log(key: 'core.audit' | 'core.history', entity: Log): Omit<RetentionCategoryDefinition, 'name' | 'actions'> {

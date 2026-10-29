@@ -29,7 +29,8 @@ export function RegisterTab() {
   const [selected, setSelected] = useState<string | null>(null);
   if (!register) return null;
   const current = register.activities.find((a) => a.key === selected) ?? register.activities[0];
-  const download = (format: 'pdf' | 'xlsx') => void openAfterStepUp(apiUrl(`core/privacy/register/export/${format}`, { language: i18n.language === 'en' ? 'en' : 'de' }));
+  const download = (format: 'pdf' | 'xlsx', scope?: 'dpia') => void openAfterStepUp(apiUrl(`core/privacy/register/export/${format}`, { language: i18n.language === 'en' ? 'en' : 'de', scope }));
+  const health = register.activities.some((a) => a.health);
   return (
     <Stack gap="lg">
       <Group justify="space-between" align="flex-start" wrap="wrap">
@@ -39,6 +40,11 @@ export function RegisterTab() {
           <Button leftSection={<IconDownload size={16} />} onClick={() => download('pdf')}>{t('register.pdf')}</Button>
         </Group>
       </Group>
+      {health && (
+        <Notice kind="warning" action={<Button size="xs" variant="outline" leftSection={<IconDownload size={14} />} onClick={() => download('pdf', 'dpia')}>{t('hardening.register.dpiaExport')}</Button>}>
+          {t('hardening.register.dpiaNotice')}
+        </Notice>
+      )}
       <ActivitiesTable register={register} selected={current?.key ?? null} onSelect={setSelected} />
       {current && <ActivityCard key={`${current.key}:${current.record.version}:${current.record.reviewedAt ?? ''}`} activity={current} />}
       <GeneralRecipients key={JSON.stringify(register.general)} initial={register.general} />
@@ -120,6 +126,7 @@ function ActivityCard({ activity }: { activity: RegisterActivity }) {
           <Field label={t('register.fields.subjects')}>{activity.subjects.map(localized).join('; ') || '–'}</Field>
           <Field label={t('register.fields.categories')}>{activity.categories.map(localized).join('; ') || '–'}</Field>
           <Field label={t('register.fields.special')}>{activity.health ? <StatusBadge tone="warning">{activity.healthNote ? localized(activity.healthNote) : t('register.health')}</StatusBadge> : '–'}</Field>
+          {activity.health && <Field label={t('hardening.register.dpia')}>{t('hardening.register.dpiaHint')}</Field>}
           <Field label={t('register.fields.recipients')}>
             {fromRegister.length ? fromRegister.map((r) => `${localized(r.name)} (${t(`register.sources.${r.source}`)})`).join('; ') : '–'}
           </Field>

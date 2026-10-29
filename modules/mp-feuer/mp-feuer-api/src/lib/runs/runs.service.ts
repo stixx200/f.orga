@@ -495,6 +495,7 @@ export class MpFeuerRuns implements OnApplicationBootstrap {
       datasets: datasets.map((d) => ({ profile: d.profile, name: this.profileName(d.profile), counts: d.counts ?? null, durationMs: d.durationMs ?? null })),
       messages: [...groups.values()].toSorted((a, b) => Number(b.error) - Number(a.error) || b.count - a.count || a.code.localeCompare(b.code)),
       remembered: run.rememberedCount,
+      messagesRemovedAt: run.messagesRemovedAt?.toISOString() ?? null,
     };
   }
 
@@ -586,6 +587,25 @@ export class MpFeuerRuns implements OnApplicationBootstrap {
     const run = await em.findOne(MpFeuerRunEntity, { id });
     if (!run) throw new NotFoundException({ code: 'mp-feuer.runNotFound' });
     return run;
+  }
+
+  /**
+   * Removes the rows with messages (they name persons from MP-Feuer) of finished runs: `olderThan` 90 days by the
+   * retention run, or of all finished runs at the end of the transition. Counts and the run stay; returns the number of
+   * runs.
+   */
+  async removeMessages(olderThan: Date | null, dryRun = false): Promise<number> {
+    const em = this.em.fork();
+    const runs = await em.find(
+      MpFeuerRunEntity,
+      { messagesRemovedAt: null, status: { $nin: [...RUNNING] }, ...(olderThan ? { $or: [{ finishedAt: { $lt: olderThan } }, { finishedAt: null, createdAt: { $lt: olderThan } }] } : {}) },
+      { fields: ['id'] },
+    );
+    if (!runs.length || dryRun) return runs.length;
+    const ids = runs.map((r) => r.id);
+    await em.nativeUpdate(MpFeuerRunDatasetEntity, { run: { $in: ids } }, { results: [], rows: null });
+    await em.nativeUpdate(MpFeuerRunEntity, { id: { $in: ids } }, { messagesRemovedAt: new Date() });
+    return ids.length;
   }
 
   /** Removes the rows of runs older than 7 days (retention run); returns the number of datasets. */

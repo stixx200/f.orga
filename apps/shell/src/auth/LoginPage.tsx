@@ -1,4 +1,4 @@
-import { Alert, Anchor, Button, Center, Divider, Group, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Anchor, Button, Center, Checkbox, Divider, Group, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { LocalizedText } from '@forga/core-contracts';
@@ -14,7 +14,7 @@ function oidcError(): string | null {
   return code && /^auth\.oidc\w+$/.test(code) ? code : null;
 }
 
-export function LoginPage({ brigadeName, oidc }: { brigadeName: string | null; oidc: { label: LocalizedText } | null }) {
+export function LoginPage({ brigadeName, oidc, rememberAllowed = false }: { brigadeName: string | null; oidc: { label: LocalizedText } | null; rememberAllowed?: boolean }) {
   const { t } = useTranslation('shell');
   const localized = useLocalized();
   const [providerError] = useState(oidcError);
@@ -23,9 +23,10 @@ export function LoginPage({ brigadeName, oidc }: { brigadeName: string | null; o
   const queryClient = useQueryClient();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(false);
   const [forgotten, setForgotten] = useState(false);
   const login = useMutation({
-    mutationFn: () => send('POST', 'core/login', { username, password }),
+    mutationFn: () => send('POST', 'core/login', { username, password, remember: rememberAllowed && remember }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY }),
   });
 
@@ -53,6 +54,9 @@ export function LoginPage({ brigadeName, oidc }: { brigadeName: string | null; o
             {providerError && !login.error && <Alert color="brand">{translateCode(providerError)}</Alert>}
             <TextInput label={t('login.username')} value={username} onChange={(e) => setUsername(e.currentTarget.value)} required autoFocus autoComplete="username" />
             <PasswordInput label={t('login.password')} value={password} onChange={(e) => setPassword(e.currentTarget.value)} required autoComplete="current-password" />
+            {rememberAllowed && (
+              <Checkbox label={t('hardening.login.remember')} description={t('hardening.login.rememberHint')} checked={remember} onChange={(e) => setRemember(e.currentTarget.checked)} />
+            )}
             <Button type="submit" loading={login.isPending}>
               {t('login.submit')}
             </Button>

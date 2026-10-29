@@ -34,6 +34,7 @@ import { RetentionTexts } from '../privacy/retention-texts.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { OrganizationDirectory } from '../security/organization-directory.js';
 import { ApiToken, User } from '../security/security.entities.js';
+import { tokenRecipientName } from '../security/token-recipient.js';
 import { decryptBytes, encryptBytes, serverKey } from '../security/server-key.js';
 import { brigadeLogoDataUrl } from '../settings/assets.js';
 import { SettingsService } from '../settings/settings.js';
@@ -238,7 +239,8 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     const activities = this.activities();
     const retention = await this.retentionTexts(ctx);
     const tokens = await this.em.fork().find(ApiToken, { revokedAt: null, $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] }, { orderBy: { name: 'asc' } });
-    const tokenRecipients = tokens.map((t) => ctx.t(`Schnittstelle „${t.name}“`, `interface "${t.name}"`));
+    // Recipients of API tokens with system, operator and purpose (L23).
+    const tokenRecipients = tokens.map((t) => `${ctx.text(tokenRecipientName(t))}${t.purpose ? ` (${t.purpose})` : ''}`);
     const em = this.em.fork();
     const described = sections.map((section) => {
       const activity = activities.get(section.activity);

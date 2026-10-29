@@ -6,7 +6,7 @@ import { DomainEvents } from '@forga/core-api';
 import { BW_TEMPLATE } from '@forga/cost-recovery-contracts';
 import { DUTY_KIND_TEMPLATE } from '@forga/duty-officer-contracts';
 import { type IncidentCreatedEvent, INCIDENTS_EVENTS } from '@forga/incidents-contracts';
-import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
+import { setUp, startTestApp, type TestApp, UI, TOKEN_FIELDS } from './testing/test-app';
 
 let test: TestApp;
 let admin: string;
@@ -238,7 +238,7 @@ describe('EvD reports', () => {
   });
 
   it('adds the EvD report to incidents of other systems (API)', async () => {
-    const token = await post('/core/tokens', { name: 'Alarmfax', scopes: ['incidents.api.create'] }).expect(201);
+    const token = await post('/core/tokens', { ...TOKEN_FIELDS, name: 'Alarmfax', scopes: ['incidents.api.create'] }).expect(201);
     const created = await test.http
       .post('/api/incidents/v1/incidents')
       .set({ Authorization: `Bearer ${token.body.token}` })

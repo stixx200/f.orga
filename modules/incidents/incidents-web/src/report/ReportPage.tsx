@@ -229,7 +229,7 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
       )}
       {step === 'other' && (
         <Panel title={t('editor.attachments')}>
-          <Attachments type="incidents.report" id={report.id} editable={editable} />
+          <Attachments type="incidents.report" id={report.id} editable={editable} hint={t('editor.attachmentsHint')} />
         </Panel>
       )}
       {step === 'other' &&

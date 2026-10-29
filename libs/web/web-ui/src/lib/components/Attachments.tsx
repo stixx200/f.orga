@@ -11,9 +11,10 @@ export const attachmentsKey = (type: string, id: string) => ['core', 'attachment
 
 /**
  * Attachments of a record (photos and PDF): thumbnails open the file, `editable` allows adding and removing.
- * The module registers who may read and write them (`Attachments.register` on the server).
+ * The module registers who may read and write them (`Attachments.register` on the server). `hint` is shown above the
+ * upload, e.g. what photos of an incident may show; the server removes location and camera data of photos.
  */
-export function Attachments({ type, id, editable = false }: { type: string; id: string; editable?: boolean }) {
+export function Attachments({ type, id, editable = false, hint }: { type: string; id: string; editable?: boolean; hint?: string }) {
   const { t } = useTranslation('common');
   const key = attachmentsKey(type, id);
   const { data = [], isLoading } = useQuery({ queryKey: key, queryFn: () => api<Attachment[]>(`core/attachments?type=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}`) });
@@ -45,6 +46,7 @@ export function Attachments({ type, id, editable = false }: { type: string; id: 
           </Group>
         );
       })}
+      {editable && hint && <Text size="xs" c="dimmed">{hint}</Text>}
       {editable && (
         <Group gap="sm">
           <FileButton accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(file) => file && add.mutate(file)}>
@@ -58,6 +60,7 @@ export function Attachments({ type, id, editable = false }: { type: string; id: 
           <Text size="xs" c="dimmed">{t('attachments.hint')}</Text>
         </Group>
       )}
+      {editable && <Text size="xs" c="dimmed">{t('attachments.metadata')}</Text>}
     </Stack>
   );
 }

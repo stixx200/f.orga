@@ -10,16 +10,17 @@ import {
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import type { Request, Response } from 'express';
-import { Audit, CookiePolicy, CSRF_HEADER, UserContext } from '@forga/core-api';
+import { Audit, CookiePolicy, CSRF_HEADER, RateLimits, UserContext } from '@forga/core-api';
 import { KIOSK_API_PATH, TERMINAL_COOKIE } from '@forga/info-terminal-contracts';
 import { TerminalEntity } from '../info-terminal.entities.js';
 import { hashDeviceKey, sameHash } from '../security/device-keys.js';
-import { RateLimiter } from '../security/rate-limit.js';
 
 /** The device cookie lives 400 days and is renewed while the terminal is used. */
 const COOKIE_MAX_AGE_MS = 400 * 24 * 3_600_000;
 const SEEN_INTERVAL_MS = 60_000;
 const HOUR_MS = 3_600_000;
+/** Wrong keys per address: 10 in 10 minutes, then blocked for 10 minutes. */
+const FAILURES = { limit: 10, windowMs: 10 * 60_000, blockMs: 10 * 60_000 };
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 export type KioskRequest = Request & { terminal?: TerminalEntity };
@@ -34,13 +35,11 @@ export const CurrentTerminal = createParamDecorator((_data: unknown, context: Ex
  */
 @Injectable()
 export class TerminalAuth {
-  private readonly failures = new RateLimiter(10, 10 * 60_000, 10 * 60_000);
-  private readonly logged = new RateLimiter(1, HOUR_MS);
-
   constructor(
     private readonly em: EntityManager,
     private readonly audit: Audit,
     private readonly cookies: CookiePolicy,
+    private readonly rateLimits: RateLimits,
   ) {}
 
   /** `Secure` like the session cookie (`CookiePolicy`). */
@@ -53,13 +52,13 @@ export class TerminalAuth {
    * terminals, `429 info-terminal.tooManyAttempts` while the address is blocked.
    */
   async authenticate(key: string | undefined, ip: string): Promise<TerminalEntity> {
-    if (this.failures.blocked(ip)) throw new HttpException({ code: 'info-terminal.tooManyAttempts' }, HttpStatus.TOO_MANY_REQUESTS);
+    if (await this.rateLimits.blocked('info-terminal.key', ip)) throw new HttpException({ code: 'info-terminal.tooManyAttempts' }, HttpStatus.TOO_MANY_REQUESTS);
     const hash = key ? hashDeviceKey(key) : '';
     const terminal = hash ? await this.em.fork().findOne(TerminalEntity, { keyHash: hash }) : null;
     if (!terminal || !sameHash(terminal.keyHash, hash)) {
       if (key) {
-        this.failures.hit(ip);
-        if (this.logged.hit(ip)) await this.audit.log('info-terminal.invalid-key', { ip }, null);
+        await this.rateLimits.hit('info-terminal.key', ip, FAILURES);
+        if (await this.rateLimits.hit('info-terminal.key-logged', ip, { limit: 1, windowMs: HOUR_MS })) await this.audit.log('info-terminal.invalid-key', { ip }, null);
       }
       throw new UnauthorizedException({ code: 'info-terminal.invalidKey' });
     }

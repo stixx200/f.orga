@@ -25,7 +25,8 @@ services:
   forga-real:
     <<: *forga
     environment:
-      DATABASE_URL: postgresql://forga:${POSTGRES_PASSWORD_REAL:?POSTGRES_PASSWORD_REAL is missing}@db-real:5432/forga
+      # Own role without superuser rights (docker/db/10-app-role.sh).
+      DATABASE_URL: postgresql://forga_app:${FORGA_DB_APP_PASSWORD_REAL:?FORGA_DB_APP_PASSWORD_REAL is missing}@db-real:5432/forga
       FORGA_STAGE: production
       FORGA_SETUP_TOKEN: ${FORGA_SETUP_TOKEN_REAL:-}
       FORGA_SECRET_KEY: ${FORGA_SECRET_KEY_REAL:-}
@@ -53,13 +54,16 @@ services:
       POSTGRES_USER: forga
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_REAL:?POSTGRES_PASSWORD_REAL is missing}
       POSTGRES_DB: forga
+      FORGA_DB_APP_PASSWORD: ${FORGA_DB_APP_PASSWORD_REAL:?FORGA_DB_APP_PASSWORD_REAL is missing}
     volumes:
       - forga-real-db:/var/lib/postgresql/data
+      - ./db/10-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
 
   forga-test:
     <<: *forga
     environment:
-      DATABASE_URL: postgresql://forga:${POSTGRES_PASSWORD_TEST:?POSTGRES_PASSWORD_TEST is missing}@db-test:5432/forga
+      # Own role without superuser rights (docker/db/10-app-role.sh).
+      DATABASE_URL: postgresql://forga_app:${FORGA_DB_APP_PASSWORD_TEST:?FORGA_DB_APP_PASSWORD_TEST is missing}@db-test:5432/forga
       # Demo data only: band on every page, no transfer from MP-Feuer, no import of persons.
       FORGA_STAGE: test
       FORGA_SETUP_TOKEN: ${FORGA_SETUP_TOKEN_TEST:-}
@@ -89,8 +93,10 @@ services:
       POSTGRES_USER: forga
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_TEST:?POSTGRES_PASSWORD_TEST is missing}
       POSTGRES_DB: forga
+      FORGA_DB_APP_PASSWORD: ${FORGA_DB_APP_PASSWORD_TEST:?FORGA_DB_APP_PASSWORD_TEST is missing}
     volumes:
       - forga-test-db:/var/lib/postgresql/data
+      - ./db/10-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
 
 # Fixed names: the data survives a change of the project name.
 volumes:

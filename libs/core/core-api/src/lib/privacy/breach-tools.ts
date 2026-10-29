@@ -74,6 +74,26 @@ const SOURCE_ACTIONS = ['lists.exported', 'data.exported', 'data.person-exported
 const label = (action: string): LocalizedText => AUDIT_LABELS[action] ?? { de: action, en: action };
 
 /** Helpers for data breaches (L20): protocols, affected persons, ending all sessions and tokens. */
+/**
+ * Devices with their own keys outside the sessions (e.g. the info terminals), blocked by „Alle Sitzungen beenden“ in a
+ * data breach. A handler blocks the keys of its module and returns how many devices it blocked.
+ */
+@Injectable()
+export class LockdownRegistry {
+  private readonly handlers: { module: string; block: () => Promise<number> }[] = [];
+
+  register(module: string, block: () => Promise<number>): void {
+    this.handlers.push({ module, block });
+  }
+
+  /** Blocks the devices of all modules (also inactive ones: their keys would work again on activation). */
+  async blockAll(): Promise<number> {
+    let count = 0;
+    for (const handler of this.handlers) count += await handler.block();
+    return count;
+  }
+}
+
 @Injectable()
 export class BreachTools implements OnModuleInit {
   constructor(
@@ -84,6 +104,7 @@ export class BreachTools implements OnModuleInit {
     private readonly lists: ListRegistry,
     private readonly audit: Audit,
     private readonly accessLog: AccessLog,
+    private readonly lockdowns: LockdownRegistry,
   ) {}
 
   onModuleInit(): void {
@@ -250,15 +271,16 @@ export class BreachTools implements OnModuleInit {
   }
 
   /**
-   * Ends every session except the caller's own (also impersonations) and revokes every API token. Info terminals keep
-   * their device keys.
+   * Ends every session except the caller's own (also impersonations), revokes every API token and blocks the device
+   * keys of the modules (info terminals need a new link afterwards).
    */
   async lockdown(input: ReturnType<typeof BreachLockdownInput.parse>, ownSession: string | null): Promise<BreachLockdownResult> {
     const em = this.em.fork();
     const sessions = await em.nativeDelete(Session, ownSession ? { id: { $ne: ownSession } } : {});
     const tokens = await em.nativeUpdate(ApiToken, { revokedAt: null }, { revokedAt: new Date() });
-    await this.audit.log('privacy.breach-lockdown', { reason: input.reason, sessions, tokens, ...(input.breachId ? { breachId: input.breachId } : {}) });
-    return { sessions, tokens };
+    const devices = await this.lockdowns.blockAll();
+    await this.audit.log('privacy.breach-lockdown', { reason: input.reason, sessions, tokens, devices, ...(input.breachId ? { breachId: input.breachId } : {}) });
+    return { sessions, tokens, devices };
   }
 }
 

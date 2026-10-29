@@ -316,7 +316,7 @@ describe('search, export and retention', () => {
 
     // The other modules anonymise as well: the account is locked and nameless, health data and free texts are gone.
     expect((await get(`/core/users/${account}`)).body).toMatchObject({ displayName: 'N. N.', email: null, active: false, passwordSet: false });
-    await test.http.post('/api/core/login').send({ username: 'xaver', password: 'xaver-passwort-1' }).expect(401);
+    await test.http.post('/api/core/login').set(UI).send({ username: 'xaver', password: 'xaver-passwort-1' }).expect(401);
     expect((await get(`/core/history/core.user/${account}`)).body).toEqual([]);
     const exclusions = await sql.execute('select reason from promotions.exclusion where person_id = ?', [person]);
     expect(exclusions).toEqual([{ reason: '' }]);

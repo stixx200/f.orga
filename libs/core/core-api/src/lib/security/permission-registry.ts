@@ -11,6 +11,19 @@ export class PermissionRegistry {
   constructor(@Inject(FORGA_CORE_OPTIONS) options: ForgaCoreOptions) {
     this.all = [...CORE_PERMISSIONS, ...options.modules.flatMap((m) => m.manifest.permissions ?? [])];
     this.stepUp = new Set(this.all.filter((p) => p.stepUp).map((p) => p.id));
+    this.administrative = new Set(this.all.filter((p) => p.stepUp || p.privileged).map((p) => p.id));
+  }
+
+  /**
+   * Permissions that make an account privileged for the session rules (L16): those with step-up or `privileged`. Such
+   * sessions end after a shorter idle time and never stay signed in („Angemeldet bleiben“).
+   */
+  readonly administrative: ReadonlySet<string>;
+
+  /** Does an account holding these permissions count as privileged? */
+  isPrivilegedAccount(permissions: Iterable<string>): boolean {
+    for (const permission of permissions) if (this.administrative.has(permission)) return true;
+    return false;
   }
 
   /** IDs of the permissions that need the second factor (step-up). */

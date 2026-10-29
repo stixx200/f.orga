@@ -1,6 +1,7 @@
 import { privacyDe } from './privacy';
 import { breachesDe, registerDe, registerAuditDe } from './register';
 import { transparencyAuditDe, transparencyAuditKeysDe, transparencyDe } from './transparency';
+import { hardeningAuditDe, hardeningAuditKeysDe, hardeningDe } from './hardening';
 
 /** German texts of the shell. Keep the keys in sync with `en.ts`. */
 export const de = {
@@ -8,6 +9,7 @@ export const de = {
   register: registerDe,
   breaches: breachesDe,
   transparency: transparencyDe,
+  hardening: hardeningDe,
   appName: 'f.orga',
   loading: 'Wird geladen …',
   skipToContent: 'Zum Inhalt springen',
@@ -292,7 +294,7 @@ export const de = {
     languageHint: 'Gilt auf jedem Gerät nach der Anmeldung.',
     receiveDigest: 'Wöchentliche E-Mail mit Fristen',
     password: 'Passwort',
-    passwordHint: 'Mindestens 10 Zeichen.',
+    passwordHint: 'Mindestens 10 Zeichen; häufige Passwörter und der eigene Name werden abgelehnt. Am besten ein Passwortmanager.',
     newPassword: 'Neues Passwort',
     newPasswordHint: 'Leer lassen, um das Passwort nicht zu ändern.',
     roles: 'Rollen',
@@ -645,10 +647,12 @@ export const de = {
       text: 'Textbaustein',
       channel: 'Weg',
       ...transparencyAuditKeysDe,
+      ...hardeningAuditKeysDe,
     },
     actions: {
       ...registerAuditDe.actions,
       ...transparencyAuditDe,
+      ...hardeningAuditDe,
       'retention.offered': 'Dem Archiv angeboten',
       'retention.exported': 'Export für das Archiv heruntergeladen',
       'retention.decided': 'Entscheidung des Archivs erfasst',
