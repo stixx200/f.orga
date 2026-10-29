@@ -6,6 +6,8 @@ import { api, choose, expect, germanDate, login, row, test, USERS } from './supp
  * Consumables: a receipt raises the counter on the stock page.
  */
 test('clothing store: article, piece, issue, laundry, inspection, my area', async ({ browser }) => {
+  // A long journey with several users: more time than the default.
+  test.slow();
   const stamp = Date.now();
   const articleName = `E2E Warnjacke ${stamp}`;
   const number = `E2E-${stamp}`;

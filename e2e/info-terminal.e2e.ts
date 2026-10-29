@@ -69,9 +69,11 @@ test('info terminal: incident report, standby, session and closed window', async
   const kiosk = await openKiosk(browser, url);
   await expect(kiosk.getByRole('heading', { name: 'Wofür möchten Sie sich eintragen?' })).toBeVisible();
   await expect(kiosk.getByRole('button', { name: new RegExp(running) })).toBeVisible();
-  // The later session is shown greyed out until shortly before it begins.
-  await expect(kiosk.getByText(later).locator('..')).toContainText(/Eintragen ab \d{2}:\d{2}/);
+  // The later session is not open yet; the overview shows it greyed out when it begins today (not after midnight).
   await expect(kiosk.getByRole('button', { name: new RegExp(later) })).toHaveCount(0);
+  if (new Date(Date.now() + 60 * 60_000).getDate() === new Date().getDate()) {
+    await expect(kiosk.getByText(later).locator('..')).toContainText(/Eintragen ab \d{2}:\d{2}/);
+  }
 
   // A member books on a vehicle; vehicles show designation and radio call sign.
   await kiosk.getByRole('button', { name: tile }).click();

@@ -39,6 +39,8 @@ async function rosterYear(page: Page, days: number): Promise<void> {
  * and amounts; the treasury finds the compensation items; all is removed again.
  */
 test('duty kinds with counting modes, roster and compensation of the duties', async ({ browser }) => {
+  // A long journey with several users: more time than the default.
+  test.slow();
   const stamp = Date.now();
   const kinds = {
     full: { key: `e2e-full-${stamp}`, name: `E2E volle Tage ${stamp}`, unit: 'volle Tage (24 Stunden)' },
