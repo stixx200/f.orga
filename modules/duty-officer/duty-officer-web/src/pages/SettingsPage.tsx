@@ -64,7 +64,7 @@ function SettingsForm({ initial }: { initial: DutyOfficerSettings }) {
                     <Table.Td>
                       <Select
                         aria-label={t('settings.unit')}
-                        data={(['full-day', 'started-day'] as const).map((u) => ({ value: u, label: t(`settings.units.${u}`) }))}
+                        data={(['full-day', 'started-day', 'midnight'] as const).map((u) => ({ value: u, label: t(`settings.units.${u}`) }))}
                         value={kind.unit}
                         onChange={(v) => v && setKind(index, { unit: v as DutyKind['unit'] })}
                         allowDeselect={false}
