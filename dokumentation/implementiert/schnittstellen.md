@@ -66,7 +66,7 @@ Alle Pfade liegen unter `/api`.
 | `GET` | `/core/history/:entity/:id` | Prüfung des Moduls (`HistoryAccessRegistry`), sonst eine Berechtigung des Moduls von `:entity` | Historieneinträge des Datensatzes und seiner Kinddatensätze (`parentEntity`/`parentId`), neueste zuerst. Maskierte Felder haben `hidden: true`. Ohne Leserecht `404`. `:entity` z. B. `masterdata.person` |
 | `GET` | `/core/codes?code=` | angemeldet; Treffer je nach Rechten im Modul | Gegenstände mit genau diesem Code (`SearchHit[]`): Barcode, RFID-Chip (Trennzeichen und Schreibweise egal), Inventar-, Seriennummer oder URL eines QR-Etiketts |
 | `GET` | `/core/codes/modules` | angemeldet | Module, in denen der Benutzer Codes suchen kann (`string[]`) |
-| `GET` | `/core/audit?from=&to=&userId=&action=&q=&limit=` | `core.audit.read` | Audit-Einträge, neueste zuerst (höchstens 1000), mit `userName` und `impersonatorName`. `action` mit `.` am Ende filtert nach Präfix |
+| `GET` | `/core/audit?from=&to=&userId=&action=&q=&limit=` | `core.audit.read` | Audit-Einträge (`AuditEntry`), neueste zuerst (höchstens 1000), mit `userName`, `impersonatorName` und `references`: die IDs in `details`, nach ID aufgelöst zu `{ kind, label, to?, anonymized? }` (`label` Text oder `{ de, en }`, `null` = gelöscht; `to` nur, wenn der Leser die Seite öffnen darf). `action` mit `.` am Ende filtert nach Präfix |
 | `GET` | `/core/audit/filters` | `core.audit.read` | `{ actions, users }` für die Filter |
 | `GET` | `/core/export` | `core.data.export` | Module mit Vollexport, einschließlich `core` |
 | `GET` | `/core/export/:module` | `core.data.export` | Vollexport eines Moduls (JSON-Datei); bei `core` Abschnitte und Felder nur für Verwalter nur für diese |

@@ -3,6 +3,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { Migrator } from '@mikro-orm/migrations';
 import { CORE_MIGRATIONS } from '../migrations/index.js';
 import { Audit, AuditController, AuditEntry } from './audit/audit.js';
+import { AuditReferenceRegistry } from './audit/audit-references.js';
+import { CoreAuditReferences } from './audit/core-references.js';
 import { DomainEvents } from './events/domain-events.js';
 import { CORE_HISTORIZED, HistoryAccessRegistry } from './history/history-access.js';
 import { HistoryController } from './history/history.controller.js';
@@ -152,6 +154,8 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         ModuleStateService,
         ModuleGateMiddleware,
         Audit,
+        AuditReferenceRegistry,
+        CoreAuditReferences,
         DomainEvents,
         HistoryAccessRegistry,
         ListRegistry,
@@ -176,6 +180,7 @@ export class ForgaCoreModule implements NestModule, OnModuleInit {
         FORGA_CORE_OPTIONS,
         ModuleStateService,
         Audit,
+        AuditReferenceRegistry,
         SettingsService,
         PermissionRegistry,
         OrganizationDirectory,

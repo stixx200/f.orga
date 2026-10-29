@@ -489,8 +489,11 @@ describe('cost recovery', () => {
     const report = await post('/cost-recovery/export/hand-over', {}).expect(200);
     expect(report.text).toContain(`;${amendment.number};Aufhebung;${original.number};-${original.total.toFixed(2).replace('.', ',')}`);
 
-    const audit = (await get('/core/audit?action=cost-recovery.').expect(200)).body as { action: string; details: { noticeId?: string } }[];
+    const audit = (await get('/core/audit?action=cost-recovery.').expect(200)).body as { action: string; details: { noticeId?: string; number?: string }; references: Record<string, { label: unknown; to?: string }> }[];
     const actions = new Set(audit.map((e) => e.action));
+    // The audit log names the notice by its number and links it.
+    const issuedEntry = audit.find((e) => e.action === 'cost-recovery.notice-issued')!;
+    expect(issuedEntry.references[issuedEntry.details.noticeId!]).toEqual({ kind: 'cost-recovery.notice', label: issuedEntry.details.number, to: `/cost-recovery/notices/${issuedEntry.details.noticeId}` });
     for (const action of ['cost-recovery.notice-submitted', 'cost-recovery.notice-issued', 'cost-recovery.notice-cancelled', 'cost-recovery.notice-discarded', 'cost-recovery.amendment-created', 'cost-recovery.payment-recorded', 'cost-recovery.payment-reversed', 'cost-recovery.refund-recorded', 'cost-recovery.handover-exported', 'cost-recovery.payments-imported']) {
       expect(actions).toContain(action);
     }

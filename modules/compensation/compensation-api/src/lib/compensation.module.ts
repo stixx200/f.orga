@@ -1,8 +1,10 @@
 import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
-import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry } from '@forga/core-api';
+import { EntityManager } from '@mikro-orm/core';
+import { AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry } from '@forga/core-api';
 import { COMPENSATION_MANIFEST, COMPENSATION_SETTINGS, COMPENSATION_STATUTE } from '@forga/compensation-contracts';
 import { CATALOG_REFERENCES, type CatalogReferences } from '@forga/masterdata-contracts';
 import { COMPENSATION_MIGRATIONS } from '../migrations/index.js';
+import { registerAuditReferences } from './audit/audit.references.js';
 import { FunctionHolderEntity, ItemEntity, RunEntity } from './compensation.entities.js';
 import { CompensationData } from './data/compensation.data.js';
 import { FunctionsController } from './functions/functions.controller.js';
@@ -32,9 +34,12 @@ export class CompensationModule implements OnModuleInit {
     private readonly historyAccess: HistoryAccessRegistry,
     private readonly items: ItemsService,
     @Inject(CATALOG_REFERENCES) private readonly catalogReferences: CatalogReferences,
+    private readonly auditReferences: AuditReferenceRegistry,
+    private readonly em: EntityManager,
   ) {}
 
   onModuleInit(): void {
+    registerAuditReferences(this.auditReferences, this.em);
     for (const definition of this.moduleLists.definitions()) this.lists.register('compensation', definition);
     this.deadlines.register(this.data);
     this.exports.register('compensation', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });

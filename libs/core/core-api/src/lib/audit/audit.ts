@@ -1,11 +1,14 @@
 import { Controller, Get, Injectable, Query } from '@nestjs/common';
 import { defineEntity, EntityManager, type FilterQuery, p, raw } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import { RequirePermissions } from '../security/decorators.js';
+import type { AuditEntry as AuditEntryDto, AuditFilters } from '@forga/core-contracts';
+import type { AuthenticatedUser } from '../security/authenticated-user.js';
+import { CurrentUser, RequirePermissions } from '../security/decorators.js';
 import { User } from '../security/security.entities.js';
 import { likeWord, searchWords } from '../data/search-words.js';
 import { berlinDayAfter, berlinDayStart } from '../imports/parse.js';
 import { UserContext } from '../user-context.js';
+import { AuditReferenceRegistry } from './audit-references.js';
 
 /** Security-relevant events: logins, permission changes, tokens, imports, exports. */
 export const AuditEntrySchema = defineEntity({
@@ -24,25 +27,6 @@ export const AuditEntrySchema = defineEntity({
 });
 export class AuditEntry extends AuditEntrySchema.class {}
 AuditEntrySchema.setClass(AuditEntry);
-
-export interface AuditEntryDto {
-  id: string;
-  timestamp: string;
-  userId: string | null;
-  /** Display name of the user, resolved by the server (readers of the log need not manage users). */
-  userName: string | null;
-  impersonatorId: string | null;
-  impersonatorName: string | null;
-  action: string;
-  details: Record<string, unknown>;
-}
-
-export interface AuditFilters {
-  /** All actions in the log, for the filter. */
-  actions: string[];
-  /** Users appearing in the log. */
-  users: { id: string; name: string }[];
-}
 
 @Injectable()
 export class Audit {
@@ -67,14 +51,19 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 @Controller('core/audit')
 @RequirePermissions('core.audit.read')
 export class AuditController {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly references: AuditReferenceRegistry,
+  ) {}
 
   /**
    * Entries newest first, filtered on the server: period (`from`/`to`, days in Europe/Berlin, inclusive),
-   * user, action (exact or prefix ending in `.`), words in action or details; at most 1000.
+   * user, action (exact or prefix ending in `.`), words in action or details; at most 1000. IDs in the details are
+   * resolved for display (`references`), one query per kind for the whole page.
    */
   @Get()
   async list(
+    @CurrentUser() user: AuthenticatedUser,
     @Query('limit') limit = '200',
     @Query('from') from?: string,
     @Query('to') to?: string,
@@ -96,8 +85,11 @@ export class AuditController {
       orderBy: { timestamp: 'desc' },
       limit: Math.min(Math.max(Number(limit) || 200, 1), 1000),
     });
-    const names = await this.names(em, entries.flatMap((e) => [e.userId, e.impersonatorId]));
-    return entries.map((e) => ({
+    const [names, references] = await Promise.all([
+      this.names(em, entries.flatMap((e) => [e.userId, e.impersonatorId])),
+      this.references.resolve(entries, user),
+    ]);
+    return entries.map((e, index) => ({
       id: e.id,
       timestamp: e.timestamp.toISOString(),
       userId: e.userId ?? null,
@@ -106,6 +98,7 @@ export class AuditController {
       impersonatorName: e.impersonatorId ? (names.get(e.impersonatorId) ?? null) : null,
       action: e.action,
       details: e.details,
+      references: references[index],
     }));
   }
 

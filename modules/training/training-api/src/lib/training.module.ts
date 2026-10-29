@@ -1,8 +1,9 @@
 import { Global, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Attachments, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry, SearchRegistry } from '@forga/core-api';
+import { Attachments, AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry, SearchRegistry } from '@forga/core-api';
 import { TRAINING_CASUALTIES, TRAINING_MANIFEST, TRAINING_SESSIONS, TRAINING_SETTINGS, TRAINING_TERMINAL_CHECK_IN } from '@forga/training-contracts';
 import { TRAINING_MIGRATIONS } from '../migrations/index.js';
+import { registerAuditReferences } from './audit/audit.references.js';
 import { TrainingData } from './data/training.data.js';
 import { SessionsImport } from './imports/sessions.import.js';
 import { TrainingLists } from './lists/training.lists.js';
@@ -36,9 +37,11 @@ export class TrainingModule implements OnModuleInit {
     private readonly sessionsImport: SessionsImport,
     private readonly attachments: Attachments,
     private readonly personData: PersonDataRegistry,
+    private readonly auditReferences: AuditReferenceRegistry,
   ) {}
 
   onModuleInit(): void {
+    registerAuditReferences(this.auditReferences, this.em);
     for (const definition of this.trainingLists.definitions()) this.lists.register('training', definition);
     this.deadlines.register(this.data);
     this.search.register('training', (user, query) => this.data.search(user, query));

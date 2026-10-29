@@ -1,9 +1,10 @@
 import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Attachments, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
+import { Attachments, AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
 import { INCIDENT_UNITS, INCIDENTS_LOOKUP, INCIDENTS_MANIFEST, INCIDENTS_SETTINGS, INCIDENTS_TERMINAL_BOOKING, INCIDENTS_UNIT_REPORTS } from '@forga/incidents-contracts';
-import { CATALOG_REFERENCES, type CatalogReferences, ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
+import { CATALOG_REFERENCES, type CatalogReferences, ORGANIZATION, type Organization, ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
 import { INCIDENTS_MIGRATIONS } from '../migrations/index.js';
+import { registerAuditReferences } from './audit/audit.references.js';
 import { ExternalController } from './api/external.controller.js';
 import { IncidentsData } from './data/incidents.data.js';
 import { IncidentsLookupService } from './data/incidents.lookup.js';
@@ -67,6 +68,8 @@ export class IncidentsModule implements OnModuleInit {
     private readonly data: IncidentsData,
     private readonly attachments: Attachments,
     private readonly reports: ReportsService,
+    private readonly auditReferences: AuditReferenceRegistry,
+    @Inject(ORGANIZATION) private readonly organization: Organization,
   ) {}
 
   /** Reports are readable per department (or brigade-wide unit); incidents for everyone who can read one of their reports. */
@@ -88,6 +91,7 @@ export class IncidentsModule implements OnModuleInit {
     this.catalogReferences.register('incidents', (kind, key) => (kind === 'function' ? this.em.fork().count(ReportPersonnelEntity, { function: key }) : Promise.resolve(0)));
     this.catalogReferences.require('incidents', 'qualification', 'breathing-apparatus');
     this.search.register('incidents', (user, query) => this.data.search(user, query));
+    registerAuditReferences(this.auditReferences, this.em, this.organization);
     this.exports.register('incidents', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
     this.historyAccess.register('incidents.report', async (user, id) => {
       const report = await this.em.fork().findOne(ReportEntity, id);

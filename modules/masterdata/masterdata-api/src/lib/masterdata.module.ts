@@ -1,6 +1,6 @@
 import { Global, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, OrganizationDirectory, RetentionRegistry, RoleAssignment, SearchRegistry } from '@forga/core-api';
+import { AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, OrganizationDirectory, RetentionRegistry, RoleAssignment, SearchRegistry } from '@forga/core-api';
 import {
   CATALOG_REFERENCES,
   MASTERDATA_MANIFEST,
@@ -12,6 +12,7 @@ import {
   SENSITIVE_PERSON_FIELDS,
 } from '@forga/masterdata-contracts';
 import { MASTERDATA_MIGRATIONS } from '../migrations/index.js';
+import { registerAuditReferences } from './audit/audit.references.js';
 import { CatalogController, CatalogEntry, CatalogService } from './catalog/catalog.js';
 import { CatalogReferenceRegistry } from './catalog/references.js';
 import { MasterdataCatalogUsage } from './catalog/usage.js';
@@ -83,6 +84,7 @@ export class MasterdataModule implements OnModuleInit {
     private readonly retention: RetentionRegistry,
     private readonly data: MasterdataData,
     private readonly organization: OrganizationDirectory,
+    private readonly auditReferences: AuditReferenceRegistry,
   ) {}
 
   /**
@@ -124,6 +126,7 @@ export class MasterdataModule implements OnModuleInit {
           .map((p) => ({ id: p.id, label: `${p.lastName}, ${p.firstName}${p.personnelNumber ? ` (${p.personnelNumber})` : ''}` })),
     });
     this.search.register('masterdata', (user, query) => this.data.search(user, query));
+    registerAuditReferences(this.auditReferences, this.em);
     this.exports.register('masterdata', { all: () => this.data.exportAll(), person: (id) => this.data.exportPerson(id) });
     this.retention.register('masterdata.persons', { run: (settings, dryRun) => this.data.anonymize(settings, dryRun) });
     this.historyAccess.register('masterdata.person', async (user, id) => {

@@ -1,7 +1,9 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
-import { defineModule, HistoryAccessRegistry, RetentionRegistry } from '@forga/core-api';
+import { EntityManager } from '@mikro-orm/core';
+import { AuditReferenceRegistry, defineModule, HistoryAccessRegistry, RetentionRegistry } from '@forga/core-api';
 import { MP_FEUER_MANIFEST, MP_FEUER_READ, MP_FEUER_SETTINGS } from '@forga/mp-feuer-contracts';
 import { MP_FEUER_MIGRATIONS } from '../migrations/index.js';
+import { registerAuditReferences } from './audit/audit.references.js';
 import { MpFeuerExports } from './exports/export-adapter.js';
 import { MpFeuerMappingEntity, MpFeuerRunDatasetEntity, MpFeuerRunEntity } from './mp-feuer.entities.js';
 import { MpFeuerMappings } from './runs/mp-feuer-mappings.js';
@@ -14,9 +16,12 @@ export class MpFeuerModule implements OnModuleInit {
     private readonly historyAccess: HistoryAccessRegistry,
     private readonly retention: RetentionRegistry,
     private readonly runs: MpFeuerRuns,
+    private readonly auditReferences: AuditReferenceRegistry,
+    private readonly em: EntityManager,
   ) {}
 
   onModuleInit(): void {
+    registerAuditReferences(this.auditReferences, this.em);
     this.historyAccess.registerPermission('mp_feuer.run', MP_FEUER_READ);
     this.historyAccess.registerPermission('mp_feuer.mapping', MP_FEUER_READ);
     // The rows read from the transfer files hold personal data; they go after the apply, at the latest after 7 days.

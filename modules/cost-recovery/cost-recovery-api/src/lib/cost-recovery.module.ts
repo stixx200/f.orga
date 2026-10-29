@@ -1,8 +1,9 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
-import { DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
+import { AuditReferenceRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, SearchRegistry } from '@forga/core-api';
 import { COST_RECOVERY_MANIFEST, COST_RECOVERY_SETTINGS } from '@forga/cost-recovery-contracts';
 import { EntityManager, wrap } from '@mikro-orm/core';
 import { COST_RECOVERY_MIGRATIONS } from '../migrations/index.js';
+import { registerAuditReferences } from './audit/audit.references.js';
 import { AddressBookEntity, IncidentOffenseEntity, NoticeEntity } from './cost-recovery.entities.js';
 import { PaymentsImport } from './imports/payments.import.js';
 import { CostRecoveryLists } from './lists/cost-recovery.lists.js';
@@ -28,9 +29,11 @@ export class CostRecoveryModule implements OnModuleInit {
     private readonly notices: NoticesService,
     private readonly deadlines: DeadlineRegistry,
     private readonly overdue: OverdueNotices,
+    private readonly auditReferences: AuditReferenceRegistry,
   ) {}
 
   onModuleInit(): void {
+    registerAuditReferences(this.auditReferences, this.em);
     for (const definition of this.moduleLists.definitions()) this.lists.register('cost-recovery', definition);
     this.historyAccess.registerPermission('cost_recovery.notice', 'cost-recovery.read');
     this.imports.register('cost-recovery', this.payments.profile());
