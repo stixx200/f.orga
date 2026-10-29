@@ -1,6 +1,6 @@
 import { defineEntity, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import type { Language, PrivacyNoticeSection, PrivacyRequestChannel, PrivacyRequestKind, PrivacyRequestStatus } from '@forga/core-contracts';
+import type { BreachNotificationVia, BreachRisk, BreachStatus, Language, PrivacyNoticeSection, PrivacyRequestChannel, PrivacyRequestKind, PrivacyRequestStatus } from '@forga/core-contracts';
 
 /** Rectification of a request as stored. */
 export interface StoredRectification {
@@ -32,7 +32,9 @@ export const PrivacyRequestSchema = defineEntity({
     identityNote: p.text().default(''),
     content: p.text().default(''),
     language: p.string().$type<Language>().default('de'),
-    /** Objection: processing activity it refers to. */
+    /** Objection: processing activity of the register it refers to. */
+    activityKey: p.string().nullable(),
+    /** Objection: further description; requests recorded before the register refer to an activity only by this text. */
     activity: p.text().default(''),
     /** Received + 1 month. */
     dueOn: p.string().length(10),
@@ -74,3 +76,48 @@ export const PrivacyNoticeSchema = defineEntity({
 });
 export class PrivacyNoticeEntity extends PrivacyNoticeSchema.class {}
 PrivacyNoticeSchema.setClass(PrivacyNoticeEntity);
+
+/**
+ * A data breach (Art. 33/34): when it became known (72 hours to notify the supervisory authority), what is affected,
+ * the measures and the notifications. Historized (the history is the documentation under Art. 33(5)); readable only
+ * with `core.privacy.manage`.
+ */
+export const PrivacyBreachSchema = defineEntity({
+  name: 'PrivacyBreachEntity',
+  schema: 'core',
+  tableName: 'privacy_breach',
+  indexes: [{ properties: ['status'] }],
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv7()),
+    title: p.string().length(200),
+    discoveredAt: p.datetime(),
+    occurredFrom: p.string().length(10).nullable(),
+    occurredUntil: p.string().length(10).nullable(),
+    description: p.text().default(''),
+    /** Processing activities of the register (keys). */
+    activityKeys: p.json<string[]>().defaultRaw("'[]'::jsonb").onCreate(() => []),
+    dataCategories: p.text().default(''),
+    health: p.boolean().default(false),
+    affectedCount: p.integer().nullable(),
+    /** Persons in the master data module; no foreign key across modules. */
+    affectedPersonIds: p.json<string[]>().defaultRaw("'[]'::jsonb").onCreate(() => []),
+    affectedSource: p.text().default(''),
+    consequences: p.text().default(''),
+    measures: p.text().default(''),
+    risk: p.string().$type<BreachRisk>().nullable(),
+    authorityNotifiedOn: p.string().length(10).nullable(),
+    authorityReference: p.string().length(200).default(''),
+    authorityNotRequired: p.boolean().default(false),
+    authorityNote: p.text().default(''),
+    subjectsNotifiedOn: p.string().length(10).nullable(),
+    subjectsNotifiedVia: p.string().$type<BreachNotificationVia>().nullable(),
+    subjectsNote: p.text().default(''),
+    status: p.string().$type<BreachStatus>().default('open'),
+    closedOn: p.string().length(10).nullable(),
+    createdAt: p.datetime().onCreate(() => new Date()),
+    createdBy: p.string().nullable(),
+    version: p.integer().version(),
+  },
+});
+export class PrivacyBreachEntity extends PrivacyBreachSchema.class {}
+PrivacyBreachSchema.setClass(PrivacyBreachEntity);

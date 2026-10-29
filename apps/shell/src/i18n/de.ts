@@ -1,9 +1,12 @@
 import { privacyDe } from './privacy';
+import { breachesDe, registerDe, registerAuditDe } from './register';
 import { transparencyAuditDe, transparencyAuditKeysDe, transparencyDe } from './transparency';
 
 /** German texts of the shell. Keep the keys in sync with `en.ts`. */
 export const de = {
   privacy: privacyDe,
+  register: registerDe,
+  breaches: breachesDe,
   transparency: transparencyDe,
   appName: 'f.orga',
   loading: 'Wird geladen …',
@@ -553,6 +556,7 @@ export const de = {
     no: 'nein',
     rawId: 'ID: {{id}}',
     keys: {
+      ...registerAuditDe.keys,
       factor: 'Faktor',
       recoveryCodesLeft: 'Verbleibende Wiederherstellungscodes',
       during: 'Bei',
@@ -643,6 +647,7 @@ export const de = {
       ...transparencyAuditKeysDe,
     },
     actions: {
+      ...registerAuditDe.actions,
       ...transparencyAuditDe,
       'retention.offered': 'Dem Archiv angeboten',
       'retention.exported': 'Export für das Archiv heruntergeladen',

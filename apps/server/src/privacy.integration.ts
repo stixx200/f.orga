@@ -77,7 +77,7 @@ describe('permission and settings', () => {
     await put('/core/settings/privacy.contacts', { dpo: { email: 'keine-adresse' } }, privacy).expect(400);
     await get('/core/settings/privacy.contacts', reader).expect(403);
     await put('/core/settings/privacy.selfServiceAccess', { mode: 'request', contact: 'Markus Vogt, Kommandant' }, privacy).expect(200);
-    await put('/core/settings/privacy.recipients', { recipients: [{ id: 'treasury', name: 'Stadtkasse' }] }, privacy).expect(200);
+    await put('/core/privacy/register/recipients', { recipients: [{ id: 'treasury', name: 'Stadtkasse' }] }, privacy).expect(200);
     // The security settings moved to the data protection page: its managers may change them.
     await put('/core/settings/security', { mailHealthWithoutNames: true, mailAllWithoutNames: false }, privacy).expect(200);
     await get('/core/security/status', privacy).expect(200);

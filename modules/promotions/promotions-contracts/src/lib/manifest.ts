@@ -75,6 +75,9 @@ export const PROMOTIONS_MANIFEST = {
     activities: [
       {
         key: 'promotions.promotions',
+        subjects: [{ de: 'Angehörige der Feuerwehr', en: 'Members of the fire brigade' }],
+        categories: [{ de: 'Dienstgrad, Dienstzeit, Lehrgänge, Ausschlüsse mit Grund, Entscheidungen', en: 'Rank, years of service, courses, exclusions with reason, decisions' }],
+        legalBasisHint: { de: 'Feuerwehrgesetz Baden-Württemberg (FwG) und Regeln für Beförderungen; mit dem DSB festlegen', en: 'Fire Brigade Act of Baden-Württemberg (FwG) and promotion rules; decide with the DPO' },
         name: { de: 'Beförderungen', en: 'Promotions' },
         purpose: { de: 'Vorbereitung und Nachweis der Beförderungen nach den Beförderungsregeln', en: 'Preparing and documenting promotions under the promotion rules' },
       },

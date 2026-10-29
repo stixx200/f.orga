@@ -76,7 +76,7 @@ export class ListsController {
     @Res() res: Response,
   ): Promise<void> {
     if (!LIST_FORMATS.includes(format as ListFormat)) throw new BadRequestException({ code: 'lists.unknownFormat' });
-    const { data, definition, language } = await this.build(id, query, user);
+    const { data, definition, language, params, personIds } = await this.build(id, query, user);
     const context = {
       data,
       language,
@@ -88,7 +88,8 @@ export class ListsController {
     };
     const file =
       format === 'pdf' ? await renderPdf(context) : format === 'xlsx' ? await renderXlsx(context) : renderCsv(context);
-    await this.audit.log('lists.exported', { listId: id, format, rows: data.rows.length });
+    // Parameters and the persons named: a lost printout can be traced to the persons affected (data breach).
+    await this.audit.log('lists.exported', { listId: id, format, rows: data.rows.length, params, ...(personIds ? { personIds } : {}) });
 
     const name = `${data.title.replace(/[^\p{L}\p{N} _-]/gu, '').trim() || id}.${format}`;
     res.setHeader('Content-Type', CONTENT_TYPES[format as ListFormat]);
@@ -113,6 +114,6 @@ export class ListsController {
       columns: content.columns ?? definition.columns,
       rows: content.rows,
     };
-    return { data, definition, language };
+    return { data, definition, language, params: parsed as Record<string, unknown>, personIds: content.personIds ? [...new Set(content.personIds)] : null };
   }
 }

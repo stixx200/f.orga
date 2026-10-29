@@ -149,6 +149,7 @@ export class MasterdataModule implements OnModuleInit {
           street: p.street,
           postalCode: p.postalCode,
           city: p.city,
+          phone: p.phoneMobile || p.phonePrivate,
         })),
       catalogEntries: () => this.em.fork().count(CatalogEntry, {}),
       // A linked user reads and changes the person's own data including the sensitive fields.
@@ -161,6 +162,8 @@ export class MasterdataModule implements OnModuleInit {
         const p = await this.em.fork().findOne(Person, id);
         return p && { salutation: p.salutation, title: p.title, firstName: p.firstName, lastName: p.lastName, street: p.street, postalCode: p.postalCode, city: p.city };
       },
+      readablePersonIds: async (user) => (await this.persons.findVisible(user, READ)).map((p) => p.id),
+      allPersonIds: async () => (await this.em.fork().find(Person, {}, { fields: ['id'] })).map((p) => p.id),
       // Restriction of processing (Art. 18): the core leaves these persons out of deadlines and search.
       restrictedPersonIds: () => this.personPrivacy.restrictedIds(),
       restrictProcessing: (personId, restriction) => this.personPrivacy.restrict(personId, restriction),

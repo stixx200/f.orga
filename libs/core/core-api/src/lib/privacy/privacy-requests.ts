@@ -61,6 +61,7 @@ import { ZodPipe } from '../zod.pipe.js';
 import { PrivacyRequestEntity, type StoredRectification } from './privacy.entities.js';
 import { PrivacyNoticeService } from './privacy-notice.js';
 import { formatDay, KIND_LABELS, lines, pdfParagraphs } from './privacy-text.js';
+import { PrivacyRegister } from './register.js';
 
 const deadlineOf = (r: PrivacyRequestEntity) => r.extendedUntil ?? r.dueOn;
 const isOpen = (r: PrivacyRequestEntity) => OPEN_REQUEST_STATUSES.includes(r.status);
@@ -81,6 +82,7 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
     private readonly audit: Audit,
     private readonly registry: DeadlineRegistry,
     private readonly references: AuditReferenceRegistry,
+    private readonly register: PrivacyRegister,
     @Inject(FORGA_CORE_OPTIONS) private readonly options: ForgaCoreOptions,
   ) {}
 
@@ -170,6 +172,8 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
         identityNote: r.identityNote,
         content: r.content,
         language: r.language,
+        activityKey: r.activityKey ?? null,
+        activityName: this.register.activityName(r.activityKey),
         activity: r.activity,
         dueOn: r.dueOn,
         extendedUntil: r.extendedUntil ?? null,
@@ -207,6 +211,7 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
     if (known && !known.length) throw new BadRequestException({ code: 'privacy.personUnknown' });
     if (input.receivedOn > berlinDate()) throw new BadRequestException({ code: 'privacy.receivedInFuture' });
     if (input.restrict && !['objection', 'restriction'].includes(input.kind)) throw new BadRequestException({ code: 'privacy.restrictNotForKind' });
+    await this.assertActivity(input.activityKey);
     const em = this.em.fork();
     const request = em.create(PrivacyRequestEntity, {
       personId: input.personId,
@@ -217,6 +222,7 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
       identityNote: input.identityNote,
       content: input.content,
       language: input.language,
+      activityKey: input.activityKey,
       activity: input.activity,
       dueOn: addMonthsToDate(input.receivedOn, 1),
       createdBy,
@@ -231,6 +237,17 @@ export class PrivacyRequests implements DeadlineProvider, OnModuleInit {
       }
     }
     return request;
+  }
+
+  /** An objection refers to an activity of the register (core or an active module). */
+  async assertActivity(key: string | null): Promise<void> {
+    if (key && !(await this.register.isActive(key))) throw new BadRequestException({ code: 'privacy.activityUnknown' });
+  }
+
+  /** The activity of an objection as text in a language: its name, followed by the further description. */
+  activityText(request: PrivacyRequestEntity, language: Language): string {
+    const activity = this.register.activityName(request.activityKey)?.[language];
+    return [activity, request.activity].filter(Boolean).join(': ');
   }
 
   /**
@@ -318,6 +335,7 @@ export class PrivacyRequestsController {
     if (input.assigneeId && input.assigneeId !== request.assigneeId && !(await this.assignees.list()).some((a) => a.id === input.assigneeId)) {
       throw new BadRequestException({ code: 'privacy.assigneeWithoutPermission' });
     }
+    if (input.activityKey !== (request.activityKey ?? null)) await this.requests.assertActivity(input.activityKey);
     const status = input.status && request.status !== 'extended' ? input.status : request.status;
     const changedStatus = status !== request.status;
     em.assign(request, {
@@ -328,6 +346,7 @@ export class PrivacyRequestsController {
       content: input.content,
       notes: input.notes,
       language: input.language,
+      activityKey: input.activityKey,
       activity: input.activity,
     });
     await em.flush();
@@ -444,7 +463,7 @@ export class PrivacyRequestsController {
       dueOn: formatDay(request.dueOn, language),
       extendedUntil: formatDay(request.extendedUntil, language),
       kind,
-      activity: request.activity,
+      activity: this.requests.activityText(request, language),
       reason: request.status === 'rejected' ? request.rejectionReason : request.extensionReason,
       authority: lines(contacts.authority.name, contacts.authority.address, contacts.authority.website).replaceAll('\n', ', '),
       today: formatDay(today, language),

@@ -41,6 +41,9 @@ export const CLOTHING_MANIFEST = {
     activities: [
       {
         key: 'clothing.issues',
+        subjects: [{ de: 'Angehörige der Feuerwehr', en: 'Members of the fire brigade' }],
+        categories: [{ de: 'Größen, ausgegebene und zurückgenommene Stücke', en: 'Sizes, items issued and returned' }],
+        legalBasisHint: { de: 'Ausstattung der Feuerwehr (FwG), Arbeitsschutz; mit dem DSB festlegen', en: 'Equipment of the fire brigade (FwG), occupational safety; decide with the DPO' },
         name: { de: 'Kleiderkammer', en: 'Clothing store' },
         purpose: { de: 'Ausgabe, Rücknahme und Pflege der persönlichen Schutzausrüstung', en: 'Issue, return and care of personal protective equipment' },
       },

@@ -259,8 +259,8 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Frist (eingegangen + 1 Monat), Fristverlängerung, über die Verlängerung unterrichtet | `dueOn`, `deadline`, `extendedUntil`, `extensionReason`, `extensionNotifiedOn`; Aufgaben `privacy-request`, `privacy-extension-notice` |
 | Bearbeiter | assignee (`assigneeId`, `GET /api/core/privacy/assignees`) |
 | Antwortschreiben | reply letter (`GET /api/core/privacy/requests/:id/reply.pdf`, Bausteine `reply…`, `REPLY_TEXT_OF_KIND`) |
-| Empfänger informieren (Art. 19) | recipients (`PrivacyRequest.recipients`, Einstellungsabschnitt `privacy.recipients`) |
-| Bezug des Widerspruchs (Verarbeitungstätigkeit) | `activity` |
+| Empfänger informieren (Art. 19) | recipients (`PrivacyRequest.recipients`, Auswahl aus dem Verzeichnis `RecipientOption`, `GET /api/core/privacy/register/recipients`) |
+| Bezug des Widerspruchs (Verarbeitungstätigkeit, genauer Bezug) | `activityKey`, `activityName`; `activity` (Freitext, bei älteren Anfragen der einzige Bezug) |
 | Löschprüfung | erasure check (`PersonDataHandler.erasure`) |
 | Einschränkung der Verarbeitung, eingeschränkte Person | processing restriction (`masterdata.person.restricted_at`, `restriction_reason`, `restricted_until`, `restriction_request_id`; `Person.processingRestriction`, `ProcessingRestriction`, `RestrictedPerson`; `PERSON_DIRECTORY.isRestricted`, `restrictedIds`; `assertNotRestricted`, `refuseRestricted`; Fehlercode `privacy.processingRestricted`) |
 | Grund der Einschränkung (Richtigkeit bestritten, unrechtmäßig, Rechtsansprüche, Widerspruch wird geprüft, Aufbewahrungsfrist läuft) | `ProcessingRestrictionReason` (`accuracy-contested`, `unlawful-processing`, `legal-claims`, `objection-pending`, `retention`) |
@@ -277,7 +277,13 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Hinweis bei der ersten Anmeldung, „Zur Kenntnis genommen“ | first-login notice, acknowledgement (`Session.privacyNotice.due`, `core.user.privacy_notice_version`, `privacy_notice_acknowledged_at`, `POST /api/core/privacy/notice/acknowledge`) |
 | Information nach Art. 13/14, „Information erteilt am“ | privacy information (`masterdata.person.privacy_informed_on`, `privacy_informed_via`, `PrivacyInformation`, `UninformedPerson`) |
 | Selbstauskunft in Mein Bereich, „Auskunft anfordern“ | self-service access (`privacy.selfServiceAccess`: `mode` `request`/`instant`, `contact`; `POST /api/core/privacy/me/requests`) |
-| Verzeichnis der Verarbeitungstätigkeiten, Verarbeitungstätigkeit | record of processing activities, processing activity (`ProcessingActivity` in `privacy.activities` im Manifest, `CORE_ACTIVITIES`; Ergänzungen in den Einstellungen) |
+| Verzeichnis der Verarbeitungstätigkeiten, Verarbeitungstätigkeit | record of processing activities, processing activity (`ProcessingRegister`, `RegisterActivity`, `PrivacyRegister`; `ProcessingActivity` in `privacy.activities` im Manifest, `CORE_ACTIVITIES`) |
+| Betroffene, Datenkategorien, besondere Kategorien, Hinweis zur Rechtsgrundlage (je Tätigkeit) | `subjects`, `categories`, `health`, `healthNote`, `legalBasisHint` an `ProcessingActivity` |
+| Ergänzung der Gemeinde je Tätigkeit (Rechtsgrundlage, weitere Empfänger, Drittland, Bemerkungen, geprüft am/von) | activity record (Einstellungsabschnitt `privacy.activities`, `PrivacyActivities`, `ActivityRecord`: `legalBasis`, `recipients`, `thirdCountry`, `remarks`, `reviewedAt`, `reviewedBy`) |
+| Empfänger für alle Tätigkeiten | general recipients (`PrivacyActivities.general`, früher Einstellungsabschnitt `privacy.recipients`) |
+| Herkunft eines Empfängers (Modul, Gemeinde, alle Tätigkeiten, API-Token, Konfiguration) | `RecipientSource` (`module`, `municipality`, `general`, `token`, `processor`) |
+| Technische Empfänger, Auftragsverarbeiter | processors (`ProcessingRegister.processors`: E-Mail-Server, Anmeldedienst) |
+| Technische Maßnahmen | technical measures (`TechnicalMeasure`, `TechnicalMeasureRegistry`, `CoreMeasures`) |
 | Verantwortlicher, Datenschutzbeauftragter, Aufsichtsbehörde | controller, data protection officer, supervisory authority (`privacy.contacts`, `PrivacyContacts`: `controller`, `dpo`, `authority`) |
 | Gesundheitsdaten (besondere Kategorie) | `health: true` an Feldern, Fristarten und Tätigkeiten |
 | Leseprotokoll, Bereich des Leseprotokolls | access log (`core.access_log`, `AccessLog` mit `record`, `query`, `registerArea`; Aufbewahrungskategorie `core.access-log`) |
@@ -289,7 +295,14 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Beim Anbieter bestätigen | Einstellung `oidc.stepUpViaProvider`, `POST /api/core/oidc/step-up` |
 | Zweiten Faktor zurücksetzen | `DELETE /api/core/users/:id/mfa`, Audit `auth.mfa-reset` |
 | Datenschutz verwalten | Recht `core.privacy.manage` |
-| Datenpanne | data breach |
+| Datenpanne | data breach (`core.privacy_breach`, `PrivacyBreach`, `PrivacyBreaches`) |
+| Bekannt geworden am, Meldung bis (72 Stunden) | `discoveredAt`, `notifyBy`, `BREACH_NOTIFICATION_HOURS`; Aufgaben `privacy-breach`, `privacy-breach-subjects` |
+| Risiko (unwahrscheinlich, Risiko, hohes Risiko) | `BreachRisk` (`unlikely`, `risk`, `high`) |
+| Meldung an die Aufsichtsbehörde, Aktenzeichen, nicht meldepflichtig | `authorityNotifiedOn`, `authorityReference`, `authorityNotRequired`, `authorityNote` |
+| Benachrichtigung der Personen (Art. 34) | `subjectsNotifiedOn`, `subjectsNotifiedVia` (`BreachNotificationVia`) |
+| Betroffene Personen ermitteln | affected persons (`AffectedPersons`, `POST /api/core/privacy/breach-tools/affected`, Quellen `audit` und `account`; `personIds` im Audit `lists.exported`) |
+| Protokolle exportieren | protocols (`ProtocolRegistry`, `ProtocolSource`, `GET /api/core/privacy/breach-tools/protocols.xlsx`) |
+| Alle Sitzungen beenden und alle Tokens widerrufen | lockdown (`POST /api/core/privacy/breach-tools/lockdown`, Audit `privacy.breach-lockdown`) |
 | Stufe der Installation (Echt-, Test-, Entwicklungssystem) | stage (`FORGA_STAGE`: `production`, `test`, `development`; `ForgaStage`, `forgaStage()`, `isTestStage()`, `useStage()`) |
 | Band „Testsystem – nur Demodaten“ | `StageBand` |
 | Im Testsystem gesperrt | locked in test stage (`imports.lockedInTestStage`, `mp-feuer.lockedInTestStage`, `ImportProfile.personData`, `lockedInTestStage`) |

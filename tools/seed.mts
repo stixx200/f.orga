@@ -1263,7 +1263,19 @@ async function privacy(persons: PersonRef[]): Promise<void> {
     authority: {},
   });
   await call('PUT', 'core/settings/privacy.selfServiceAccess', { mode: 'request', contact: 'Kommandant der Feuerwehr Musterstadt' });
-  await call('PUT', 'core/settings/privacy.recipients', { recipients: [{ id: 'treasury', name: 'Stadtkasse Musterstadt (Beispiel)', note: 'Bankverbindung, Entschädigung' }] });
+  // Register of processing activities: recipients for all activities and one activity completed by the municipality.
+  await call('PUT', 'core/privacy/register/recipients', { recipients: [{ id: 'treasury', name: 'Stadtkasse Musterstadt (Beispiel)', note: 'Bankverbindung, Entschädigung' }] });
+  const register = await call<{ activities: { key: string; record: { version: number; legalBasis: string } }[] }>('GET', 'core/privacy/register');
+  const personnel = register.activities.find((a) => a.key === 'masterdata.persons');
+  if (personnel && !personnel.record.legalBasis) {
+    await call('PUT', 'core/privacy/register/activities/masterdata.persons', {
+      version: personnel.record.version,
+      legalBasis: '[Beispiel] Feuerwehrgesetz Baden-Württemberg und Feuerwehrsatzung der Stadt Musterstadt – mit dem DSB festlegen',
+      recipients: [{ id: 'accident-insurance', name: 'Unfallkasse (Beispiel)', note: 'nur bei Dienstunfällen' }],
+      thirdCountry: '',
+      remarks: '',
+    });
+  }
   const active = persons.filter((p) => p.status !== 'left');
   // Information after the transfer: given to most members, a few are still open.
   const informed = active.slice(0, Math.max(0, active.length - 12)).map((p) => p.id);
@@ -1274,6 +1286,30 @@ async function privacy(persons: PersonRef[]): Promise<void> {
   if (first) await call('POST', 'core/privacy/requests', { personId: first.id, kind: 'access', receivedOn: day(-24), channel: 'letter', identityChecked: true, identityNote: 'Unterschrift und Anschrift', content: 'Bitte um Auskunft über meine gespeicherten Daten.' });
   if (second) await call('POST', 'core/privacy/requests', { personId: second.id, kind: 'rectification', receivedOn: day(-5), channel: 'email', content: 'Der Lehrgang Maschinist fehlt in meinen Daten.' });
   console.log(`  Information für ${informed.length} Personen, 2 Anfragen`);
+  await breach();
+}
+
+/** A fictitious, closed data breach as example of the documentation (Art. 33(5)). */
+async function breach(): Promise<void> {
+  if ((await call<unknown[]>('GET', 'core/privacy/breaches?state=all')).length) return;
+  const discoveredAt = new Date(Date.now() - 40 * 86_400_000);
+  const created = await call<{ id: string; version: number }>('POST', 'core/privacy/breaches', {
+    title: '[Beispiel] Ausdruck der Telefonliste im Schulungsraum liegen gelassen',
+    discoveredAt: discoveredAt.toISOString(),
+    occurredFrom: day(-41),
+    occurredUntil: day(-40),
+    description: 'Nach dem Dienstabend lag ein Ausdruck der Telefonliste einer Abteilung offen im Schulungsraum, der auch von Vereinen genutzt wird.',
+    activityKeys: ['masterdata.persons'],
+    dataCategories: 'Name, Mobilnummer',
+    affectedCount: 25,
+    consequences: 'Unerwünschte Anrufe möglich; keine besonderen Kategorien betroffen.',
+    measures: 'Ausdruck vernichtet, Hinweis „nach Gebrauch vernichten“ im Dienstabend wiederholt.',
+    risk: 'unlikely',
+    authorityNotRequired: true,
+    authorityNote: '[Beispiel] Risiko unwahrscheinlich: Raum abgeschlossen, Ausdruck nach wenigen Stunden gefunden.',
+  });
+  await call('POST', `core/privacy/breaches/${created.id}/close`, { version: created.version, closedOn: day(-39) });
+  console.log('  1 Datenpanne (Beispiel, abgeschlossen)');
 }
 
 /**

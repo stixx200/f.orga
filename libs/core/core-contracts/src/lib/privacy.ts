@@ -134,16 +134,10 @@ export const PrivacySelfService = z.object({
 export type PrivacySelfService = z.infer<typeof PrivacySelfService>;
 
 /**
- * Setting `privacy.recipients`: recipients to inform about a rectification, erasure or restriction (Art. 19), e.g. the
- * treasury. A plain list until the register of processing activities (phase 3) names recipients per activity.
+ * Former setting `privacy.recipients` (recipients for Art. 19). Replaced by the register of processing activities
+ * (`privacy.activities`): the server moves stored entries to its general recipients at startup, with their IDs.
  */
-export const PrivacyRecipients = z.object({
-  recipients: z
-    .array(z.object({ id: z.string().trim().min(1).max(100), name: z.string().trim().min(1).max(200), note: z.string().trim().max(500).default('') }))
-    .max(50)
-    .default([]),
-});
-export type PrivacyRecipients = z.infer<typeof PrivacyRecipients>;
+export const LEGACY_RECIPIENTS_SECTION = 'privacy.recipients';
 
 // ---------- Privacy notice ----------
 
@@ -281,7 +275,9 @@ export const PrivacyRequestInput = z.object({
   content: z.string().trim().max(5000).default(''),
   /** Language of reply and access report. */
   language: Language.default('de'),
-  /** Objection: the processing activity it refers to (free text or module until the register exists). */
+  /** Objection: the processing activity of the register it refers to. */
+  activityKey: z.string().max(100).nullable().default(null),
+  /** Objection: further description of what it refers to (requests recorded before the register: the only reference). */
   activity: line,
   /** Objection or restriction: restrict the processing of the person right away (until the decision). */
   restrict: z.boolean().default(false),
@@ -298,6 +294,7 @@ export const PrivacyRequestUpdate = z.object({
   content: z.string().trim().max(5000).default(''),
   notes: z.string().trim().max(10000).default(''),
   language: Language,
+  activityKey: z.string().max(100).nullable().default(null),
   activity: line,
 });
 export type PrivacyRequestUpdate = z.input<typeof PrivacyRequestUpdate>;
@@ -381,6 +378,10 @@ export const PrivacyRequest = z.object({
   identityNote: z.string(),
   content: z.string(),
   language: Language,
+  /** Objection: processing activity of the register (`null` for requests recorded before the register). */
+  activityKey: z.string().nullable(),
+  /** Name of `activityKey` in both languages; `null` if the activity is no longer in the register (module removed). */
+  activityName: LocalizedText.nullable(),
   activity: z.string(),
   /** Received + 1 month. */
   dueOn: z.string(),

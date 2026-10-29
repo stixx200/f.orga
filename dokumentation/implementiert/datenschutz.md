@@ -1,6 +1,6 @@
 # Datenschutz (umgesetzter Stand)
 
-Was vom [Datenschutzkonzept](../geplant/datenschutz.md) im Code existiert: Phase 1 (L1, L2, L5 teilweise, L6, L18 teilweise), aus Phase 2 Datenschutzhinweis und Information (L4), Betroffenenanfragen mit Frist und Einschränkung der Verarbeitung (L7 ohne Löschprüfung) sowie Widerspruch (L19) und die Auskunft als PDF (L3), aus Phase 3 Einwilligungen (L9), Berichtigung (L12) sowie Leseprotokoll und Transparenz der Impersonation (L15). Offene Punkte stehen dort. Weitere umgesetzte Bausteine: Rechte je Abteilung, sensible Felder, Historie und Audit-Log ([Architektur](architektur.md#sicherheit)), Auskunft als JSON und Aufbewahrungsplan ([Aufbewahrung](aufbewahrung.md)).
+Was vom [Datenschutzkonzept](../geplant/datenschutz.md) im Code existiert: Phase 1 (L1, L2, L5 teilweise, L6, L18 teilweise), aus Phase 2 Datenschutzhinweis und Information (L4), Betroffenenanfragen mit Frist und Einschränkung der Verarbeitung (L7 ohne Löschprüfung) sowie Widerspruch (L19) und die Auskunft als PDF (L3), aus Phase 3 Verzeichnis der Verarbeitungstätigkeiten mit technischen Maßnahmen (L8), Einwilligungen (L9), Berichtigung (L12), Leseprotokoll und Transparenz der Impersonation (L15) sowie Datenpannen (L20). Offene Punkte stehen dort. Weitere umgesetzte Bausteine: Rechte je Abteilung, sensible Felder, Historie und Audit-Log ([Architektur](architektur.md#sicherheit)), Auskunft als JSON und Aufbewahrungsplan ([Aufbewahrung](aufbewahrung.md)).
 
 ## Zweiter Faktor bei sensiblen Daten (Step-up)
 
@@ -81,7 +81,7 @@ Erstellen, Ansehen, Herunterladen und Übergeben verlangen `core.privacy.manage`
 - `DescribeContext` (`ctx`): Sprache, Stichtag, `text`/`t`, `date` (`21.10.2026` bzw. `21 Oct 2026`, Zeiten in Europe/Berlin), `dateTime`, `time`, `money`, `number`, `yesNo`, `value` („–“ für leer), `iban` („IBAN endet auf 4711“), `actor(userId)` und `person(personId)`: die Person selbst mit Namen bzw. „Sie selbst“, andere Benutzer nur mit ihrer Funktion (Namen ihrer Rollen), technische Benutzer als „Schnittstelle „Name““, Personen ohne Konto als „andere Person“, ohne Benutzer „automatisch (System)“.
 - Regeln: Klartext, keine IDs, keine Feldnamen aus dem Code, andere Personen nie mit Namen, große Mengen als Tabelle mit Summen je Jahr, interne Bemerkungen gehören dazu.
 
-**Manifest:** `privacy: { personData, activities }`. `personData: true` heißt, das Modul speichert Daten über Personen; dann muss es `describePerson` oder `anonymize` (`PersonDataRegistry`) anbieten, sonst bricht der Server beim Start ab (`assertPersonDataComplete`), wie bei der Historie. Tätigkeiten (`ProcessingActivity`: `key` mit der Modul-ID als Präfix, `name`, `purpose`, `recipients`, `retention` mit Kategorien des Aufbewahrungsplans) liefern Zweck, Empfänger und Speicherdauer je Abschnitt; die Tätigkeit des Core ist `core.accounts` (`CORE_ACTIVITIES`).
+**Manifest:** `privacy: { personData, activities }`. `personData: true` heißt, das Modul speichert Daten über Personen; dann muss es `describePerson` oder `anonymize` (`PersonDataRegistry`) anbieten, sonst bricht der Server beim Start ab (`assertPersonDataComplete`), wie bei der Historie. Tätigkeiten (`ProcessingActivity`: `key` mit der Modul-ID als Präfix, `name`, `purpose`, `recipients`, `retention` mit Kategorien des Aufbewahrungsplans, dazu für das [Verzeichnis](#verzeichnis-der-verarbeitungstätigkeiten-l8) `subjects`, `categories`, `health`, `healthNote`, `legalBasisHint`) liefern Zweck, Empfänger und Speicherdauer je Abschnitt; die Tätigkeit des Core ist `core.accounts` (`CORE_ACTIVITIES`).
 
 | Bereich | Inhalt |
 | --- | --- |
@@ -328,9 +328,11 @@ Einstellung `security` (nur Verwalter lesen sie: `core.settings.manage` oder `co
 | Anfragen | `/admin/privacy` | `core.privacy.manage` | Kacheln „Frist in 7 Tagen“, „Offene Anfragen“ (älteste), „Eingeschränkte Personen“, „Information nach Art. 13/14 offen“; Filter offen/abgeschlossen/alle; Tabelle Art, Person, Eingang mit Weg, Frist (rot überfällig, gelb in 7 Tagen), Stand, Bearbeiter; „Anfrage erfassen …“; Karte „Eingeschränkte Personen“ |
 | Anfrage | `/admin/privacy/requests/:id` | `core.privacy.manage` | siehe [Betroffenenanfragen](#betroffenenanfragen-l7-l19) |
 | Information | `/admin/privacy/information` | `core.privacy.manage` | siehe [Information nach Art. 13/14](#information-nach-art-1314) |
+| Verzeichnis | `/admin/privacy/register` | `core.privacy.manage` | siehe [Verzeichnis der Verarbeitungstätigkeiten](#verzeichnis-der-verarbeitungstätigkeiten-l8) |
+| Datenpannen, Datenpanne | `/admin/privacy/breaches`, `/admin/privacy/breaches/:id` | `core.privacy.manage` | siehe [Datenpannen](#datenpannen-l20) |
 | Einstellungen | `/admin/privacy/settings?tab=` | je Reiter | Kontakte, Texte, Einwilligungen, Selbstauskunft (`core.privacy.manage`); Sicherheit, Aufbewahrung (`core.privacy.manage` oder `core.settings.manage`) |
 
-Die Reiter „Datenschutz“ (Aufbewahrungsfristen) und „Sicherheit“ der Seite „Einstellungen“ sind hierher gezogen; alte Links (`/admin/settings?tab=privacy`, `?tab=security`) leiten weiter. Der Reiter „Verzeichnis“ (L8) fehlt noch.
+Die Reiter „Datenschutz“ (Aufbewahrungsfristen) und „Sicherheit“ der Seite „Einstellungen“ sind hierher gezogen; alte Links (`/admin/settings?tab=privacy`, `?tab=security`) leiten weiter.
 
 **Einstellungsabschnitte** (`core.setting`, historisiert; lesen und ändern nur ihre Verwalter, `SettingsAccess.managers`):
 
@@ -339,7 +341,7 @@ Die Reiter „Datenschutz“ (Aufbewahrungsfristen) und „Sicherheit“ der Sei
 | `privacy.contacts` | `PrivacyContacts` | `core.privacy.manage` | `controller` (`name`, `address`, `representedBy`), `dpo` (`name`, `address`, `email`, `phone`), `authority` (`name`, vorbelegt mit dem Landesbeauftragten für den Datenschutz und die Informationsfreiheit Baden-Württemberg, `address`, `website`) |
 | `privacy.texts` | `PrivacyTexts`, `PrivacyTextBlock` | `core.privacy.manage`, nur über die eigenen Endpunkte (`PUT /api/core/settings/privacy.texts` antwortet `400 settings.dedicatedEndpoint`) | Textbausteine, siehe unten |
 | `privacy.selfServiceAccess` | `PrivacySelfService` | `core.privacy.manage` | `mode` `request` (Standard) oder `instant`; `contact` (Ansprechpartner in Mein Bereich) |
-| `privacy.recipients` | `PrivacyRecipients` | `core.privacy.manage` | Empfänger für Art. 19 (`id`, `name`, `note`), bis das Verzeichnis der Verarbeitungstätigkeiten Empfänger je Tätigkeit nennt |
+| `privacy.activities` | `PrivacyActivities`, `ActivityRecord` | `core.privacy.manage`, nur über die eigenen Endpunkte (`settings.dedicatedEndpoint`) | Ergänzungen der Gemeinde je Verarbeitungstätigkeit und Empfänger für alle Tätigkeiten, siehe [Verzeichnis](#verzeichnis-der-verarbeitungstätigkeiten-l8) |
 | `privacy.consents` | `PrivacyConsents`, `ConsentDefinition` | `core.privacy.manage`, nur über die eigenen Endpunkte | Katalog der Einwilligungen, siehe [Einwilligungen](#einwilligungen-l9) |
 | `privacy` (Aufbewahrung), `security` | wie bisher | `core.settings.manage` oder `core.privacy.manage` | |
 
@@ -390,7 +392,8 @@ Die meisten Mitglieder haben kein Benutzerkonto. An der Person stehen deshalb �
 | `kind` | `access` Auskunft, `rectification` Berichtigung, `erasure` Löschung, `restriction` Einschränkung, `objection` Widerspruch, `consent-withdrawal` Widerruf einer Einwilligung |
 | `receivedOn`, `channel` | eingegangen am (nicht in der Zukunft), Weg: `letter` schriftlich, `email`, `in-person` persönlich, `my-area` Mein Bereich |
 | `identityChecked`, `identityNote` | Identität geprüft und wie (bei Mein Bereich durch die Anmeldung) |
-| `content`, `language`, `activity` | Inhalt, Sprache von Antwort und Auskunft, beim Widerspruch die Verarbeitungstätigkeit als Text (bis es das Verzeichnis gibt) |
+| `content`, `language` | Inhalt, Sprache von Antwort und Auskunft |
+| `activityKey`, `activity` | beim Widerspruch die Verarbeitungstätigkeit aus dem [Verzeichnis](#verzeichnis-der-verarbeitungstätigkeiten-l8) (nur Kern und aktive Module, sonst `400 privacy.activityUnknown`; die Antwort nennt `activityName`) und der genauere Bezug als Text; Anfragen von vor dem Verzeichnis haben nur den Text |
 | `dueOn` | eingegangen + 1 Monat (Art. 12 Abs. 3; am Monatsende auf den letzten Tag gekürzt, `addMonthsToDate`) |
 | `extendedUntil`, `extensionReason`, `extensionNotifiedOn` | Verlängerung um 1 oder 2 Monate mit Begründung (mindestens 10 Zeichen), nur einmal und nur vor Ablauf der Frist; Person unterrichtet am |
 | `status` | `received` eingegangen, `in-review` in Prüfung, `extended` verlängert, `done` erledigt, `rejected` abgelehnt (mit Begründung) |
@@ -405,9 +408,9 @@ Die Auskunft als JSON (`GET /api/core/export/person/:personId`) enthält die Anf
 
 **Antwortschreiben** `GET /api/core/privacy/requests/:id/reply.pdf?text=&language=`: Brief mit Briefkopf, Anschrift der Person, Ort und Datum, Betreff und dem Baustein mit gefüllten Platzhaltern; ohne `text` der Baustein der Art (`REPLY_TEXT_OF_KIND`), bei abgelehnten Anfragen `replyRejection`. Ein ungeprüfter Baustein trägt den Vermerk „Vorlage – vor dem Versand mit dem Datenschutzbeauftragten prüfen“. Nur Bausteine `reply…` (sonst `400 privacy.noReplyText`). Audit `privacy.reply-created`.
 
-**Seite der Anfrage** (Mockup `anfrage.html` ohne die Löschprüfung): Eingang, Person (Link auf den Reiter „Datenschutz“), Identität, Inhalt, Bezug, Sprache, Frist; Warnung zur Unterrichtung über die Verlängerung; Bearbeitung (Stand, Bearbeiter, Sprache, Identität, Inhalt, Notizen, „Frist verlängern …“, „Abschließen …“ mit Ergebnis, Datum und Pflichtbegründung bei Ablehnung, „Wieder öffnen“); bei Berichtigung, Löschung und Einschränkung „Empfänger informieren (Art. 19)“ als Checkliste aus `privacy.recipients`; bei Einschränkung, Widerspruch, Löschung und Berichtigung die Einschränkung der Person mit „Verarbeitung einschränken …“ bzw. „Einschränkung aufheben …“; bei Auskunft der Stand der Auskunft; „Antwortschreiben (PDF)“ mit Auswahl des Bausteins.
+**Seite der Anfrage** (Mockup `anfrage.html` ohne die Löschprüfung): Eingang, Person (Link auf den Reiter „Datenschutz“), Identität, Inhalt, Bezug, Sprache, Frist; Warnung zur Unterrichtung über die Verlängerung; Bearbeitung (Stand, Bearbeiter, Sprache, Identität, Inhalt, Notizen, „Frist verlängern …“, „Abschließen …“ mit Ergebnis, Datum und Pflichtbegründung bei Ablehnung, „Wieder öffnen“); bei Berichtigung, Löschung und Einschränkung „Empfänger informieren (Art. 19)“ als Checkliste aus den Empfängern des Verzeichnisses (`GET /api/core/privacy/register/recipients`: Empfänger für alle Tätigkeiten, aus den Modulen, von der Gemeinde ergänzte und API-Tokens, je einmal mit ihren Tätigkeiten; ohne E-Mail-Server und Anmeldedienst); bei Einschränkung, Widerspruch, Löschung und Berichtigung die Einschränkung der Person mit „Verarbeitung einschränken …“ bzw. „Einschränkung aufheben …“; bei Auskunft der Stand der Auskunft; „Antwortschreiben (PDF)“ mit Auswahl des Bausteins.
 
-**Widerspruch (L19):** Art `objection` mit `activity`. „Verarbeitung bis zur Entscheidung einschränken“ beim Erfassen (`restrict: true`, nur bei Widerspruch und Einschränkung, sonst `400 privacy.restrictNotForKind`) schränkt die Person sofort ein (Grund `objection-pending` bzw. `accuracy-contested`, mit `requestId`). Die Entscheidung mit Begründung steht im Antwortschreiben `replyObjection` bzw. `replyRejection`.
+**Widerspruch (L19):** Art `objection` mit `activityKey` (Tätigkeit des Verzeichnisses) und `activity` (genauer Bezug). Der Platzhalter `{activity}` der Antwortschreiben nennt beides („Personalverwaltung: Telefonliste“). „Verarbeitung bis zur Entscheidung einschränken“ beim Erfassen (`restrict: true`, nur bei Widerspruch und Einschränkung, sonst `400 privacy.restrictNotForKind`) schränkt die Person sofort ein (Grund `objection-pending` bzw. `accuracy-contested`, mit `requestId`). Die Entscheidung mit Begründung steht im Antwortschreiben `replyObjection` bzw. `replyRejection`.
 
 **Endpunkte** (`core.privacy.manage`, außer Mein Bereich und Datenschutzhinweis):
 
@@ -464,3 +467,87 @@ An der Person (`masterdata.person`): `restricted_at`, `restriction_reason` (`acc
 Weiter verarbeitet werden (Art. 18 Abs. 2, gesetzliche Pflichten): die Jahresstatistik (`membersOn(…, { includeRestricted: true })`, nur Zahlen), bereits erfasste Einsatzberichte und Dienste mit ihrem Personal, Auszahlungsläufe und Abrechnungen, Prüfprotokolle der Geräte mit dem Prüfer und der Vollexport. Seiten eines Moduls über eine einzelne Person prüfen die Einschränkung mit `assertNotRestricted(user, restricted)` aus `@forga/core-api`; neue Einträge lehnt `refuseRestricted(restricted)` ab.
 
 **Tests:** `apps/server/src/privacy.integration.ts` (Recht und Step-up, Einstellungen, Fassungen der Texte, Hinweis mit erster Anmeldung und Impersonation, Information, Anfragen mit Frist, Verlängerung, Antwortschreiben, Empfänger, Abschluss, Mein Bereich, Einschränkung in Stammdaten, Suche, Listen, Fristen, Einsätzen, Atemschutz, Entschädigung, Kleiderkammer, Beförderungen, Diensten und Infoterminal) und Unit-Tests der `DeadlineRegistry`.
+
+## Verzeichnis der Verarbeitungstätigkeiten (L8)
+
+Reiter „Verzeichnis“ der Seite „Verwaltung → Datenschutz“ (`/admin/privacy/register`, Recht `core.privacy.manage` mit Step-up; Mockup `datenschutz/verzeichnis.html`). f.orga setzt einen **Entwurf** nach Art. 30 Abs. 1 DSGVO zusammen; die Gemeinde ergänzt ihn je Tätigkeit. Das Verzeichnis führt der Verantwortliche, der Entwurf ersetzt keine Prüfung.
+
+**Zusammensetzung** (`PrivacyRegister`, `GET /api/core/privacy/register`, `ProcessingRegister`):
+
+- **Tätigkeiten** aus den Manifesten der aktiven Module (`privacy.activities`), danach `core.accounts` des Core. Ein deaktiviertes Modul fällt weg. Je Tätigkeit: Modul, Name, Zweck, Betroffene (`subjects`), Datenkategorien (`categories`), besondere Kategorien (`health` mit `healthNote`, z. B. „Verletzungen von Einsatzkräften und Beteiligten“), Hinweis zur Rechtsgrundlage (`legalBasisHint`, nur ein Hinweis, keine Rechtsberatung).
+- **Löschfrist** aus `privacy.retention` je Aufbewahrungskategorie der Tätigkeit (`RetentionTexts`, dieselben Texte wie in der Auskunft: „Personalakte: 30 Jahre nach Austritt“, sonst „bis zur Festlegung einer Frist“).
+- **Empfänger** (`RegisterRecipientView` mit `source`): aus dem Manifest (`module`), gültige API-Tokens mit Rechten des Moduls als „Schnittstelle „Name““ (`token`), von der Gemeinde ergänzte (`municipality`). E-Mail-Server und Anmeldedienst (OIDC) aus den Einstellungen sind technische Empfänger bzw. Auftragsverarbeiter (`processors`, `processor`) und stehen bei `core.accounts`.
+- **Empfänger für alle Tätigkeiten** (`general`), z. B. die Stadtkasse.
+- **Kostenersatz** hat eine Tätigkeit `cost-recovery.notices` (Kostenschuldner), aber keine Personendaten im Sinne der Auskunft (`personData: false`).
+- **Technische Maßnahmen** (`TechnicalMeasure`: Titel, Stand, `tone` `ok`/`warning`/`info`) mit dem Stand beim Aufruf: Rechte je Abteilung (Zahl der Rollen und Benutzer), zweiter Faktor (Step-up; wie viele Benutzer mit Rechten unter Step-up ihn eingerichtet haben; Warnung ohne `FORGA_SECRET_KEY`), HTTPS (aus Sicht der Anfrage und der Adresse wie `GET /api/core/security/status`, „nein – Aufruf über http://“ als Warnung), Anmeldung (scrypt, Sperre, OIDC), Protokolle mit ihren Fristen, Leseprotokoll mit seiner Frist, Verschlüsselung (Auskünfte, Faktor), E-Mails (Server, TLS, ohne Namen bei Gesundheitsbezug), System (Echt-, Testsystem, Entwicklung); das Modul Datensicherung meldet „nicht eingerichtet“ bzw. Zeitplan, Verschlüsselung und letzte erfolgreiche Sicherung (`backup.state`). Weitere Quellen melden sich am `TechnicalMeasureRegistry` an (`register({ module, measures(context) })`, Kontext wie `SecurityStatus`); Maßnahmen inaktiver Module fallen weg.
+
+**Ergänzungen der Gemeinde** (Einstellungsabschnitt `privacy.activities`, `PrivacyActivities`; historisiert wie jede Einstellung, Historie unter `core.setting`):
+
+| Endpunkt | Zweck |
+| --- | --- |
+| `PUT /api/core/privacy/register/activities/:key` | `ActivityRecordInput`: Rechtsgrundlage, weitere Empfänger (`id`, `name`, `note`), Übermittlung in Drittländer (leer = keine), Bemerkungen, `version`. Eine Änderung erhöht `version` und macht die Tätigkeit wieder zum Entwurf (`reviewedAt` leer). Fehler `404 privacy.activityUnknown` (nicht im Kern oder einem aktiven Modul), `409 conflict.stale`. Audit `privacy.activity-changed` |
+| `POST /api/core/privacy/register/activities/:key/review` | „Als geprüft markieren“ mit `version`: `reviewedAt`, `reviewedBy` (Anzeigename). Audit `privacy.activity-reviewed` |
+| `PUT /api/core/privacy/register/recipients` | Empfänger für alle Tätigkeiten. Audit `privacy.recipients-changed` |
+| `GET /api/core/privacy/register/activities` | Tätigkeiten zur Auswahl (`ActivityOption`: Widerspruch, Datenpanne) |
+| `GET /api/core/privacy/register/recipients` | Empfänger nach Art. 19 (`RecipientOption`) für die Anfragen |
+| `GET /api/core/privacy/register/export/pdf`, `…/xlsx` `?language=` | Export; Audit `privacy.register-exported` mit Format und Sprache |
+
+`PUT /api/core/settings/privacy.activities` antwortet `400 settings.dedicatedEndpoint`.
+
+**Übernahme der früheren Empfängerliste:** Den Einstellungsabschnitt `privacy.recipients` (Empfänger nach Art. 19) gibt es nicht mehr. Beim Start verschiebt der Server gespeicherte Einträge mit ihren IDs in die Empfänger für alle Tätigkeiten (`PrivacyRegister.migrateLegacyRecipients`; ungültige Einträge entfallen, schon vorhandene IDs bleiben) und löscht den alten Abschnitt; Audit `privacy.recipients-migrated` mit der Zahl. In Anfragen abgehakte Empfänger bleiben dadurch abgehakt. Eine Datenbankmigration ist dafür nicht nötig (Einstellungen sind JSON).
+
+**Export** (Entscheidung 10: PDF und Excel):
+
+- **PDF** (`renderRegisterPdf`, Rahmen wie die Briefe): Titel „Verzeichnis von Verarbeitungstätigkeiten nach Art. 30 Abs. 1 DSGVO“, Hinweis „Entwurf aus f.orga …“, Verantwortlicher und DSB aus `privacy.contacts` (fehlende als „[in den Einstellungen Datenschutz eintragen]“), Übersicht, je Tätigkeit eine Tabelle Zweck, Betroffene, Daten, besondere Kategorien, Empfänger, Drittland, Löschfrist, Rechtsgrundlage (ohne Eintrag „mit dem DSB festlegen“ mit dem Hinweis des Moduls), Bemerkungen und „Geprüft“, danach Empfänger für alle Tätigkeiten, technische Empfänger und technische Maßnahmen.
+- **Excel** (`renderRegisterXlsx`, `addStyledSheet`): Blatt „Verzeichnis“ mit einer Zeile je Tätigkeit zum Weiterbearbeiten, Blatt „Empfänger“ mit Herkunft, Blatt „Technische Maßnahmen“.
+
+**Oberfläche:** Hinweis „Entwurf aus den aktiven Modulen …“, „Excel“ und „PDF herunterladen“; Tabelle Tätigkeit, Modul, Betroffene, besondere Kategorien (Plakette), Frist, Geprüft (Plakette „Entwurf“ bzw. Datum und Name); darunter die gewählte Tätigkeit mit den Angaben aus f.orga und den Feldern der Gemeinde (Rechtsgrundlage, Drittland, weitere Empfänger, Bemerkungen), „Als geprüft markieren …“ (Bestätigung) und „Speichern“; Karten „Empfänger für alle Tätigkeiten“ (früher „Einstellungen → Kontakte → Empfänger (Art. 19)“), „Technische Empfänger und Auftragsverarbeiter“ und „Technische Maßnahmen“ mit Plakette „prüfen“ bei Warnungen.
+
+## Datenpannen (L20)
+
+Reiter „Datenpannen“ (`/admin/privacy/breaches`) und Seite einer Datenpanne (`/admin/privacy/breaches/:id`), Recht `core.privacy.manage` mit Step-up.
+
+**Datenpanne** (`core.privacy_breach`, `PrivacyBreachEntity`, historisiert; Historie nur mit `core.privacy.manage`; die Historie ist Teil der Dokumentation nach Art. 33 Abs. 5):
+
+| Feld | Bedeutung |
+| --- | --- |
+| `title`, `description` | Kurzbeschreibung, was passiert ist |
+| `discoveredAt` | bekannt geworden am (Zeitpunkt, nicht in der Zukunft: `privacy.discoveredInFuture`); `notifyBy` = + 72 Stunden (`BREACH_NOTIFICATION_HOURS`) |
+| `occurredFrom`, `occurredUntil` | Zeitraum des Vorfalls, falls bekannt (`privacy.periodInvalid`) |
+| `activityKeys`, `dataCategories`, `health` | betroffene Tätigkeiten des Verzeichnisses (`privacy.activityUnknown`), betroffene Daten als Text, besondere Kategorien |
+| `affectedCount`, `affectedPersonIds`, `affectedSource` | geschätzte Zahl; ermittelte Personen und woraus |
+| `consequences`, `measures`, `risk` | wahrscheinliche Folgen, Maßnahmen (Art. 33 Abs. 3 c, d), Risiko `unlikely`, `risk`, `high` |
+| `authorityNotifiedOn`, `authorityReference`, `authorityNotRequired`, `authorityNote` | Meldung an die Aufsichtsbehörde mit Aktenzeichen, oder nicht meldepflichtig mit Begründung (beides zugleich: `privacy.authorityNotifiedAndNotRequired`; vor dem Bekanntwerden: `privacy.notifiedBeforeDiscovered`) |
+| `subjectsNotifiedOn`, `subjectsNotifiedVia`, `subjectsNote` | Benachrichtigung der Personen (Art. 34) mit Weg `letter`, `email`, `in-person`, `posting`, `other` (Datum ohne Weg: `privacy.notificationWayMissing`) |
+| `status`, `closedOn` | `open`, `closed` |
+
+**Frist als Aufgabe.** Solange eine offene Datenpanne weder gemeldet noch als nicht meldepflichtig vermerkt ist, haben alle mit `core.privacy.manage` die Aufgabe `privacy-breach` „Datenpanne der Aufsichtsbehörde melden (bis 31.10.2026, 14:30)“, fällig am Tag von `notifyBy`, auch vor dem Step-up (`held`; die Aufgabe nennt keinen Inhalt). Bei hohem Risiko ohne Benachrichtigung zusätzlich `privacy-breach-subjects` „Betroffene Personen über die Datenpanne benachrichtigen (Art. 34)“. Beim Erfassen bekommen alle, deren Rolle `core.privacy.manage` ausdrücklich nennt, eine E-Mail ohne Inhalt („Datenpanne erfasst … bis …, Einzelheiten nur in f.orga“, Audit `privacy.breach-mailed`).
+
+**Endpunkte** (`/api/core/privacy/breaches`):
+
+| Methode | Pfad | Zweck |
+| --- | --- | --- |
+| `GET` | `?state=open\|closed` | Liste (`PrivacyBreach[]` mit `notifyBy`, `affectedPersons` mit Namen, `createdByName`) |
+| `GET`, `POST`, `PUT` | `/`, `/:id` | lesen, erfassen (`PrivacyBreachInput`), ändern (`PrivacyBreachUpdate` mit `version`; abgeschlossen: `409 privacy.breachClosed`). Audit `privacy.breach-recorded`, `privacy.breach-changed`, bei neuer Meldung `privacy.breach-authority-notified` (Datum, Aktenzeichen), `privacy.breach-not-notifiable` (Begründung), `privacy.breach-subjects-notified` (Datum, Weg) |
+| `PUT` | `/:id/affected` | ermittelte Personen übernehmen (`personIds`, `source`; unbekannte Personen `privacy.personUnknown`). Audit `privacy.breach-affected-recorded` mit Zahl |
+| `GET` | `/:id/contacts.xlsx?language=` | Kontaktliste für die Benachrichtigung (Art. 34): Name, Anschrift, E-Mail, Telefon (mobil, sonst privat), benachrichtigt am; Hinweis „nur für die Benachrichtigung, danach löschen“. Audit `privacy.breach-contacts-exported` mit Zahl |
+| `POST` | `/:id/close`, `/:id/reopen` | abschließen (nur gemeldet oder nicht meldepflichtig: `privacy.breachAuthorityOpen`; Datum nicht vor dem Bekanntwerden), wieder öffnen. Audit `privacy.breach-closed`, `privacy.breach-reopened` |
+
+**Hilfen** (`/api/core/privacy/breach-tools`):
+
+- **Protokolle exportieren** (`GET protocols.xlsx?from=&to=&userId=&breachId=&language=`): je Protokoll ein Blatt für den Zeitraum (Tage in Europe/Berlin) und optional einen Benutzer (auch als Administrator bei „Anmelden als“); das Audit-Log mit Zeitpunkt, Benutzer, „Angemeldet als durch“, Vorgang lesbar und als Code, Details (höchstens 50 000 Zeilen) und das Leseprotokoll (`AccessLog.query`: Tag, Benutzer, Person bzw. „alle Personen“, Bereich, Zugriffe, erster und letzter Zugriff; höchstens 2000 Zeilen). Weitere Protokolle melden sich am `ProtocolRegistry` an (`ProtocolSource`: `key`, `title`, `columns`, `rows(filter, language)`); `GET protocols` nennt sie. Audit `privacy.breach-protocol-exported`. `GET accounts` liefert alle Konten zur Auswahl (auch technische und gesperrte).
+- **Betroffene Personen ermitteln** (`GET sources?from=&to=&userId=` listet die Audit-Einträge `lists.exported`, `data.exported`, `data.person-exported`, `privacy.access-report-created`, `privacy.access-report-downloaded` mit lesbarem Namen und Zahl der Personen; `POST affected` mit `{ source: 'audit', auditId }` oder `{ source: 'account', userId }`, Ergebnis `AffectedPersons`):
+  - **Liste exportiert:** Das Audit `lists.exported` enthält die Parameter (`params`) und die IDs der genannten Personen (`personIds`), wenn die Liste sie liefert (`ListContent.personIds`; Stammdaten: Mitglieder, Unterschriften, Telefon, Komplettdaten, Geburtstage, Dienstjubiläen, Qualifikationen, Atemschutzgeräteträger, Probezeit, Altersgrenzen). Ergebnis mit dem Stand des Exports (`basis: recorded`). Die Audit-Seite zeigt `personIds` nur als Zahl.
+  - **Auskunft, Auskunft als JSON:** die Person des Eintrags.
+  - **Vollexport** (`data.exported`): alle Personen, berechnet aus den heutigen Daten (`basis: current`).
+  - **Benutzerkonto:** die Personen, die das Konto heute mit `masterdata.persons.read` lesen kann (ohne eingeschränkte; technische Benutzer mit den Rechten ihres Tokens), `basis: current`.
+  - Einträge ohne Personen: `400 privacy.sourceWithoutPersons`. Audit `privacy.breach-affected-determined` (Quelle, Zahl).
+- **Alle Sitzungen beenden und alle Tokens widerrufen** (`POST lockdown`, `{ reason }` mit mindestens 10 Zeichen, optional `breachId`; Endpunkt mit `@StepUp()`): beendet alle Sitzungen außer der eigenen (auch Impersonationen) und widerruft alle API-Tokens; Infoterminals behalten ihren Geräteschlüssel. Audit `privacy.breach-lockdown` mit Grund und Zahlen.
+
+Für die Hilfen liefert die Stammdaten zusätzlich `OrganizationProvider.readablePersonIds(user)`, `allPersonIds()` und `PersonSummary.phone`.
+
+**Oberfläche:** Reiter „Datenpannen“ mit Hinweis auf Art. 33/34, Filter offen/abgeschlossen/alle, „Datenpanne erfassen …“ (Kurzbeschreibung, bekannt geworden am, Zeitraum, Beschreibung, Tätigkeiten, Daten, Zahl, besondere Kategorien, Risiko), Tabelle Bekannt seit, Vorfall, Meldung bis, Aufsichtsbehörde (Plakette „gemeldet …“, „nicht meldepflichtig“, „offen“ bzw. rot „überfällig“), Betroffene, Stand; Karten „Protokolle exportieren“ und „Notfall: alle Sitzungen beenden“ (Bestätigung mit Pflichtgrund). Seite der Datenpanne: Hinweis mit verbleibenden Stunden bzw. „abgelaufen“, alle Felder, Meldung an die Aufsichtsbehörde, Benachrichtigung der Personen, „Abschließen …“/„Wieder öffnen“, „Betroffene Personen“ mit „Betroffene ermitteln …“ (Audit-Log eines Zeitraums oder Benutzerkonto, Ergebnis mit Herkunft, „In die Datenpanne übernehmen“) und „Kontaktliste für die Benachrichtigung (Excel)“, Protokolle und Notfall zur Datenpanne, Verlauf.
+
+**Demodaten:** `npm run seed` trägt die Stadtkasse als Empfänger für alle Tätigkeiten ein, ergänzt die Personalverwaltung um eine Beispiel-Rechtsgrundlage und legt eine erfundene, abgeschlossene Datenpanne an („[Beispiel] Ausdruck der Telefonliste im Schulungsraum liegen gelassen“, nicht meldepflichtig).
+
+**Tests:** `apps/server/src/privacy-register.integration.ts` (Recht und Step-up, Entwurf aus aktiven Modulen mit Fristen, Empfänger aus Tokens, SMTP und OIDC, technische Maßnahmen einschließlich Datensicherung, Ergänzung mit Fassung, Prüfung und Historie, Übernahme von `privacy.recipients`, Empfänger nach Art. 19 und Widerspruch mit Tätigkeit, Export PDF und Excel; Datenpanne mit Aufgabe und E-Mail ohne Inhalt, Meldungen, Prüfungen der Felder, Betroffene aus Listenexport, Vollexport und Konto, Kontaktliste, Protokolle, Abschluss, Notfall mit Step-up).

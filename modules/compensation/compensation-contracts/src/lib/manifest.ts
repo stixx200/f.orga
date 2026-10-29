@@ -44,6 +44,9 @@ export const COMPENSATION_MANIFEST = {
     activities: [
       {
         key: 'compensation.payouts',
+        subjects: [{ de: 'Angehörige der Feuerwehr', en: 'Members of the fire brigade' }, { de: 'Arbeitgeber (Verdienstausfall)', en: 'Employers (loss of earnings)' }],
+        categories: [{ de: 'Posten mit Anlass, Stunden und Betrag, Auszahlungsläufe, Bankverbindung', en: 'Items with occasion, hours and amount, payout runs, bank account' }],
+        legalBasisHint: { de: 'Entschädigungsregelung des FwG und Entschädigungssatzung; Aufbewahrung als Kassenunterlage', en: 'Compensation rules of the FwG and compensation statute; kept as accounting record' },
         name: { de: 'Entschädigung', en: 'Compensation' },
         purpose: { de: 'Berechnung und Auszahlung der Entschädigung nach der Entschädigungssatzung', en: 'Calculating and paying compensation under the compensation statute' },
         recipients: [{ de: 'Gemeindeverwaltung/Kämmerei (Auszahlung)', en: 'Municipal administration/treasury (payout)' }],

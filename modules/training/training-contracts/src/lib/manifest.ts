@@ -41,6 +41,11 @@ export const TRAINING_MANIFEST = {
     activities: [
       {
         key: 'training.sessions',
+        subjects: [{ de: 'Angehörige der Feuerwehr', en: 'Members of the fire brigade' }, { de: 'Ausbilder', en: 'Instructors' }],
+        categories: [{ de: 'Anwesenheit mit Zeiten, Entschuldigungen mit Grund, Funktion, Atemschutz', en: 'Attendance with times, excuses with reason, function, breathing apparatus' }],
+        health: true,
+        healthNote: { de: 'Entschuldigung „krank“, Verletzungen im Dienst', en: 'Excuse "sick", injuries on duty' },
+        legalBasisHint: { de: 'Feuerwehrgesetz Baden-Württemberg (FwG), Dienstpflicht und Ausbildung; mit dem DSB festlegen', en: 'Fire Brigade Act of Baden-Württemberg (FwG), duty and training; decide with the DPO' },
         name: { de: 'Dienstbetrieb', en: 'Service operations' },
         purpose: { de: 'Planung und Nachweis der Dienste und der Ausbildung, Dienstbeteiligung', en: 'Planning and evidence of sessions and training, participation' },
         retention: ['training.sessions'],

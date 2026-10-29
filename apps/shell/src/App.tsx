@@ -30,6 +30,7 @@ import { ScanPage } from './pages/ScanPage';
 import { StartPage } from './pages/StartPage';
 import { FirstLoginPage, NoticePage } from './pages/privacy/NoticePage';
 import { PrivacyPage } from './pages/privacy/PrivacyPage';
+import { BreachPage } from './pages/privacy/BreachPage';
 import { RequestPage } from './pages/privacy/RequestPage';
 import { RectificationPage } from './privacy/Rectification';
 
@@ -72,6 +73,9 @@ function Router({ modules, session }: { modules: LoadedModule[]; session: Sessio
             { path: 'admin/privacy', element: <Guard session={session} permission="core.privacy.manage"><PrivacyPage tab="requests" session={session} /></Guard> },
             { path: 'admin/privacy/information', element: <Guard session={session} permission="core.privacy.manage"><PrivacyPage tab="information" session={session} /></Guard> },
             { path: 'admin/privacy/requests/:id', element: <Guard session={session} permission="core.privacy.manage"><RequestPage /></Guard> },
+            { path: 'admin/privacy/register', element: <Guard session={session} permission="core.privacy.manage"><PrivacyPage tab="register" session={session} /></Guard> },
+            { path: 'admin/privacy/breaches', element: <Guard session={session} permission="core.privacy.manage"><PrivacyPage tab="breaches" session={session} /></Guard> },
+            { path: 'admin/privacy/breaches/:id', element: <Guard session={session} permission="core.privacy.manage"><BreachPage /></Guard> },
             {
               path: 'admin/privacy/settings',
               // Security and retention also for the managers of the settings.

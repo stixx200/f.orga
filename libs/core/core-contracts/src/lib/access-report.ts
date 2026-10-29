@@ -9,8 +9,9 @@ export const ACCESS_REPORT_PERMISSION = PRIVACY_PERMISSION;
 export const ACCESS_REPORT_DAYS = 30;
 
 /**
- * A processing activity of a module (Art. 30 GDPR), named in the manifest. Sections of the access report refer to it:
- * purpose, recipients and retention period of the section come from here.
+ * A processing activity of a module (Art. 30 GDPR), named in the manifest. Sections of the access report refer to it
+ * (purpose, recipients and retention period of the section come from here), and the register of processing activities
+ * is composed of the activities of the active modules.
  */
 export const ProcessingActivity = z.object({
   /** `<module-id>.<name>`, e.g. `incidents.reports`. */
@@ -21,6 +22,16 @@ export const ProcessingActivity = z.object({
   recipients: z.array(LocalizedText).default([]),
   /** Retention categories whose periods apply (`privacy.retention`), e.g. `incidents.incidents`. */
   retention: z.array(z.string()).default([]),
+  /** Categories of data subjects (Art. 30(1) c), e.g. members, persons involved in an incident. */
+  subjects: z.array(LocalizedText).default([]),
+  /** Categories of personal data (Art. 30(1) c), e.g. "times of the operation, function, vehicle". */
+  categories: z.array(LocalizedText).default([]),
+  /** Special categories of data (Art. 9), e.g. injuries or medical examinations. */
+  health: z.boolean().default(false),
+  /** What the special categories are, e.g. "injuries of the fire fighters"; shown with `health`. */
+  healthNote: LocalizedText.optional(),
+  /** Hint for the legal basis the municipality decides on, e.g. "§ 9 FwG (duty to keep records)"; no legal advice. */
+  legalBasisHint: LocalizedText.optional(),
 });
 export type ProcessingActivity = z.infer<typeof ProcessingActivity>;
 
@@ -46,6 +57,14 @@ export const CORE_ACTIVITIES: ProcessingActivity[] = [
     },
     recipients: [],
     retention: ['core.audit', 'core.history', 'core.access-log'],
+    subjects: [{ de: 'Benutzer von f.orga', en: 'Users of f.orga' }],
+    categories: [
+      { de: 'Benutzername, Name, E-Mail-Adresse, Rollen und Rechte', en: 'Username, name, e-mail address, roles and permissions' },
+      { de: 'Anmeldungen, Sitzungen, zweiter Faktor, API-Tokens', en: 'Logins, sessions, second factor, API tokens' },
+      { de: 'Audit-Log, Leseprotokoll und Historie der Änderungen', en: 'Audit log, read log and history of changes' },
+    ],
+    health: false,
+    legalBasisHint: { de: 'Datensicherheit (Art. 32 DSGVO), Rechenschaftspflicht (Art. 5 Abs. 2 DSGVO)', en: 'Security of processing (Art. 32 GDPR), accountability (Art. 5(2) GDPR)' },
   },
 ];
 

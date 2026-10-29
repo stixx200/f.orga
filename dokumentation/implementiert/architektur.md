@@ -316,7 +316,7 @@ Danach ist der Benutzer angemeldet, und der Endpunkt antwortet mit `409`.
 - **Sprache:** Parameter `lang`, sonst die Sprache des Benutzers.
 - **Abteilungen:** `GET /api/core/lists` liefert je Liste `departments`: `brigade` oder die Abteilungen, in denen der Benutzer die Berechtigung der Liste hat. Ein Abteilungsparameter bietet nur diese an („Alle Ihre Abteilungen“ statt „Alle Abteilungen“, wenn er nicht alle sehen darf).
 - **Sicherheit:** pdfmake lädt keine URLs. Lokal erlaubt sind nur die Namen der Standardschriften.
-- Jeder Export steht im Audit-Log (`lists.exported`).
+- Jeder Export steht im Audit-Log (`lists.exported`) mit Format, Zeilenzahl, Parametern und, bei Listen über Personen, den IDs der genannten Personen (`ListContent.personIds`), damit sich bei einer Datenpanne die Betroffenen ermitteln lassen ([Datenpannen](datenschutz.md#datenpannen-l20)).
 
 ## Fristen und Aufgaben
 

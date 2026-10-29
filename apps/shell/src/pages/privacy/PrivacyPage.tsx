@@ -8,9 +8,11 @@ import { DataTable, KpiTile, PageHeader, Panel, StatusBadge, type Tone } from '@
 import { useDepartments } from '../admin/data';
 import { daysUntil, PRIVACY, useRequests, useRestricted, useUninformed } from './api';
 import { InformationDialog, RequestDialog } from './dialogs';
+import { BreachesTab } from './BreachesTab';
 import { PrivacySettings } from './PrivacySettings';
+import { RegisterTab } from './RegisterTab';
 
-type Tab = 'requests' | 'information' | 'settings';
+type Tab = 'requests' | 'information' | 'register' | 'breaches' | 'settings';
 
 export const STATUS_TONES: Record<PrivacyRequest['status'], Tone> = { received: 'warning', 'in-review': 'primary', extended: 'warning', done: 'done', rejected: 'neutral' };
 
@@ -19,7 +21,7 @@ export function PrivacyPage({ tab, session }: { tab: Tab; session: Session }) {
   const { t } = useTranslation('shell');
   const navigate = useNavigate();
   const manager = can(session, PRIVACY);
-  const paths: Record<Tab, string> = { requests: '/admin/privacy', information: '/admin/privacy/information', settings: '/admin/privacy/settings' };
+  const paths: Record<Tab, string> = { requests: '/admin/privacy', information: '/admin/privacy/information', register: '/admin/privacy/register', breaches: '/admin/privacy/breaches', settings: '/admin/privacy/settings' };
   return (
     <Stack gap="lg">
       <PageHeader breadcrumbs={[{ label: t('nav.administration') }, { label: t('privacy.title') }]} title={t('privacy.title')} />
@@ -27,11 +29,15 @@ export function PrivacyPage({ tab, session }: { tab: Tab; session: Session }) {
         <Tabs.List>
           {manager && <Tabs.Tab value="requests">{t('privacy.tabs.requests')}</Tabs.Tab>}
           {manager && <Tabs.Tab value="information">{t('privacy.tabs.information')}</Tabs.Tab>}
+          {manager && <Tabs.Tab value="register">{t('privacy.tabs.register')}</Tabs.Tab>}
+          {manager && <Tabs.Tab value="breaches">{t('privacy.tabs.breaches')}</Tabs.Tab>}
           <Tabs.Tab value="settings">{t('privacy.tabs.settings')}</Tabs.Tab>
         </Tabs.List>
       </Tabs>
       {tab === 'requests' && <RequestsTab />}
       {tab === 'information' && <InformationTab />}
+      {tab === 'register' && <RegisterTab />}
+      {tab === 'breaches' && <BreachesTab />}
       {tab === 'settings' && <PrivacySettings session={session} />}
     </Stack>
   );

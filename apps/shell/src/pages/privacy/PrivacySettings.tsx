@@ -1,5 +1,4 @@
-import { ActionIcon, Anchor, Button, Group, Radio, SimpleGrid, Stack, Tabs, Text, Textarea, TextInput } from '@mantine/core';
-import { IconTrash } from '@tabler/icons-react';
+import { Anchor, Button, Group, Radio, SimpleGrid, Stack, Tabs, Text, Textarea, TextInput } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
@@ -7,7 +6,6 @@ import {
   PRIVACY_TEXT_BLOCKS,
   PRIVACY_TEXT_KEYS,
   type PrivacyContacts,
-  type PrivacyRecipients,
   type PrivacySelfService,
   type PrivacyTextKey,
   type PrivacyTexts,
@@ -18,7 +16,7 @@ import { DataTable, Notice, Panel, ResponsiveDialog, StatusBadge, useAction } fr
 import { RetentionSettings } from '../admin/RetentionSettings';
 import { SecuritySettings } from '../admin/SecuritySettings';
 import { ConsentCatalog } from '../../privacy/consents/ConsentCatalog';
-import { PRIVACY, privacyKeys, useContacts, useNotice, useRecipients, useTexts } from './api';
+import { PRIVACY, privacyKeys, useContacts, useNotice, useTexts } from './api';
 
 const TABS = ['contacts', 'texts', 'consents', 'selfService', 'security', 'retention'] as const;
 type Tab = (typeof TABS)[number];
@@ -56,12 +54,10 @@ export function PrivacySettings({ session }: { session: Session }) {
 
 function ContactsTab() {
   const { data: contacts } = useContacts();
-  const { data: recipients } = useRecipients();
-  if (!contacts || !recipients) return null;
+  if (!contacts) return null;
   return (
     <Stack gap="lg" maw={1100}>
       <ContactsForm initial={contacts} />
-      <RecipientsForm initial={recipients} />
     </Stack>
   );
 }
@@ -110,34 +106,6 @@ function ContactsForm({ initial }: { initial: PrivacyContacts }) {
         </Group>
       </Stack>
     </form>
-  );
-}
-
-function RecipientsForm({ initial }: { initial: PrivacyRecipients }) {
-  const { t } = useTranslation('shell');
-  const { t: common } = useTranslation('common');
-  const [recipients, setRecipients] = useState(initial.recipients);
-  const save = useAction(() => send('PUT', 'core/settings/privacy.recipients', { recipients: recipients.filter((r) => r.name.trim()) }), { success: t('privacy.settings.saved'), invalidate: [privacyKeys.settings('privacy.recipients')] });
-  const change = (index: number, field: 'name' | 'note', v: string) => setRecipients((list) => list.map((r, i) => (i === index ? { ...r, [field]: v } : r)));
-  return (
-    <Panel title={t('privacy.settings.recipients')}>
-      <Stack gap="sm">
-        <Text size="xs" c="dimmed">{t('privacy.settings.recipientsHint')}</Text>
-        {recipients.map((r, index) => (
-          <Group key={r.id} align="flex-end" wrap="nowrap">
-            <TextInput flex={1} label={t('privacy.settings.recipientName')} value={r.name} onChange={(e) => change(index, 'name', e.currentTarget.value)} />
-            <TextInput flex={2} label={t('privacy.settings.recipientNote')} value={r.note} onChange={(e) => change(index, 'note', e.currentTarget.value)} />
-            <ActionIcon variant="subtle" size="lg" aria-label={t('privacy.settings.remove')} onClick={() => setRecipients((list) => list.filter((_, i) => i !== index))}>
-              <IconTrash size={18} />
-            </ActionIcon>
-          </Group>
-        ))}
-        <Group justify="space-between">
-          <Button variant="default" onClick={() => setRecipients((list) => [...list, { id: crypto.randomUUID(), name: '', note: '' }])}>{t('privacy.settings.addRecipient')}</Button>
-          <Button loading={save.isPending} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
-        </Group>
-      </Stack>
-    </Panel>
   );
 }
 

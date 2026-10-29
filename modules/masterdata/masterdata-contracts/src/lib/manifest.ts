@@ -82,6 +82,13 @@ export const MASTERDATA_MANIFEST = {
     activities: [
       {
         key: 'masterdata.persons',
+        subjects: [{ de: 'Angehörige der Feuerwehr (auch Jugendfeuerwehr und Altersabteilung)', en: 'Members of the fire brigade (including youth and veterans department)' }, { de: 'Arbeitgeber der Mitglieder', en: 'Employers of the members' }],
+        categories: [
+          { de: 'Name, Geburtsdatum und -ort, Anschrift, Telefon, E-Mail', en: 'Name, date and place of birth, address, phone, e-mail' },
+          { de: 'Mitgliedschaft, Dienstgrade, Qualifikationen, Lehrgänge, Ehrungen, Ämter, Ruhezeiten', en: 'Membership, ranks, qualifications, courses, honours, offices, rest periods' },
+          { de: 'Arbeitgeber, Bankverbindung, Bemerkungen', en: 'Employer, bank account, remarks' },
+        ],
+        legalBasisHint: { de: 'Feuerwehrgesetz Baden-Württemberg (FwG) und Feuerwehrsatzung; mit dem DSB festlegen', en: 'Fire Brigade Act of Baden-Württemberg (FwG) and fire brigade statute; decide with the DPO' },
         name: { de: 'Personalverwaltung', en: 'Personnel administration' },
         purpose: {
           de: 'Führung der Personalakte der Feuerwehrangehörigen: Mitgliedschaft, Laufbahn, Ausbildung, Ehrungen und Erreichbarkeit',
@@ -92,6 +99,9 @@ export const MASTERDATA_MANIFEST = {
       },
       {
         key: 'masterdata.driver-licenses',
+        subjects: [{ de: 'Fahrer von Einsatzfahrzeugen', en: 'Drivers of fire service vehicles' }],
+        categories: [{ de: 'Führerscheinklassen mit Ablauf, Kontrollen mit Datum und Prüfer, Transponder', en: 'Licence classes with expiry, checks with date and checker, transponders' }],
+        legalBasisHint: { de: 'Halterpflichten (§ 21 StVG); mit dem DSB festlegen', en: 'Duties of the vehicle owner (§ 21 StVG); decide with the DPO' },
         name: { de: 'Führerscheinkontrolle', en: 'Driving licence checks' },
         purpose: { de: 'Nachweis der Fahrberechtigung für Einsatzfahrzeuge (Halterpflicht der Gemeinde)', en: 'Evidence of the driving permission for fire service vehicles (duty of the vehicle owner)' },
         retention: ['masterdata.person-file'],

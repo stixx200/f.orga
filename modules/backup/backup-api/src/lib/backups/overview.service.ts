@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { type DeadlineInput, serverKey } from '@forga/core-api';
+import type { LocalizedText, TechnicalMeasure } from '@forga/core-contracts';
 import { BACKUP_MANAGE, type BackupOverview, type BackupWarning } from '@forga/backup-contracts';
 import { BackupRun } from '../backup.entities.js';
 import { RestoreService } from '../restore/restore.service.js';
@@ -144,6 +145,39 @@ export class BackupOverviewService {
       });
     }
     return result;
+  }
+
+  /**
+   * State of the backup for the technical measures of the register of processing activities: set up, schedule,
+   * encryption, the latest successful backup.
+   */
+  async measures(): Promise<TechnicalMeasure[]> {
+    const title: LocalizedText = { de: 'Datensicherung', en: 'Backup' };
+    const loaded = await this.settings.load();
+    if (!backupEnvironment.root() || !loaded.saved) {
+      return [{ key: 'backup.state', title, value: { de: 'nicht eingerichtet', en: 'not set up' }, tone: 'warning' }];
+    }
+    const view = await this.settings.view(loaded);
+    const encrypted = view.encryption && view.passphraseSet && !view.passphraseUnreadable && Boolean(serverKey());
+    const success = await this.em.fork().findOne(BackupRun, { status: { $in: ['ok', 'missing'] }, trigger: { $in: ['scheduled', 'manual', 'safety'] } }, { orderBy: { startedAt: 'desc' } });
+    const schedule: Record<string, LocalizedText> = {
+      off: { de: 'nur von Hand', en: 'manual only' },
+      daily: { de: `täglich ${loaded.settings.schedule.time}`, en: `daily ${loaded.settings.schedule.time}` },
+      weekdays: { de: `werktags ${loaded.settings.schedule.time}`, en: `weekdays ${loaded.settings.schedule.time}` },
+    };
+    const last = success ? success.startedAt.toISOString().slice(0, 10) : null;
+    const when = schedule[loaded.settings.schedule.mode];
+    return [
+      {
+        key: 'backup.state',
+        title,
+        value: {
+          de: `eingerichtet, ${when.de}; verschlüsselt (AES-256-GCM): ${encrypted ? 'ja' : 'nein'}; letzte erfolgreiche Sicherung: ${last ?? 'keine'}`,
+          en: `set up, ${when.en}; encrypted (AES-256-GCM): ${encrypted ? 'yes' : 'no'}; latest successful backup: ${last ?? 'none'}`,
+        },
+        tone: encrypted && !this.stale(success?.startedAt.toISOString() ?? null, loaded.settings.notify.staleHours, new Date()) ? 'ok' : 'warning',
+      },
+    ];
   }
 
   /** The entry of a backup by ID, for the restore wizard. */

@@ -1,6 +1,6 @@
 import { type MiddlewareConsumer, Module, type NestModule, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { AuditReferenceRegistry, defineModule, DeadlineRegistry } from '@forga/core-api';
+import { AuditReferenceRegistry, defineModule, DeadlineRegistry, TechnicalMeasureRegistry } from '@forga/core-api';
 import { BACKUP_MANIFEST, BACKUP_SETTINGS_SECTION } from '@forga/backup-contracts';
 import { BACKUP_MIGRATIONS } from '../migrations/index.js';
 import { registerAuditReferences } from './audit/audit.references.js';
@@ -24,10 +24,13 @@ export class BackupModule implements NestModule, OnModuleInit {
     private readonly overview: BackupOverviewService,
     private readonly auditReferences: AuditReferenceRegistry,
     private readonly em: EntityManager,
+    private readonly measures: TechnicalMeasureRegistry,
   ) {}
 
   onModuleInit(): void {
     this.deadlines.register({ module: 'backup', deadlines: (asOf) => this.overview.deadlines(asOf) });
+    // Register of processing activities: backup set up and encrypted.
+    this.measures.register({ module: 'backup', measures: () => this.overview.measures() });
     registerAuditReferences(this.auditReferences, this.em);
   }
 
