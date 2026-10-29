@@ -2,21 +2,26 @@ import type { ModuleManifest } from '@forga/core-contracts';
 
 /**
  * Startup check like the one of the history: a module declaring personal data (`privacy.personData`) must describe it
- * for the access report (`describePerson`) or anonymise it (`PersonDataRegistry`); its processing activities must be
- * named after the module.
+ * for the access report (`describePerson`) and erase and anonymise it (`PersonDataRegistry`: `erasure`, `erase`,
+ * `anonymize`); its processing activities must be named after the module.
  */
-export function assertPersonDataComplete(modules: readonly { manifest: ModuleManifest }[], handled: (moduleId: string) => boolean): void {
-  const missing: string[] = [];
+export function assertPersonDataComplete(
+  modules: readonly { manifest: ModuleManifest }[],
+  checks: { describes: (moduleId: string) => boolean; anonymizes: (moduleId: string) => boolean },
+): void {
+  const undescribed: string[] = [];
+  const unanonymized: string[] = [];
   const misnamed: string[] = [];
   for (const { manifest } of modules) {
     const privacy = manifest.privacy;
     if (!privacy) continue;
-    if (privacy.personData && !handled(manifest.id)) missing.push(manifest.id);
+    if (privacy.personData && !checks.describes(manifest.id)) undescribed.push(manifest.id);
+    if (privacy.personData && !checks.anonymizes(manifest.id)) unanonymized.push(manifest.id);
     misnamed.push(...(privacy.activities ?? []).map((a) => a.key).filter((key) => !key.startsWith(`${manifest.id}.`)));
   }
-  if (missing.length || misnamed.length) {
+  if (undescribed.length || unanonymized.length || misnamed.length) {
     throw new Error(
-      `Personal data: ${missing.join(', ') || '–'} declare personal data but neither describe it (describePerson) nor anonymise it; activities named after other modules: ${misnamed.join(', ') || '–'}.`,
+      `Personal data: ${undescribed.join(', ') || '–'} declare personal data but do not describe it (describePerson); ${unanonymized.join(', ') || '–'} declare personal data but do not erase and anonymise it (PersonDataRegistry); activities named after other modules: ${misnamed.join(', ') || '–'}.`,
     );
   }
 }

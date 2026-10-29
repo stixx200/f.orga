@@ -110,9 +110,15 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     clearInterval(this.timer);
   }
 
-  /** Modules with `privacy.personData` must offer `describePerson` or `anonymize`; activity keys start with the module ID. */
+  /**
+   * Modules with `privacy.personData` must offer `describePerson` and erase and anonymise their data
+   * (`PersonDataRegistry`); activity keys start with the module ID.
+   */
   assertComplete(): void {
-    assertPersonDataComplete(this.options.modules, (id) => Boolean(this.exports.sources.get(id)?.describePerson) || this.personData.handlers.has(id));
+    assertPersonDataComplete(this.options.modules, {
+      describes: (id) => Boolean(this.exports.sources.get(id)?.describePerson),
+      anonymizes: (id) => this.personData.handlers.has(id),
+    });
   }
 
   /** Processing activities of core and modules by key. */
@@ -126,6 +132,8 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
   private async collect(personId: string, language: Language, asOf: Date): Promise<Collected> {
     const persons = await this.organization.persons([personId]);
     if (persons && !persons.length) throw new NotFoundException({ code: 'data.unknownPerson' });
+    // After the complete anonymisation nothing identifies the person any more: there is nothing to report.
+    if (persons?.[0]?.anonymized) throw new ConflictException({ code: 'privacy.personAnonymized' });
     const person = persons?.[0];
     const personName = person ? `${person.firstName} ${person.lastName}`.trim() : '';
     const em = this.em.fork();
@@ -291,6 +299,7 @@ export class AccessReportService implements OnApplicationBootstrap, OnModuleDest
     const key = this.key();
     const persons = await this.organization.persons([input.personId]);
     if (persons && !persons.length) throw new NotFoundException({ code: 'data.unknownPerson' });
+    if (persons?.[0]?.anonymized) throw new ConflictException({ code: 'privacy.personAnonymized' });
     if (input.requestId) {
       // Only an access request of the same person can be answered by the report.
       const request = await this.em.fork().findOne(PrivacyRequestEntity, input.requestId);

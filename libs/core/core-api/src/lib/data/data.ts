@@ -95,29 +95,7 @@ export class ExportRegistry {
 
 // ----- Personal data -----
 
-/** What a module does with the data of a person who is anonymised (e.g. long after leaving). */
-export interface PersonDataHandler {
-  /** Removes or neutralises everything the module stores about these persons beyond what statistics need. */
-  anonymize(personIds: readonly string[]): Promise<void>;
-}
-
-/**
- * Modules register how they anonymise the data they keep about persons; the master data module calls `anonymize`
- * when it anonymises persons, so no module keeps names, notes or health data of them.
- */
-@Injectable()
-export class PersonDataRegistry {
-  readonly handlers = new Map<string, PersonDataHandler>();
-
-  register(module: string, handler: PersonDataHandler): void {
-    this.handlers.set(module, handler);
-  }
-
-  async anonymize(personIds: readonly string[]): Promise<void> {
-    if (!personIds.length) return;
-    for (const handler of this.handlers.values()) await handler.anonymize(personIds);
-  }
-}
+export * from './person-data.js';
 
 @Controller('core')
 export class DataController {

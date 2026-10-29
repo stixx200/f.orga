@@ -252,7 +252,7 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | --- | --- |
 | Auskunft (Art. 15), lesbare Fassung | access report (`AccessReport`, `AccessReportService`), `describePerson` an `ExportSource` mit `DescribeContext`, Bereich `PersonDataSection` (Blöcke `fields`, `table`, `text`); Ablage `core.privacy_document` (`PrivacyDocument`) |
 | Übergabe der Auskunft (in Mein Bereich bereitgestellt, persönlich, per Post) | handover (`AccessReportHandOver`, `AccessReportChannel`: `self-service`, `in-person`, `post`) |
-| Personendaten eines Moduls (Meldung im Manifest) | `privacy.personData` im Manifest (`ModulePrivacy`), Startprüfung `assertPersonDataComplete` |
+| Personendaten eines Moduls (Meldung im Manifest) | `privacy.personData` im Manifest (`ModulePrivacy`), Startprüfung `assertPersonDataComplete` (`describePerson` und `PersonDataRegistry`) |
 | Betroffenenanfrage, Datenschutzanfrage (Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch, Widerruf einer Einwilligung) | data subject request (`core.privacy_request`, `PrivacyRequest`, `kind`: `access`, `rectification`, `erasure`, `restriction`, `objection`, `consent-withdrawal`) |
 | Eingegangen am, Weg | `receivedOn`, `channel` (`letter`, `email`, `in-person`, `my-area`) |
 | Stand der Anfrage (eingegangen, in Prüfung, verlängert, erledigt, abgelehnt) | `status` (`received`, `in-review`, `extended`, `done`, `rejected`), `OPEN_REQUEST_STATUSES` |
@@ -261,7 +261,8 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Antwortschreiben | reply letter (`GET /api/core/privacy/requests/:id/reply.pdf`, Bausteine `reply…`, `REPLY_TEXT_OF_KIND`) |
 | Empfänger informieren (Art. 19) | recipients (`PrivacyRequest.recipients`, Auswahl aus dem Verzeichnis `RecipientOption`, `GET /api/core/privacy/register/recipients`) |
 | Bezug des Widerspruchs (Verarbeitungstätigkeit, genauer Bezug) | `activityKey`, `activityName`; `activity` (Freitext, bei älteren Anfragen der einzige Bezug) |
-| Löschprüfung | erasure check (`PersonDataHandler.erasure`) |
+| Löschprüfung, Datenbereich (löschen, anonymisieren, einschränken bis) | erasure check (`ErasureCheck`, `PersonDataHandler.erasure`/`erase`, `ErasureArea` mit `outcome` `delete`, `anonymize`, `keep`; `ErasureService`, `GET`/`POST /api/core/privacy/requests/:id/erasure`; Audit `privacy.erasure-executed`) |
+| Vollständige Anonymisierung, Namensersetzung („N. N.“) | complete anonymisation (`PersonDataRegistry.anonymize`, `AnonymizeContext`, `replaceNames`, `ANONYMIZED_NAME`) |
 | Einschränkung der Verarbeitung, eingeschränkte Person | processing restriction (`masterdata.person.restricted_at`, `restriction_reason`, `restricted_until`, `restriction_request_id`; `Person.processingRestriction`, `ProcessingRestriction`, `RestrictedPerson`; `PERSON_DIRECTORY.isRestricted`, `restrictedIds`; `assertNotRestricted`, `refuseRestricted`; Fehlercode `privacy.processingRestricted`) |
 | Grund der Einschränkung (Richtigkeit bestritten, unrechtmäßig, Rechtsansprüche, Widerspruch wird geprüft, Aufbewahrungsfrist läuft) | `ProcessingRestrictionReason` (`accuracy-contested`, `unlawful-processing`, `legal-claims`, `objection-pending`, `retention`) |
 | Einwilligung, Fassung, Widerruf | consent (`core.consent`, `ConsentEntity`, `PersonConsent`; Fassung `definition_version`, `withdrawn_on`, `withdrawn_via`; neue Fassung erteilt `superseded_on`) |
