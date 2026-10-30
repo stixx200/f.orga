@@ -450,7 +450,7 @@ describe('API tokens (L23)', () => {
   });
 
   it('names recipient and purpose in the register and reminds of the expiry', async () => {
-    const register = (await get('/core/privacy/register').expect(200)).body as {
+    const register = (await get('/privacy/register').expect(200)).body as {
       activities: {
         key: string;
         recipients: { id: string; name: { de: string }; note: string }[];
@@ -479,7 +479,7 @@ describe('register: processors and impact assessment (L25, L26)', () => {
       name: 'Feuerwehr Musterstadt',
       publicUrl: 'https://forga.example.org',
     }).expect(200);
-    const register = (await get('/core/privacy/register').expect(200)).body as {
+    const register = (await get('/privacy/register').expect(200)).body as {
       processors: { id: string; name: { de: string } }[];
       measures: { key: string; value: { de: string } }[];
     };
@@ -496,14 +496,14 @@ describe('register: processors and impact assessment (L25, L26)', () => {
       register.measures.find((m) => m.key === 'core.encryption')!.value.de,
     ).toContain('Zugangsdaten');
     const pdf = await get(
-      '/core/privacy/register/export/pdf?scope=dpia&language=de',
+      '/privacy/register/export/pdf?scope=dpia&language=de',
     ).expect(200);
     expect(pdf.headers['content-type']).toBe('application/pdf');
     expect(pdf.headers['content-disposition']).toContain(
       'folgenabschaetzung-angaben',
     );
     const xlsx = await get(
-      '/core/privacy/register/export/xlsx?scope=dpia&language=en',
+      '/privacy/register/export/xlsx?scope=dpia&language=en',
     ).expect(200);
     expect(xlsx.headers['content-disposition']).toContain('dpia-information');
   });

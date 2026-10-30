@@ -1,7 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
-import { assertNotRestricted, type AuthenticatedUser, wordsWhere } from '@forga/core-api';
-import type { ProcessingRestriction } from '@forga/core-contracts';
+import { assertNotRestricted, type AuthenticatedUser, ProcessingRestrictions, wordsWhere } from '@forga/core-api';
 import { type Person as PersonDto, type PersonSnapshot, type PersonSummary, readDriverLicense } from '@forga/masterdata-contracts';
 import { today } from '../shared/access.js';
 import { PersonFields } from './person-fields.js';
@@ -72,32 +71,44 @@ export function recordedDates(person: Person): string[] {
   ];
 }
 
-/** A visibility condition for all (not restricted) persons. */
-const all = (where: FilterQuery<Person> | null) => !!where && Object.keys(where).length === 1 && 'restrictedAt' in where;
+/** A visibility condition for all (not restricted) persons: no condition, or only the restricted persons left out. */
+const all = (where: FilterQuery<Person> | null) => !!where && Object.keys(where).every((key) => key === 'id');
 
 @Injectable()
 export class PersonsService {
   constructor(
     private readonly em: EntityManager,
     private readonly fields: PersonFields,
+    private readonly restrictions: ProcessingRestrictions,
   ) {}
 
   /** The person as the UI gets it, without the fields switched off in the settings (L10). */
   async dto(person: Person, user: AuthenticatedUser, options: { self?: boolean } = {}): Promise<PersonDto> {
-    return this.fields.blank(this.toDto(person, user, options), await this.fields.disabled());
+    const dto = { ...this.toDto(person, user, options), processingRestricted: await this.restrictions.isRestricted(person.id) };
+    return this.fields.blank(dto, await this.fields.disabled());
+  }
+
+  /**
+   * Leaves out the persons whose processing is restricted (Art. 18, module `privacy`); no condition while nobody is
+   * restricted or the module is inactive.
+   */
+  async notRestricted(): Promise<{ id?: { $nin: string[] } }> {
+    const restricted = await this.restrictions.restrictedIds();
+    return restricted.size ? { id: { $nin: [...restricted] } } : {};
   }
 
   /**
    * Restricts a query to the persons the user may see with the permission. Persons whose processing is restricted
    * (Art. 18) never appear in lists, search and pickers; their file opens only by ID (`load`).
    */
-  visibleWhere(user: AuthenticatedUser, permission: string): FilterQuery<Person> | null {
+  async visibleWhere(user: AuthenticatedUser, permission: string): Promise<FilterQuery<Person> | null> {
     const grant = user.grant(permission);
     if (!grant) return null;
-    if (grant === 'brigade') return { restrictedAt: null };
+    const unrestricted = await this.notRestricted();
+    if (grant === 'brigade') return unrestricted;
     const date = today();
     return {
-      restrictedAt: null,
+      ...unrestricted,
       $or: [
         {
           memberships: {
@@ -113,7 +124,7 @@ export class PersonsService {
 
   /** Persons visible with the permission, filtered further by `where`, sorted by name. */
   async findVisible(user: AuthenticatedUser, permission: string, where: FilterQuery<Person> = {}): Promise<Person[]> {
-    const visible = this.visibleWhere(user, permission);
+    const visible = await this.visibleWhere(user, permission);
     if (!visible) return [];
     return this.em
       .fork()
@@ -141,25 +152,25 @@ export class PersonsService {
     const person = await em.findOne(Person, id, { populate: POPULATE });
     if (!person) throw new NotFoundException();
     if (!this.can(user, READ, person)) throw new NotFoundException();
-    this.assertReadable(user, person);
+    await this.assertReadable(user, person);
     if (!this.can(user, permission, person)) throw this.denied(user, permission, person);
     return person;
   }
 
   /**
-   * A person whose processing is restricted is readable (and correctable) only with `core.privacy.manage`:
+   * A person whose processing is restricted is readable (and correctable) only with `privacy.manage`:
    * `privacy.processingRestricted`, or `auth.stepUpRequired` if the step-up would give the permission.
    */
-  assertReadable(user: AuthenticatedUser, person: Person): void {
-    assertNotRestricted(user, Boolean(person.restrictedAt));
+  async assertReadable(user: AuthenticatedUser, person: Person): Promise<void> {
+    assertNotRestricted(user, await this.restrictions.isRestricted(person.id));
   }
 
   async list(
     user: AuthenticatedUser,
     filter: { query?: string; departmentId?: string; status?: string; qualification?: string; includeLeft?: boolean },
   ): Promise<PersonSummary[]> {
-    const full = this.visibleWhere(user, READ);
-    const names = this.visibleWhere(user, DIRECTORY);
+    const full = await this.visibleWhere(user, READ);
+    const names = await this.visibleWhere(user, DIRECTORY);
     if (!full && !names) return [];
     // Qualifications are part of the personnel file, so filtering by them stays within it.
     // An empty condition (all departments) inside `$or` would be dropped, so it is taken as is.
@@ -307,8 +318,7 @@ export class PersonsService {
       sensitiveHidden: !sensitive,
       stepUpAvailable: !sensitive && this.needsStepUp(user, SENSITIVE, person),
       anonymizedAt: person.anonymizedAt ? person.anonymizedAt.toISOString() : null,
-      processingRestriction: processingRestriction(person),
-      privacyInformation: person.privacyInformedOn && person.privacyInformedVia ? { informedOn: person.privacyInformedOn, via: person.privacyInformedVia } : null,
+      processingRestricted: false,
       version: person.version,
     };
     if (sensitive) {
@@ -320,13 +330,6 @@ export class PersonsService {
     }
     return dto;
   }
-}
-
-/** The restriction of processing of the person, `null` if none. */
-export function processingRestriction(person: Person): ProcessingRestriction | null {
-  return person.restrictedAt && person.restrictionReason
-    ? { restrictedAt: person.restrictedAt.toISOString(), reason: person.restrictionReason, until: person.restrictedUntil ?? null, requestId: person.restrictionRequestId ?? null }
-    : null;
 }
 
 function sortBy<T>(items: T[], key: (item: T) => string): T[] {

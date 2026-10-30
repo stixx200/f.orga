@@ -46,7 +46,6 @@ import { LISTS_ACCESS_AREA } from './lists/masterdata.lists.js';
 import { ageOn } from './shared/dates.js';
 import { today } from './shared/access.js';
 import { SelfController } from './self/self.controller.js';
-import { PersonPrivacyController, PersonPrivacyService, RestrictionDeadlines } from './privacy/privacy.controller.js';
 import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/persons.service.js';
 
 /**
@@ -55,13 +54,11 @@ import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/person
  */
 @Global()
 @Module({
-  controllers: [CatalogController, OrganizationController, GroupsController, PersonsController, CoursesController, SelfController, DriverLicensesController, PersonPrivacyController, PersonFieldsController],
+  controllers: [CatalogController, OrganizationController, GroupsController, PersonsController, CoursesController, SelfController, DriverLicensesController, PersonFieldsController],
   providers: [
     CatalogService,
     PersonFields,
     PersonsService,
-    PersonPrivacyService,
-    RestrictionDeadlines,
     MasterdataLists,
     MasterdataDeadlines,
     PersonsImport,
@@ -114,8 +111,6 @@ export class MasterdataModule implements OnModuleInit {
     private readonly auditReferences: AuditReferenceRegistry,
     private readonly licenseDeadlines: DriverLicenseDeadlines,
     private readonly licenseLists: DriverLicenseLists,
-    private readonly personPrivacy: PersonPrivacyService,
-    private readonly restrictionDeadlines: RestrictionDeadlines,
     private readonly accessLog: AccessLog,
     private readonly personData: PersonDataRegistry,
     private readonly erasure: MasterdataErasure,
@@ -129,7 +124,6 @@ export class MasterdataModule implements OnModuleInit {
     for (const definition of [...this.masterdataLists.definitions(), ...this.licenseLists.definitions()]) this.lists.register('masterdata', definition);
     this.deadlineRegistry.register(this.deadlines);
     this.deadlineRegistry.register(this.licenseDeadlines);
-    this.deadlineRegistry.register(this.restrictionDeadlines);
     this.imports.register('masterdata', this.personsImport.profile());
     this.imports.register('masterdata', this.careerImport.profile());
     for (const lookup of this.lookups.lookups()) this.imports.registerLookup('masterdata', lookup);
@@ -171,9 +165,6 @@ export class MasterdataModule implements OnModuleInit {
       },
       readablePersonIds: async (user) => (await this.persons.findVisible(user, READ)).map((p) => p.id),
       allPersonIds: async () => (await this.em.fork().find(Person, {}, { fields: ['id'] })).map((p) => p.id),
-      // Restriction of processing (Art. 18): the core leaves these persons out of deadlines and search.
-      restrictedPersonIds: () => this.personPrivacy.restrictedIds(),
-      restrictProcessing: (personId, restriction) => this.personPrivacy.restrict(personId, restriction),
       // Consents of minors are given by their legal guardians (L9).
       minors: async (ids) => {
         const day = today();

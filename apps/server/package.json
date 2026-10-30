@@ -110,7 +110,9 @@
     "@forga/info-terminal-api": "*",
     "@forga/mp-feuer-api": "*",
     "@forga/mp-feuer-contracts": "*",
-    "@forga/backup-api": "*"
+    "@forga/backup-api": "*",
+    "@forga/privacy-api": "*",
+    "@forga/privacy-contracts": "*"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.0",

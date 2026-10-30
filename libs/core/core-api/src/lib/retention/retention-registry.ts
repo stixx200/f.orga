@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { LocalizedText, PrivacySettings, RetentionAction, RetentionFinalAction, RetentionRuleInput, RetentionSubtype } from '@forga/core-contracts';
+import type { LocalizedText, RetentionSettings, RetentionAction, RetentionFinalAction, RetentionRuleInput, RetentionSubtype } from '@forga/core-contracts';
 
 /** A record whose retention period has passed. */
 export interface RetentionCandidate {
@@ -94,7 +94,7 @@ export interface RetentionDependent {
 
 export interface RetentionRule {
   /** Applies the rule (or only counts when `dryRun`); returns the number of affected records. */
-  run(settings: PrivacySettings, dryRun: boolean): Promise<number>;
+  run(settings: RetentionSettings, dryRun: boolean): Promise<number>;
 }
 
 /**

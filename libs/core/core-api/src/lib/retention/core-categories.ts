@@ -1,6 +1,6 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import type { PrivacySettings } from '@forga/core-contracts';
+import type { RetentionSettings } from '@forga/core-contracts';
 import { AuditEntry } from '../audit/audit.js';
 import { anonymizeAccounts } from '../data/core-export.js';
 import { HistoryEntry } from '../history/history.entity.js';
@@ -140,7 +140,7 @@ export class CoreRetentionCategories implements OnModuleInit {
 
   /** The current period of the stored rule (a case is executed later than it was created). */
   private async cutoff(key: string): Promise<Date> {
-    const rule = (await this.settings.get<PrivacySettings>('privacy'))?.retention[key];
+    const rule = (await this.settings.get<RetentionSettings>('retention'))?.retention[key];
     const years = rule?.years ?? (key === 'core.audit' ? 2 : null);
     const cutoff = new Date();
     if (years === null) return new Date(0);

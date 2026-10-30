@@ -88,8 +88,9 @@ test('administrator backs up, verifies and prepares a restore', async ({ browser
   // Not restored: that ends with the restart of the server.
   await page.getByRole('link', { name: 'Abbrechen' }).click();
 
-  // Download and delete the backup.
-  await page.getByRole('row').filter({ hasText: 'Wiederherstellung getestet' }).first().getByRole('button', { name: 'Weitere Aktionen' }).click();
+  // Download and delete the backup. The check of the wizard was recorded at the backup as well, so the row now says
+  // „geprüft“ instead of „Wiederherstellung getestet“ as soon as the list is loaded again.
+  await row.getByRole('button', { name: 'Weitere Aktionen' }).click();
   const details = page.getByRole('dialog', { name: /^Sicherung vom / });
   const file = await download(page, () => details.getByRole('link', { name: 'Herunterladen' }).click());
   expect(file.name).toMatch(/\.forgabackup$/);

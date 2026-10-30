@@ -4,6 +4,7 @@ import type { SearchHit } from '@forga/core-contracts';
 import type { DescribeContext, PersonDataSection } from '../access-report/person-description.js';
 import { Audit } from '../audit/audit.js';
 import { AccessLog } from '../privacy/access-log.js';
+import { ProcessingRestrictions } from '../privacy/restriction.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { OrganizationDirectory } from '../security/organization-directory.js';
 import { CurrentUser, RequirePermissions } from '../security/decorators.js';
@@ -20,7 +21,7 @@ export type SearchSource = (user: AuthenticatedUser, query: string) => Promise<S
 export class SearchRegistry {
   private readonly sources: { module: string; source: SearchSource }[] = [];
 
-  constructor(private readonly organization: OrganizationDirectory) {}
+  constructor(private readonly restrictions: ProcessingRestrictions) {}
 
   register(module: string, source: SearchSource): void {
     this.sources.push({ module, source });
@@ -31,8 +32,9 @@ export class SearchRegistry {
       this.sources.filter((s) => user.canAnythingIn(s.module)).map((s) => s.source(user, query).catch((): SearchHit[] => [])),
     );
     // Hits about persons whose processing is restricted (Art. 18) never show up.
-    const restricted = await this.organization.restrictedPersonIds();
-    return results.flat().filter((hit) => !hit.personId || !restricted.has(hit.personId));
+    const hits = results.flat();
+    const restricted = await this.restrictions.restrictedIds([...new Set(hits.flatMap((hit) => (hit.personId ? [hit.personId] : [])))]);
+    return hits.filter((hit) => !hit.personId || !restricted.has(hit.personId));
   }
 }
 

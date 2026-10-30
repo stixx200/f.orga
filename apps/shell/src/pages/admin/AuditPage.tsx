@@ -5,9 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Fragment, type ReactNode, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import type { AuditEntry, AuditFilters, AuditReference } from '@forga/core-contracts';
-import { api, formatDate, formatDateTime, useLocalized, useTranslation, withQuery } from '@forga/web-sdk';
+import { api, can, extensionsOf, formatDate, formatDateTime, useLocalized, useSession, useTranslation, withQuery } from '@forga/web-sdk';
 import { DataTable, PageHeader } from '@forga/web-ui';
-import { AccessLogView } from './AccessLogView';
 
 /** Starting the action filter on a prefix (e.g. `?action=events.` from a task) selects all actions of that area. */
 function initialAction(): string | null {
@@ -135,28 +134,46 @@ function Details({ entry }: { entry: AuditEntry }) {
             <KeyLabel name={key} label={texts.key(key, entry.action)} />:
           </Text>{' '}
           {/* Persons named by an export (data breaches): only their number, the IDs stay in the entry. */}
-          {key === 'personIds' && Array.isArray(value) ? t('breaches.personCount', { count: value.length }) : <DetailValue value={value} entry={entry} />}
+          {key === 'personIds' && Array.isArray(value) ? t('audit.personCount', { count: value.length }) : <DetailValue value={value} entry={entry} />}
         </Text>
       ))}
     </Stack>
   );
 }
 
-/** "Verwaltung → Audit-Log" with the tabs audit log and read log (`?tab=access`). */
+/**
+ * "Verwaltung → Audit-Log": the audit log and further protocols of the modules as tabs (extension point
+ * `core.audit.tabs`, e.g. the read log of the module `privacy` at `?tab=privacy`).
+ */
 export function AuditPage() {
   const { t } = useTranslation('shell');
+  const localized = useLocalized();
+  const session = useSession().data;
   const [search, setSearch] = useSearchParams();
-  const tab = search.get('tab') === 'access' ? 'access' : 'audit';
+  const tabs = extensionsOf('core.audit.tabs').filter((e) => !e.permission || can(session, e.permission));
+  const requested = search.get('tab');
+  const tab = tabs.some((e) => e.module === requested) ? requested! : 'audit';
+  if (!tabs.length) {
+    return (
+      <Stack gap="lg">
+        <PageHeader breadcrumbs={[{ label: t('nav.administration') }, { label: t('nav.audit') }]} title={t('nav.audit')} subtitle={t('audit.subtitle')} />
+        <AuditLogView />
+      </Stack>
+    );
+  }
   return (
     <Stack gap="lg">
       <PageHeader breadcrumbs={[{ label: t('nav.administration') }, { label: t('nav.audit') }]} title={t('nav.audit')} subtitle={t('audit.subtitle')} />
-      <Tabs value={tab} onChange={(value) => setSearch(value === 'access' ? { tab: 'access' } : {}, { replace: true })} keepMounted={false}>
+      <Tabs value={tab} onChange={(value) => setSearch(value && value !== 'audit' ? { tab: value } : {}, { replace: true })} keepMounted={false}>
         <Tabs.List mb="lg">
-          <Tabs.Tab value="audit">{t('transparency.accessLog.tabAudit')}</Tabs.Tab>
-          <Tabs.Tab value="access">{t('transparency.accessLog.tab')}</Tabs.Tab>
+          <Tabs.Tab value="audit">{t('audit.tab')}</Tabs.Tab>
+          {tabs.map((e) => <Tabs.Tab key={e.module} value={e.module}>{localized(e.label)}</Tabs.Tab>)}
         </Tabs.List>
         <Tabs.Panel value="audit"><AuditLogView /></Tabs.Panel>
-        <Tabs.Panel value="access"><AccessLogView /></Tabs.Panel>
+        {tabs.map((e) => {
+          const Tab = e.component;
+          return <Tabs.Panel key={e.module} value={e.module}><Tab /></Tabs.Panel>;
+        })}
       </Tabs>
     </Stack>
   );

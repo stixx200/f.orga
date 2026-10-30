@@ -416,6 +416,8 @@ function ProgressStep({ run }: { run: MpFeuerRun }) {
 
 function ResultStep({ run }: { run: MpFeuerRun }) {
   const { t, i18n } = useTranslation('mp-feuer');
+  // Information under Art. 13/14 is recorded in the module `privacy` (only while it is active).
+  const privacy = useCan('privacy.manage');
   const localized = useLocalized();
   const navigate = useNavigate();
   const { data: report } = useReport(run.id, !isRunning(run));
@@ -433,8 +435,8 @@ function ResultStep({ run }: { run: MpFeuerRun }) {
           {t('result.applied', { date: formatDateTime(run.finishedAt, i18n.language), duration, errors: counts.error, remembered: report?.remembered ?? 0 })}
         </Notice>
       )}
-      {run.status === 'applied' && (run.datasets.find((d) => d.profile === 'masterdata.persons')?.counts?.create ?? 0) > 0 && (
-        <Notice kind="info" action={<Button size="xs" variant="outline" component={Link} to="/admin/privacy/information">{t('result.informAction')}</Button>}>
+      {privacy && run.status === 'applied' && (run.datasets.find((d) => d.profile === 'masterdata.persons')?.counts?.create ?? 0) > 0 && (
+        <Notice kind="info" action={<Button size="xs" variant="outline" component={Link} to="/privacy/information">{t('result.informAction')}</Button>}>
           {t('result.inform')}
         </Notice>
       )}

@@ -2,11 +2,12 @@ import { Anchor, Button, FileButton, Group, NumberInput, PasswordInput, Select, 
 import { IconDownload } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
-import { Navigate } from 'react-router';
 import type { BrigadeSettings, OidcSettings, ReminderSettings, SmtpSettings } from '@forga/core-contracts';
 import { api, can, send, upload as uploadFile, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { Notice, notifySuccess, PageHeader, Panel, useAction } from '@forga/web-ui';
 import type { LoadedModule } from '../../modules';
+import { RetentionSettings } from './RetentionSettings';
+import { SecuritySettings } from './SecuritySettings';
 
 const key = (section: string) => ['core', 'settings', section] as const;
 
@@ -44,9 +45,7 @@ function SectionFormLoaded<T extends object>({ section, initial, children }: { s
 }
 
 const BRIGADE_DEFAULTS: BrigadeSettings = { name: '', street: '', postalCode: '', city: '', phone: '', fax: '', website: '', email: '', municipality: '', population: null, publicUrl: '' };
-const TABS = ['brigade', 'smtp', 'reminders', 'oidc', 'export'];
-/** Tabs that moved to „Verwaltung → Datenschutz → Einstellungen“ (old links keep working). */
-const MOVED: Record<string, string> = { privacy: 'retention', security: 'security' };
+const TABS = ['brigade', 'smtp', 'reminders', 'security', 'retention', 'oidc', 'export'];
 
 /** Warnings and the connection test of the OIDC settings. */
 function OidcChecks({ matchBy }: { matchBy: OidcSettings['matchBy'] }) {
@@ -82,9 +81,7 @@ export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
     const requested = new URLSearchParams(window.location.search).get('tab');
     return requested && TABS.includes(requested) ? requested : 'brigade';
   });
-  const moved = MOVED[new URLSearchParams(window.location.search).get('tab') ?? ''];
   const weekdays = [1, 2, 3, 4, 5, 6, 7].map((day) => ({ value: String(day), label: t(`settings.weekdays.${day}`) }));
-  if (moved) return <Navigate to={`/admin/privacy/settings?tab=${moved}`} replace />;
   return (
     <Stack gap="lg">
       <PageHeader breadcrumbs={[{ label: t('nav.administration') }, { label: t('nav.settings') }]} title={t('nav.settings')} />
@@ -93,9 +90,20 @@ export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
           <Tabs.Tab value="brigade">{t('settings.tabs.brigade')}</Tabs.Tab>
           <Tabs.Tab value="smtp">{t('settings.tabs.smtp')}</Tabs.Tab>
           <Tabs.Tab value="reminders">{t('settings.tabs.reminders')}</Tabs.Tab>
+          <Tabs.Tab value="security">{t('settings.tabs.security')}</Tabs.Tab>
+          <Tabs.Tab value="retention">{t('settings.tabs.retention')}</Tabs.Tab>
           <Tabs.Tab value="oidc">{t('settings.tabs.oidc')}</Tabs.Tab>
           {can(session, 'core.data.export') && <Tabs.Tab value="export">{t('settings.tabs.export')}</Tabs.Tab>}
         </Tabs.List>
+        <Tabs.Panel value="security">
+          <Stack gap="lg" maw={880}>
+            <Panel title={t('settings.stepUp')}>
+              <Text size="sm">{t('settings.stepUpText')}</Text>
+            </Panel>
+            <SecuritySettings />
+          </Stack>
+        </Tabs.Panel>
+        <Tabs.Panel value="retention"><RetentionSettings /></Tabs.Panel>
         <Tabs.Panel value="brigade">
           <Panel title={t('settings.brigade.title')} maw={880}>
             <SectionForm section="brigade" defaults={BRIGADE_DEFAULTS}>

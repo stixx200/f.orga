@@ -1,11 +1,10 @@
 import { Alert, Anchor, Button, Center, Checkbox, Divider, Group, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { LocalizedText } from '@forga/core-contracts';
-import { ApiError, SESSION_QUERY_KEY, send, takeLoginNotice, translateCode, useLocalized, useTranslation } from '@forga/web-sdk';
-import { ResponsiveDialog } from '@forga/web-ui';
+import { ApiError, api, SESSION_QUERY_KEY, send, takeLoginNotice, translateCode, useLocalized, useTranslation } from '@forga/web-sdk';
+import { LanguageSwitch, ResponsiveDialog } from '@forga/web-ui';
 import { BrigadeLogo } from '../frame/AppFrame';
-import { LanguageSwitch } from '../frame/LanguageSwitch';
 
 /** Error code from a failed sign-in with the OIDC provider (`/?oidcError=…`), read once. */
 function oidcError(): string | null {
@@ -14,9 +13,20 @@ function oidcError(): string | null {
   return code && /^auth\.oidc\w+$/.test(code) ? code : null;
 }
 
+/** Is the public privacy notice available (module `privacy` active)? Asked without sign-in. */
+function usePrivacyNoticeAvailable(): boolean {
+  const { data } = useQuery({
+    queryKey: ['core', 'kiosk', 'privacy-notice', 'available'],
+    queryFn: () => api('core/modules/kiosk/privacy-notice').then(() => true, () => false),
+    staleTime: Infinity,
+  });
+  return data ?? false;
+}
+
 export function LoginPage({ brigadeName, oidc, rememberAllowed = false }: { brigadeName: string | null; oidc: { label: LocalizedText } | null; rememberAllowed?: boolean }) {
   const { t } = useTranslation('shell');
   const localized = useLocalized();
+  const noticeAvailable = usePrivacyNoticeAvailable();
   const [providerError] = useState(oidcError);
   // E.g. „Wiederhergestellt aus der Sicherung vom …“ after a restore.
   const [notice] = useState(takeLoginNotice);
@@ -70,7 +80,7 @@ export function LoginPage({ brigadeName, oidc, rememberAllowed = false }: { brig
               <LanguageSwitch loggedIn={false} />
               <Anchor component="button" type="button" size="sm" onClick={() => setForgotten(true)}>{t('login.forgotten')}</Anchor>
             </Group>
-            <Anchor href="/privacy" size="xs" c="dimmed">{t('privacy.notice.link')}</Anchor>
+            {noticeAvailable && <Anchor href="/privacy-notice" size="xs" c="dimmed">{t('privacyNotice')}</Anchor>}
           </Stack>
         </form>
       </Paper>

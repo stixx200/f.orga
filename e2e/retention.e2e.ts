@@ -1,4 +1,4 @@
-import { ADMIN, api, expect, germanDate, login, row, test, USERS } from './support';
+import { ADMIN, api, expect, germanDate, login, restore, row, test, USERS } from './support';
 
 /**
  * The commander marks an old incident „30 Jahre aufbewahren (Sonderfall)“; the administrator sets the period of the
@@ -27,10 +27,10 @@ test('administrator anonymises an old incident kept as special case', async ({ b
   await expect(commander.getByRole('checkbox', { name: '30 Jahre aufbewahren (Sonderfall)' })).toBeChecked();
 
   const page = await login(browser, ADMIN.username);
-  const stored = await api<{ retention?: Record<string, unknown> } | null>(page, 'GET', 'core/settings/privacy');
+  const stored = await api<{ retention?: Record<string, unknown> } | null>(page, 'GET', 'core/settings/retention');
   try {
     // Rule: incidents with special features 30 years, anonymise, special case to be checked.
-    await page.goto('/admin/privacy/settings?tab=retention');
+    await page.goto('/admin/settings?tab=retention');
     const special = row(page, 'Einsätze mit Besonderheiten');
     await special.getByRole('textbox', { name: 'Jahre' }).fill('30');
     await special.getByRole('combobox', { name: /^Nach Ablauf/ }).click();
@@ -65,6 +65,6 @@ test('administrator anonymises an old incident kept as special case', async ({ b
     await commander.reload();
     await expect(commander.getByText(/^Nach Ablauf der Aufbewahrungsfrist am .* anonymisiert/)).toBeVisible();
   } finally {
-    if (!page.isClosed()) await api(page, 'PUT', 'core/settings/privacy', { retention: stored?.retention ?? {} });
+    if (!page.isClosed()) await restore('the retention periods', () => api(page, 'PUT', 'core/settings/retention', { retention: stored?.retention ?? {} }));
   }
 });

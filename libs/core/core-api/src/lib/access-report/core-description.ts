@@ -2,8 +2,6 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { AuditEntry } from '../audit/audit.js';
 import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
-import { AccessLog } from '../privacy/access-log.js';
-import { ConsentService } from '../privacy/consents.js';
 import { OrganizationDirectory } from '../security/organization-directory.js';
 import { ApiToken, Session, User, UserMfa } from '../security/security.entities.js';
 import { AUDIT_LABELS } from './audit-labels.js';
@@ -16,39 +14,12 @@ export class CoreDescription {
     private readonly em: EntityManager,
     private readonly organization: OrganizationDirectory,
     @Inject(FORGA_CORE_OPTIONS) private readonly options: ForgaCoreOptions,
-    private readonly consents: ConsentService,
-    private readonly accessLog: AccessLog,
   ) {}
 
-  /** Consents (L9), accesses to especially protected data (L15) and the user account with its protocol. */
+  /** The user account with its protocol. */
   async describePerson(personId: string, ctx: DescribeContext): Promise<PersonDataSection[]> {
-    const consents = await this.consents.describe(personId, ctx);
-    const accesses = await this.describeAccesses(personId, ctx);
     const account = await this.describeAccount(personId, ctx);
-    return [...(consents ? [consents] : []), ...(accesses ? [accesses] : []), ...(account ? [account] : [])];
-  }
-
-  /**
-   * "Zugriffe auf besonders geschützte Daten": from the read log, per function (never the name of the reader), area and
-   * day; own accesses are not logged.
-   */
-  private async describeAccesses(personId: string, ctx: DescribeContext): Promise<PersonDataSection | null> {
-    const rows = await this.accessLog.forPerson(personId);
-    if (!rows.length) return null;
-    return {
-      key: 'core.access-log',
-      title: ctx.t('Zugriffe auf besonders geschützte Daten', 'Access to especially protected data'),
-      activity: 'core.accounts',
-      categories: [ctx.t('Leseprotokoll', 'Read log')],
-      blocks: [
-        {
-          kind: 'table',
-          title: ctx.t('Wer hat wann auf Gesundheitsdaten und andere besonders geschützte Daten zugegriffen', 'Who accessed health data and other especially protected data when'),
-          columns: [ctx.t('Tag', 'Day'), ctx.t('Funktion', 'Function'), ctx.t('Bereich', 'Area'), ctx.t('Zugriffe', 'Accesses')],
-          rows: await Promise.all(rows.map(async (r) => [ctx.date(r.day), await ctx.actor(r.userId), ctx.text(this.accessLog.areaLabel(r.area)), String(r.count)])),
-        },
-      ],
-    };
+    return account ? [account] : [];
   }
 
   private async describeAccount(personId: string, ctx: DescribeContext): Promise<PersonDataSection | null> {

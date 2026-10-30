@@ -21,7 +21,7 @@ test('global search, data protection and export', async ({ browser }) => {
   await expect(page.getByRole('heading', { name: 'Fahrzeuge', level: 1 })).toBeVisible();
 
   // Retention periods show how many records each rule would affect now.
-  await page.goto('/admin/privacy/settings?tab=retention');
+  await page.goto('/admin/settings?tab=retention');
   await expect(page.getByRole('heading', { name: 'Aufbewahrungsfristen' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Jetzt betroffen' })).toBeVisible();
 

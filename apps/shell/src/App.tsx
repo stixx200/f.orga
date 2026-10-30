@@ -1,9 +1,9 @@
 import { Alert, Loader } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { type ReactNode, useEffect, useMemo } from 'react';
+import { type ComponentType, type ReactNode, useEffect, useMemo } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import type { Session } from '@forga/core-contracts';
-import { ApiError, can, currentLanguage, setLanguage, useMaintenance, useSession, useSetupState, useTranslation } from '@forga/web-sdk';
+import { ApiError, can, currentLanguage, extensionsOf, setLanguage, useMaintenance, useSession, useSetupState, useTranslation } from '@forga/web-sdk';
 import { EmptyState } from '@forga/web-ui';
 import { LoginPage } from './auth/LoginPage';
 import { MaintenancePage } from './auth/MaintenancePage';
@@ -28,11 +28,6 @@ import { MyAreaPage } from './pages/MyAreaPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ScanPage } from './pages/ScanPage';
 import { StartPage } from './pages/StartPage';
-import { FirstLoginPage, NoticePage } from './pages/privacy/NoticePage';
-import { PrivacyPage } from './pages/privacy/PrivacyPage';
-import { BreachPage } from './pages/privacy/BreachPage';
-import { RequestPage } from './pages/privacy/RequestPage';
-import { RectificationPage } from './privacy/Rectification';
 
 function NotFound() {
   const { t } = useTranslation('shell');
@@ -59,7 +54,6 @@ function Router({ modules, session }: { modules: LoadedModule[]; session: Sessio
             { path: 'lists', element: <ListsPage modules={modules} /> },
             { path: 'scan', element: <ScanPage /> },
             { path: 'import', element: <ImportPage /> },
-            { path: 'privacy/rectifications/:id', element: <RectificationPage /> },
             { path: 'admin/users', element: <Guard session={session} permission="core.users.manage"><UsersPage /></Guard> },
             { path: 'admin/roles', element: <Guard session={session} permission="core.roles.manage"><RolesPage modules={modules} /></Guard> },
             {
@@ -70,17 +64,6 @@ function Router({ modules, session }: { modules: LoadedModule[]; session: Sessio
             { path: 'admin/settings', element: <Guard session={session} permission="core.settings.manage"><SettingsPage modules={modules} /></Guard> },
             { path: 'admin/audit', element: <Guard session={session} permission="core.audit.read"><AuditPage /></Guard> },
             { path: 'admin/retention', element: <Guard session={session} permission="core.retention.manage"><RetentionPage /></Guard> },
-            { path: 'admin/privacy', element: <Guard session={session} permission="core.privacy.manage"><PrivacyPage tab="requests" session={session} /></Guard> },
-            { path: 'admin/privacy/information', element: <Guard session={session} permission="core.privacy.manage"><PrivacyPage tab="information" session={session} /></Guard> },
-            { path: 'admin/privacy/requests/:id', element: <Guard session={session} permission="core.privacy.manage"><RequestPage /></Guard> },
-            { path: 'admin/privacy/register', element: <Guard session={session} permission="core.privacy.manage"><PrivacyPage tab="register" session={session} /></Guard> },
-            { path: 'admin/privacy/breaches', element: <Guard session={session} permission="core.privacy.manage"><PrivacyPage tab="breaches" session={session} /></Guard> },
-            { path: 'admin/privacy/breaches/:id', element: <Guard session={session} permission="core.privacy.manage"><BreachPage /></Guard> },
-            {
-              path: 'admin/privacy/settings',
-              // Security and retention also for the managers of the settings.
-              element: <Guard session={session} permission={can(session, 'core.privacy.manage') ? 'core.privacy.manage' : 'core.settings.manage'}><PrivacyPage tab="settings" session={session} /></Guard>,
-            },
             ...modules.flatMap(({ info, web }) => (web ? [{ path: `${info.id}/*`, children: web.routes }] : [])),
             { path: '*', element: <NotFound /> },
           ],
@@ -103,14 +86,18 @@ function LoggedIn({ session }: { session: Session }) {
 
   if (error) return <Alert color="brand" title={t('serverUnavailable')}>{error.message}</Alert>;
   if (!modules) return <Loader m="xl" />;
-  // First sign-in or a new version of the privacy notice: acknowledge it before working.
-  if (session.privacyNotice.due) return <FirstLoginPage session={session} />;
-  return (
+  // Modules may hold the work back before the app opens (extension point `core.session.gate`), e.g. the privacy notice
+  // at the first sign-in.
+  const app = (
     <>
       <Router modules={modules} session={session} />
       <StepUpHost session={session} />
     </>
   );
+  return extensionsOf('core.session.gate').reduceRight<ReactNode>((inner, gate) => {
+    const Gate = gate.component as ComponentType<{ session: Session; children: ReactNode }>;
+    return <Gate key={gate.module} session={session}>{inner}</Gate>;
+  }, app);
 }
 
 /** A page of a module without shell frame and login, e.g. the info terminal at `/terminal`. */
@@ -141,8 +128,6 @@ function Pages() {
   if (kiosk) return <KioskPage path={kiosk} />;
   if (window.location.pathname === '/reset-password') return <ResetPasswordPage />;
   if (window.location.pathname === '/confirm-email') return <ConfirmEmailPage />;
-  // The privacy notice is readable without sign-in.
-  if (window.location.pathname === '/privacy') return <NoticePage />;
   return <Main />;
 }
 

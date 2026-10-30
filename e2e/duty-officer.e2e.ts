@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { api, choose, expect, panel, germanDate, isoDate, login, row, test, USERS } from './support';
+import { api, choose, expect, germanDate, isoDate, login, panel, restore, row, test, USERS } from './support';
 
 type Kind = { key: string; name: string; unit: string };
 
@@ -208,6 +208,6 @@ test('EvD report of a new incident', async ({ browser }) => {
     await expect(restored).toContainText(/EvD-Bericht: EvD-\d{4}-\d+/);
     await expect(restored.getByRole('link', { name: 'Bericht öffnen' })).toBeVisible();
   } finally {
-    await api(commander, 'DELETE', `duty-officer/roster/${duty.id}`);
+    await restore('the roster', () => api(commander, 'DELETE', `duty-officer/roster/${duty.id}`));
   }
 });

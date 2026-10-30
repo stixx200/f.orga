@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { wordsWhere } from '@forga/core-api';
+import { ProcessingRestrictions, wordsWhere } from '@forga/core-api';
 import type {
   CatalogEntry as CatalogEntryDto,
   CatalogKind,
@@ -33,6 +33,7 @@ export class PersonDirectoryService implements PersonDirectory {
   constructor(
     private readonly em: EntityManager,
     private readonly persons: PersonsService,
+    private readonly restrictions: ProcessingRestrictions,
   ) {}
 
   async search(query: string, options: { departmentIds?: string[]; limit?: number } = {}): Promise<PersonSummary[]> {
@@ -40,8 +41,8 @@ export class PersonDirectoryService implements PersonDirectory {
     const found = await this.em.fork().find(
       Person,
       {
+        ...(await this.persons.notRestricted()),
         status: { $ne: 'left' },
-        restrictedAt: null,
         ...words,
         ...(options.departmentIds ? { memberships: { department: { $in: options.departmentIds } } } : {}),
       },
@@ -59,14 +60,14 @@ export class PersonDirectoryService implements PersonDirectory {
   async membersOn(date: string, options: { includeRestricted?: boolean } = {}): Promise<PersonSnapshot[]> {
     const found = await this.em.fork().find(
       Person,
-      { ...(options.includeRestricted ? {} : { restrictedAt: null }), memberships: { from: { $lte: date }, $or: [{ to: null }, { to: { $gte: date } }] } },
+      { ...(options.includeRestricted ? {} : await this.persons.notRestricted()), memberships: { from: { $lte: date }, $or: [{ to: null }, { to: { $gte: date } }] } },
       { populate: POPULATE },
     );
     return found.map((p) => this.persons.snapshot(p, date));
   }
 
   async memberPeriods(): Promise<MemberPeriods[]> {
-    const found = await this.em.fork().find(Person, { restrictedAt: null }, { populate: ['memberships'] });
+    const found = await this.em.fork().find(Person, await this.persons.notRestricted(), { populate: ['memberships'] });
     return found.map((p) => ({
       id: p.id,
       firstName: p.firstName,
@@ -100,7 +101,7 @@ export class PersonDirectoryService implements PersonDirectory {
   }
 
   async careers(ids?: readonly string[]): Promise<PersonCareer[]> {
-    const where = ids ? { id: { $in: [...ids] } } : { status: { $ne: 'left' as const }, restrictedAt: null };
+    const where = ids ? { id: { $in: [...ids] } } : { ...(await this.persons.notRestricted()), status: { $ne: 'left' as const } };
     const persons = await this.em.fork().find(Person, where, { populate: ['memberships.department', 'ranks', 'qualifications', 'offices', 'restPeriods'] });
     return persons.map((p) => {
       const current = p.memberships.getItems().filter((m) => m.from <= today() && (!m.to || m.to >= today()));
@@ -123,22 +124,21 @@ export class PersonDirectoryService implements PersonDirectory {
   }
 
   async offices(filter: { offices?: readonly string[] } = {}): Promise<OfficeHolding[]> {
+    const restricted = await this.restrictions.restrictedIds();
     const rows = await this.em.fork().find(
       OfficeAssignment,
-      { person: { restrictedAt: null }, ...(filter.offices ? { office: { $in: [...filter.offices] } } : {}) },
+      { ...(restricted.size ? { person: { $nin: [...restricted] } } : {}), ...(filter.offices ? { office: { $in: [...filter.offices] } } : {}) },
       { orderBy: { from: 'asc' } },
     );
     return rows.map((o) => ({ personId: o.person.id, office: o.office, departmentId: o.departmentId ?? null, from: o.from, to: o.to ?? null }));
   }
 
-  async isRestricted(personId: string): Promise<boolean> {
-    return (await this.restrictedIds([personId])).has(personId);
+  isRestricted(personId: string): Promise<boolean> {
+    return this.restrictions.isRestricted(personId);
   }
 
-  async restrictedIds(ids?: readonly string[]): Promise<Set<string>> {
-    if (ids && !ids.length) return new Set();
-    const found = await this.em.fork().find(Person, { restrictedAt: { $ne: null }, ...(ids ? { id: { $in: [...ids] } } : {}) }, { fields: ['id'] });
-    return new Set(found.map((p) => p.id));
+  restrictedIds(ids?: readonly string[]): Promise<Set<string>> {
+    return this.restrictions.restrictedIds(ids);
   }
 
   async recordPromotion(personId: string, promotion: { rank: string; since: string; notes: string }): Promise<void> {

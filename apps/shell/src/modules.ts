@@ -39,7 +39,7 @@ export async function loadModules(): Promise<LoadedModule[]> {
 }
 
 /** Pages without shell frame and login, served by a module (`frontend.kiosk` of its manifest). */
-export const KIOSK_PATHS = ['terminal'];
+export const KIOSK_PATHS = ['terminal', 'privacy-notice'];
 
 /** Loads the kiosk page of the module serving `/<path>`; fails with `modules.inactive` while the module is off. */
 export async function loadKiosk(path: string): Promise<KioskModule> {

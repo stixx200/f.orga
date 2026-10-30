@@ -3,11 +3,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { Deadline, LocalizedText, Session } from '@forga/core-contracts';
 import { api, send, SESSION_QUERY_KEY, useLocalized, useTranslation } from '@forga/web-sdk';
-import { Notice, notifySuccess, PageHeader, Panel, useAction } from '@forga/web-ui';
+import { LanguageSwitch, Notice, notifySuccess, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { MfaPanel } from '../auth/StepUp';
 import { ImpersonationsPanel } from '../privacy/Impersonations';
 import { DevicesPanel } from '../privacy/Devices';
-import { LanguageSwitch } from '../frame/LanguageSwitch';
 import type { LoadedModule } from '../modules';
 
 /**

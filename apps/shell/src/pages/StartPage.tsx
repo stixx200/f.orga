@@ -59,7 +59,12 @@ function Onboarding() {
   const open = data.filter((item) => !item.done);
   if (!open.length) return null;
   const label = (item: OnboardingItem) =>
-    item.key.startsWith('module:') ? t('onboarding.items.module', { name: item.label ? localized(item.label) : item.key.slice(7) }) : t(`onboarding.items.${item.key}`);
+    item.key.startsWith('module:')
+      ? t('onboarding.items.module', { name: item.label ? localized(item.label) : item.key.slice(7) })
+      : // Further steps of a module bring their own text (e.g. the data protection contacts).
+        item.label
+        ? localized(item.label)
+        : t(`onboarding.items.${item.key}`);
   return (
     <Panel title={t('onboarding.title')} aside={<Text size="xs" c="dimmed">{t('onboarding.done', { done: data.length - open.length, total: data.length })}</Text>}>
       <Text size="sm" mb="xs">{t('onboarding.intro')}</Text>

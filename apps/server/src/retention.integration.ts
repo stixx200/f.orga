@@ -17,7 +17,7 @@ const post = (path: string, body: unknown, cookie = admin) => test.http.post(`/a
 const put = (path: string, body: unknown, cookie = admin) => test.http.put(`/api${path}`).set('Cookie', cookie).set(UI).send(body as object);
 const get = (path: string, cookie = admin) => test.http.get(`/api${path}`).set('Cookie', cookie);
 const sql = () => test.app.get(EntityManager).getConnection();
-const rules = (retention: Record<string, RetentionRuleInput>) => put('/core/settings/privacy', { retention }).expect(200);
+const rules = (retention: Record<string, RetentionRuleInput>) => put('/core/settings/retention', { retention }).expect(200);
 const run = async (dryRun: boolean, retention?: Record<string, RetentionRuleInput>, cookie = admin) =>
   (await post('/core/retention/run', { dryRun, ...(retention ? { settings: { retention } } : {}) }, cookie).expect(200)).body as {
     counts: Record<string, number>;
@@ -106,10 +106,10 @@ describe('retention plan', () => {
       expect.arrayContaining(['core.audit', 'core.history', 'masterdata.person-core', 'masterdata.person-file', 'masterdata.vehicles-retired', 'incidents.incidents', 'training.sessions', 'equipment.retired', 'cost-recovery.notices', 'compensation.runs']),
     );
     // Protocols and run reports (L29): audit log, read log, records of access reports and data breaches, transfer and backup logs.
-    const protocols = ['core.audit', 'core.access-log', 'core.access-reports', 'core.privacy-breaches', 'mp-feuer.run-reports', 'backup.run-log'];
+    const protocols = ['core.audit', 'privacy.access-log', 'privacy.access-reports', 'privacy.breaches', 'mp-feuer.run-reports', 'backup.run-log'];
     expect(categories.map((c) => c.key)).toEqual(expect.arrayContaining(protocols));
     for (const c of categories) expect(c.defaultRule.action).toBe(protocols.includes(c.key) ? 'delete' : c.key === 'core.locked-accounts' ? 'anonymize' : 'none');
-    expect((await get('/core/settings/privacy')).body).toEqual({ retention: {} });
+    expect((await get('/core/settings/retention')).body).toEqual({ retention: {} });
     const result = await run(false);
     expect(Object.keys(result.counts).filter((k) => ![...protocols, 'core.imports', 'mp-feuer.rows'].includes(k) && result.counts[k] > 0)).toEqual([]);
     expect(await cases()).toEqual([]);
@@ -124,22 +124,22 @@ describe('retention plan', () => {
     await get('/core/retention/categories', clerk).expect(200);
     await post('/core/retention/run', { dryRun: false }, clerk).expect(200);
     await post('/core/retention/run', { dryRun: true, settings: { retention: {} } }, clerk).expect(403);
-    await put('/core/settings/privacy', { retention: {} }, clerk).expect(403);
+    await put('/core/settings/retention', { retention: {} }, clerk).expect(403);
     await post('/core/retention/cases/execute', { caseIds: ['0190c0de-0000-7000-8000-000000000001'] }, reader).expect(403);
   });
 
   it('applies the template „Kommunaler Aktenplan (Beispiel)“ only when saved; the basic data stay as long as the file', async () => {
     const preview = await run(true, RETENTION_TEMPLATE_MUNICIPAL);
     expect(preview.effectiveYears['masterdata.person-core']).toBe(30);
-    expect(preview.warnings).toContain('privacy.personCoreShorter');
-    expect((await get('/core/settings/privacy')).body).toEqual({ retention: {} });
+    expect(preview.warnings).toContain('retention.personCoreShorter');
+    expect((await get('/core/settings/retention')).body).toEqual({ retention: {} });
     await rules(RETENTION_TEMPLATE_MUNICIPAL);
-    const stored = (await get('/core/settings/privacy')).body.retention;
+    const stored = (await get('/core/settings/retention')).body.retention;
     expect(stored['incidents.incidents:special']).toMatchObject({ years: 30, action: 'offer-archive', afterDecision: 'anonymize', specialCase: true });
     expect(stored['training.sessions:staff-meeting']).toMatchObject({ years: 5, specialCase: true });
     expect(stored['cost-recovery.notices']).toBeUndefined();
     // An offer to the archive needs to know what happens afterwards.
-    await put('/core/settings/privacy', { retention: { 'incidents.incidents': { years: 3, action: 'offer-archive' } } }).expect(400);
+    await put('/core/settings/retention', { retention: { 'incidents.incidents': { years: 3, action: 'offer-archive' } } }).expect(400);
     await rules({});
   });
 

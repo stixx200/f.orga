@@ -250,34 +250,36 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 
 | Fachbegriff | Code |
 | --- | --- |
-| Auskunft (Art. 15), lesbare Fassung | access report (`AccessReport`, `AccessReportService`), `describePerson` an `ExportSource` mit `DescribeContext`, Bereich `PersonDataSection` (Blöcke `fields`, `table`, `text`); Ablage `core.privacy_document` (`PrivacyDocument`) |
+| Modul Datenschutz (Datenschutzverwaltung, abschaltbar) | `privacy` (`modules/privacy`, Schema `privacy`, API `/api/privacy/…`, Tätigkeit `privacy.data-protection`); die Sicherheit (Step-up, Sitzungen, Aufbewahrungsplan) bleibt im Core |
+| Einwilligungswirkung für andere Module | `CONSENTS` (`ConsentLookup`, `CONSENT_EFFECTS`), im Core `Consents` |
+| Auskunft (Art. 15), lesbare Fassung | access report (`AccessReport`, `AccessReportService`), `describePerson` an `ExportSource` mit `DescribeContext`, Bereich `PersonDataSection` (Blöcke `fields`, `table`, `text`); Ablage `privacy.document` (`PrivacyDocument`) |
 | Übergabe der Auskunft (in Mein Bereich bereitgestellt, persönlich, per Post) | handover (`AccessReportHandOver`, `AccessReportChannel`: `self-service`, `in-person`, `post`) |
 | Personendaten eines Moduls (Meldung im Manifest) | `privacy.personData` im Manifest (`ModulePrivacy`), Startprüfung `assertPersonDataComplete` (`describePerson` und `PersonDataRegistry`) |
-| Betroffenenanfrage, Datenschutzanfrage (Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch, Widerruf einer Einwilligung) | data subject request (`core.privacy_request`, `PrivacyRequest`, `kind`: `access`, `rectification`, `erasure`, `restriction`, `objection`, `consent-withdrawal`) |
+| Betroffenenanfrage, Datenschutzanfrage (Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch, Widerruf einer Einwilligung) | data subject request (`privacy.request`, `PrivacyRequest`, `kind`: `access`, `rectification`, `erasure`, `restriction`, `objection`, `consent-withdrawal`) |
 | Eingegangen am, Weg | `receivedOn`, `channel` (`letter`, `email`, `in-person`, `my-area`) |
 | Stand der Anfrage (eingegangen, in Prüfung, verlängert, erledigt, abgelehnt) | `status` (`received`, `in-review`, `extended`, `done`, `rejected`), `OPEN_REQUEST_STATUSES` |
 | Frist (eingegangen + 1 Monat), Fristverlängerung, über die Verlängerung unterrichtet | `dueOn`, `deadline`, `extendedUntil`, `extensionReason`, `extensionNotifiedOn`; Aufgaben `privacy-request`, `privacy-extension-notice` |
-| Bearbeiter | assignee (`assigneeId`, `GET /api/core/privacy/assignees`) |
-| Antwortschreiben | reply letter (`GET /api/core/privacy/requests/:id/reply.pdf`, Bausteine `reply…`, `REPLY_TEXT_OF_KIND`) |
-| Empfänger informieren (Art. 19) | recipients (`PrivacyRequest.recipients`, Auswahl aus dem Verzeichnis `RecipientOption`, `GET /api/core/privacy/register/recipients`) |
+| Bearbeiter | assignee (`assigneeId`, `GET /api/privacy/assignees`) |
+| Antwortschreiben | reply letter (`GET /api/privacy/requests/:id/reply.pdf`, Bausteine `reply…`, `REPLY_TEXT_OF_KIND`) |
+| Empfänger informieren (Art. 19) | recipients (`PrivacyRequest.recipients`, Auswahl aus dem Verzeichnis `RecipientOption`, `GET /api/privacy/register/recipients`) |
 | Bezug des Widerspruchs (Verarbeitungstätigkeit, genauer Bezug) | `activityKey`, `activityName`; `activity` (Freitext, bei älteren Anfragen der einzige Bezug) |
-| Löschprüfung, Datenbereich (löschen, anonymisieren, einschränken bis) | erasure check (`ErasureCheck`, `PersonDataHandler.erasure`/`erase`, `ErasureArea` mit `outcome` `delete`, `anonymize`, `keep`; `ErasureService`, `GET`/`POST /api/core/privacy/requests/:id/erasure`; Audit `privacy.erasure-executed`) |
+| Löschprüfung, Datenbereich (löschen, anonymisieren, einschränken bis) | erasure check (`ErasureCheck`, `PersonDataHandler.erasure`/`erase`, `ErasureArea` mit `outcome` `delete`, `anonymize`, `keep`; `ErasureService`, `GET`/`POST /api/privacy/requests/:id/erasure`; Audit `privacy.erasure-executed`) |
 | Vollständige Anonymisierung, Namensersetzung („N. N.“) | complete anonymisation (`PersonDataRegistry.anonymize`, `AnonymizeContext`, `replaceNames`, `ANONYMIZED_NAME`) |
-| Einschränkung der Verarbeitung, eingeschränkte Person | processing restriction (`masterdata.person.restricted_at`, `restriction_reason`, `restricted_until`, `restriction_request_id`; `Person.processingRestriction`, `ProcessingRestriction`, `RestrictedPerson`; `PERSON_DIRECTORY.isRestricted`, `restrictedIds`; `assertNotRestricted`, `refuseRestricted`; Fehlercode `privacy.processingRestricted`) |
+| Einschränkung der Verarbeitung, eingeschränkte Person | processing restriction (`privacy.restriction`, `ProcessingRestrictionEntity`, `ProcessingRestriction`, `RestrictedPerson`; im Core `ProcessingRestrictions` mit `restrictedIds`, `isRestricted`; `PERSON_DIRECTORY.isRestricted`, `restrictedIds`; `Person.processingRestricted`; `assertNotRestricted`, `refuseRestricted`; Fehlercode `privacy.processingRestricted`) |
 | Grund der Einschränkung (Richtigkeit bestritten, unrechtmäßig, Rechtsansprüche, Widerspruch wird geprüft, Aufbewahrungsfrist läuft) | `ProcessingRestrictionReason` (`accuracy-contested`, `unlawful-processing`, `legal-claims`, `objection-pending`, `retention`) |
-| Einwilligung, Fassung, Widerruf | consent (`core.consent`, `ConsentEntity`, `PersonConsent`; Fassung `definition_version`, `withdrawn_on`, `withdrawn_via`; neue Fassung erteilt `superseded_on`) |
+| Einwilligung, Fassung, Widerruf | consent (`privacy.consent`, `ConsentEntity`, `PersonConsent`; Fassung `definition_version`, `withdrawn_on`, `withdrawn_via`; neue Fassung erteilt `superseded_on`) |
 | Katalog der Einwilligungen, Vorlage, Wirkung in f.orga | consent catalog (Einstellungsabschnitt `privacy.consents`, `ConsentDefinition`, `CONSENT_TEMPLATES`), effect (`CONSENT_EFFECTS`, Vertrag `CONSENTS` mit `has`, `withEffect`) |
 | Erteilt durch (Person, Erziehungsberechtigte), Weg der Einwilligung | `givenBy` (`person`, `person-or-guardians`), `ConsentWay` (`written`, `in-person`, `guardians`, `my-area`, `first-login`), `ConsentWithdrawalWay` |
-| Einwilligungen erfassen und widerrufen | Recht `core.privacy.consents` |
+| Einwilligungen erfassen und widerrufen | Recht `privacy.consents` |
 | Minderjährig (unter 18) | minor (`OrganizationProvider.minors`, `PersonConsents.minor`, `MyConsents.minor`) |
-| Berichtigung beantragen, als berichtigt vermerken | rectification (`POST /api/core/privacy/me/rectifications`, `PrivacyRequest.rectification`, `RectificationView`, Aufgabe `privacy-rectification`, Audit `privacy.rectification-corrected`) |
-| Wert in der Historie unkenntlich machen („berichtigt, Wert entfernt am …“) | history redaction (`POST /api/core/history/entries/:id/redact`, `core.history.redactions`, `redactedOld`, `redactedNew`) |
+| Berichtigung beantragen, als berichtigt vermerken | rectification (`POST /api/privacy/me/rectifications`, `PrivacyRequest.rectification`, `RectificationView`, Aufgabe `privacy-rectification`, Audit `privacy.rectification-corrected`) |
+| Wert in der Historie unkenntlich machen („berichtigt, Wert entfernt am …“) | history redaction (`POST /api/privacy/history/:id/redact`, `core.history.redactions`, `redactedOld`, `redactedNew`) |
 | Anmeldungen als Sie, Benutzer bei „Anmelden als“ benachrichtigen | impersonations (`GET /api/core/me/impersonations`, `MyImpersonation`, Einstellung `security.notifyImpersonation`) |
 | Textbaustein (Vorlage / geprüft, Fassung) | text block (`privacy.texts`, `PrivacyTexts`, `PrivacyTextBlock`: `version`, `reviewedAt`, `reviewedBy`; Vorlagen `PRIVACY_TEXT_TEMPLATES`, Platzhalter `fillPlaceholders`) |
-| Datenschutzhinweis, Fassung | privacy notice, version (Seite `/privacy`, `core.privacy_notice`, `PrivacyNotice`, `composeNotice`) |
-| Hinweis bei der ersten Anmeldung, „Zur Kenntnis genommen“ | first-login notice, acknowledgement (`Session.privacyNotice.due`, `core.user.privacy_notice_version`, `privacy_notice_acknowledged_at`, `POST /api/core/privacy/notice/acknowledge`) |
-| Information nach Art. 13/14, „Information erteilt am“ | privacy information (`masterdata.person.privacy_informed_on`, `privacy_informed_via`, `PrivacyInformation`, `UninformedPerson`) |
-| Selbstauskunft in Mein Bereich, „Auskunft anfordern“ | self-service access (`privacy.selfServiceAccess`: `mode` `request`/`instant`, `contact`; `POST /api/core/privacy/me/requests`) |
+| Datenschutzhinweis, Fassung | privacy notice, version (Seite `/privacy-notice`, `privacy.notice`, `PrivacyNotice`, `composeNotice`) |
+| Hinweis bei der ersten Anmeldung, „Zur Kenntnis genommen“ | first-login notice, acknowledgement (`GET /api/privacy/notice/state` → `SessionPrivacyNotice.due`, `privacy.notice_acknowledgement`, `NoticeAcknowledgementEntity`, `POST /api/privacy/notice/acknowledge`; Erweiterungspunkt `core.session.gate`) |
+| Information nach Art. 13/14, „Information erteilt am“ | privacy information (`privacy.information`, `PrivacyInformationEntity`, `PrivacyInformation`, `UninformedPerson`) |
+| Selbstauskunft in Mein Bereich, „Auskunft anfordern“ | self-service access (`privacy.selfServiceAccess`: `mode` `request`/`instant`, `contact`; `POST /api/privacy/me/requests`) |
 | Verzeichnis der Verarbeitungstätigkeiten, Verarbeitungstätigkeit | record of processing activities, processing activity (`ProcessingRegister`, `RegisterActivity`, `PrivacyRegister`; `ProcessingActivity` in `privacy.activities` im Manifest, `CORE_ACTIVITIES`) |
 | Betroffene, Datenkategorien, besondere Kategorien, Hinweis zur Rechtsgrundlage (je Tätigkeit) | `subjects`, `categories`, `health`, `healthNote`, `legalBasisHint` an `ProcessingActivity` |
 | Ergänzung der Gemeinde je Tätigkeit (Rechtsgrundlage, weitere Empfänger, Drittland, Bemerkungen, geprüft am/von) | activity record (Einstellungsabschnitt `privacy.activities`, `PrivacyActivities`, `ActivityRecord`: `legalBasis`, `recipients`, `thirdCountry`, `remarks`, `reviewedAt`, `reviewedBy`) |
@@ -288,13 +290,13 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Zweck einer Liste, Anderer Zweck, Art der Personendaten einer Liste | list purpose (`ListPurpose`, `ListDefinition.purposes`, `LIST_PURPOSE_OTHER` mit `purposeNote`), `ListDefinition.personalData` (`ListPersonalData`: `names`, `contact`, `sensitive`, `health`), `purposeRequired` |
 | Listen mit Kontaktdaten ausgeben | Recht `masterdata.lists.contact` |
 | Daten Dritter, andere Person (nicht in den Stammdaten), Fundstelle | third party (`ThirdPartyRegistry`, `ThirdPartySource`, `ThirdPartyRef`, `ThirdPartyHit`; Anfrage `PrivacyRequest.thirdParty`; Verzeichnis `ProcessingActivity.thirdParties`) |
-| Auskunft zu einer anderen Person, Löschung bei einer anderen Person | `POST /api/core/privacy/third-parties/access-reports`, `…/erasure` (`ThirdPartyErasureResult`: `anonymized`, `deleted`, `kept`) |
+| Auskunft zu einer anderen Person, Löschung bei einer anderen Person | `POST /api/privacy/third-parties/access-reports`, `…/erasure` (`ThirdPartyErasureResult`: `anonymized`, `deleted`, `kept`) |
 | Angaben zu Beteiligten (Aufbewahrung) | retention category `incidents.involved-parties` |
-| Nachweise der Auskünfte, Dokumentation der Datenpannen, Laufberichte, Protokoll der Datensicherung (Aufbewahrung) | retention categories `core.access-reports`, `core.privacy-breaches`, `mp-feuer.run-reports`, `backup.run-log` |
+| Nachweise der Auskünfte, Dokumentation der Datenpannen, Laufberichte, Protokoll der Datensicherung (Aufbewahrung) | retention categories `privacy.access-reports`, `privacy.breaches`, `mp-feuer.run-reports`, `backup.run-log` |
 | Technische Maßnahmen | technical measures (`TechnicalMeasure`, `TechnicalMeasureRegistry`, `CoreMeasures`) |
 | Verantwortlicher, Datenschutzbeauftragter, Aufsichtsbehörde | controller, data protection officer, supervisory authority (`privacy.contacts`, `PrivacyContacts`: `controller`, `dpo`, `authority`) |
 | Gesundheitsdaten (besondere Kategorie) | `health: true` an Feldern, Fristarten und Tätigkeiten |
-| Leseprotokoll, Bereich des Leseprotokolls | access log (`core.access_log`, `AccessLog` mit `record`, `query`, `registerArea`; Aufbewahrungskategorie `core.access-log`) |
+| Leseprotokoll, Bereich des Leseprotokolls | access log (`privacy.access_log`, `AccessLogEntity`; Meldung über `AccessLog` des Core mit `record`, `registerArea`; Ablage und Abfrage `AccessLogStore` mit `query`, `forPerson`; Aufbewahrungskategorie `privacy.access-log`) |
 | Zweiter Faktor, Einrichten, Wiederherstellungscode | MFA, TOTP, enrolment, recovery code (`core.user_mfa`, `MfaService`, `/api/core/mfa/…`) |
 | Bestätigung mit dem zweiten Faktor beim Öffnen sensibler Daten (30 Minuten je Sitzung) | step-up (`POST /api/core/step-up`, `core.session.elevated_until`, `elevatedUntil`, Kennzeichen `stepUp` an Berechtigungen, `@StepUp()`, Fehlercode `auth.stepUpRequired`) |
 | Recht, das auf die Bestätigung wartet | `locked` an `AuthenticatedUser` (`holds`, `needsStepUp`, `denied`), `stepUpPermissions` der Sitzung |
@@ -302,15 +304,15 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | „Bestätigt bis …“ (Plakette in der Kopfzeile) | `ElevationBadge` |
 | Beim Anbieter bestätigen | Einstellung `oidc.stepUpViaProvider`, `POST /api/core/oidc/step-up` |
 | Zweiten Faktor zurücksetzen | `DELETE /api/core/users/:id/mfa`, Audit `auth.mfa-reset` |
-| Datenschutz verwalten | Recht `core.privacy.manage` |
-| Datenpanne | data breach (`core.privacy_breach`, `PrivacyBreach`, `PrivacyBreaches`) |
+| Datenschutz verwalten | Recht `privacy.manage` |
+| Datenpanne | data breach (`privacy.breach`, `PrivacyBreach`, `PrivacyBreaches`) |
 | Bekannt geworden am, Meldung bis (72 Stunden) | `discoveredAt`, `notifyBy`, `BREACH_NOTIFICATION_HOURS`; Aufgaben `privacy-breach`, `privacy-breach-subjects` |
 | Risiko (unwahrscheinlich, Risiko, hohes Risiko) | `BreachRisk` (`unlikely`, `risk`, `high`) |
 | Meldung an die Aufsichtsbehörde, Aktenzeichen, nicht meldepflichtig | `authorityNotifiedOn`, `authorityReference`, `authorityNotRequired`, `authorityNote` |
 | Benachrichtigung der Personen (Art. 34) | `subjectsNotifiedOn`, `subjectsNotifiedVia` (`BreachNotificationVia`) |
-| Betroffene Personen ermitteln | affected persons (`AffectedPersons`, `POST /api/core/privacy/breach-tools/affected`, Quellen `audit` und `account`; `personIds` im Audit `lists.exported`) |
-| Protokolle exportieren | protocols (`ProtocolRegistry`, `ProtocolSource`, `GET /api/core/privacy/breach-tools/protocols.xlsx`) |
-| Alle Sitzungen beenden und alle Tokens widerrufen | lockdown (`POST /api/core/privacy/breach-tools/lockdown`, Audit `privacy.breach-lockdown`) |
+| Betroffene Personen ermitteln | affected persons (`AffectedPersons`, `POST /api/privacy/breach-tools/affected`, Quellen `audit` und `account`; `personIds` im Audit `lists.exported`) |
+| Protokolle exportieren | protocols (`ProtocolRegistry`, `ProtocolSource`, `GET /api/privacy/breach-tools/protocols.xlsx`) |
+| Alle Sitzungen beenden und alle Tokens widerrufen | lockdown (`POST /api/privacy/breach-tools/lockdown`, Audit `privacy.breach-lockdown`) |
 | Stufe der Installation (Echt-, Test-, Entwicklungssystem) | stage (`FORGA_STAGE`: `production`, `test`, `development`; `ForgaStage`, `forgaStage()`, `isTestStage()`, `useStage()`) |
 | Band „Testsystem – nur Demodaten“ | `StageBand` |
 | Im Testsystem gesperrt | locked in test stage (`imports.lockedInTestStage`, `mp-feuer.lockedInTestStage`, `ImportProfile.personData`, `lockedInTestStage`) |
@@ -334,7 +336,7 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Gesperrt seit | `core.user.locked_at`, `User.lockedAt`; Aufbewahrungskategorie `core.locked-accounts` |
 | Empfänger/System, Zweck, erlaubte Adressen eines API-Tokens | `ApiToken.recipient`, `purpose`, `allowedAddresses`; `tokenRecipientName`, Aufgabe `api-token-expiry` |
 | Technische Empfänger und Auftragsverarbeiter | processors (`ProcessorRegistry`, `ProcessorSource`, Quelle `processor`) |
-| Angaben für eine Datenschutz-Folgenabschätzung | DPIA export (`GET /api/core/privacy/register/export/:format?scope=dpia`) |
+| Angaben für eine Datenschutz-Folgenabschätzung | DPIA export (`GET /api/privacy/register/export/:format?scope=dpia`) |
 | Geräteschlüssel sperren (Notfall) | `LockdownRegistry`, `BreachLockdownResult.devices`, Audit `info-terminal.keys-blocked` |
 | Metadaten von Fotos entfernen | `stripImageMetadata`, `ATTACHMENT_MAX_PER_RECORD` |
 | Zeilen mit Meldungen entfernen, Umstellung abgeschlossen | `MpFeuerRuns.removeMessages`, `messagesRemovedAt`, `MESSAGES_KEEP_DAYS`, Regel `mp-feuer.messages` |
@@ -423,7 +425,7 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Fachbegriff | Code |
 | --- | --- |
 | Aufbewahrungsplan | retention plan (`RetentionRegistry`, `RetentionService`) |
-| Aufbewahrungsfrist je Datenkategorie | retention rule (`privacy.retention`), Kategorie `RetentionCategory` |
+| Aufbewahrungsfrist je Datenkategorie | retention rule (Einstellung `retention`, `RetentionSettings`), Kategorie `RetentionCategory` |
 | Unterart (z. B. Einsätze mit Besonderheiten) | subtype (`incidents.incidents:special`) |
 | 30 Jahre aufbewahren (Sonderfall) | `retentionSpecial` am Einsatz |
 | Grunddaten / Personalakte Ausgeschiedener | `masterdata.person-core` / `masterdata.person-file` |
@@ -454,3 +456,4 @@ Die Modul-ID ist zugleich das Präfix der Berechtigungen und der Pfad in API und
 | Einsatzleiter vom Dienst | `duty-officer` |
 | Infoterminal | `info-terminal` |
 | Datensicherung | `backup` |
+| Datenschutz (Modul) | `privacy` |

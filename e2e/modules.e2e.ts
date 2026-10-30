@@ -1,4 +1,4 @@
-import { ADMIN, api, expect, login, test } from './support';
+import { ADMIN, api, expect, login, restore, test } from './support';
 
 /**
  * Verwaltung → Module: the administrator switches the module Beförderungen off (gone from the menu, data kept) and on
@@ -36,7 +36,7 @@ test('administrator switches a module off and on; setup list on the start page',
     await expect(menu.getByRole('link', { name: 'Beförderungslisten' })).toBeVisible();
     await expect(page.locator('div').filter({ has: page.getByText('Beförderungsregeln, jährliche Beförderungsliste mit Beschluss und Durchführung.') }).filter({ has: page.getByRole('button', { name: 'Deaktivieren' }) }).last()).toBeVisible();
   } finally {
-    if (!page.isClosed()) await api(page, 'PUT', 'core/modules/promotions', { active: true });
+    if (!page.isClosed()) await restore('the module promotions', () => api(page, 'PUT', 'core/modules/promotions', { active: true }));
   }
 
   // Settings pages of a module open from its card.

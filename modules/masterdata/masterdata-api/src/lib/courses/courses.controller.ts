@@ -371,7 +371,7 @@ export class CoursesController {
   @RequirePermissions(PLAN)
   async nominations(@CurrentUser() user: AuthenticatedUser, @Query('course') course?: string): Promise<CourseNominationDto[]> {
     const em = this.em.fork();
-    const visible = this.persons.visibleWhere(user, PLAN) ?? { id: null };
+    const visible = (await this.persons.visibleWhere(user, PLAN)) ?? { id: null };
     const list = await em.find(
       CourseNomination,
       { person: visible, ...(course ? { course: { key: course } } : {}) },
@@ -522,7 +522,7 @@ export class CoursesController {
     const em = this.em.fork();
     const course = await this.course(em, key);
     const dto = toCourseDto(course);
-    const visible = this.persons.visibleWhere(user, PLAN) ?? { id: null };
+    const visible = (await this.persons.visibleWhere(user, PLAN)) ?? { id: null };
     const persons = await em.find(
       Person,
       { $and: [visible, { status: { $ne: 'left' } }] },
@@ -725,7 +725,7 @@ export class CoursesController {
 
   private async runDtos(em: EntityManager, user: AuthenticatedUser, runs: CourseRun[]): Promise<CourseRunDto[]> {
     if (!runs.length) return [];
-    const visible = this.persons.visibleWhere(user, PLAN) ?? { id: null };
+    const visible = (await this.persons.visibleWhere(user, PLAN)) ?? { id: null };
     const ids = runs.map((r) => r.id);
     const nominations = await em.find(CourseNomination, { run: { $in: ids }, status: { $in: [...OPEN_NOMINATION] }, person: visible });
     const attendances = await em.find(CourseAttendance, { run: { $in: ids }, person: visible });

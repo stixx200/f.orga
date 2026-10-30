@@ -18,7 +18,7 @@ function display(value: unknown): string {
 const redactable = (change: FieldChange) => !change.hidden && ((!change.redactedOld && display(change.old) !== '–') || (!change.redactedNew && display(change.new) !== '–'));
 
 /** Managing data protection may remove wrong values from the history (rectification, L12). */
-const PRIVACY = 'core.privacy.manage';
+const PRIVACY = 'privacy.manage';
 
 /**
  * History of a record (including its child records): who changed which field from what to what.
@@ -86,7 +86,7 @@ function RedactDialog({ entryId, field, change, label, queryKey, onClose }: { en
   const sides = (['old', 'new'] as const).filter((side) => !(side === 'old' ? change.redactedOld : change.redactedNew) && display(change[side]) !== '–');
   const [side, setSide] = useState<'old' | 'new'>(sides[0] ?? 'new');
   const [reason, setReason] = useState('');
-  const redact = useAction(() => send('POST', `core/history/entries/${entryId}/redact`, { field, side, reason }), { success: t('history.redactDone'), invalidate: [queryKey], onSuccess: onClose });
+  const redact = useAction(() => send('POST', `privacy/history/${entryId}/redact`, { field, side, reason }), { success: t('history.redactDone'), invalidate: [queryKey], onSuccess: onClose });
   return (
     <ResponsiveDialog
       opened
