@@ -211,11 +211,81 @@ export async function waitForApi<T>(page: Page, path: string, done: (value: T) =
   return last as T;
 }
 
+// ----- Test data ------------------------------------------------------------------------------------------------------
+
+/** The ID of a department of the demo data by its name, e.g. „Abteilung Musterstadt“. */
+export async function departmentId(page: Page, name: string): Promise<string> {
+  const departments = await api<{ id: string; name: string }[]>(page, 'GET', 'masterdata/departments');
+  const department = departments.find((d) => d.name === name);
+  if (!department) throw new Error(`Department ${name} not found.`);
+  return department.id;
+}
+
+export interface TestPerson {
+  id: string;
+  firstName: string;
+  lastName: string;
+  /** „Vorname Nachname“ as in headings and confirmations. */
+  name: string;
+}
+
+/**
+ * Creates an active member of a department (default Abteilung Musterstadt) with the session of `page` (a user with
+ * `masterdata.persons.write`, for sensitive fields confirmed with the second factor), e.g. a person only this test uses.
+ * `fields` are further fields of the person (`PersonInput` of the master data), e.g. `{ phoneMobile }`.
+ */
+export async function createPerson(page: Page, lastName: string, fields: Record<string, unknown> = {}, department = 'Abteilung Musterstadt'): Promise<TestPerson> {
+  const firstName = typeof fields['firstName'] === 'string' ? fields['firstName'] : 'Erika';
+  const person = await api<{ id: string }>(page, 'POST', 'masterdata/persons', {
+    firstName,
+    lastName,
+    status: 'active',
+    joinedOn: isoDate(-3 * 365),
+    ...fields,
+    memberships: [{ departmentId: await departmentId(page, department), from: isoDate(-3 * 365), primary: true }],
+  });
+  return { id: person.id, firstName, lastName, name: `${firstName} ${lastName}` };
+}
+
+/**
+ * Changes fields of a person through the API (e.g. to restore them after a test): sends the stored person with the
+ * changes, so the other fields stay as they are. Needs the session of a user who may edit the person and sees its
+ * sensitive fields (confirmed with the second factor).
+ */
+export async function updatePerson(page: Page, id: string, changes: Record<string, unknown>): Promise<void> {
+  const person = await api<Record<string, unknown>>(page, 'GET', `masterdata/persons/${id}`);
+  if (person['sensitiveHidden']) throw new Error('The sensitive fields of the person are hidden: confirm the session first.');
+  await api(page, 'PUT', `masterdata/persons/${id}`, { ...person, ...changes });
+}
+
+/**
+ * Fetches the file of a link that opens in a new tab (e.g. a PDF with `target="_blank"`) with the session of the page;
+ * returns the content type and the content.
+ */
+export async function linkedFile(link: Locator): Promise<{ type: string; content: Buffer }> {
+  const href = await link.getAttribute('href');
+  if (!href) throw new Error('The link has no address.');
+  const response = await link.page().request.get(href);
+  if (!response.ok()) throw new Error(`${href}: ${response.status()} ${await response.text()}`);
+  return { type: response.headers()['content-type'] ?? '', content: await response.body() };
+}
+
 // ----- Navigation, downloads ------------------------------------------------------------------------------------------
 
 /** Opens an entry of the main menu by its label (exact, or a pattern like `/^Zur Prüfung/` for entries with a count). */
 export async function navigate(page: Page, label: string | RegExp): Promise<void> {
   await page.getByRole('navigation', { name: 'Menü' }).getByRole('link', { name: label, exact: typeof label === 'string' }).click();
+}
+
+/**
+ * Opens the start page and returns the panel „Fristen und Aufgaben“ filtered to the tasks of one module (by its name,
+ * e.g. „Datenschutz“); for users with tasks of several modules (the filter appears only then).
+ */
+export async function tasksOf(page: Page, module: string): Promise<Locator> {
+  await page.goto('/');
+  const tasks = panel(page, 'Fristen und Aufgaben');
+  await choose(tasks, 'Modul', module);
+  return tasks;
 }
 
 /** Starts a download with `action` (e.g. clicking a link) and returns the file name and the content. */

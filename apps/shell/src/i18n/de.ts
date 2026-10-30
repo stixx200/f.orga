@@ -366,6 +366,7 @@ export const de = {
       'info-terminal': 'Infoterminal an der Wache: Einsatzkräfte tragen sich nach Einsätzen und Diensten selbst ein, mit Fahrzeug, Funktion und Angaben für die Entschädigung.',
       'mp-feuer': 'Datenübernahme aus MP-Feuer-Transferdateien im Hintergrund, mit eigener Zuordnungsliste; nach der Umstellung auf f.orga abschalten.',
       backup: 'Datensicherung: regelmäßige, verschlüsselte Sicherung in einen Ordner auf dem Server, Prüfung und Wiederherstellung ohne Konsole.',
+      privacy: 'Datenschutz: Betroffenenanfragen mit Frist, Auskunft als PDF, Einschränkung, Einwilligungen, Datenschutzhinweis, Verzeichnis der Verarbeitungstätigkeiten, Datenpannen.',
     },
     noDescription: 'Zusatzmodul (Plugin) ohne Beschreibung.',
   },

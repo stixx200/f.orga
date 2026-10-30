@@ -23,6 +23,9 @@ test('cost notice from a chargeable incident', async ({ browser }) => {
   await page.getByRole('option', { name: /Ölbindemittel/ }).click();
   await page.getByRole('button', { name: 'Speichern' }).click();
   await expect(page.getByText('Bescheid gespeichert')).toBeVisible();
+  // The reloaded notice counts as saved (stored lists come back from the database with keys in another order).
+  await expect(page.getByRole('button', { name: 'Speichern' })).toBeDisabled();
+  await expect(page.getByText('Ungespeicherte Änderungen')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Zur Prüfung' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Zur Prüfung' }).click();

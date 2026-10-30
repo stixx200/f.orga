@@ -367,6 +367,7 @@ export const en: typeof de = {
       'info-terminal': 'Info terminal at the station: members book themselves into incidents and sessions, with vehicle, function and details for the compensation.',
       'mp-feuer': 'Data transfer from MP-Feuer transfer files in the background, with a mapping list of its own; switch it off after the switch to f.orga.',
       backup: 'Backup: regular encrypted backups into a folder on the server, verification and restore without a console.',
+      privacy: 'Data protection: data subject requests with deadline, access report as PDF, restriction, consents, privacy notice, register of processing activities, data breaches.',
     },
     noDescription: 'Additional module (plugin) without description.',
   },

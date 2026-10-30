@@ -6,6 +6,7 @@ import type { Language, ThirdPartyHit, ThirdPartyRef } from '@forga/core-contrac
 import type { AccessReport, PrivacyRequest, ThirdPartyErasureResult } from '@forga/privacy-contracts';
 import { api, formatDate, send, useTranslation, withQuery } from '@forga/web-sdk';
 import { DataTable, EmptyState, Notice, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { privacyKeys } from '../api';
 import { ACCESS_REPORTS_KEY, ReportsTable, useRequestReports } from './AccessReports';
 
 const refOf = (hit: ThirdPartyHit): ThirdPartyRef => ({ source: hit.source, id: hit.id });
@@ -198,7 +199,8 @@ export function ThirdPartyRequestPanel({ request }: { request: PrivacyRequest })
   const letter = { name: request.thirdParty?.name ?? '', address: letterOf(selected).address };
   const create = useAction(
     () => send<AccessReport>('POST', 'privacy/third-parties/access-reports', { ...letter, language: request.language, requestId: request.id, refs: [...selected.values()].map(refOf) }),
-    { invalidate: [ACCESS_REPORTS_KEY], success: t('minimisation.thirdParties.created') },
+    // The report is attached to the request (new version): reload it, or the next change of the request is stale.
+    { invalidate: [ACCESS_REPORTS_KEY, privacyKeys.request(request.id)], success: t('minimisation.thirdParties.created') },
   );
   const open = ['received', 'in-review', 'extended'].includes(request.status);
   return (
