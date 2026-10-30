@@ -78,6 +78,7 @@ export function QuickEntryPage() {
       {unmeasured.length > 0 && <Notice kind="error">{t('quick.kilojoulesRequired', { count: unmeasured.length })}</Notice>}
       <DataTable<FitnessStatus>
         exportable={false}
+        scroll
         rows={shown}
         rowKey={(w) => w.personId}
         empty={t('overview.empty')}

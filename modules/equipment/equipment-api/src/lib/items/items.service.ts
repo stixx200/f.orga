@@ -235,7 +235,7 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
       return {
         id: item.id, inventoryNumber: item.inventoryNumber, name: item.name, typeKey: item.typeKey ?? null, categoryKey: item.categoryKey, serialNumber: item.serialNumber, barcode: item.barcode ?? null, rfid: item.rfid ?? null, manufacturer: item.manufacturer,
         yearBuilt: item.yearBuilt ?? null, purchasedOn: item.purchasedOn ?? null, price: item.price === null || item.price === undefined ? null : Number(item.price), properties: item.properties, departmentId: item.departmentId, vehicleId: item.vehicleId ?? null,
-        stationId: item.stationId ?? null, loadingPlace: item.loadingPlace, quantity: item.quantity, expiresOn: item.expiresOn ?? null, inspections: inspections.get(item.id) ?? [], ownInspections: item.inspections !== null && item.inspections !== undefined,
+        stationId: item.stationId ?? null, loadingPlace: item.loadingPlace, location: item.location, quantity: item.quantity, expiresOn: item.expiresOn ?? null, inspections: inspections.get(item.id) ?? [], ownInspections: item.inspections !== null && item.inspections !== undefined,
         intervalOverrides: item.intervalOverrides ?? {}, status: item.status, blocked: isBlocked(dues, locking.has(item.categoryKey), today), labelPrintedAt: item.labelPrintedAt ? item.labelPrintedAt.toISOString() : null,
         retirement: item.retirement ?? null, forVehicleId: item.forVehicleId ?? null, dues, nextDue: due[0] ?? null,
         openDefects: defects.filter((d) => d.item.id === item.id).length, notes: item.notes, version: item.version,
@@ -253,7 +253,7 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     if (filter.withoutLabel) where.push({ labelPrintedAt: null });
     if (filter.status) where.push({ status: filter.status as ItemStatus });
     else if (!filter.includeRetired) where.push({ status: { $ne: 'retired' } });
-    const words = filter.q ? wordsWhere(filter.q, ['name', 'inventoryNumber', 'serialNumber', 'barcode']) : null;
+    const words = filter.q ? wordsWhere(filter.q, ['name', 'inventoryNumber', 'serialNumber', 'barcode', 'location']) : null;
     if (filter.q) where.push({ $or: [...(words ? [words] : []), { rfid: { $ilike: `%${normalizeRfid(filter.q) || filter.q}%` } }] } as FilterQuery<EquipmentItemEntity>);
     const items = await this.em.fork().find(EquipmentItemEntity, { $and: where }, { orderBy: { inventoryNumber: 'asc' }, limit: 5000 });
     const dtos = await this.toDtos(items);
@@ -612,7 +612,7 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
 
   /**
    * "My area": items the user may report defects for, by inventory number, name, barcode or RFID chip, or by a scanned
-   * `code` (label URL, barcode, RFID chip or inventory number, exact); with vehicle or station and loading place.
+   * `code` (label URL, barcode, RFID chip or inventory number, exact); with the current place, vehicle or station and loading place.
    */
   async reportable(user: AuthenticatedUser, query: string, code = ''): Promise<ReportableItem[]> {
     const visible = this.visible(user, REPORT_DEFECTS);
@@ -625,14 +625,14 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
       const exact = scanned.replace(/[\\%_]/g, '\\$&');
       match = label ? { id: label[1].toLowerCase() } : { $or: [{ barcode: { $ilike: exact } }, { rfid: normalizeRfid(scanned) }, { inventoryNumber: { $ilike: exact } }] };
     } else {
-      const words = wordsWhere(q, ['inventoryNumber', 'name', 'barcode']);
+      const words = wordsWhere(q, ['inventoryNumber', 'name', 'barcode', 'location']);
       match = { $or: [...(words ? [words] : []), { rfid: { $ilike: `%${normalizeRfid(q) || q}%` } }] } as FilterQuery<EquipmentItemEntity>;
     }
     const items = await this.em.fork().find(EquipmentItemEntity, { $and: [visible, { status: { $ne: 'retired' } }, match] }, { limit: 20, orderBy: { inventoryNumber: 'asc' } });
     if (!items.length) return [];
     const vehicles = new Map((await this.organization.vehicles({ includeRetired: true })).map((v) => [v.id, v.radioCallSign || v.designation]));
     const stations = new Map((await this.organization.stations()).map((s) => [s.id, s.name]));
-    const place = (i: EquipmentItemEntity) => [i.vehicleId ? vehicles.get(i.vehicleId) : i.stationId ? stations.get(i.stationId) : '', i.loadingPlace].filter(Boolean).join(' · ');
+    const place = (i: EquipmentItemEntity) => [i.location, i.vehicleId ? vehicles.get(i.vehicleId) : i.stationId ? stations.get(i.stationId) : '', i.loadingPlace].filter(Boolean).join(' · ');
     return items.map((i) => ({ id: i.id, inventoryNumber: i.inventoryNumber, name: i.name, place: place(i) }));
   }
 

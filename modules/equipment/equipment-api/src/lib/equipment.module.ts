@@ -1,6 +1,6 @@
 import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Attachments, AuditReferenceRegistry, CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry, RetentionRegistry, SearchRegistry } from '@forga/core-api';
+import { type AuthenticatedUser, Attachments, AuditReferenceRegistry, CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry, RetentionRegistry, SearchRegistry } from '@forga/core-api';
 import { EQUIPMENT_MANIFEST, EQUIPMENT_SETTINGS, EQUIPMENT_USAGE } from '@forga/equipment-contracts';
 import { CATALOG_REFERENCES, type CatalogReferences, ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
 import { EQUIPMENT_MIGRATIONS } from '../migrations/index.js';
@@ -10,7 +10,9 @@ import { EquipmentData } from './data/equipment.data.js';
 import { EquipmentRetention } from './data/equipment.retention.js';
 import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, UsageEntity } from './equipment.entities.js';
 import { InventoryImport } from './imports/inventory.import.js';
+import { EquipmentLookups } from './imports/lookups.js';
 import { ItemsController } from './items/items.controller.js';
+import { equipmentGroupKey } from './items/item-group.js';
 import { INSPECTOR_QUALIFICATIONS, ItemsService, READ } from './items/items.service.js';
 import { EquipmentLists } from './lists/equipment.lists.js';
 
@@ -18,7 +20,7 @@ import { EquipmentLists } from './lists/equipment.lists.js';
 @Global()
 @Module({
   controllers: [CatalogController, ItemsController],
-  providers: [ItemsService, EquipmentLists, EquipmentData, EquipmentRetention, InventoryImport, { provide: EQUIPMENT_USAGE, useExisting: ItemsService }],
+  providers: [ItemsService, EquipmentLists, EquipmentData, EquipmentRetention, InventoryImport, EquipmentLookups, { provide: EQUIPMENT_USAGE, useExisting: ItemsService }],
   exports: [EQUIPMENT_USAGE],
 })
 export class EquipmentModule implements OnModuleInit {
@@ -34,6 +36,7 @@ export class EquipmentModule implements OnModuleInit {
     private readonly historyAccess: HistoryAccessRegistry,
     private readonly data: EquipmentData,
     private readonly inventory: InventoryImport,
+    private readonly lookups: EquipmentLookups,
     private readonly attachments: Attachments,
     private readonly items: ItemsService,
     @Inject(ORGANIZATION_REFERENCES) private readonly references: OrganizationReferences,
@@ -56,6 +59,7 @@ export class EquipmentModule implements OnModuleInit {
       describePerson: (id, ctx) => this.data.describePerson(id, ctx),
     });
     this.imports.register('equipment', this.inventory.profile());
+    for (const lookup of this.lookups.lookups()) this.imports.registerLookup('equipment', lookup);
     this.retentionCategory.register(this.retention);
     this.personData.register('equipment', { anonymize: (ids) => this.retentionCategory.anonymize(ids), erasure: (id, ctx) => this.retentionCategory.erasure(id, ctx), erase: (id, areas) => this.retentionCategory.erase(id, areas) });
     // Inspections by a competent person are checked against these qualifications.
@@ -90,6 +94,35 @@ export class EquipmentModule implements OnModuleInit {
         return Boolean(d) && (this.items.may(user, 'write', d!.item, await breathing(d!.item.categoryKey)) || (d!.reportedByUserId === user.id && d!.status === 'reported'));
       },
     });
+    // Photo and documents belong to the kind of device (category, type, name), not to one inventory number.
+    const itemOf = (id: string) => /^[0-9a-f-]{36}$/i.test(id) ? this.em.fork().findOne(EquipmentItemEntity, id) : Promise.resolve(null);
+    const groupKey = (item: Pick<EquipmentItemEntity, 'categoryKey' | 'typeKey' | 'name'>) => equipmentGroupKey(item);
+    const inGroup = async (id: string) => {
+      if (!id.startsWith('group:')) return [];
+      const items = await this.em.fork().find(EquipmentItemEntity, {}, { fields: ['categoryKey', 'typeKey', 'name', 'departmentId'] });
+      return items.filter((item) => groupKey(item) === id);
+    };
+    const shared = {
+      read: async (user: AuthenticatedUser, id: string) => {
+        const item = await itemOf(id);
+        const candidates = item ? [item] : await inGroup(id);
+        return candidates.some((candidate) => user.can(READ, candidate.departmentId));
+      },
+      write: async (user: AuthenticatedUser, id: string) => {
+        const item = await itemOf(id);
+        const candidates = item ? [item] : await inGroup(id);
+        for (const candidate of candidates) {
+          if (this.items.may(user, 'write', candidate, await breathing(candidate.categoryKey))) return true;
+        }
+        return false;
+      },
+      locate: async (id: string) => {
+        const item = await itemOf(id);
+        return item ? groupKey(item) : id;
+      },
+    };
+    this.attachments.register('equipment.item', { ...shared, max: 1, imagesOnly: true });
+    this.attachments.register('equipment.item-document', shared);
     this.historyAccess.registerPermission('equipment.equipment_type', 'equipment.settings.manage');
     // Departments, stations and vehicles with equipment cannot be deleted.
     this.references.register('equipment', (kind, id) => {

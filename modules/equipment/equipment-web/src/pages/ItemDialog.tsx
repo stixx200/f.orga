@@ -1,11 +1,11 @@
-import { Button, Group, NumberInput, Select, SimpleGrid, Stack, Table, Text, Textarea, TextInput } from '@mantine/core';
+import { Autocomplete, Button, Group, NumberInput, Select, SimpleGrid, Stack, Table, Text, Textarea, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { InitialInspection, Item, ItemInput } from '@forga/equipment-contracts';
 import { vehicleLabel } from '@forga/masterdata-contracts';
 import { can, localDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { CodeInput, ResponsiveDialog, useAction } from '@forga/web-ui';
+import { CodeInput, ResponsiveDialog, treeOptions, useAction } from '@forga/web-ui';
 import { BREATHING_WRITE, keys, useCategories, useDepartments, useStations, useTypes, useVehicles, WRITE } from '../api';
 
 type Form = Required<Omit<ItemInput, 'inspections' | 'version' | 'initialInspections'>>;
@@ -27,6 +27,7 @@ const fromItem = (item?: Item): Form => ({
   vehicleId: item?.vehicleId ?? null,
   stationId: item?.stationId ?? null,
   loadingPlace: item?.loadingPlace ?? '',
+  location: item?.location ?? '',
   quantity: item?.quantity ?? 1,
   expiresOn: item?.expiresOn ?? null,
   intervalOverrides: item?.intervalOverrides ?? {},
@@ -59,6 +60,12 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
   const allowedTypes = types.filter((x) => allowedCategories.some((c) => c.key === x.categoryKey));
   const departmentId = form.departmentId || (writable.length === 1 ? writable[0].id : '');
   const stock = categories.find((c) => c.key === form.categoryKey)?.tracking === 'stock';
+  const stationOptions = stations
+    .map((s) => {
+      const shortName = departments.find((d) => d.id === s.departmentId)?.shortName;
+      return { id: s.id, label: shortName ? `${s.name} (${shortName})` : s.name };
+    })
+    .toSorted((a, b) => a.label.localeCompare(b.label, 'de', { sensitivity: 'base' }));
   const [initial, setInitial] = useState<Record<string, { date: string | null; nextDueOn: string | null }>>({});
   // Inspection types of the item: own ones, else those of the type (with the type's intervals).
   const inspections = item?.ownInspections ? item.inspections : (type?.inspections ?? []);
@@ -104,7 +111,7 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
             searchable
             clearable
           />
-          <Select label={t('fields.category')} data={allowedCategories.map((c) => ({ value: c.key, label: localized(c.name) }))} value={form.categoryKey || null} onChange={(v) => set('categoryKey', v ?? '')} required />
+          <Select label={t('fields.category')} data={treeOptions(categories, (c) => localized(c.name), { include: (c) => allowedCategories.some((a) => a.key === c.key) })} value={form.categoryKey || null} onChange={(v) => set('categoryKey', v ?? '')} required searchable />
           <TextInput label={t('fields.inventoryNumber')} value={form.inventoryNumber} onChange={(e) => set('inventoryNumber', e.currentTarget.value)} required />
           <TextInput label={t('fields.name')} value={form.name} onChange={(e) => set('name', e.currentTarget.value)} required />
           <TextInput label={t('fields.serialNumber')} value={form.serialNumber} onChange={(e) => set('serialNumber', e.currentTarget.value)} />
@@ -117,7 +124,17 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
           <DateInput label={t('fields.expiresOn')} value={form.expiresOn} onChange={(v) => set('expiresOn', v)} valueFormat="DD.MM.YYYY" clearable />
           <Select label={t('fields.department')} data={writable.map((d) => ({ value: d.id, label: d.name }))} value={departmentId || null} onChange={(v) => set('departmentId', v ?? '')} required />
           <Select label={t('fields.vehicle')} data={vehicles.filter((v) => !departmentId || v.departmentId === departmentId).map((v) => ({ value: v.id, label: vehicleLabel(v, departments.find((d) => d.id === v.departmentId)?.shortName) }))} value={form.vehicleId} onChange={(v) => setForm((f) => ({ ...f, vehicleId: v, stationId: v ? null : f.stationId }))} clearable />
-          <Select label={t('fields.station')} data={stations.filter((s) => !departmentId || s.departmentId === departmentId).map((s) => ({ value: s.id, label: s.name }))} value={form.stationId} onChange={(v) => setForm((f) => ({ ...f, stationId: v, vehicleId: v ? null : f.vehicleId }))} clearable disabled={Boolean(form.vehicleId)} />
+          <Autocomplete
+            label={t('fields.location')}
+            description={t('fields.locationHint')}
+            data={stationOptions.map((s) => s.label)}
+            value={form.stationId ? (stationOptions.find((s) => s.id === form.stationId)?.label ?? form.location) : form.location}
+            onChange={(value) => {
+              const station = stationOptions.find((s) => s.label === value);
+              setForm((f) => ({ ...f, stationId: station?.id ?? null, location: station ? '' : value, vehicleId: station ? null : f.vehicleId }));
+            }}
+            limit={Infinity}
+          />
           <TextInput label={t('fields.loadingPlace')} value={form.loadingPlace} onChange={(e) => set('loadingPlace', e.currentTarget.value)} />
           {stock && <NumberInput label={t('fields.quantity')} value={form.quantity} onChange={(v) => set('quantity', Number(v) || 0)} min={0} />}
           {(type?.properties ?? []).map((name) => (

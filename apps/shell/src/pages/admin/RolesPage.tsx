@@ -30,9 +30,10 @@ function RoleEditor({ role, permissions, modules, onDone }: { role: Role | null;
   }));
   const [deleting, setDeleting] = useState(false);
   const all = draft.permissions.includes('*') || draft.permissionsAllDepartments.includes('*');
-  /** Where a permission (or a module pattern) applies in the draft. */
+  const explicit = new Set(permissions.filter((p) => p.explicit).map((p) => p.id));
+  /** Where a permission (or a module pattern) applies in the draft. An explicit permission is not covered by `module.*`. */
   const areaOf = (id: string): Area => {
-    const covers = (list: string[]) => list.includes(id) || (!id.endsWith('.*') && list.includes(`${moduleOf(id)}.*`));
+    const covers = (list: string[]) => list.includes(id) || (!id.endsWith('.*') && !explicit.has(id) && list.includes(`${moduleOf(id)}.*`));
     if (covers(draft.permissionsAllDepartments)) return 'all';
     if (covers(draft.permissions)) return 'assigned';
     return 'none';
@@ -125,10 +126,11 @@ function RoleEditor({ role, permissions, modules, onDone }: { role: Role | null;
                               <Group gap={6}>
                                 <Text size="sm">{localized(p.name)}</Text>
                                 {p.stepUp && <span title={t('roles.stepUpHint')}><StatusBadge tone="highlight">{t('roles.stepUp')}</StatusBadge></span>}
+                                {p.explicit && <span title={t('roles.explicitHint')}><StatusBadge tone="neutral">{t('roles.explicit')}</StatusBadge></span>}
                               </Group>
                               <Text size="xs" c="dimmed"><code>{p.id}</code> · {t(p.scope === 'brigade' ? 'roles.scopeBrigade' : 'roles.scopeDepartment')}</Text>
                             </Table.Td>
-                            <Table.Td align="right">{areaControl(p.id, wholeModule)}</Table.Td>
+                            <Table.Td align="right">{areaControl(p.id, wholeModule && !p.explicit)}</Table.Td>
                           </Table.Tr>
                         ))}
                     </Table.Tbody>

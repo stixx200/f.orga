@@ -96,12 +96,7 @@ export function SettingsPage({ modules }: { modules: LoadedModule[] }) {
           {can(session, 'core.data.export') && <Tabs.Tab value="export">{t('settings.tabs.export')}</Tabs.Tab>}
         </Tabs.List>
         <Tabs.Panel value="security">
-          <Stack gap="lg" maw={880}>
-            <Panel title={t('settings.stepUp')}>
-              <Text size="sm">{t('settings.stepUpText')}</Text>
-            </Panel>
-            <SecuritySettings />
-          </Stack>
+          <SecuritySettings />
         </Tabs.Panel>
         <Tabs.Panel value="retention"><RetentionSettings /></Tabs.Panel>
         <Tabs.Panel value="brigade">

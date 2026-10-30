@@ -1,7 +1,9 @@
-import { Button, FileInput, Group, Text } from '@mantine/core';
+import { Button, FileButton, FileInput, Group, Image, Stack, Text } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
+import type { Attachment } from '@forga/core-contracts';
 import type { Defect, ItemStatus } from '@forga/equipment-contracts';
-import { formatDate, upload, useLocalized, useTranslation } from '@forga/web-sdk';
-import { Attachments, ResponsiveDialog, StatusBadge, type Tone } from '@forga/web-ui';
+import { api, apiUrl, formatDate, send, upload, useLocalized, useTranslation } from '@forga/web-sdk';
+import { attachmentsKey, Attachments, ResponsiveDialog, StatusBadge, type Tone, useAction } from '@forga/web-ui';
 import { useDueSoon } from './api';
 
 const TONES: Record<ItemStatus, Tone> = { ready: 'done', 'in-inspection': 'primary', defective: 'error', 'in-repair': 'warning', retired: 'neutral' };
@@ -46,3 +48,27 @@ export function DefectPhotoInput({ value, onChange }: { value: File | null; onCh
 }
 
 export const uploadDefectPhoto = (defectId: string, photo: File | null) => (photo ? upload(`core/attachments?type=equipment.defect&id=${defectId}`, photo) : Promise.resolve(null));
+
+/** One photo of the item. A new file replaces the previous one. */
+export function ItemPhoto({ id, editable }: { id: string; editable: boolean }) {
+  const { t } = useTranslation('equipment');
+  const key = attachmentsKey('equipment.item', id);
+  const { data = [] } = useQuery({ queryKey: key, queryFn: () => api<Attachment[]>(`core/attachments?type=equipment.item&id=${encodeURIComponent(id)}`) });
+  const photo = data.find((a) => a.contentType.startsWith('image/'));
+  const add = useAction((file: File) => upload<Attachment>(`core/attachments?type=equipment.item&id=${encodeURIComponent(id)}`, file), { invalidate: [key] });
+  const remove = useAction((attachment: string) => send('DELETE', `core/attachments/${attachment}`), { invalidate: [key] });
+  const url = photo ? apiUrl(`core/attachments/${photo.id}/file`) : undefined;
+  return (
+    <Stack align="center" gap="xs">
+      {url ? <Image src={url} alt="" w={160} h={160} fit="contain" radius="sm" /> : <Text size="sm" c="dimmed">{t('item.noPhoto')}</Text>}
+      {editable && (
+        <FileButton accept="image/png,image/jpeg,image/webp" onChange={(file) => file && add.mutate(file)}>
+          {(props) => <Button size="xs" variant="default" loading={add.isPending} {...props}>{photo ? t('item.replacePhoto') : t('item.addPhoto')}</Button>}
+        </FileButton>
+      )}
+      {editable && photo && (
+        <Button size="xs" variant="subtle" color="red" loading={remove.isPending} onClick={() => remove.mutate(photo.id)}>{t('item.removePhoto')}</Button>
+      )}
+    </Stack>
+  );
+}

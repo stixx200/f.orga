@@ -137,6 +137,7 @@ export function InspectionsPage() {
         </Panel>
       )}
       <DataTable<Row>
+        scroll
         rows={visible}
         rowKey={(r) => `${r.item.id}:${r.due.key}`}
         empty={isLoading ? t('loading') : t('bulk.empty')}

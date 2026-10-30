@@ -68,7 +68,7 @@ Offen:
 - **Vollexport** je Modul als JSON (versioniertes Format, IDs bleiben erhalten) für Umzug, Sicherung auf Fachebene und Auswertungen außerhalb; Import solcher Dateien
 - **MP-Feuer-Migration der Einsätze**: Profil für den Berichtsexport `Einsatzberichte_Zusatz.xlsx` (Wetter, Sachschaden, Brandfläche; Spalten siehe [Altanwendungen](../recherche/altanwendungen.md)). Der Personalexport `Einsaetze_Personal.xlsx` wird schon übernommen.
 - **Jugendfeuerwehr aus MP-Feuer**: Erziehungsberechtigte (`JUG_EB_1/2_*`) und Jugendgruppen (`Einheiten`) aus dem Export bzw. der Transferdatei der Jugendfeuerwehr
-- **Weitere Inhalte der MP-Feuer-Transferdateien** (das [Modul MP-Feuer](../implementiert/architektur.md#modul-mp-feuer-mp-feuer) liest Personen, Lehrgänge, Dienstgrade, Ehrungen, G26, Belastungsübungen, Dienste und Einsätze): Fahrzeuge (`FZG_*`) und Geräte (`GAS_*`, `GSO_*`, `GFU_*` usw. mit Prüfungen) für Stammdaten und Gerätewartung, Fahrzeuge je Einsatz ohne Besatzung (`EIN_FAHRZ`), Funktionen und Dienststellungen aus `PER_HIST`, Atemschutz-Heißausbildung (`AS-BÜC`) und Atemschutzeinsätze aus `PER_PRUEF`, Einsatzwachen (`EIW_*`), Vergütungen (`VPE_*`), Kleiderkammer (`KLD_*`, `PER_AUSR`)
+- **Weitere Inhalte der MP-Feuer-Transferdateien** (Gerätebestand, Kleiderkammer, Funktionen als Ämter, Material und Kräfte am Einsatz übernimmt das [Modul MP-Feuer](../implementiert/architektur.md#modul-mp-feuer-mp-feuer) bereits): Fahrzeugstamm (`FZG_STAMM`), Beladelisten ohne Inventarnummer, Dienststellungen aus `PER_HIST`, Atemschutz-Heißausbildung und Atemschutzeinsätze aus `PER_PRUEF`, Einsatzwachen (`EIW_*`), Vergütungen (`VPE_*`), die Ausgabegeschichte der Kleiderkammer (`PER_AUSR`; der aktuelle Träger kommt aus `KLD_STAMM`), Dokumente (die Dateien liegen nicht in der Transferdatei)
 - Audit-Eintrag für Vollexporte
 - **Parallelbetrieb mit MP-Feuer** (umgesetzt ist der [Grundablauf](../implementiert/parallelbetrieb-mp-feuer.md)), offen:
   - in MP-Feuer gelöschte Einsätze und Berichte erkennen: Berichte aus MP-Feuer im Zeitraum der Transferdateien, die nicht mehr vorkommen, nach der Übernahme zur Prüfung auflisten (nicht automatisch löschen)
@@ -127,6 +127,7 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Wache, Gerätehaus | `Station` |
 | Fahrzeug | `Vehicle` |
 | Gerät | `EquipmentItem` |
+| Standort (aktueller Ort eines Geräts) | `location` |
 | Person | `Person` |
 | Mitgliedschaft | `Membership` |
 | Übernahme in Einsatzabteilung / in Altersabteilung | transfer to operational / to veterans (`transfer-to-operational`, `transfer-to-veterans`) |

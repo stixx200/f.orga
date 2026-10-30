@@ -130,15 +130,27 @@ export const ImportLookupInfo = z.object({
   creatable: z.boolean(),
   /** `slug`: keys like `chain-saw-course`; `text`: the key is the name itself (e.g. alarm keywords). */
   keyFormat: z.enum(['slug', 'text']),
+  /**
+   * Lookup whose entries are the category a new entry must belong to (sent as `categoryKey`), e.g. the category of
+   * an equipment type. `null` when a new entry needs no category.
+   */
+  createCategoryKind: z.string().nullable(),
 });
 export type ImportLookupInfo = z.infer<typeof ImportLookupInfo>;
 
-export const ImportLookupEntry = z.object({ key: z.string(), name: LocalizedText });
+export const ImportLookupEntry = z.object({
+  key: z.string(),
+  name: LocalizedText,
+  /** Parent entry when the lookup is a tree (equipment categories). Omitted for a flat list. */
+  parentKey: z.string().nullable().optional(),
+});
 export type ImportLookupEntry = z.infer<typeof ImportLookupEntry>;
 
 export const ImportLookupEntryInput = z.object({
   key: z.string().trim().min(1).max(60),
   name: z.string().trim().min(1).max(200),
+  /** Category of the new entry, when the lookup's `createCategoryKind` is set (e.g. an equipment type). */
+  categoryKey: z.string().trim().min(1).max(60).optional(),
 });
 export type ImportLookupEntryInput = z.input<typeof ImportLookupEntryInput>;
 

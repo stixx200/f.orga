@@ -9,6 +9,11 @@ export type ForgaStage = z.infer<typeof ForgaStage>;
 
 /** E-mails without person names (L18). Deadlines and notifications about health always go without names when on. */
 export const SecuritySettings = z.object({
+  /**
+   * Second factor (TOTP step-up) for sensitive data and the administration. Off: a password or the municipal account
+   * is enough; enrolled factors stay stored and apply again when this is switched on. On by default.
+   */
+  mfaEnabled: z.boolean().default(true),
   /** Deadlines and notifications with a health reference (e.g. medical examination) only as counts. */
   mailHealthWithoutNames: z.boolean().default(true),
   /** Every deadline of the weekly e-mail only as counts per module. */

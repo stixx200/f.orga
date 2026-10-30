@@ -1,5 +1,6 @@
 export * from './lib/theme';
 export * from './lib/search';
+export * from './lib/tree-options';
 export * from './lib/components/ActionBar';
 export * from './lib/components/CodeScanner';
 export * from './lib/components/DataTable';

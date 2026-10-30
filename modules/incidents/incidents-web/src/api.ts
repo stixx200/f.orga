@@ -5,6 +5,8 @@ import { api, can, useLocalized, useSession, withQuery } from '@forga/web-sdk';
 
 export const READ = 'incidents.reports.read';
 export const WRITE = 'incidents.reports.write';
+/** Unlocked drafts only. Not included in `incidents.*`; the administrator role holds it through `*`. */
+export const DELETE_REPORT = 'incidents.reports.delete';
 export const RELEASE = 'incidents.reports.release';
 export const COSTS = 'incidents.costs';
 export const UNLOCK = 'incidents.reports.unlock';

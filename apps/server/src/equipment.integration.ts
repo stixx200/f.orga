@@ -49,44 +49,19 @@ beforeAll(async () => {
 afterAll(() => test?.app.close());
 
 describe('equipment', () => {
-  it('offers the DGUV 305-002 template and takes over the vehicles', async () => {
+  it('offers the DGUV 305-002 template', async () => {
     const template = (await post('/equipment/templates/dguv', {}).expect(201)).body;
     expect(template.types).toBeGreaterThan(20);
     expect((await post('/equipment/templates/dguv', {}).expect(201)).body).toEqual({ categories: 0, types: 0 });
     const scba = ((await get('/equipment/types').expect(200)).body as { key: string; inspections: { key: string; intervalMonths: number | null }[] }[]).find((t) => t.key === 'scba')!;
     expect(scba.inspections.map((i) => [i.key, i.intervalMonths])).toEqual([['scba-check', 6], ['scba-overhaul', 72], ['scba-after-use', null]]);
-
-    expect((await post('/equipment/vehicles/sync', {}).expect(200)).body).toEqual({ created: 2 });
-    expect((await post('/equipment/vehicles/sync', {}).expect(200)).body).toEqual({ created: 0 });
-    type VehicleItem = { id: string; typeKey: string; forVehicleId: string; nextDue: string | null; dues: { key: string; dueOn: string | null; overdue: boolean; notRecorded: boolean }[] };
-    const synced = (await get('/equipment/items?categoryKey=vehicles').expect(200)).body as VehicleItem[];
-    const vehicle = synced.find((v) => v.forVehicleId === ids.lf)!;
-    ids.lfItem = vehicle.id;
-    // Over 7.5 t: annual inspection once (DGUV regulation 70 and principle 305-002), roadworthiness test and safety inspection.
-    expect(vehicle).toMatchObject({ typeKey: 'fire-vehicle', nextDue: null });
-    expect(vehicle.dues.map((d) => d.key)).toEqual(['vehicle-annual', 'vehicle-hu', 'vehicle-safety']);
-    // Taken over without dates: "not recorded yet" instead of due today.
-    expect(vehicle.dues.every((d) => d.dueOn === null && !d.overdue && d.notRecorded)).toBe(true);
-    // TSF (3.5 to 7.5 t): no safety inspection.
-    const tsf = synced.find((v) => v.forVehicleId === ids.tsf)!;
-    expect(tsf.typeKey).toBe('fire-vehicle-medium');
-    expect(tsf.dues.map((d) => d.key)).toEqual(['vehicle-annual', 'vehicle-hu']);
-    ids.tsfItem = tsf.id;
-    const types = (await get('/equipment/types').expect(200)).body as { key: string; name: { de: string }; inspections: { key: string; intervalMonths: number | null }[] }[];
-    const light = types.find((t) => t.key === 'fire-vehicle-light')!;
-    expect(light.inspections.map((i) => [i.key, i.intervalMonths])).toEqual([['vehicle-annual', 12], ['vehicle-hu', 24]]);
-    // The vehicle classes are marked as template values.
-    expect(types.filter((t) => t.key.startsWith('fire-vehicle')).every((t) => t.name.de.includes('Vorlagewerte'))).toBe(true);
-    // An entered inspection replaces "not recorded yet".
-    await post(`/equipment/items/${ids.tsfItem}/inspections`, { inspectionKey: 'vehicle-hu', date: '2026-03-01', inspectorCompany: 'Prüfstelle', result: 'passed' }).expect(201);
-    const hu = ((await get(`/equipment/items/${ids.tsfItem}`).expect(200)).body as VehicleItem).dues.find((d) => d.key === 'vehicle-hu');
-    expect(hu).toMatchObject({ dueOn: '2027-03-01', notRecorded: false });
+    expect(((await get('/equipment/categories')).body as { key: string }[]).some((c) => c.key === 'vehicles')).toBe(false);
     // Hoses are single items by default.
     expect(((await get('/equipment/categories')).body as { key: string; tracking: string }[]).find((c) => c.key === 'hoses')?.tracking).toBe('item');
   });
 
   it('manages items with due inspections per department', async () => {
-    const item = { inventoryNumber: 'AS-PA-0001', name: 'Pressluftatmer 1', typeKey: 'scba', categoryKey: 'breathing', departmentId: ids.musterstadt, vehicleId: ids.lf, loadingPlace: 'G1' };
+    const item = { inventoryNumber: 'AS-PA-0001', name: 'Pressluftatmer 1', typeKey: 'scba', categoryKey: 'breathing', departmentId: ids.musterstadt, vehicleId: ids.lf, loadingPlace: 'G1', location: 'Atemschutzwerkstatt' };
     ids.scba = (await post('/equipment/items', item, officer).expect(201)).body.id;
     await post('/equipment/items', { ...item, name: 'Doppelt' }, officer).expect(400);
     await post('/equipment/items', { ...item, inventoryNumber: 'AS-PA-0099' }, member).expect(403);
@@ -96,7 +71,7 @@ describe('equipment', () => {
 
     // Never inspected and no purchase date: due from the day the item was recorded.
     const scba = (await get(`/equipment/items/${ids.scba}`, officer).expect(200)).body;
-    expect(scba).toMatchObject({ status: 'ready', nextDue: today, openDefects: 0, blocked: false, labelPrintedAt: null });
+    expect(scba).toMatchObject({ status: 'ready', nextDue: today, openDefects: 0, blocked: false, labelPrintedAt: null, location: 'Atemschutzwerkstatt' });
     expect(scba.dues.find((d: { key: string }) => d.key === 'scba-after-use').dueOn).toBeNull();
     // The group leader sees the item, but cannot edit it.
     await get(`/equipment/items/${ids.scba}`, member).expect(200);
@@ -105,10 +80,29 @@ describe('equipment', () => {
     const summary = (await get(`/equipment/items/${ids.scba}`, reporter).expect(200)).body;
     expect(summary).toEqual({ id: ids.scba, inventoryNumber: 'AS-PA-0001', name: 'Pressluftatmer 1', departmentId: ids.musterstadt, status: 'ready', blocked: false, reportOnly: true });
     // "My area": hits name vehicle and loading place, also for a scanned code.
-    expect((await get('/equipment/me/items?q=Pressluftatmer', reporter).expect(200)).body).toEqual([{ id: ids.scba, inventoryNumber: 'AS-PA-0001', name: 'Pressluftatmer 1', place: 'Florian Musterstadt 1/44 · G1' }]);
+    expect((await get('/equipment/me/items?q=Pressluftatmer', reporter).expect(200)).body).toEqual([{ id: ids.scba, inventoryNumber: 'AS-PA-0001', name: 'Pressluftatmer 1', place: 'Atemschutzwerkstatt · Florian Musterstadt 1/44 · G1' }]);
     expect(((await get('/equipment/me/items?code=as-pa-0001', reporter).expect(200)).body as { id: string }[]).map((i) => i.id)).toEqual([ids.scba]);
     expect(((await get(`/equipment/me/items?code=${encodeURIComponent(`https://forga.example.org/equipment/items/${ids.scba}`)}`, reporter).expect(200)).body as { id: string }[]).map((i) => i.id)).toEqual([ids.scba]);
     await get(`/equipment/items/${ids.scba}/inspections`, reporter).expect(403);
+  });
+
+  it('stores one photo of an item and replaces it with the next one', async () => {
+    const photo = Buffer.from([0xff, 0xd8, 0xff, 0xda, 0, 4, 1, 2, 0xff, 0xd9]);
+    const upload = (cookie: string, file = photo, type = 'image/jpeg', name = 'geraet.jpg') =>
+      test.http.post(`/api/core/attachments?type=equipment.item&id=${ids.scba}`).set('Cookie', cookie).set(UI).attach('file', file, { filename: name, contentType: type });
+    expect((await upload(reporter)).status).toBeGreaterThanOrEqual(400);
+    const first = (await upload(officer).expect(201)).body as { id: string };
+    const again = (await upload(officer).expect(201)).body as { id: string };
+    const list = (await get(`/core/attachments?type=equipment.item&id=${ids.scba}`, officer).expect(200)).body as { id: string }[];
+    expect(list.map((a) => a.id)).toEqual([again.id]);
+    expect(first.id).not.toBe(again.id);
+    await upload(officer, Buffer.from('%PDF-1.4'), 'application/pdf', 'x.pdf').expect(400);
+    const twin = (await post('/equipment/items', { inventoryNumber: 'AS-PA-0002', name: 'Pressluftatmer 1', typeKey: 'scba', categoryKey: 'breathing', departmentId: ids.musterstadt }, officer).expect(201)).body as { id: string };
+    const shared = (await get(`/core/attachments?type=equipment.item&id=${twin.id}`, officer).expect(200)).body as { id: string }[];
+    expect(shared.map((a) => a.id)).toEqual([again.id]);
+    const document = (await test.http.post(`/api/core/attachments?type=equipment.item-document&id=${twin.id}`).set('Cookie', officer).set(UI).attach('file', Buffer.from('%PDF-1.4'), { filename: 'blatt.pdf', contentType: 'application/pdf' }).expect(201)).body as { id: string };
+    const documents = (await get(`/core/attachments?type=equipment.item-document&id=${ids.scba}`, officer).expect(200)).body as { id: string }[];
+    expect(documents.map((a) => a.id)).toEqual([document.id]);
   });
 
   it('measures new items from the purchase date or the inspections taken over, with interval overrides per item', async () => {
@@ -344,8 +338,6 @@ describe('equipment', () => {
     const ofOfficer = await subjects(officer);
     expect(ofOfficer).toContain(ids.ladder);
     expect(ofOfficer).not.toContain(ids.scba);
-    // Vehicles taken over without dates make no deadlines; deadlines open the page where they are done.
-    expect(ofOfficer).not.toContain(ids.lfItem);
     const tasks = (await get(`/core/tasks?asOf=${today}`, officer).expect(200)).body as { kind: string; subject: { id: string }; to?: string }[];
     expect(tasks.find((t) => t.kind === 'equipment-inspection' && t.subject.id === ids.ladder)?.to).toBe(`/equipment/items/${ids.ladder}?tab=inspections`);
     expect(tasks.find((t) => t.kind === 'equipment-defect' && t.subject.id === ids.ladder)?.to).toBe(`/equipment/items/${ids.ladder}?tab=defects`);
@@ -430,7 +422,7 @@ describe('equipment', () => {
     const retired = (await post(`/equipment/items/${ids.hose}/retire`, { date: today, reason: 'Kupplung defekt', disposition: 'Entsorgt' }, officer).expect(200)).body;
     expect(retired).toMatchObject({ status: 'retired', dues: [], retirement: { reason: 'Kupplung defekt' } });
     expect(((await get('/equipment/defects?open=true', officer)).body as { itemId: string }[]).filter((d) => d.itemId === ids.hose)).toHaveLength(0);
-    expect(((await get('/equipment/items', officer)).body as { id: string }[]).map((i) => i.id)).toEqual(expect.arrayContaining([ids.scba, ids.ladder, ids.tsfItem]));
+    expect(((await get('/equipment/items', officer)).body as { id: string }[]).map((i) => i.id)).toEqual(expect.arrayContaining([ids.scba, ids.ladder]));
 
     await del(`/masterdata/vehicles/${ids.lf}`).expect(409);
 
@@ -466,5 +458,65 @@ describe('equipment', () => {
     const kept = ((await get('/equipment/items?q=L-0001', officer)).body as { name: string; typeKey: string; vehicleId: string; loadingPlace: string; dues: { key: string; lastDate: string | null }[] }[])[0];
     expect(kept).toMatchObject({ name: 'Steckleiter', typeKey: 'portable-ladder', vehicleId: ids.lf, loadingPlace: 'Dach' });
     expect(kept.dues.find((d) => d.key === 'ladder-visual')?.lastDate).toBe('2026-04-01');
+  });
+
+  it('maps a blank department to a department and creates an unknown equipment type', async () => {
+    const gesamt = (await post('/masterdata/departments', { name: 'Gesamtfeuerwehr', shortName: 'Gesamt', type: 'command' }).expect(201)).body.id as string;
+    await post('/equipment/categories', { key: 'measuring', name: { de: 'Messgeräte', en: 'Measuring devices' } }).expect(201);
+    const csv = 'Inventar-Nr.;Bezeichnung;Gerätetyp;Abteilung\nMG-1;Multigaswarngerät;Altair 4X Multigas Messgerät;\n';
+    const upload = await test.http.post('/api/core/imports').set('Cookie', officer).set(UI).attach('file', Buffer.from(csv, 'utf8'), 'messgeraete.csv').expect(201);
+    const mapping = upload.body.suggestions['equipment.inventory'];
+    const preview = await post(`/core/imports/${upload.body.id}/preview`, { profile: 'equipment.inventory', mapping }, officer).expect(200);
+    expect(preview.body.unmatched).toEqual([
+      { kind: 'department', value: '', count: 1 },
+      { kind: 'equipment-type', value: 'Altair 4X Multigas Messgerät', count: 1 },
+    ]);
+    expect(preview.body.counts).toMatchObject({ error: 1 });
+
+    const lookups = (await get('/core/imports/lookups').expect(200)).body as { kind: string; creatable: boolean; createCategoryKind: string | null }[];
+    expect(lookups.find((l) => l.kind === 'department')).toMatchObject({ creatable: false, createCategoryKind: null });
+    expect(lookups.find((l) => l.kind === 'equipment-type')).toMatchObject({ creatable: true, createCategoryKind: 'equipment-category' });
+    expect((await post('/core/imports/lookups/equipment-type', { key: 'altair-without-category', name: 'Altair' }).expect(400)).body.code).toBe('equipment.unknownCategory');
+    const created = (await post('/core/imports/lookups/equipment-type', { key: 'altair-4x', name: 'Altair 4X Multigas Messgerät', categoryKey: 'measuring' }).expect(201)).body;
+    expect(created).toMatchObject({ key: 'altair-4x', name: { de: 'Altair 4X Multigas Messgerät' } });
+    expect((await post('/core/imports/lookups/equipment-type', { key: 'altair-4x', name: 'Altair', categoryKey: 'measuring' }).expect(400)).body.code).toBe('equipment.keyTaken');
+
+    const applied = await post(`/core/imports/${upload.body.id}/apply`, {
+      profile: 'equipment.inventory',
+      mapping,
+      mappings: { department: { '': gesamt }, 'equipment-type': { 'Altair 4X Multigas Messgerät': 'altair-4x' } },
+    }, officer).expect(200);
+    expect(applied.body).toMatchObject({ counts: { create: 1, error: 0 }, unmatched: [] });
+    const item = ((await get('/equipment/items?q=MG-1', officer)).body as { departmentId: string; typeKey: string; categoryKey: string }[])[0];
+    expect(item).toMatchObject({ departmentId: gesamt, typeKey: 'altair-4x', categoryKey: 'measuring' });
+
+    // The next file has no department column; the blank cell and the type name are remembered.
+    const againCsv = 'Inventar-Nr.;Bezeichnung;Gerätetyp\nMG-2;Zweites Messgerät;Altair 4X Multigas Messgerät\n';
+    const again = await test.http.post('/api/core/imports').set('Cookie', officer).set(UI).attach('file', Buffer.from(againCsv, 'utf8'), 'messgeraete-2.csv').expect(201);
+    const remembered = await post(`/core/imports/${again.body.id}/apply`, { profile: 'equipment.inventory', mapping: again.body.suggestions['equipment.inventory'] }, officer).expect(200);
+    expect(remembered.body).toMatchObject({ counts: { create: 1, error: 0 }, unmatched: [] });
+    const second = ((await get('/equipment/items?q=MG-2', officer)).body as { departmentId: string; typeKey: string }[])[0];
+    expect(second).toMatchObject({ departmentId: gesamt, typeKey: 'altair-4x' });
+  });
+
+  it('deletes a category and keeps its subcategories and types', async () => {
+    const parent = (await post('/equipment/categories', { key: 'spare', name: { de: 'Reserve', en: 'Spare' } }).expect(201)).body as { id: string };
+    const child = (await post('/equipment/categories', { key: 'spare-child', name: { de: 'Kind', en: 'Child' }, parentKey: 'spare' }).expect(201)).body as { id: string };
+    await post('/equipment/categories', { key: 'spare-grandchild', name: { de: 'Enkel', en: 'Grandchild' }, parentKey: 'spare-child' }).expect(201);
+    await post('/equipment/types', { key: 'spare-type', name: { de: 'Typ', en: 'Type' }, categoryKey: 'spare-child' }).expect(201);
+
+    await del(`/equipment/categories/${child.id}`).expect(204);
+    const categories = (await get('/equipment/categories').expect(200)).body as { key: string; parentKey: string | null }[];
+    expect(categories.find((c) => c.key === 'spare-child')).toBeUndefined();
+    expect(categories.find((c) => c.key === 'spare-grandchild')).toMatchObject({ parentKey: 'spare' });
+    const type = ((await get('/equipment/types').expect(200)).body as { key: string; categoryKey: string }[]).find((t) => t.key === 'spare-type');
+    expect(type).toMatchObject({ categoryKey: 'spare' });
+
+    const loose = (await post('/equipment/categories', { key: 'loose', name: { de: 'Lose', en: 'Loose' } }).expect(201)).body as { id: string };
+    await post('/equipment/types', { key: 'loose-type', name: { de: 'Lose', en: 'Loose' }, categoryKey: 'loose' }).expect(201);
+    expect((await del(`/equipment/categories/${loose.id}`).expect(400)).body.code).toBe('equipment.categoryHasTypes');
+
+    await post('/equipment/items', { inventoryNumber: 'SP-1', name: 'Reserve', categoryKey: 'spare', departmentId: ids.musterstadt }).expect(201);
+    expect((await del(`/equipment/categories/${parent.id}`).expect(400)).body.code).toBe('equipment.categoryInUse');
   });
 });

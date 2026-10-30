@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { send, useLocalized, useTranslation } from '@forga/web-sdk';
-import { Notice, PageHeader, useAction } from '@forga/web-ui';
+import { Notice, PageHeader, treeOptions, useAction } from '@forga/web-ui';
 import { keys, useCategories, useDepartments, useItemAccess, useItems, useLabelBase } from '../api';
 import classes from './labels.module.css';
 
@@ -50,7 +50,7 @@ export function LabelsPage() {
         ) : (
           <Group align="end">
             <Select label={t('fields.department')} placeholder={t('items.all')} data={departments.map((d) => ({ value: d.id, label: d.name }))} value={departmentId} onChange={setDepartmentId} clearable />
-            <Select label={t('fields.category')} placeholder={t('items.all')} data={categories.map((c) => ({ value: c.key, label: localized(c.name) }))} value={categoryKey} onChange={setCategoryKey} clearable />
+            <Select label={t('fields.category')} placeholder={t('items.all')} data={treeOptions(categories, (c) => localized(c.name))} value={categoryKey} onChange={setCategoryKey} clearable searchable miw={280} />
             <Switch label={t('labels.withoutLabel')} checked={withoutLabel} onChange={(e) => setWithoutLabel(e.currentTarget.checked)} />
           </Group>
         )}

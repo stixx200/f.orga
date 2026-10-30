@@ -6,6 +6,7 @@ const KNOWN: Permission[] = [
   { id: 'masterdata.persons.read', name, scope: 'department' },
   { id: 'masterdata.catalogs.manage', name, scope: 'brigade' },
   { id: 'incidents.reports.release', name, scope: 'brigade' },
+  { id: 'incidents.reports.delete', name, scope: 'brigade', explicit: true },
 ];
 
 const user = (grants: Map<string, 'brigade' | string[]>) =>
@@ -17,13 +18,23 @@ describe('matches', () => {
     expect(matches('masterdata.*', 'masterdata.persons.read')).toBe(true);
     expect(matches('masterdata.*', 'incidents.reports.release')).toBe(false);
     expect(matches('*', 'incidents.reports.release')).toBe(true);
+    expect(matches('incidents.*', 'incidents.reports.delete', true)).toBe(false);
+    expect(matches('*', 'incidents.reports.delete', true)).toBe(true);
+    expect(matches('incidents.reports.delete', 'incidents.reports.delete', true)).toBe(true);
   });
 });
 
 describe('computeGrants', () => {
   it('grants brigade-wide for assignments without department', () => {
     const grants = computeGrants(KNOWN, [{ patterns: ['*'], departmentId: null }]);
-    expect([...grants.values()]).toEqual(['brigade', 'brigade', 'brigade']);
+    expect([...grants.values()]).toEqual(['brigade', 'brigade', 'brigade', 'brigade']);
+  });
+
+  it('keeps an explicit permission out of a module wildcard', () => {
+    const wildcard = computeGrants(KNOWN, [{ patterns: ['incidents.*'], departmentId: null }]);
+    expect(wildcard.has('incidents.reports.release')).toBe(true);
+    expect(wildcard.has('incidents.reports.delete')).toBe(false);
+    expect(computeGrants(KNOWN, [{ patterns: ['incidents.reports.delete'], departmentId: null }]).get('incidents.reports.delete')).toBe('brigade');
   });
 
   it('collects departments and ignores brigade-only permissions for department assignments', () => {
