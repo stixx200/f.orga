@@ -515,6 +515,18 @@ export const de = {
     rawId: 'ID: {{id}}',
     keys: {
       ...minimisationAuditDe.keys,
+      // Keys used by actions of the core and several modules (e.g. list exports, imports).
+      from: 'Von',
+      to: 'Bis',
+      language: 'Sprache',
+      params: 'Parameter',
+      personIds: 'Personen',
+      entity: 'Datensatzart',
+      entityId: 'Datensatz',
+      field: 'Feld',
+      area: 'Bereich',
+      active: 'Aktiv',
+      created: 'Neu angelegt',
       factor: 'Faktor',
       recoveryCodesLeft: 'Verbleibende Wiederherstellungscodes',
       during: 'Bei',

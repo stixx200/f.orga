@@ -151,7 +151,7 @@ test('signed-in devices and idle logout', async ({ browser }) => {
   const admin = await login(browser, ADMIN.username);
   const stored = await api<Record<string, unknown> | null>(admin, 'GET', 'core/settings/security');
   try {
-    await admin.goto('/admin/privacy/settings?tab=security');
+    await admin.goto('/admin/settings?tab=security');
     const idle = admin.getByLabel(/^Abmeldung bei Konten mit Verwaltungsrechten/);
     await idle.fill('45');
     await admin.getByRole('button', { name: 'Speichern' }).first().click();

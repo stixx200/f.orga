@@ -29,7 +29,6 @@ export const audit = {
       'privacy.access-report-created': 'Auskunft erstellt',
       'privacy.access-report-downloaded': 'Auskunft heruntergeladen',
       'privacy.access-report-handed-over': 'Auskunft übergeben',
-      'privacy.retention-applied': 'Aufbewahrungsregeln angewendet',
     },
     keys: {
       ...registerAuditDe.keys,
@@ -62,7 +61,6 @@ export const audit = {
       'privacy.access-report-created': 'Access report created',
       'privacy.access-report-downloaded': 'Access report downloaded',
       'privacy.access-report-handed-over': 'Access report handed over',
-      'privacy.retention-applied': 'Retention rules applied',
     },
     keys: {
       ...registerAuditEn.keys,

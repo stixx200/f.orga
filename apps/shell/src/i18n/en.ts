@@ -516,6 +516,18 @@ export const en: typeof de = {
     rawId: 'ID: {{id}}',
     keys: {
       ...minimisationAuditEn.keys,
+      // Keys used by actions of the core and several modules (e.g. list exports, imports).
+      from: 'From',
+      to: 'To',
+      language: 'Language',
+      params: 'Parameters',
+      personIds: 'Persons',
+      entity: 'Kind of record',
+      entityId: 'Record',
+      field: 'Field',
+      area: 'Area',
+      active: 'Active',
+      created: 'Newly created',
       factor: 'Factor',
       recoveryCodesLeft: 'Recovery codes left',
       during: 'During',
