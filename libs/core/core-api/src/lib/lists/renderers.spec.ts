@@ -1,4 +1,4 @@
-import { columnWidths, csvText } from './renderers.js';
+import { columnWidths, csvText, sheetName } from './renderers.js';
 
 describe('csvText', () => {
   it('keeps text that looks like a formula as text, but leaves numbers alone', () => {
@@ -21,5 +21,14 @@ describe('columnWidths', () => {
     // "MOBILTELEFON" in the header and "Oberfeuerwehrmann/-frau" in a cell are not split.
     expect(widths[1]).toBeGreaterThan(60);
     expect(widths[2]).toBeGreaterThan(100);
+  });
+});
+
+describe('sheetName', () => {
+  it('leaves out the characters Excel does not allow in a worksheet name and keeps at most 31', () => {
+    expect(sheetName('Führerscheinkontrollen: Nachweis für die Gemeinde')).toBe('Führerscheinkontrollen Nachweis');
+    expect(sheetName("'Liste [A/B]?'")).toBe('Liste A B');
+    expect(sheetName('Telefonliste')).toBe('Telefonliste');
+    expect(sheetName(' : ')).toBe('Liste');
   });
 });
