@@ -18,6 +18,7 @@ import {
   FitnessRule,
   type FitnessStatus,
   minimumKilojoules,
+  type PersonalFitnessView,
   type PersonRespiratoryProtection,
   QuickEntryInput,
   RESPIRATORY_PROTECTION_EVENTS,
@@ -190,6 +191,20 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
   async colors(personIds: readonly string[], date: string): Promise<Map<string, FitnessColor>> {
     const persons = await this.directory.snapshots([...new Set(personIds)], date);
     return new Map((await this.statuses(persons, date)).map((s) => [s.personId, s.color]));
+  }
+
+  /** Fitness for a personal access link: no medical examination (no date, no result, no reason). */
+  async personalView(personId: string): Promise<PersonalFitnessView | null> {
+    const [person] = await this.directory.snapshots([personId]);
+    if (!person) return null;
+    const [status] = await this.statuses([person]);
+    if (!status) return null;
+    const rows = await this.em.fork().find(EvidenceEntity, { personId, kind: { $ne: 'examination' }, withdrawn: false }, { orderBy: { date: 'desc' } });
+    return {
+      color: status.color,
+      nextDue: status.nextDue,
+      evidence: rows.map((row) => ({ kind: row.kind, date: row.date, validUntil: row.validUntil ?? null, passed: row.passed ?? null })),
+    };
   }
 
   /** "My area": the own status and all own records, examinations included (own data). */

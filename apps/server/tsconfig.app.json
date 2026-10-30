@@ -41,6 +41,9 @@
       "path": "../../modules/compensation/compensation-contracts/tsconfig.lib.json"
     },
     {
+      "path": "../../modules/personal/personal-api/tsconfig.lib.json"
+    },
+    {
       "path": "../../modules/privacy/privacy-contracts/tsconfig.lib.json"
     },
     {

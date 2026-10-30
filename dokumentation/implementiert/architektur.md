@@ -1816,6 +1816,16 @@ Der Core zeigt in Mein Bereich zusätzlich „Anmeldungen als Sie“ (`GET /api/
 
 - Das Theme (`libs/web/web-ui/src/lib/theme.ts`, `forgaTheme`) folgt `Stil.md` mit Dienstrot als Primärfarbe und ist eckig und Material-nah: Eckenradius 4 px (`defaultRadius: 'xs'`, Stufen bis `md` 4 px), Schatten nach Material-Höhenstufen.
 
+## Modul Persönlicher Zugang (`personal`)
+
+Jede Person kann einen eigenen Link bekommen und damit auf dem Handy die eigenen Stammdaten und den Atemschutz sehen, ohne Benutzerkonto. Die Seite `/personal` ist wie das Infoterminal eine Kiosk-Seite ohne Shell-Rahmen und ohne Anmeldung (`frontend.kiosk`, `./Kiosk`). Backend `modules/personal/personal-api`, Oberfläche `personal-web`, Verträge `personal-contracts`. Benötigt `masterdata`, nutzt optional `respiratory-protection`.
+
+**Rechte:** `personal.read` (Abteilung: Zugänge sehen, deren Person einer eigenen Abteilung angehört), `personal.manage` (Abteilung: Link erzeugen, erneut anzeigen, widerrufen). Rollenvorlagen: `commander` `personal.*`, `department-commander` `personal.read` und `.manage`, `group-leader` `personal.read`. Der Zugang selbst hat keine Rolle.
+
+**Link.** Ein Zugang je Person (`personal.access_link`). Der Schlüssel beginnt mit `fpa_`, wird als SHA-256 geprüft und mit `FORGA_SECRET_KEY` verschlüsselt gespeichert, damit er sich erneut anzeigen lässt. Der Link lautet `<Adresse von f.orga>/personal#k=…`; der Schlüssel steht im Fragment und geht nicht ins Serverprotokoll. Die Seite tauscht ihn einmal gegen das Cookie `forga_personal` (HttpOnly, Pfad `/api/personal/kiosk`). Falsche Schlüssel werden je Adresse begrenzt (10 in 10 Minuten). Ein neuer Link ersetzt den bisherigen. Widerruf und „Alle Sitzungen beenden“ machen den Schlüssel ungültig. Anlegen, Anzeigen, Widerruf und ein ungültiger Schlüssel stehen im Audit-Log.
+
+**Ansicht.** Stammdaten ohne Bankverbindung, Arbeitgeber und interne Notizen: Name, Status, Eintritt, Anschrift, Telefon, E-Mail, aktuelle Abteilungen, Dienstgrad, gültige Qualifikationen, aktuelle Ämter. Atemschutz, wenn das Modul installiert ist: Ampel, nächste Frist und Nachweise außer der Eignungsuntersuchung (kein Datum, kein Ergebnis, keine Begründung). Angelegt und angezeigt wird der Link in der Personenakte (Reiter „Persönlicher Zugang“) und in der Liste „Verwaltung → Persönliche Zugänge“.
+
 ## Modulgrenzen
 
 Jedes Projekt trägt zwei Nx-Tags. `tools/module-boundaries.mjs` prüft die Abhängigkeiten im Nx-Projektgraphen. Die Prüfung läuft als Teil von `npm run lint`.

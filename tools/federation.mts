@@ -33,6 +33,7 @@ export const MODULE_PORTS: Record<string, number> = {
   'mp-feuer': 4212,
   backup: 4213,
   privacy: 4214,
+  personal: 4215,
 };
 
 export const SERVER_PORT = 3000;

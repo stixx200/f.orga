@@ -101,6 +101,12 @@
     },
     {
       "path": "./modules/privacy/privacy-api"
+    },
+    {
+      "path": "./modules/personal/personal-contracts"
+    },
+    {
+      "path": "./modules/personal/personal-api"
     }
   ],
   "compilerOptions": {}

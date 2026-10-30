@@ -9,6 +9,7 @@ import type {
   PaymentDetails,
   PersonCareer,
   PersonDirectory,
+  PersonalFile,
   PersonSnapshot,
   PersonSummary,
   Station as StationDto,
@@ -19,7 +20,7 @@ import type {
 import { CatalogEntry, toCatalogDto } from '../catalog/catalog.js';
 import { toDepartmentDto, toStationDto, toVehicleDto } from '../organization/organization.controller.js';
 import { Department, OfficeAssignment, Person, RankAssignment, Station, Vehicle } from '../masterdata.entities.js';
-import { PersonsService } from '../persons/persons.service.js';
+import { currentQualifications, currentRank, PersonsService } from '../persons/persons.service.js';
 import { today } from '../shared/access.js';
 
 const POPULATE = ['memberships.department', 'qualifications', 'ranks', 'honors', 'offices', 'restPeriods'] as const;
@@ -151,6 +152,43 @@ export class PersonDirectoryService implements PersonDirectory {
   async findByPersonnelNumber(personnelNumber: string): Promise<PersonSummary | null> {
     const person = await this.em.fork().findOne(Person, { personnelNumber }, { populate: POPULATE });
     return person ? this.persons.summary(person) : null;
+  }
+
+  async personalFile(personId: string): Promise<PersonalFile | null> {
+    if (!/^[0-9a-f-]{36}$/i.test(personId)) return null;
+    const person = await this.em.fork().findOne(Person, personId, { populate: ['memberships.department', 'qualifications', 'ranks', 'offices'] });
+    if (!person || person.anonymizedAt) return null;
+    const date = today();
+    const catalogs = await this.em.fork().find(CatalogEntry, { kind: { $in: ['rank', 'qualification', 'office'] } });
+    const label = (kind: CatalogKind, key: string) => catalogs.find((entry) => entry.kind === kind && entry.key === key)?.name ?? { de: key, en: key };
+    const current = person.memberships.getItems().filter((membership) => membership.from <= date && (!membership.to || membership.to >= date));
+    const rank = currentRank(person, date);
+    return {
+      id: person.id,
+      firstName: person.firstName,
+      lastName: person.lastName,
+      status: person.status,
+      street: person.street,
+      postalCode: person.postalCode,
+      city: person.city,
+      phonePrivate: person.phonePrivate,
+      phoneMobile: person.phoneMobile,
+      phoneWork: person.phoneWork,
+      email: person.email,
+      joinedOn: person.joinedOn ?? null,
+      memberships: current.map((membership) => ({ departmentId: membership.department.id, name: membership.department.name, primary: membership.primary })),
+      rank: rank ? { key: rank, name: label('rank', rank) } : null,
+      qualifications: currentQualifications(person, date).map((qualification) => ({
+        key: qualification.qualification,
+        name: label('qualification', qualification.qualification),
+        acquiredOn: qualification.acquiredOn,
+        validUntil: qualification.validUntil ?? null,
+      })),
+      offices: person.offices
+        .getItems()
+        .filter((office) => office.from <= date && (!office.to || office.to >= date))
+        .map((office) => ({ key: office.office, name: label('office', office.office), from: office.from, to: office.to ?? null })),
+    };
   }
 }
 

@@ -1,3 +1,4 @@
+import type { LocalizedText } from '@forga/core-contracts';
 import type { CatalogEntry, CatalogKind } from './catalog.js';
 import type { Department } from './department.js';
 import type { Employment, Gender, PersonStatus, PersonSummary } from './person.js';
@@ -65,6 +66,31 @@ export interface PersonDirectory {
   restrictedIds(ids?: readonly string[]): Promise<Set<string>>;
   /** Records a promotion in the person file (rank history). */
   recordPromotion(personId: string, promotion: { rank: string; since: string; notes: string }): Promise<void>;
+  /**
+   * The person's own file for a personal access link: address and phones, current memberships, rank, qualifications
+   * and offices. No bank account, no employer, no internal notes. `null` when the person does not exist or was anonymised.
+   */
+  personalFile(personId: string): Promise<PersonalFile | null>;
+}
+
+/** What a person may see about themselves through a personal access link. */
+export interface PersonalFile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  status: PersonStatus;
+  street: string;
+  postalCode: string;
+  city: string;
+  phonePrivate: string;
+  phoneMobile: string;
+  phoneWork: string;
+  email: string;
+  joinedOn: string | null;
+  memberships: { departmentId: string; name: string; primary: boolean }[];
+  rank: { key: string; name: LocalizedText } | null;
+  qualifications: { key: string; name: LocalizedText; acquiredOn: string; validUntil: string | null }[];
+  offices: { key: string; name: LocalizedText; from: string; to: string | null }[];
 }
 
 export interface MemberPeriods {

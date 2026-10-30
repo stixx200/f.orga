@@ -364,6 +364,7 @@ export const de = {
       clothing: 'Kleiderkammer: Schutzkleidung und Dienstkleidung, Ausgabe und Rücknahme, Größen, Waschen und Imprägnieren.',
       'duty-officer': 'Einsatzleiter vom Dienst: EvD-Dienstplan mit Tagespauschalen und ein EvD-Bericht für jeden Einsatz.',
       'info-terminal': 'Infoterminal an der Wache: Einsatzkräfte tragen sich nach Einsätzen und Diensten selbst ein, mit Fahrzeug, Funktion und Angaben für die Entschädigung.',
+      personal: 'Persönlicher Zugang: Jede Person erhält einen Link und sieht auf dem Handy die eigenen Stammdaten und den Atemschutz, ohne Anmeldung.',
       'mp-feuer': 'Datenübernahme aus MP-Feuer-Transferdateien im Hintergrund, mit eigener Zuordnungsliste; nach der Umstellung auf f.orga abschalten.',
       backup: 'Datensicherung: regelmäßige, verschlüsselte Sicherung in einen Ordner auf dem Server, Prüfung und Wiederherstellung ohne Konsole.',
     },

@@ -1,0 +1,123 @@
+import type { Translations } from '@forga/web-sdk';
+
+const errors = {
+  personal: {
+    noPublicUrl: 'Ohne „Adresse von f.orga“ lässt sich kein Zugang anlegen. Bitte unter Verwaltung → Einstellungen → Feuerwehr die Adresse eintragen, unter der das Handy f.orga erreicht.',
+    noSecretKey: 'Auf dem Server fehlt der Schlüssel FORGA_SECRET_KEY. Ohne ihn lässt sich kein Zugang anlegen.',
+    linkUnavailable: 'Der Link lässt sich nicht mehr anzeigen (der Server-Schlüssel wurde geändert). Bitte einen neuen Link erzeugen.',
+    invalidKey: 'Dieser Zugangsschlüssel gilt nicht.',
+    revoked: 'Dieser Zugang wurde widerrufen.',
+    tooManyAttempts: 'Zu viele Versuche. Bitte später noch einmal versuchen.',
+    unknownPerson: 'Diese Person hat keinen persönlichen Zugang.',
+    gone: 'Für diesen Zugang liegen keine Daten mehr vor.',
+  },
+};
+
+const errorsEn = {
+  personal: {
+    noPublicUrl: 'Without "Address of f.orga" no access link can be created. Please enter the address the phone reaches f.orga at under Administration → Settings → Brigade.',
+    noSecretKey: 'The key FORGA_SECRET_KEY is missing on the server. Without it no access link can be created.',
+    linkUnavailable: 'The link can no longer be shown (the server key was changed). Please create a new link.',
+    invalidKey: 'This access key is not valid.',
+    revoked: 'This access has been revoked.',
+    tooManyAttempts: 'Too many attempts. Please try again later.',
+    unknownPerson: 'This person has no personal access.',
+    gone: 'No data is available for this access anymore.',
+  },
+};
+
+/** Texts of the administration (the personal view brings its own, see `kiosk/i18n.ts`). */
+export const translations: Translations = {
+  de: {
+    module: 'Persönlicher Zugang',
+    notFound: 'Diese Seite gibt es nicht.',
+    links: {
+      title: 'Persönliche Zugänge',
+      hint: 'Jede Person erhält einen eigenen Link. Damit sieht sie auf dem Handy ihre Stammdaten und den Atemschutz, ohne sich anzumelden. Bankverbindung und interne Notizen sind nicht dabei.',
+      empty: 'Noch keine persönlichen Zugänge.',
+      person: 'Person',
+      prefix: 'Schlüssel',
+      created: 'Angelegt',
+      lastSeen: 'Zuletzt gesehen',
+      never: 'noch nie',
+      status: 'Status',
+      active: 'aktiv',
+      revoked: 'widerrufen',
+      open: 'Zur Person',
+    },
+    person: {
+      title: 'Persönlicher Zugang',
+      hint: 'Der Link zeigt dieser Person ihre Stammdaten und den Atemschutz. Bankverbindung, Arbeitgeber und interne Notizen sind nicht dabei. Ein neuer Link ersetzt den bisherigen.',
+      none: 'Noch kein Zugang.',
+      prefix: 'Schlüssel beginnt mit {{prefix}}',
+      lastSeen: 'Zuletzt gesehen {{date}}',
+      never: 'Bisher nicht verwendet.',
+      revoked: 'Widerrufen. Ein neuer Link schaltet den Zugang wieder frei.',
+      create: 'Link erzeugen',
+      show: 'Link anzeigen',
+      revoke: 'Zugang widerrufen',
+      created: 'Zugang angelegt.',
+      revokedDone: 'Zugang widerrufen.',
+      copy: 'Link kopieren',
+      copied: 'Kopiert',
+      once: 'Den Link jetzt weitergeben. Er lässt sich später erneut anzeigen.',
+    },
+    errors,
+    audit: {
+      actions: {
+        'personal.link-created': 'Persönlichen Zugang angelegt',
+        'personal.link-shown': 'Link eines persönlichen Zugangs angezeigt',
+        'personal.link-revoked': 'Persönlichen Zugang widerrufen',
+        'personal.invalid-key': 'Persönliche Ansicht mit ungültigem Schlüssel',
+        'personal.keys-blocked': 'Persönliche Zugänge gesperrt (Notfall)',
+      },
+      keys: { personId: 'Person', linkId: 'Zugang', count: 'Anzahl' },
+    },
+  },
+  en: {
+    module: 'Personal access',
+    notFound: 'This page does not exist.',
+    links: {
+      title: 'Personal access',
+      hint: 'Each person gets their own link. With it they see their master data and respiratory protection on a phone, without signing in. Bank details and internal notes are not included.',
+      empty: 'No personal access links yet.',
+      person: 'Person',
+      prefix: 'Key',
+      created: 'Created',
+      lastSeen: 'Last seen',
+      never: 'never',
+      status: 'Status',
+      active: 'active',
+      revoked: 'revoked',
+      open: 'Open person',
+    },
+    person: {
+      title: 'Personal access',
+      hint: 'The link shows this person their master data and respiratory protection. Bank account, employer and internal notes are not included. A new link replaces the previous one.',
+      none: 'No access yet.',
+      prefix: 'Key starts with {{prefix}}',
+      lastSeen: 'Last seen {{date}}',
+      never: 'Not used yet.',
+      revoked: 'Revoked. A new link enables access again.',
+      create: 'Create link',
+      show: 'Show link',
+      revoke: 'Revoke access',
+      created: 'Access created.',
+      revokedDone: 'Access revoked.',
+      copy: 'Copy link',
+      copied: 'Copied',
+      once: 'Pass the link on now. It can be shown again later.',
+    },
+    errors: errorsEn,
+    audit: {
+      actions: {
+        'personal.link-created': 'Personal access created',
+        'personal.link-shown': 'Personal access link shown',
+        'personal.link-revoked': 'Personal access revoked',
+        'personal.invalid-key': 'Personal view with invalid key',
+        'personal.keys-blocked': 'Personal access links blocked (emergency)',
+      },
+      keys: { personId: 'Person', linkId: 'Access', count: 'Count' },
+    },
+  },
+};

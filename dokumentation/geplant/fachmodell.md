@@ -389,6 +389,15 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Kiosk-Seite | kiosk, Shell-Route `/terminal` (`frontend.kiosk` im Manifest), API `/api/info-terminal/kiosk/…` |
 | Fahrzeugbeschriftung „Bezeichnung · Funkrufname (Abteilung)“ | `vehicleLabel(vehicle, departmentShortName)` |
 
+### Persönlicher Zugang
+
+| Fachbegriff | Code |
+| --- | --- |
+| Persönlicher Zugang | access link (`AccessLinkEntity`), Modul `personal`, eine Zeile je Person |
+| Zugangsschlüssel, Link | access key (`fpa_…`, `keyHash`, `keyPrefix`), Link `…/personal#k=…`, Cookie `forga_personal` |
+| Persönliche Ansicht | kiosk, Shell-Route `/personal`, API `/api/personal/kiosk/file` |
+| Link erzeugen, anzeigen, widerrufen | `personal.link-created`, `personal.link-shown`, `revokedAt` |
+
 ### Führerscheinkontrolle
 
 | Fachbegriff | Code |
@@ -455,5 +464,6 @@ Die Modul-ID ist zugleich das Präfix der Berechtigungen und der Pfad in API und
 | Kleiderkammer | `clothing` |
 | Einsatzleiter vom Dienst | `duty-officer` |
 | Infoterminal | `info-terminal` |
+| Persönlicher Zugang | `personal` |
 | Datensicherung | `backup` |
 | Datenschutz (Modul) | `privacy` |
