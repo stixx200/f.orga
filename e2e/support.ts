@@ -222,6 +222,11 @@ export async function openTerminal(browser: Browser, admin: Page, options: { sta
   const station = stations.find((s) => s.name === (options.station ?? 'Feuerwehrhaus Musterstadt'));
   if (!station) throw new Error(`Station ${options.station} not found.`);
   const { url } = await api<{ url: string }>(admin, 'POST', 'info-terminal/terminals', { stationId: station.id, name: options.name ?? `E2E-Terminal ${Date.now()}` });
+  return openKiosk(browser, url);
+}
+
+/** Opens the link of an info terminal (`…/terminal#k=…`) in a new browser context, like the tablet in the station. */
+export async function openKiosk(browser: Browser, url: string): Promise<Page> {
   const kiosk = await newPage(browser);
   const link = new URL(url);
   await kiosk.goto(`${link.pathname}${link.hash}`);
@@ -260,8 +265,12 @@ export async function section(page: Page, title: string): Promise<void> {
   await page.getByRole('list', { name: 'Abschnitte des Berichts' }).getByRole('button', { name: new RegExp(title) }).click();
 }
 
+/** A panel (card with a title) by its title, e.g. a card on the incident page; `hasText` narrows panels of the same title. */
+export const panel = (page: Page, title: string | RegExp, hasText?: string | RegExp) =>
+  page.getByRole('heading', { name: title, exact: typeof title === 'string' }).locator('xpath=../..').filter(hasText ? { hasText } : {});
+
 /** The table row that contains the text, e.g. a dispatch number. */
-export const row = (page: Page, text: string | RegExp) => page.getByRole('row').filter({ hasText: text });
+export const row = (scope: Page | Locator, text: string | RegExp) => scope.getByRole('row').filter({ hasText: text });
 
 // ----- Dates ----------------------------------------------------------------------------------------------------------
 
