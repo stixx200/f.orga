@@ -3,8 +3,6 @@ import '@mantine/notifications/styles.css';
 import '@mantine/dates/styles.css';
 import 'dayjs/locale/de';
 import '@forga/web-ui/forga.css';
-import dayjs from 'dayjs';
-import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { type ComponentType, type ReactNode, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MantineProvider } from '@mantine/core';
@@ -17,10 +15,6 @@ import { App } from './App';
 import { shellTranslations } from './i18n';
 import { registerCoreExtensions } from './privacy/extensions';
 import { PersonPrivacyTab } from './pages/privacy/PersonPrivacyTab';
-
-// Typed dates in date fields are read in the format of the field ("28.10.2031" as DD.MM.YYYY); without the plugin
-// dayjs reads them as US dates or not at all.
-dayjs.extend(customParseFormat);
 
 addTranslations('shell', shellTranslations);
 // Tab „Datenschutz“ of the person file (`?tab=privacy`): requests, consents, information and restriction of processing.
