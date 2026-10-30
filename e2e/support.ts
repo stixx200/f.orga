@@ -168,11 +168,32 @@ async function expectOk(response: Promise<APIResponse>): Promise<APIResponse> {
   return result;
 }
 
+/**
+ * The server closes idle keep-alive connections after 5 s; a request sent on such a connection at the same moment fails
+ * with `ECONNRESET` before the server read it. Such a request is sent once more.
+ */
+const CONNECTION_CLOSED = /ECONNRESET|socket hang up/;
+
 /** Calls the API with the session of the page (e.g. to prepare data); fails on an error status. */
 export async function api<T = unknown>(page: Page, method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, data?: unknown): Promise<T> {
-  const response = await expectOk(page.request.fetch(`/api/${path}`, { method, headers: CSRF, data }));
+  const send = () => page.request.fetch(`/api/${path}`, { method, headers: CSRF, data });
+  const response = await expectOk(send().catch((error: unknown) => (error instanceof Error && CONNECTION_CLOSED.test(error.message) ? send() : Promise.reject(error))));
   const text = await response.text();
   return (text ? JSON.parse(text) : undefined) as T;
+}
+
+/**
+ * Restores what a test changed (settings, a switched-off module …) in its `finally` block. A failing restore is reported
+ * as a warning of the test and never hides the error that made the test fail.
+ */
+export async function restore(what: string, action: () => Promise<unknown>): Promise<void> {
+  try {
+    await action();
+  } catch (error) {
+    const description = `Restoring ${what} failed: ${error instanceof Error ? error.message : String(error)}`;
+    test.info().annotations.push({ type: 'warning', description });
+    console.warn(description);
+  }
 }
 
 /**

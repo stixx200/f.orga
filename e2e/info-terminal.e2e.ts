@@ -1,4 +1,4 @@
-import { api, choose, expect, isoDate, login, openKiosk, openTerminal, test, USERS } from './support';
+import { api, choose, expect, isoDate, login, openKiosk, openTerminal, restore, test, USERS } from './support';
 
 type Person = { id: string; firstName: string; lastName: string };
 type Report = { id: string; version: number; times: Record<string, string | null>; personnel: { personId: string | null }[] };
@@ -178,6 +178,6 @@ test('info terminal: driving licence self-check', async ({ browser }) => {
     await commander.goto(`/masterdata/persons/${leader.id}/driver-license`);
     await expect(commander.getByRole('row').filter({ hasText: 'Selbstkontrolle Barcode' }).first()).toContainText(/Selbsterklärung bestätigt/);
   } finally {
-    await api(commander, 'PUT', 'core/settings/masterdata.driverLicense', before ?? {});
+    await restore('the driving licence settings', () => api(commander, 'PUT', 'core/settings/masterdata.driverLicense', before ?? {}));
   }
 });

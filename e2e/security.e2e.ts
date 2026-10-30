@@ -1,4 +1,4 @@
-import { ADMIN, api, choose, expect, login, rememberTotpSecret, row, test, totpCode, USERS } from './support';
+import { ADMIN, api, choose, expect, login, rememberTotpSecret, restore, row, test, totpCode, USERS } from './support';
 
 /**
  * A new breathing apparatus officer: the administrator creates the user (password rules), the user sets up the second
@@ -159,6 +159,6 @@ test('signed-in devices and idle logout', async ({ browser }) => {
     await admin.goto('/profile');
     await expect(admin.getByText('Ohne Bedienung werden Sie nach 45 Minuten abgemeldet.')).toBeVisible();
   } finally {
-    if (!admin.isClosed()) await api(admin, 'PUT', 'core/settings/security', stored ?? {});
+    if (!admin.isClosed()) await restore('the security settings', () => api(admin, 'PUT', 'core/settings/security', stored ?? {}));
   }
 });

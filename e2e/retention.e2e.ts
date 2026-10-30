@@ -1,4 +1,4 @@
-import { ADMIN, api, expect, germanDate, login, row, test, USERS } from './support';
+import { ADMIN, api, expect, germanDate, login, restore, row, test, USERS } from './support';
 
 /**
  * The commander marks an old incident „30 Jahre aufbewahren (Sonderfall)“; the administrator sets the period of the
@@ -65,6 +65,6 @@ test('administrator anonymises an old incident kept as special case', async ({ b
     await commander.reload();
     await expect(commander.getByText(/^Nach Ablauf der Aufbewahrungsfrist am .* anonymisiert/)).toBeVisible();
   } finally {
-    if (!page.isClosed()) await api(page, 'PUT', 'core/settings/retention', { retention: stored?.retention ?? {} });
+    if (!page.isClosed()) await restore('the retention periods', () => api(page, 'PUT', 'core/settings/retention', { retention: stored?.retention ?? {} }));
   }
 });
