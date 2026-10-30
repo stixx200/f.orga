@@ -147,7 +147,7 @@ FORGA_E2E_URL=http://localhost:3100 FORGA_TOTP_FILE=dist/e2e/totp.json TZ=Europe
 
 ### CI
 
-Der Job `e2e` in `.github/workflows/ci.yml` läuft parallel zu den anderen Jobs mit einem eigenen PostgreSQL-17-Dienst: `npm ci`, `postgresql-client-17` aus dem PGDG-Repository (für die Datensicherung), `npx playwright install --with-deps chromium`, `npm run e2e:fresh`. Schlägt er fehl, hängt er HTML-Bericht, Traces, Bildschirmfotos und das Server-Protokoll als Artefakt `e2e-report` an (14 Tage). Ein Lauf dauert lokal rund 10 Minuten: Bau aus dem Nx-Cache unter einer Minute, Demodaten rund 6 Minuten, Tests rund 3 Minuten.
+Der Job `e2e` in `.github/workflows/ci.yml` läuft parallel zu den anderen Jobs mit einem eigenen PostgreSQL-17-Dienst: `npm ci`, `postgresql-client-17` aus dem PGDG-Repository (für die Datensicherung), `npx playwright install --with-deps chromium`, `npm run e2e:fresh`. Schlägt er fehl, hängt er HTML-Bericht, Traces, Bildschirmfotos und das Server-Protokoll als Artefakt `e2e-report` an (14 Tage). Ein Lauf dauert lokal rund 20 Minuten: Bau aus dem Nx-Cache unter einer Minute, Demodaten rund 6 bis 8 Minuten, Tests rund 10 Minuten.
 
 ### Tests schreiben
 
