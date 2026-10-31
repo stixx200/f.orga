@@ -38,7 +38,7 @@ jobs:
       TEST_DATABASE_URL: postgresql://forga:forga@localhost:5432/forga
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -90,7 +90,7 @@ jobs:
       FORGA_E2E_DATABASE_URL: postgresql://forga:forga@localhost:5432/forga_e2e
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: 24
