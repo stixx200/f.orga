@@ -48,9 +48,9 @@ export function LocationField({
 }) {
   const { t } = useTranslation('equipment');
   const { data: settings } = useEquipmentSettings();
-  const configured = settings?.locations ?? [];
+  const configured = settings?.locations;
   const data = useMemo(() => {
-    const names = new Set(configured);
+    const names = new Set(configured ?? []);
     if (location && !names.has(location)) names.add(location);
     const places = [...names].toSorted((a, b) => a.localeCompare(b)).map((name) => ({ value: `l:${name}`, label: name }));
     const stationItems = stations.map((s) => ({ value: `s:${s.id}`, label: s.label }));
