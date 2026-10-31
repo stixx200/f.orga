@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { Item } from '@forga/equipment-contracts';
 import { can, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { DataTable, PageHeader, StatusBadge } from '@forga/web-ui';
+import { DataTable, PageHeader, StatusBadge, treeOptions } from '@forga/web-ui';
 import { BREATHING_WRITE, useCategories, useCategoryName, useDepartments, useDueSoon, useItems, usePlace, WRITE } from '../api';
 import { DueDate, ItemStatusBadge } from '../parts';
 import { ItemDialog } from './ItemDialog';
@@ -60,7 +60,7 @@ export function ItemsPage() {
       />
       <Group align="end">
         <TextInput label={t('items.search')} leftSection={<IconSearch size={16} />} value={q} onChange={(e) => setQ(e.currentTarget.value)} w={260} />
-        <Select label={t('fields.category')} placeholder={t('items.all')} data={categories.map((c) => ({ value: c.key, label: localized(c.name) }))} value={categoryKey} onChange={setCategoryKey} clearable />
+        <Select label={t('fields.category')} placeholder={t('items.all')} data={treeOptions(categories, (c) => localized(c.name))} value={categoryKey} onChange={setCategoryKey} clearable searchable miw={280} />
         <Select label={t('fields.department')} placeholder={t('items.all')} data={departments.map((d) => ({ value: d.id, label: d.name }))} value={departmentId} onChange={setDepartmentId} clearable />
         <Select label={t('fields.status')} placeholder={t('items.active')} data={(['ready', 'in-inspection', 'defective', 'in-repair', 'retired'] as const).map((s) => ({ value: s, label: t(`status.${s}`) }))} value={status} onChange={setStatus} clearable />
         <Select label={t('items.due')} placeholder={t('items.all')} data={[{ value: 'overdue', label: t('items.overdue') }, { value: 'soon', label: t('items.dueSoon', { count: days }) }]} value={due} onChange={setDue} clearable />

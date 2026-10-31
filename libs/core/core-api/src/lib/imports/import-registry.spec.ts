@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { AuthenticatedUser } from '../security/authenticated-user.js';
 import { type ImportContext, type ImportProfile, ImportRegistry } from './import-registry.js';
+import { BLANK_MAPPING } from './parse.js';
 
 const name = { de: 'x', en: 'x' };
 const user = new AuthenticatedUser('u', 'user', 'User', null, 'de', new Map([['test.write', 'brigade']]), 'session');
@@ -104,6 +105,22 @@ describe('ImportRegistry.run', () => {
   });
 
   it('offers creating entries only with the permission', () => {
-    expect(registry().lookups(user)).toEqual([{ kind: 'color', name, keyFormat: 'slug', creatable: false }]);
+    expect(registry().lookups(user)).toEqual([{ kind: 'color', name, keyFormat: 'slug', creatable: false, createCategoryKind: null }]);
+  });
+
+  it('treats a blank cell as a value that can be mapped and remembered', async () => {
+    const seen: string[] = [];
+    const blank = [{ row: 1, values: { color: '' } }, { row: 2, values: { color: '   ' } }];
+    const open = await registry().run(profile(seen), blank, { user, options: {}, dryRun: true, source, mappings: {} });
+    expect(open.result.unmatched).toEqual([{ kind: 'color', value: '', count: 2 }]);
+
+    const chosen = await registry().run(profile([]), blank, { user, options: {}, dryRun: true, source, mappings: { color: { '': 'red' } } });
+    expect(chosen.result.unmatched).toEqual([]);
+    expect(chosen.used).toEqual([{ kind: 'color', value: '', key: 'red', remembered: false }]);
+
+    const remembered = new Map([['color', new Map([[BLANK_MAPPING, 'blue']])]]);
+    const again = await registry().run(profile([]), blank, { user, options: {}, dryRun: true, source, mappings: {}, remembered });
+    expect(again.result.unmatched).toEqual([]);
+    expect(again.used).toEqual([{ kind: 'color', value: '', key: 'blue', remembered: true }]);
   });
 });

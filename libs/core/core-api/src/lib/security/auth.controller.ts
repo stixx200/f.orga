@@ -144,6 +144,7 @@ export class AuthController {
     const mfa = await this.mfa.status(factorOwner.id);
     const held = new Map([...user.locked, ...user.grants]);
     const oidc = await this.settings.get<OidcSettings>('oidc');
+    const mfaEnabled = (await this.auth.securitySettings()).mfaEnabled;
     return {
       user: {
         id: user.id,
@@ -158,13 +159,14 @@ export class AuthController {
       },
       permissions: Object.fromEntries(held),
       impersonator: user.impersonator && { id: user.impersonator.id, displayName: user.impersonator.displayName, endsAt: user.impersonator.endsAt.toISOString() },
-      stepUpPermissions: [...held.keys()].filter((p) => this.registry.stepUp.has(p)),
+      stepUpPermissions: mfaEnabled ? [...held.keys()].filter((p) => this.registry.stepUp.has(p)) : [],
       elevatedUntil: user.elevatedUntil?.toISOString() ?? null,
       mfa: {
         ...mfa,
         available: serverKey() !== null,
         passwordRequired: Boolean(factorOwner.passwordHash),
-        viaProvider: Boolean(!user.impersonator && stored.oidcSubject && oidc?.enabled && oidc.stepUpViaProvider),
+        viaProvider: Boolean(mfaEnabled && !user.impersonator && stored.oidcSubject && oidc?.enabled && oidc.stepUpViaProvider),
+        enabled: mfaEnabled,
       },
       current: user.session ?? { persistent: false, idleMinutes: null },
     };

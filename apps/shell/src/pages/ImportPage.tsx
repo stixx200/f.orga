@@ -271,6 +271,7 @@ export function ImportPage() {
                     stale={stale}
                     onRecheck={() => check.mutate(undefined)}
                     rechecking={check.isPending}
+                    filterByKind
                   />
                 </Panel>
               )}

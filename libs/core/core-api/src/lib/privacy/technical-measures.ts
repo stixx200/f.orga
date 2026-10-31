@@ -102,13 +102,15 @@ export class CoreMeasures implements OnModuleInit {
       {
         key: 'core.step-up',
         title: { de: 'Zweiter Faktor', en: 'Second factor' },
-        value: !key
-          ? { de: 'bei sensiblen Daten (Step-up) vorgesehen, aber FORGA_SECRET_KEY fehlt: diese Bereiche sind gesperrt', en: 'intended for sensitive data (step-up), but FORGA_SECRET_KEY is missing: these areas are locked' }
-          : {
-              de: `bei sensiblen Daten und Verwaltung (Step-up, 30 Minuten); ${needing - missing} von ${needing} Benutzern mit solchen Rechten haben ihn eingerichtet`,
-              en: `for sensitive data and administration (step-up, 30 minutes); ${needing - missing} of ${needing} users with such permissions have set it up`,
-            },
-        tone: key && !missing ? 'ok' : 'warning',
+        value: !security.mfaEnabled
+          ? { de: 'ausgeschaltet (Einstellungen → Sicherheit → Anmeldung); eingerichtete Faktoren bleiben gespeichert', en: 'switched off (Settings → Security → Sign-in); enrolled factors stay stored' }
+          : !key
+            ? { de: 'bei sensiblen Daten (Step-up) vorgesehen, aber FORGA_SECRET_KEY fehlt: diese Bereiche sind gesperrt', en: 'intended for sensitive data (step-up), but FORGA_SECRET_KEY is missing: these areas are locked' }
+            : {
+                de: `bei sensiblen Daten und Verwaltung (Step-up, 30 Minuten); ${needing - missing} von ${needing} Benutzern mit solchen Rechten haben ihn eingerichtet`,
+                en: `for sensitive data and administration (step-up, 30 minutes); ${needing - missing} of ${needing} users with such permissions have set it up`,
+              },
+        tone: !security.mfaEnabled ? 'warning' : key && !missing ? 'ok' : 'warning',
       },
       {
         key: 'core.https',

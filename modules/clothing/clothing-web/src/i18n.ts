@@ -228,7 +228,8 @@ export const translations: Translations = {
     },
     errors: {
       'clothing.unknownPerson': 'Unbekannte Person.',
-      'clothing.unknownArticle': 'Unbekannter Artikel.',
+      'clothing.unknownArticle': 'Unbekannter Artikel „{{name}}“.',
+      'clothing.inventoryNumberRequired': 'Die Inventarnummer fehlt.',
       'clothing.unknownItem': 'Unbekanntes Stück.',
       'clothing.unknownSize': 'Die Größe „{{size}}“ gibt es bei diesem Artikel nicht.',
       'clothing.articleKeyTaken': 'Diesen Schlüssel gibt es schon.',
@@ -488,7 +489,8 @@ export const translations: Translations = {
     },
     errors: {
       'clothing.unknownPerson': 'Unknown person.',
-      'clothing.unknownArticle': 'Unknown article.',
+      'clothing.unknownArticle': 'Unknown article "{{name}}".',
+      'clothing.inventoryNumberRequired': 'The inventory number is missing.',
       'clothing.unknownItem': 'Unknown piece.',
       'clothing.unknownSize': 'The size “{{size}}” does not exist for this article.',
       'clothing.articleKeyTaken': 'This key exists already.',

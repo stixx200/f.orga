@@ -157,7 +157,15 @@ export const Session = z.object({
    * (not for accounts without password that sign in with OIDC); `viaProvider`: the session can also be confirmed by a new
    * sign-in at the OIDC provider with its second factor (setting `oidc.stepUpViaProvider`, linked account).
    */
-  mfa: z.object({ enrolled: z.boolean(), available: z.boolean(), passwordRequired: z.boolean(), recoveryCodesLeft: z.number().int(), viaProvider: z.boolean() }),
+  mfa: z.object({
+    enrolled: z.boolean(),
+    available: z.boolean(),
+    passwordRequired: z.boolean(),
+    recoveryCodesLeft: z.number().int(),
+    viaProvider: z.boolean(),
+    /** `false` when the brigade has switched the second factor off (`security.mfaEnabled`). */
+    enabled: z.boolean(),
+  }),
   /**
    * The session itself: „Angemeldet bleiben“ (`persistent`) and after how many minutes without input it ends
    * (`idleMinutes`, `null` for persistent sessions).

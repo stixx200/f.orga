@@ -364,10 +364,11 @@ export class AuthService implements OnApplicationBootstrap {
   async load(em: EntityManager, user: User, via: 'session' | 'token', elevated = false): Promise<AuthenticatedUser> {
     await em.populate(user, ['roles.role']);
     const held = await this.grantsFor(user.roles.getItems().map((a) => ({ role: a.role, departmentId: a.departmentId ?? null })));
+    const mfaEnabled = (await this.securitySettings()).mfaEnabled;
     const grants = new Map<string, Grant>();
     const locked = new Map<string, Grant>();
     for (const [permission, grant] of held) {
-      (elevated || !this.registry.stepUp.has(permission) ? grants : locked).set(permission, grant);
+      (elevated || !mfaEnabled || !this.registry.stepUp.has(permission) ? grants : locked).set(permission, grant);
     }
     return new AuthenticatedUser(user.id, user.username, user.displayName, user.personId ?? null, user.language, grants, via, locked);
   }

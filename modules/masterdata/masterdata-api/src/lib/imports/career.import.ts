@@ -7,7 +7,7 @@ import { type CatalogKind, COURSE_TARGET_PREFIX } from '@forga/masterdata-contra
 import { CatalogEntry } from '../catalog/catalog.js';
 import { attendanceDescription } from '../courses/course-description.js';
 import { Course, CourseAttendance } from '../courses/course.entities.js';
-import { HonorAward, Person, PersonQualification, RankAssignment } from '../masterdata.entities.js';
+import { Department, HonorAward, OfficeAssignment, Person, PersonQualification, RankAssignment } from '../masterdata.entities.js';
 import { PersonsService, validQualifications, WRITE } from '../persons/persons.service.js';
 import { today } from '../shared/access.js';
 import { addMonths } from '../shared/dates.js';
@@ -19,15 +19,17 @@ const FIELDS = [
   field('personnelNumber', 'Personalnummer', 'Personnel number', ['Pers.-Nr.', 'Personalnummer']),
   field('personName', 'Name (Nachname Vorname)', 'Name (last first)', ['Name']),
   field('birthDate', 'Geburtsdatum', 'Date of birth', ['Geburtsdatum', 'Geb.-Datum']),
-  field('kind', 'Art (Lehrgang, Dienstgrad, Ehrung)', 'Kind (course, rank, honor)', ['Art', 'Kategorie'], true),
+  field('kind', 'Art (Lehrgang, Dienstgrad, Ehrung, Amt)', 'Kind (course, rank, honor, office)', ['Art', 'Kategorie'], true),
+  field('department', 'Abteilung', 'Department', ['Abteilung', 'Abt.']),
   field('name', 'Bezeichnung', 'Name', ['Bezeichnung', 'Lehrgang', 'Dienstgrad', 'Ehrung'], true),
   field('date', 'Datum', 'Date', ['Datum', 'Abschluss', 'von'], true),
   field('validUntil', 'Gültig bis', 'Valid until', ['gültig bis']),
 ];
 
-type CareerKind = Extract<CatalogKind, 'qualification' | 'rank' | 'honor'>;
+type CareerKind = Extract<CatalogKind, 'qualification' | 'rank' | 'honor' | 'office'>;
 
 const KINDS: [RegExp, CareerKind][] = [
+  [/amt|office|funktion/i, 'office'],
   [/lehrg|qualifi|ausbild|course/i, 'qualification'],
   [/dienstgrad|rank|bef(ö|oe)rder/i, 'rank'],
   [/ehrung|honou?r|auszeichnung/i, 'honor'],
@@ -61,8 +63,8 @@ export class CareerImport {
       id: 'masterdata.career',
       name: { de: 'Lehrgänge, Dienstgrade und Ehrungen', en: 'Courses, ranks and honors' },
       description: {
-        de: 'Eine Zeile je Lehrgang, Beförderung oder Ehrung einer Person. Die Bezeichnung wird dem Katalog zugeordnet (z. B. „Truppführer, Lehrgang auf Kreisebene“ → Truppführer). Lehrgänge ohne passende Qualifikation werden als Lehrgangsteilnahme eingetragen, wenn sie zu einem Lehrgang des Lehrgangskatalogs passen oder ihm zugeordnet werden; beim Sammellehrgang „Anderer Lehrgang“ wird die Bezeichnung als Beschreibung übernommen. Schon vorhandene Einträge mit demselben Datum bleiben unverändert.',
-        en: 'One row per course, promotion or honor of a person. The name is matched to the catalog (e.g. "Truppführer, Lehrgang auf Kreisebene" → squad leader). Courses without a matching qualification are recorded as course attendance when they match or are assigned to a course of the course catalog; for the collective course "Other course" the name is kept as description. Existing entries with the same date stay unchanged.',
+        de: 'Eine Zeile je Lehrgang, Beförderung, Ehrung oder Amt einer Person. Die Bezeichnung wird dem Katalog zugeordnet (z. B. „Truppführer, Lehrgang auf Kreisebene“ → Truppführer, „Abteilungskommandant“ → Amt). Eine Funktion aus MP-Feuer wird als Amt übernommen; ohne Abteilung gilt sie für die Gesamtwehr. Lehrgänge ohne passende Qualifikation werden als Lehrgangsteilnahme eingetragen, wenn sie zu einem Lehrgang des Lehrgangskatalogs passen oder ihm zugeordnet werden; beim Sammellehrgang „Anderer Lehrgang“ wird die Bezeichnung als Beschreibung übernommen. Schon vorhandene Einträge mit demselben Datum bleiben unverändert.',
+        en: 'One row per course, promotion, honor or office of a person. The name is matched to the catalog (e.g. "Truppführer, Lehrgang auf Kreisebene" → squad leader, "Abteilungskommandant" → office). A function from MP-Feuer is taken over as an office; without a department it applies to the whole brigade. Courses without a matching qualification are recorded as course attendance when they match or are assigned to a course of the course catalog; for the collective course "Other course" the name is kept as description. Existing entries with the same date stay unchanged.',
       },
       permission: WRITE,
       fields: FIELDS,
@@ -73,8 +75,9 @@ export class CareerImport {
 
   private async run(rows: ImportRow[], { user, options, dryRun, mapped, unmatched }: ImportContext): Promise<ImportRunResult> {
     const em = this.em.fork();
-    const persons = await em.find(Person, {}, { populate: ['memberships.department', 'qualifications', 'ranks', 'honors'] });
-    const catalog = await em.find(CatalogEntry, { kind: { $in: ['qualification', 'rank', 'honor'] } });
+    const persons = await em.find(Person, {}, { populate: ['memberships.department', 'qualifications', 'ranks', 'honors', 'offices'] });
+    const departments = await em.find(Department, {});
+    const catalog = await em.find(CatalogEntry, { kind: { $in: ['qualification', 'rank', 'honor', 'office'] } });
     const courses = await em.find(Course, { active: true });
     // Matched by name only without a qualification of that name; collective courses only through a mapping.
     const namedCourses = courses.filter((c) => !c.describe).map((course) => ({ key: course.key, name: course.name, attributes: {}, course }));
@@ -145,9 +148,20 @@ export class CareerImport {
       } else if (kind === 'rank') {
         exists = person.ranks.getItems().some((r) => r.rank === key && r.since === date);
         if (!exists) person.ranks.add(em.create(RankAssignment, { person, rank: key, since: date, notes: '' }));
-      } else {
+      } else if (kind === 'honor') {
         exists = person.honors.getItems().some((h) => h.honor === key && h.awardedOn === date);
         if (!exists) person.honors.add(em.create(HonorAward, { person, honor: key, awardedOn: date, notes: '' }));
+      } else {
+        const brigade = /^(ja|yes|1)$/i.test(values['brigadeOffice'] ?? '');
+        const departmentName = (values['department'] ?? '').trim();
+        const departmentId = brigade || !departmentName ? null : this.departmentId(departments, departmentName);
+        if (!brigade && departmentName && !departmentId) {
+          unmatched('department', departmentName);
+          fail('masterdata.import.unknownDepartment', { name: departmentName });
+          continue;
+        }
+        exists = person.offices.getItems().some((o) => o.office === key && o.from === date);
+        if (!exists) person.offices.add(em.create(OfficeAssignment, { person, office: key, departmentId, from: date, to: validUntil, notes: '' }));
       }
       results.push({ row, action: exists ? 'unchanged' : 'create', label, messages });
     }
@@ -156,6 +170,14 @@ export class CareerImport {
     const counts = { create: 0, update: 0, unchanged: 0, error: 0 };
     for (const r of results) counts[r.action]++;
     return { dryRun, counts, rows: results };
+  }
+
+  /** Department by its name or short name; a leading "Abteilung" is ignored. */
+  private departmentId(departments: Department[], name: string): string | null {
+    const text = name.trim().toLowerCase();
+    const stripped = text.replace(/^(abteilung|abt\.?)\s*/, '');
+    const found = departments.find((d) => [d.name, d.shortName].some((n) => n.toLowerCase() === text || n.toLowerCase() === stripped));
+    return found?.id ?? null;
   }
 
   /**

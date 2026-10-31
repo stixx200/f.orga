@@ -51,7 +51,7 @@ import { UnitReportsService } from '../units/unit-reports.service.js';
 import { ownerName } from '../units/units.registry.js';
 import { ReportPdf } from './report-pdf.js';
 import { ReportWriters } from './report-writers.js';
-import { COSTS, normalized, READ, RELEASE, REPORT_POPULATE, ReportsService, REVIEW, UNLOCK, WRITE } from './reports.service.js';
+import { COSTS, DELETE_REPORT, normalized, READ, RELEASE, REPORT_POPULATE, ReportsService, REVIEW, UNLOCK, WRITE } from './reports.service.js';
 
 const Period = z.object({ from: z.iso.date(), to: z.iso.date() });
 const MatchQuery = z.object({
@@ -710,21 +710,22 @@ export class IncidentsController {
   }
 
   /**
-   * Only drafts of departments can be deleted; a primary report only as the last department report of the incident.
-   * Deleting the last department report deletes the incident as well, with the drafts of brigade-wide units, so no
-   * incident is left that nobody finds in the list. Reports of units are removed by their module (e.g. "no duty
-   * officer at this incident").
+   * Only an unlocked draft of a department can be deleted, and only with `incidents.reports.delete` (the administrator
+   * role). A primary report only as the last department report of the incident. Deleting that last report deletes the
+   * incident as well, with the drafts of brigade-wide units, so no incident is left that nobody finds in the list.
+   * Reports of units are removed by their module (e.g. "no duty officer at this incident").
    */
   @Delete('reports/:id')
   @HttpCode(204)
-  @RequirePermissions(READ)
+  @RequirePermissions(DELETE_REPORT)
   async deleteReport(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<void> {
     const em = this.em.fork();
     const report = await this.reports.load(em, id, user);
-    this.reports.assertWrite(user, report);
     if (report.unit) throw new ConflictException({ code: 'incidents.unitReportManaged' });
     await this.reports.assertNotLedExternally(report);
-    if (report.status !== 'draft') throw new ConflictException({ code: 'incidents.invalidTransition', from: report.status });
+    if (report.status.startsWith('released')) throw new ForbiddenException({ code: 'incidents.reportReleased' });
+    if (report.locked) throw new ForbiddenException({ code: 'incidents.reportLocked', lockedBy: report.lockedBy ?? '' });
+    if (report.status !== 'draft') throw new ForbiddenException({ code: 'incidents.notDraft', status: report.status });
     const siblings = await em.find(ReportEntity, { incident: report.incident, id: { $ne: report.id } });
     const departmentSiblings = siblings.filter((s) => s.departmentId);
     if (report.primary && departmentSiblings.length) throw new ConflictException({ code: 'incidents.primaryHasSiblings' });

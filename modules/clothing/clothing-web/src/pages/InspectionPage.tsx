@@ -71,6 +71,7 @@ export function InspectionPage() {
       </Group>
       <DataTable<Item>
         exportable={false}
+        scroll
         rows={rows}
         rowKey={(i) => i.id}
         empty={isLoading ? t('loading') : t('inspections.noItems')}

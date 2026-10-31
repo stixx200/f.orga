@@ -13,7 +13,7 @@ import {
   ZodPipe,
 } from '@forga/core-api';
 import type { ImportMessage, ImportRowResult } from '@forga/core-contracts';
-import { AlarmKeywordInput, IncidentInput, type IncidentUnit, type ReportStatus } from '@forga/incidents-contracts';
+import { AlarmKeywordInput, IncidentInput, type IncidentUnit, type PartyRole, type ReportStatus, type Weather } from '@forga/incidents-contracts';
 import {
   type CatalogEntry,
   type Department,
@@ -27,7 +27,7 @@ import {
   type Vehicle,
 } from '@forga/masterdata-contracts';
 import { localDate } from '../domain/compensation.js';
-import { AlarmKeywordEntity, IncidentEntity, ReportEntity, ReportPersonnelEntity, ReportVehicleEntity } from '../incidents.entities.js';
+import { AlarmKeywordEntity, IncidentEntity, InvolvedPartyEntity, OtherAgencyEntity, ReportEntity, ReportPersonnelEntity, ReportVehicleEntity } from '../incidents.entities.js';
 import { addCrewVehicles, RELEASE, REPORT_POPULATE, ReportsService } from '../reports/reports.service.js';
 import { functionTargetOf } from './function-targets.js';
 import { STATISTICS_FIELDS, statisticsOf, statusOf, yes } from './personnel-columns.js';
@@ -68,12 +68,38 @@ const FIELDS = [
   field('situation', 'Lage', 'Situation'),
   field('actions', 'Verlauf', 'Course'),
   field('narrative', 'Bericht', 'Report text'),
+  field('remark', 'Bemerkung', 'Remark'),
+  field('equipment', 'Geräte und Material', 'Equipment and material'),
+  field('departed', 'Ausrücken', 'Departed'),
   field('cause', 'Ursache', 'Cause'),
   field('commander', 'Einsatzleiter', 'Incident commander'),
   field('function', 'Funktion', 'Function', ['Aufgabe']),
   ...STATISTICS_FIELDS.map(([key, de, en]) => field(key, de, en)),
   field('chargeable', 'Kostenpflichtig', 'Chargeable'),
 ];
+
+type Involved = { role: PartyRole; name: string; street: string; postalCode: string; city: string; phone: string; licensePlate: string; notes: string };
+type Agency = { organization: string; forces: number | null; vehicles: number | null; notes: string };
+
+function listed<T>(value: string | undefined): T[] {
+  if (!value?.trim()) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function weatherOf(value: string | undefined): Weather {
+  if (!value?.trim()) return { influence: false, conditions: [] };
+  try {
+    const parsed = JSON.parse(value) as Partial<Weather>;
+    return { influence: Boolean(parsed.influence), conditions: Array.isArray(parsed.conditions) ? parsed.conditions : [] };
+  } catch {
+    return { influence: false, conditions: [] };
+  }
+}
 
 function normalizeName(text: string): string {
   return text.toLowerCase().replace(/^(abteilung|abt\.?)\s*/, '').replace(/[^a-z0-9äöüß]/g, '');
@@ -295,7 +321,7 @@ export class PersonnelImport {
         continue;
       }
       report ??= await this.reports.createReport(em, current, unit ? { unit: unit.key } : department!.id, null);
-      await em.populate(report, ['personnel', 'vehicles']);
+      await em.populate(report, ['personnel', 'vehicles', 'involvedParties', 'otherAgencies']);
       if (!before.has(report.id)) before.set(report.id, created ? null : releaseSignature(report));
 
       // MP-Feuer may hold several reports of a department for one dispatch number; f.orga keeps one and merges their personnel.
@@ -309,7 +335,7 @@ export class PersonnelImport {
         const end = time(first['end']) ?? new Date(begin.getTime() + 3_600_000);
         const status = statusOf(first['status']);
         // "Verlauf" may be a short picklist value and "Bericht" the free text; both become the course of actions.
-        const actions = [first['actions'], first['narrative']].map((t) => t?.trim()).filter(Boolean).join('\n\n');
+        const actions = [first['actions'], first['narrative'], first['remark']].map((t) => t?.trim()).filter(Boolean).join('\n\n');
         const read = statisticsOf(first);
         const statistics = read.statistics;
         if (read.message) groupMessages.push(read.message);
@@ -321,6 +347,9 @@ export class PersonnelImport {
           actions,
           cause: first['cause'] ?? '',
           incidentCommander: first['commander'] ?? '',
+          equipment: first['equipment'] ?? '',
+          departedAt: time(first['departed']),
+          weather: weatherOf(first['weather']),
           status,
           locked: status !== 'draft',
           lockedBy: status !== 'draft' ? (mpFeuer ? 'MP-Feuer' : 'Import') : null,
@@ -351,6 +380,16 @@ export class PersonnelImport {
         report.personnel.removeAll();
         for (const item of report.vehicles.getItems()) em.remove(item);
         report.vehicles.removeAll();
+        for (const item of report.involvedParties.getItems()) em.remove(item);
+        report.involvedParties.removeAll();
+        for (const item of report.otherAgencies.getItems()) em.remove(item);
+        report.otherAgencies.removeAll();
+        for (const party of listed<Involved>(first['involved'])) {
+          report.involvedParties.add(em.create(InvolvedPartyEntity, { report, ...party }));
+        }
+        for (const agency of listed<Agency>(first['agencies'])) {
+          report.otherAgencies.add(em.create(OtherAgencyEntity, { report, ...agency }));
+        }
       }
       const date = localDate(begin.toISOString());
       const members = membersOnDate(persons, date);
@@ -359,6 +398,15 @@ export class PersonnelImport {
         const messages: ImportMessage[] = position === 0 ? [...groupMessages] : [];
         // A row without a person carries only the report (e.g. the report row of a data transfer).
         if (!values['personName']?.trim() && !values['personnelNumber']?.trim()) {
+          // A vehicle of the report that nobody is booked on (MP-Feuer keeps those in EIN_FAHRZ).
+          const vehicleText = (values['vehicle'] ?? '').trim();
+          if (vehicleText) {
+            const vehicle = this.vehicle(vehicles, vehicleText) ?? vehicles.find((v) => v.id === mapped('vehicle', vehicleText));
+            if (!vehicle) {
+              messages.push({ code: 'incidents.api.unknownVehicle', params: { kind: 'vehicle', value: vehicleText } });
+              unmatched('vehicle', vehicleText);
+            } else this.vehicleTimes(em, report, vehicle.id, values);
+          }
           results.push({ row, action: created ? 'create' : 'update', label, messages });
           continue;
         }

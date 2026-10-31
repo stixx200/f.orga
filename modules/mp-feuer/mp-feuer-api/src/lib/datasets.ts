@@ -1,6 +1,8 @@
 import type { TransferArchive, TransferRow } from './archive/transfer-archive.js';
 import { readCareer } from './readers/career.reader.js';
 import { readExaminations, readStressExercises } from './readers/evidence.reader.js';
+import { readClothing } from './readers/clothing.reader.js';
+import { readEquipment } from './readers/equipment.reader.js';
 import { readIncidents } from './readers/incidents.reader.js';
 import { readPersons } from './readers/persons.reader.js';
 import { readSessions } from './readers/sessions.reader.js';
@@ -56,6 +58,18 @@ export const DATASETS: readonly DatasetDefinition[] = [
     },
     units: true,
     dateField: 'begin',
+  },
+  {
+    profile: 'equipment.inventory',
+    position: 55,
+    read: readEquipment,
+    groups: (rows) => rows.map((v, index) => v['inventoryNumber'] || String(index)),
+  },
+  {
+    profile: 'clothing.inventory',
+    position: 56,
+    read: readClothing,
+    groups: (rows) => rows.map((v, index) => v['inventoryNumber'] || String(index)),
   },
 ];
 

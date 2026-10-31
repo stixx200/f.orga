@@ -49,6 +49,15 @@ AttachmentSchema.setClass(AttachmentEntity);
 export interface AttachmentAccess {
   read: (user: AuthenticatedUser, ownerId: string) => Promise<boolean>;
   write: (user: AuthenticatedUser, ownerId: string) => Promise<boolean>;
+  /** At most this many files. `1` replaces the existing file on the next upload. */
+  max?: number;
+  /** Photos only; a PDF is rejected. */
+  imagesOnly?: boolean;
+  /**
+   * Storage id for this record. The request still names the record the user opened (the permission check uses that
+   * id); the returned id is where the files actually lie, so several records can share them.
+   */
+  locate?(ownerId: string): Promise<string>;
 }
 
 /** The content must match the declared type (magic bytes). */
@@ -97,6 +106,17 @@ export class Attachments {
     return access ? access[mode](user, ownerId) : false;
   }
 
+  /** Limits of a registered type; unknown types have none. */
+  rules(ownerType: string): { max?: number; imagesOnly?: boolean } {
+    const access = this.access.get(ownerType);
+    return { max: access?.max, imagesOnly: access?.imagesOnly };
+  }
+
+  /** Where the files of this record are stored. Without `locate`, that is the record id itself. */
+  async locate(ownerType: string, ownerId: string): Promise<string> {
+    return (await this.access.get(ownerType)?.locate?.(ownerId)) ?? ownerId;
+  }
+
   async list(ownerType: string, ownerIds: readonly string[]): Promise<Attachment[]> {
     if (!ownerIds.length) return [];
     return (await this.em.fork().find(AttachmentEntity, { ownerType, ownerId: { $in: [...ownerIds] } }, { orderBy: { createdAt: 'asc' } })).map(toDto);
@@ -140,7 +160,7 @@ export class AttachmentsController {
   @Get()
   async list(@Query('type') ownerType: string, @Query('id') ownerId: string, @CurrentUser() user: AuthenticatedUser): Promise<Attachment[]> {
     await this.require(user, ownerType, ownerId, 'read');
-    return this.attachments.list(ownerType, [ownerId]);
+    return this.attachments.list(ownerType, [await this.attachments.locate(ownerType, ownerId)]);
   }
 
   @Post()
@@ -152,10 +172,20 @@ export class AttachmentsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<Attachment> {
     await this.require(user, ownerType, ownerId, 'write');
+    ownerId = await this.attachments.locate(ownerType, ownerId);
     if (!file) throw new BadRequestException({ code: 'imports.fileMissing' });
     if (!(ATTACHMENT_TYPES as readonly string[]).includes(file.mimetype) || !matchesType(file.buffer, file.mimetype)) throw new BadRequestException({ code: 'attachments.type' });
+    const rules = this.attachments.rules(ownerType);
+    if (rules.imagesOnly && !file.mimetype.startsWith('image/')) throw new BadRequestException({ code: 'attachments.type' });
     const em = this.em.fork();
-    if ((await em.count(AttachmentEntity, { ownerType, ownerId })) >= ATTACHMENT_MAX_PER_RECORD) throw new BadRequestException({ code: 'attachments.tooMany', max: ATTACHMENT_MAX_PER_RECORD });
+    const existing = await em.find(AttachmentEntity, { ownerType, ownerId }, { orderBy: { createdAt: 'asc' } });
+    const max = rules.max ?? ATTACHMENT_MAX_PER_RECORD;
+    // One picture of a device: the new file takes the place of the old one.
+    if (max === 1 && existing.length) {
+      for (const old of existing) em.remove(old);
+    } else if (existing.length >= max) {
+      throw new BadRequestException({ code: 'attachments.tooMany', max });
+    }
     // Browsers send the name as Latin-1; restore UTF-8 umlauts and keep only the base name.
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8').split(/[\\/]/).pop()!.slice(0, 200) || 'datei';
     // Position, camera and time of photos are not stored (L27).

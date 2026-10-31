@@ -1,11 +1,16 @@
 import { ForbiddenException, type HttpException } from '@nestjs/common';
 import type { Grant, Language, Permission } from '@forga/core-contracts';
 
-/** Does a permission match a pattern from a role? `*` = everything, `module.*` = everything of a module. */
-export function matches(pattern: string, permission: string): boolean {
+/**
+ * Does a permission match a pattern from a role? `*` = everything, `module.*` = everything of a module.
+ * An explicit permission is not covered by the module wildcard, only by `*` and its exact id.
+ */
+export function matches(pattern: string, permission: string, explicit = false): boolean {
   if (pattern === '*') return true;
+  if (pattern === permission) return true;
+  if (explicit) return false;
   if (pattern.endsWith('.*')) return permission.startsWith(pattern.slice(0, -1));
-  return pattern === permission;
+  return false;
 }
 
 /** The given department and all departments below it (e.g. youth and veterans department of an operational department). */
@@ -24,7 +29,7 @@ export function computeGrants(
   const result = new Map<string, Grant>();
   for (const permission of known) {
     for (const { patterns, departmentId } of assignments) {
-      if (!patterns.some((p) => matches(p, permission.id))) continue;
+      if (!patterns.some((p) => matches(p, permission.id, permission.explicit))) continue;
       const current = result.get(permission.id);
       if (departmentId === null) {
         result.set(permission.id, 'brigade');

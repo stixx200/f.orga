@@ -31,6 +31,7 @@ function exportTitle(table: HTMLElement): string {
 /**
  * Table in the brigade style: white-on-red header, alternating rows; on phones every row becomes a card
  * with a label per field. Rows can be clickable, selected or highlighted as primary report.
+ * `scroll` keeps a long selection list inside the table, so the page around it stays short.
  */
 export function DataTable<T>({
   columns,
@@ -43,6 +44,7 @@ export function DataTable<T>({
   caption,
   exportName,
   exportable = true,
+  scroll = false,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -56,6 +58,8 @@ export function DataTable<T>({
   exportName?: string;
   /** Shows the Excel export below the table (default); `false` e.g. in dashboards and forms. */
   exportable?: boolean;
+  /** The row list scrolls inside the table and the header stays put. */
+  scroll?: boolean;
 }) {
   const { t } = useTranslation('common');
   const table = useRef<HTMLTableElement>(null);
@@ -69,14 +73,14 @@ export function DataTable<T>({
   };
   if (!rows.length) {
     return (
-      <div className={classes.tableWrap}>
+      <div className={`${classes.tableWrap} ${scroll ? classes.tableScroll : ''}`}>
         {typeof empty === 'string' ? <Text size="sm" c="dimmed" p="md">{empty}</Text> : (empty ?? <EmptyState title={t('table.empty')} />)}
       </div>
     );
   }
   return (
     <>
-    <div className={classes.tableWrap}>
+    <div className={`${classes.tableWrap} ${scroll ? classes.tableScroll : ''}`}>
       <table ref={table} className={`${classes.table} ${classes.stack}`}>
         {caption && <caption className="visually-hidden">{caption}</caption>}
         <thead>

@@ -10,7 +10,7 @@ const de = {
   fields: {
     type: 'Gerätetyp', category: 'Kategorie', inventoryNumber: 'Inventar-Nr.', name: 'Bezeichnung', serialNumber: 'Seriennummer', manufacturer: 'Hersteller',
     yearBuilt: 'Baujahr', purchasedOn: 'Beschafft am', price: 'Preis', expiresOn: 'Ablaufdatum', department: 'Abteilung', vehicle: 'Fahrzeug', station: 'Wache / Lager',
-    loadingPlace: 'Beladeplatz / Lagerort', quantity: 'Menge', notes: 'Bemerkung', status: 'Status', place: 'Standort',
+    loadingPlace: 'Beladeplatz / Lagerort', location: 'Standort', locationHint: 'Jede Wache oder ein anderer Ort, z. B. die Atemschutzwerkstatt.', quantity: 'Menge', notes: 'Bemerkung', status: 'Status', place: 'Standort',
   },
   items: {
     title: 'Geräte', search: 'Suche', all: 'Alle', active: 'Alle aktiven', due: 'Prüfung', overdue: 'fällig', dueSoon_one: 'in {{count}} Tag fällig', dueSoon_other: 'in {{count}} Tagen fällig', empty: 'Keine Geräte gefunden.',
@@ -29,6 +29,8 @@ const de = {
     openDefects_one: '{{count}} offener Mangel', openDefects_other: '{{count}} offene Mängel',
     tabs: { data: 'Stammdaten', inspections: 'Prüfungen', defects: 'Mängel', incidents: 'Einsätze', history: 'Historie' },
     qr: 'QR-Code', qrHint: 'Scannen öffnet dieses Gerät, z. B. um einen Mangel zu melden.', reportOnly: 'Sie können für dieses Gerät einen Mangel melden.',
+    photo: 'Bild', noPhoto: 'Kein Bild.', addPhoto: 'Bild hinzufügen', replacePhoto: 'Bild ersetzen', removePhoto: 'Bild entfernen',
+    documents: 'Dokumente', sharedFiles: 'Gilt für alle Geräte mit derselben Kategorie, demselben Gerätetyp und derselben Bezeichnung.',
     blocked: 'Gesperrt: Eine Prüfung ist überfällig. Das Gerät erst nach der Prüfung wieder einsetzen.', notReady: 'Dieses Gerät ist nicht einsatzbereit. Bitte nicht verwenden.', awaitingInspection: 'Der Mangel ist behoben. Das Gerät ist erst nach einer bestandenen Prüfung wieder einsatzbereit.',
     inspections: 'Prüfarten', inspectionsHint: 'Eigenes Intervall nur, wenn es vom Gerätetyp abweicht. Die letzte Prüfung vor der Erfassung legt die erste Fälligkeit fest; ohne sie zählt das Beschaffungsdatum, sonst der heutige Tag.',
     inspectionsHintEdit: 'Eigenes Intervall nur, wenn es vom Gerätetyp abweicht, z. B. Hauptuntersuchung nach Zulassung des Fahrzeugs.', ownInterval: 'Eigenes Intervall (Monate)', lastInspection: 'Letzte Prüfung',
@@ -91,6 +93,10 @@ const de = {
     remove: 'Entfernen', addInspection: '+ Prüfart', template: 'Vorlage DGUV 305-002 ergänzen', vehicles: 'Fahrzeuge übernehmen',
     templateDone: '{{categories}} Kategorien und {{types}} Gerätetypen ergänzt.', vehiclesDone: '{{created}} Fahrzeuge übernommen. Die Prüfungen stehen auf „noch nicht erfasst“: Tragen Sie je Fahrzeug die letzte HU und Sicherheitsprüfung über „Prüfen“ mit deren Datum ein und prüfen Sie die Intervalle (Vorlagenwerte).', types: 'Gerätetypen', categories: 'Kategorien',
     noTypes: 'Noch keine Gerätetypen. Ergänzen Sie die Vorlage DGUV 305-002.', noCategories: 'Noch keine Kategorien.',
+    unknownCategory: 'Ohne Kategorie',
+    deleted: 'Kategorie gelöscht.',
+    deleteCategoryTitle: 'Kategorie „{{name}}“ löschen?',
+    deleteCategoryText: 'Unterkategorien rücken eine Ebene nach oben. Gerätetypen dieser Kategorie fallen an die übergeordnete Kategorie. Solange Geräte in dieser Kategorie liegen, bleibt sie; eine Hauptkategorie mit Gerätetypen ebenfalls, bis die Typen woanders liegen.',
   },
   tracking: { item: 'Einzelstück', stock: 'Bestand (Menge)' },
   report: {
@@ -108,6 +114,7 @@ const de = {
     'equipment.unknownCategory': 'Unbekannte Kategorie „{{key}}“.',
     'equipment.unknownType': 'Unbekannter Gerätetyp „{{key}}“.',
     'equipment.categoryInUse': 'Der Kategorie sind noch Geräte zugeordnet.',
+    'equipment.categoryHasTypes': 'Dieser Kategorie sind noch Gerätetypen zugeordnet. Ordnen Sie sie zuerst einer anderen Kategorie zu.',
     'equipment.inventoryNumberTaken': 'Die Inventarnummer „{{value}}“ ist schon vergeben.',
     'equipment.retired': 'Das Gerät ist ausgesondert.',
     'equipment.unknownInspection': 'Diese Prüfart gibt es für das Gerät nicht.',
@@ -138,7 +145,7 @@ const en: typeof de = {
   fields: {
     type: 'Equipment type', category: 'Category', inventoryNumber: 'Inventory no.', name: 'Name', serialNumber: 'Serial number', manufacturer: 'Manufacturer',
     yearBuilt: 'Year built', purchasedOn: 'Purchased on', price: 'Price', expiresOn: 'Expiry date', department: 'Department', vehicle: 'Vehicle', station: 'Station / store',
-    loadingPlace: 'Loading place / storage', quantity: 'Quantity', notes: 'Notes', status: 'Status', place: 'Location',
+    loadingPlace: 'Loading place / storage', location: 'Location', locationHint: 'Any station, or another place such as the breathing apparatus workshop.', quantity: 'Quantity', notes: 'Notes', status: 'Status', place: 'Location',
   },
   items: {
     title: 'Equipment', search: 'Search', all: 'All', active: 'All active', due: 'Inspection', overdue: 'due', dueSoon_one: 'due within {{count}} day', dueSoon_other: 'due within {{count}} days', empty: 'No equipment found.',
@@ -157,6 +164,8 @@ const en: typeof de = {
     openDefects_one: '{{count}} open defect', openDefects_other: '{{count}} open defects',
     tabs: { data: 'Master data', inspections: 'Inspections', defects: 'Defects', incidents: 'Incidents', history: 'History' },
     qr: 'QR code', qrHint: 'Scanning opens this item, e.g. to report a defect.', reportOnly: 'You can report a defect for this item.',
+    photo: 'Photo', noPhoto: 'No photo.', addPhoto: 'Add photo', replacePhoto: 'Replace photo', removePhoto: 'Remove photo',
+    documents: 'Documents', sharedFiles: 'Applies to every item with the same category, equipment type and name.',
     blocked: 'Blocked: an inspection is overdue. Use the item again only after the inspection.', notReady: 'This item is not ready for use. Please do not use it.', awaitingInspection: 'The defect is fixed. The item is ready again only after a passed inspection.',
     inspections: 'Inspection types', inspectionsHint: 'Own interval only if it differs from the equipment type. The last inspection before recording sets the first due date; without it the purchase date counts, otherwise today.',
     inspectionsHintEdit: 'Own interval only if it differs from the equipment type, e.g. roadworthiness test by the registration of the vehicle.', ownInterval: 'Own interval (months)', lastInspection: 'Last inspection',
@@ -219,6 +228,10 @@ const en: typeof de = {
     remove: 'Remove', addInspection: '+ Inspection type', template: 'Add DGUV 305-002 template', vehicles: 'Take over vehicles',
     templateDone: '{{categories}} categories and {{types}} equipment types added.', vehiclesDone: '{{created}} vehicles taken over. Their inspections are "not recorded yet": enter the last roadworthiness test and safety inspection of each vehicle via "Inspect" with their dates and check the intervals (template values).', types: 'Equipment types', categories: 'Categories',
     noTypes: 'No equipment types yet. Add the DGUV 305-002 template.', noCategories: 'No categories yet.',
+    unknownCategory: 'No category',
+    deleted: 'Category deleted.',
+    deleteCategoryTitle: 'Delete category "{{name}}"?',
+    deleteCategoryText: 'Subcategories move up one level. Equipment types of this category fall back to the parent category. The category stays while items belong to it; a top-level category with equipment types stays too, until those types sit elsewhere.',
   },
   tracking: { item: 'Single item', stock: 'Stock (quantity)' },
   report: {
@@ -236,6 +249,7 @@ const en: typeof de = {
     'equipment.unknownCategory': 'Unknown category "{{key}}".',
     'equipment.unknownType': 'Unknown equipment type "{{key}}".',
     'equipment.categoryInUse': 'Items still belong to this category.',
+    'equipment.categoryHasTypes': 'Equipment types still belong to this category. Assign them to another category first.',
     'equipment.inventoryNumberTaken': 'The inventory number "{{value}}" is already taken.',
     'equipment.retired': 'The item is retired.',
     'equipment.unknownInspection': 'This inspection type does not exist for the item.',

@@ -26,6 +26,18 @@
   overflow-x: auto;
 }
 
+/* Selection lists on a work page: the rows scroll, the header stays, the page itself stays short. */
+.tableScroll {
+  max-height: min(32rem, calc(100dvh - 16rem));
+  overflow: auto;
+}
+
+.tableScroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;

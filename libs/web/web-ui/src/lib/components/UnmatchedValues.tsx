@@ -5,6 +5,7 @@ import { type ReactNode, useState } from 'react';
 import type { ImportLookupEntry, ImportLookupInfo, ImportUnmatched, ImportValueMappings } from '@forga/core-contracts';
 import { api, send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { Notice } from './Notice';
+import { treeOptions } from '../tree-options';
 import { useAction } from './useAction';
 
 const LOOKUPS = ['core', 'imports', 'lookups'] as const;
@@ -120,11 +121,18 @@ export function UnmatchedValues({ items, mappings, onChange, stale, onRecheck, r
 function UnmatchedRow({ item, lookup, selected, onSelect }: { item: ImportUnmatched; lookup?: ImportLookupInfo; selected: string | null; onSelect: (key: string | null) => void }) {
   const { t } = useTranslation('common');
   const localized = useLocalized();
-  const [creating, setCreating] = useState<{ name: string; key: string } | null>(null);
+  const [creating, setCreating] = useState<{ name: string; key: string; categoryKey: string | null } | null>(null);
   const entriesKey = [...LOOKUPS, item.kind];
   const { data: entries = [] } = useQuery({ queryKey: entriesKey, queryFn: () => api<ImportLookupEntry[]>(`core/imports/lookups/${encodeURIComponent(item.kind)}`), enabled: !!lookup });
+  const categoryKind = lookup?.createCategoryKind ?? null;
+  const { data: categories = [] } = useQuery({
+    queryKey: [...LOOKUPS, categoryKind],
+    queryFn: () => api<ImportLookupEntry[]>(`core/imports/lookups/${encodeURIComponent(categoryKind!)}`),
+    enabled: Boolean(categoryKind) && creating !== null,
+  });
   const deriveKey = (name: string) => (lookup?.keyFormat === 'text' ? name.trim().slice(0, 40) : slugKey(name));
-  const create = useAction((input: { name: string; key: string }) => send<ImportLookupEntry>('POST', `core/imports/lookups/${encodeURIComponent(item.kind)}`, input), {
+  const label = item.value.trim() ? item.value : t('unmatched.empty');
+  const create = useAction((input: { name: string; key: string; categoryKey?: string }) => send<ImportLookupEntry>('POST', `core/imports/lookups/${encodeURIComponent(item.kind)}`, input), {
     success: t('unmatched.created'),
     invalidate: [entriesKey],
     onSuccess: (entry) => {
@@ -136,7 +144,7 @@ function UnmatchedRow({ item, lookup, selected, onSelect }: { item: ImportUnmatc
   return (
     <Table.Tr>
       <Table.Td>
-        <Text size="sm" fw={700} translate="no">{item.value}</Text>
+        <Text size="sm" fw={700} translate={item.value.trim() ? 'no' : undefined}>{label}</Text>
         <Text size="xs" c="dimmed">{t('unmatched.count', { count: item.count })}</Text>
       </Table.Td>
       <Table.Td visibleFrom="sm"><Text size="sm">{lookup ? localized(lookup.name) : item.kind}</Text></Table.Td>
@@ -145,22 +153,33 @@ function UnmatchedRow({ item, lookup, selected, onSelect }: { item: ImportUnmatc
           <Stack gap="xs">
             <TextInput label={t('unmatched.name')} value={creating.name} onChange={(e) => {
               const name = e.currentTarget.value;
-              setCreating((c) => c && { name, key: c.key === deriveKey(c.name) ? deriveKey(name) : c.key });
+              setCreating((c) => c && { ...c, name, key: c.key === deriveKey(c.name) ? deriveKey(name) : c.key });
             }} />
+            {categoryKind && (
+              <Select
+                label={t('unmatched.category')}
+                description={t('unmatched.categoryHint')}
+                data={treeOptions(categories, (e) => localized(e.name))}
+                value={creating.categoryKey}
+                onChange={(value) => setCreating((c) => c && { ...c, categoryKey: value })}
+                searchable
+                required
+              />
+            )}
             <TextInput label={t('unmatched.key')} description={t('unmatched.keyHint')} value={creating.key} onChange={(e) => {
               const key = e.currentTarget.value;
               setCreating((c) => c && { ...c, key });
             }} />
             <Group gap="xs" justify="flex-end">
               <Button size="xs" variant="default" onClick={() => setCreating(null)}>{t('actions.cancel')}</Button>
-              <Button size="xs" loading={create.isPending} disabled={!creating.name.trim() || !creating.key.trim()} onClick={() => create.mutate(creating)}>{t('unmatched.save')}</Button>
+              <Button size="xs" loading={create.isPending} disabled={!creating.name.trim() || !creating.key.trim() || (Boolean(categoryKind) && !creating.categoryKey)} onClick={() => create.mutate({ name: creating.name, key: creating.key, ...(creating.categoryKey ? { categoryKey: creating.categoryKey } : {}) })}>{t('unmatched.save')}</Button>
             </Group>
           </Stack>
         ) : (
           <Group gap="xs" wrap="nowrap" align="flex-start">
             <Select
               style={{ flex: 1 }}
-              aria-label={t('unmatched.entryFor', { value: item.value })}
+              aria-label={t('unmatched.entryFor', { value: label })}
               placeholder={t('unmatched.ignore')}
               data={entries.map((e) => ({ value: e.key, label: localized(e.name) }))}
               value={selected}
@@ -170,7 +189,7 @@ function UnmatchedRow({ item, lookup, selected, onSelect }: { item: ImportUnmatc
               searchable
             />
             {lookup?.creatable && (
-              <Button variant="default" leftSection={<IconPlus size={16} />} onClick={() => setCreating({ name: item.value, key: deriveKey(item.value) })}>
+              <Button variant="default" leftSection={<IconPlus size={16} />} onClick={() => setCreating({ name: item.value, key: deriveKey(item.value), categoryKey: null })}>
                 {t('unmatched.create')}
               </Button>
             )}

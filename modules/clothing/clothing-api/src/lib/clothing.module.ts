@@ -1,6 +1,6 @@
 import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ListRegistry, PersonDataRegistry, SearchRegistry } from '@forga/core-api';
+import { CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry, SearchRegistry } from '@forga/core-api';
 import { CLOTHING_HELD, CLOTHING_MANIFEST, CLOTHING_SETTINGS } from '@forga/clothing-contracts';
 import { ORGANIZATION_REFERENCES, type OrganizationReferences, PERSON_HOLDINGS, type PersonHoldings } from '@forga/masterdata-contracts';
 import { CLOTHING_MIGRATIONS } from '../migrations/index.js';
@@ -8,12 +8,13 @@ import { ClothingController } from './clothing.controller.js';
 import { ClothingData } from './clothing.data.js';
 import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, ConsumableReceiptEntity, IssueEntity, SizeProfileEntity } from './clothing.entities.js';
 import { ClothingService, ISSUE, MANAGE, READ } from './clothing.service.js';
+import { ClothingInventoryImport } from './imports/inventory.import.js';
 
 /** Global, so other modules can inject `CLOTHING_HELD`. */
 @Global()
 @Module({
   controllers: [ClothingController],
-  providers: [ClothingService, ClothingData, { provide: CLOTHING_HELD, useExisting: ClothingService }],
+  providers: [ClothingService, ClothingData, ClothingInventoryImport, { provide: CLOTHING_HELD, useExisting: ClothingService }],
   exports: [CLOTHING_HELD],
 })
 export class ClothingModule implements OnModuleInit {
@@ -30,6 +31,8 @@ export class ClothingModule implements OnModuleInit {
     @Inject(ORGANIZATION_REFERENCES) private readonly references: OrganizationReferences,
     @Inject(PERSON_HOLDINGS) private readonly holdings: PersonHoldings,
     private readonly personData: PersonDataRegistry,
+    private readonly imports: ImportRegistry,
+    private readonly clothingImport: ClothingInventoryImport,
   ) {}
 
   onModuleInit(): void {
@@ -43,6 +46,8 @@ export class ClothingModule implements OnModuleInit {
       describePerson: (id, ctx) => this.data.describePerson(id, ctx),
     });
     this.personData.register('clothing', { anonymize: (ids) => this.data.anonymize(ids), erasure: (id) => this.data.erasure(id), erase: (id, areas) => this.data.erase(id, areas) });
+    this.imports.register('clothing', this.clothingImport.profile());
+    for (const lookup of this.clothingImport.lookups()) this.imports.registerLookup('clothing', lookup);
     this.historyAccess.register('clothing.item', async (user, id) => {
       const item = await this.em.fork().findOne(ClothingItemEntity, id);
       return { allowed: Boolean(item) && user.can(READ, item!.departmentId) };

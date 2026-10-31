@@ -29,12 +29,13 @@ export function RememberedMappings({ path, deletable, showProfile = false }: { p
   });
 
   const kindName = (m: RememberedMapping) => (m.kindName ? localized(m.kindName) : m.kind);
+  const valueLabel = (m: RememberedMapping) => (m.value.trim() ? m.value : t('unmatched.empty'));
   const target = (m: RememberedMapping) => (m.targetName ? localized(m.targetName) : m.key);
   const kinds = [...new Map(mappings.map((m) => [m.kind, kindName(m)])).entries()].map(([value, label]) => ({ value, label }));
   const problems = mappings.filter((m) => m.targetState !== 'active');
   const words = search.toLowerCase().split(/\s+/).filter(Boolean);
   const shown = mappings.filter(
-    (m) => (!kind || m.kind === kind) && (!problemsOnly || m.targetState !== 'active') && words.every((w) => [m.value, target(m)].some((text) => text.toLowerCase().includes(w))),
+    (m) => (!kind || m.kind === kind) && (!problemsOnly || m.targetState !== 'active') && words.every((w) => [valueLabel(m), target(m)].some((text) => text.toLowerCase().includes(w))),
   );
 
   return (
@@ -49,7 +50,7 @@ export function RememberedMappings({ path, deletable, showProfile = false }: { p
         rowKey={(m) => m.id}
         empty={isLoading ? undefined : t('mappings.empty')}
         columns={[
-          { key: 'value', header: t('mappings.value'), render: (m) => <Text size="sm" fw={700} translate="no">{m.value}</Text> },
+          { key: 'value', header: t('mappings.value'), render: (m) => <Text size="sm" fw={700} translate={m.value.trim() ? 'no' : undefined}>{valueLabel(m)}</Text> },
           { key: 'kind', header: t('mappings.kind'), render: kindName },
           {
             key: 'target',
@@ -75,7 +76,7 @@ export function RememberedMappings({ path, deletable, showProfile = false }: { p
         opened={!!deleting}
         onClose={() => setDeleting(null)}
         title={t('mappings.deleteTitle')}
-        description={deleting ? t('mappings.deleteText', { value: deleting.value, target: target(deleting) }) : undefined}
+        description={deleting ? t('mappings.deleteText', { value: valueLabel(deleting), target: target(deleting) }) : undefined}
         confirmLabel={t('actions.delete')}
         loading={remove.isPending}
         onConfirm={() => deleting && remove.mutate(deleting)}

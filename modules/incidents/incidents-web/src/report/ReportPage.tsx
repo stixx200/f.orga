@@ -2,11 +2,11 @@ import { Button, Group, Stack, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import type { Report } from '@forga/incidents-contracts';
 import { apiUrl, can, extensionsOf, formatDateTime, formatMoney, formatTime, send, useSession, useTranslation } from '@forga/web-sdk';
 import { ActionBar, Attachments, ConfirmDialog, DataTable, EmptyState, HistoryTimeline, Notice, notifyError, notifySuccess, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
-import { keys, ledByMpFeuer, RELEASE, useIncident, useNames, useReport, useReportAccess, useRevisions, useSettings } from '../api';
+import { DELETE_REPORT, keys, ledByMpFeuer, RELEASE, useIncident, useNames, useReport, useReportAccess, useRevisions, useSettings } from '../api';
 import { DepartmentBadge, ReportStatusBadge } from '../parts';
 import { WorkflowActions } from '../WorkflowActions';
 import { CheckSection } from './CheckSection';
@@ -40,6 +40,7 @@ function stepState(step: StepId, content: Content, report: Report): { state: 'do
 
 function Editor({ report, userId }: { report: Report; userId: string }) {
   const { t, i18n } = useTranslation('incidents');
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const session = useSession().data;
   const names = useNames();
@@ -47,7 +48,7 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
   const { content, update, flush, reset, saveState, restorable, restoreLocal, discardLocal, loadServer, keepMine, newBookings, dismissBookings } = useReportEditor(report, userId);
   const [step, setStep] = useState<StepId>('times');
   const { reasons, setReason, clearReasons } = useStoredReasons(userId, report.id);
-  const [dialog, setDialog] = useState<'submit' | 'versions' | 'history' | 'takeOver' | 'mpFeuer' | null>(null);
+  const [dialog, setDialog] = useState<'submit' | 'versions' | 'history' | 'takeOver' | 'mpFeuer' | 'delete' | null>(null);
   const { data: settings } = useSettings();
   // Releasers read drafts of authors; editing one locks it for the author, so it needs a confirmation.
   const [takenOver, setTakenOver] = useState(false);
@@ -61,6 +62,8 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
   const fromMpFeuer = ledByMpFeuer(settings, report);
   const draftOfAuthor = !fromMpFeuer && releaser && report.status === 'draft' && !report.locked && !takenOver && !ownDraft;
   const editable = !fromMpFeuer && (releaser ? !report.status.startsWith('released') && !draftOfAuthor : writer && report.status === 'draft' && !report.locked);
+  // Deleting is its own permission (administrator). Locked, released and submitted reports stay.
+  const deletable = can(session, DELETE_REPORT) && !fromMpFeuer && !report.unit && report.status === 'draft' && !report.locked;
   const errors = blocking(mergeFindings(report.findings));
   const warnings = openWarnings(mergeFindings(report.findings));
   const missingReasons = warnings.filter((f) => !reasons[findingKey(f)]?.trim());
@@ -95,6 +98,12 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
       },
     },
   );
+  const remove = useAction(() => send('DELETE', `incidents/reports/${report.id}`), {
+    success: t('editor.deleted'),
+    invalidate: [keys.incidents],
+    // The last department report takes the incident and the drafts of brigade-wide units with it.
+    onSuccess: () => navigate(incident?.reports.some((other) => other.id !== report.id && other.departmentId) ? `/incidents/incidents/${report.incidentId}` : '/incidents/incidents'),
+  });
   const takeOverFromMpFeuer = useAction(() => send<Report>('POST', `incidents/reports/${report.id}/take-over`), {
     success: t('editor.mpFeuerTakenOver'),
     invalidate: [keys.incidents],
@@ -264,12 +273,24 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
           </Text>
         }
       >
+        {deletable && <Button variant="default" onClick={() => setDialog('delete')}>{t('editor.delete')}</Button>}
         <Button component="a" href={apiUrl(`incidents/reports/${report.id}/pdf`, { lang: i18n.language })} target="_blank" variant="subtle">{t('editor.pdf')}</Button>
         <Button variant="subtle" onClick={() => setDialog('history')}>{t('editor.history')}</Button>
         <Button variant="subtle" onClick={() => setDialog('versions')}>{t('editor.versions')}</Button>
         {editable && report.status === 'draft' && <Button onClick={askSubmit}>{t('editor.submit')}</Button>}
       </ActionBar>
 
+      {dialog === 'delete' && (
+        <ConfirmDialog
+          opened
+          onClose={() => setDialog(null)}
+          title={t('editor.deleteTitle')}
+          description={t('editor.deleteText', { report: report.number })}
+          confirmLabel={t('editor.delete')}
+          loading={remove.isPending}
+          onConfirm={() => remove.mutate(undefined)}
+        />
+      )}
       {dialog === 'submit' && (
         <ConfirmDialog
           opened

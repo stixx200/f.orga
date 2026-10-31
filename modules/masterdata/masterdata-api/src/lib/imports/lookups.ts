@@ -5,7 +5,7 @@ import type { LocalizedText } from '@forga/core-contracts';
 import { CatalogEntryInput, type CatalogKind, COURSE_TARGET_PREFIX } from '@forga/masterdata-contracts';
 import { CatalogEntry, CatalogService } from '../catalog/catalog.js';
 import { Course } from '../courses/course.entities.js';
-import { Vehicle } from '../masterdata.entities.js';
+import { Department, Vehicle } from '../masterdata.entities.js';
 
 const MANAGE_CATALOGS = 'masterdata.catalogs.manage';
 
@@ -14,6 +14,7 @@ const CATALOGS: [CatalogKind, LocalizedText][] = [
   ['qualification', { de: 'Lehrgänge und Qualifikationen', en: 'Courses and qualifications' }],
   ['rank', { de: 'Dienstgrade', en: 'Ranks' }],
   ['honor', { de: 'Ehrungen', en: 'Honors' }],
+  ['office', { de: 'Ämter', en: 'Offices' }],
   ['exit-reason', { de: 'Austrittsgründe', en: 'Exit reasons' }],
   ['function', { de: 'Funktionen im Einsatz', en: 'Incident functions' }],
 ];
@@ -27,7 +28,7 @@ export class MasterdataLookups {
   ) {}
 
   lookups(): ImportLookup[] {
-    return [...CATALOGS.map(([kind, name]) => this.catalog(kind, name)), this.vehicles()];
+    return [...CATALOGS.map(([kind, name]) => this.catalog(kind, name)), this.vehicles(), this.departments()];
   }
 
   private catalog(kind: CatalogKind, name: LocalizedText): ImportLookup {
@@ -68,6 +69,20 @@ export class MasterdataLookups {
       key: `${COURSE_TARGET_PREFIX}${c.key}`,
       name: { de: `${c.name.de} (Lehrgangsteilnahme)`, en: `${c.name.en} (course attendance)` },
     }));
+  }
+
+  /** Departments by ID, so a blank or unknown department name can be assigned to one (e.g. the whole brigade). */
+  private departments(): ImportLookup {
+    return {
+      kind: 'department',
+      name: { de: 'Abteilungen', en: 'Departments' },
+      keyFormat: 'slug',
+      entries: async () =>
+        (await this.em.fork().find(Department, {}, { orderBy: { name: 'asc' } })).map((d) => {
+          const label = d.shortName && d.shortName !== d.name ? `${d.name} (${d.shortName})` : d.name;
+          return { key: d.id, name: { de: label, en: label } };
+        }),
+    };
   }
 
   /** Vehicles by ID; created in the organization only. */

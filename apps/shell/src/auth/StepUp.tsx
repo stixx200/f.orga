@@ -233,7 +233,7 @@ export function ElevationBadge({ session }: { session: Session }) {
     return () => clearTimeout(timer);
   }, [until, queryClient]);
 
-  if (!until || until <= now) return null;
+  if (!session.mfa.enabled || !until || until <= now) return null;
   const end = async () => {
     try {
       await send('POST', 'core/step-up/end');
@@ -260,6 +260,13 @@ export function MfaPanel({ session }: { session: Session }) {
     onSuccess: (result) => setCodes(result.recoveryCodes),
   });
   const needed = session.stepUpPermissions.length > 0;
+  if (!session.mfa.enabled) {
+    return (
+      <Panel title={t('mfa.title')} aside={<StatusBadge tone="neutral">{t('mfa.switchedOff')}</StatusBadge>}>
+        <Text size="sm">{t('mfa.disabled')}</Text>
+      </Panel>
+    );
+  }
 
   return (
     <Panel title={t('mfa.title')} aside={<StatusBadge tone={session.mfa.enrolled ? 'done' : needed ? 'warning' : 'neutral'}>{t(session.mfa.enrolled ? 'mfa.enrolled' : needed ? 'mfa.missing' : 'mfa.notNeeded')}</StatusBadge>}>

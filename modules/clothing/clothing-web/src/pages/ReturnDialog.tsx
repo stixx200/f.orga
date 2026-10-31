@@ -50,6 +50,7 @@ export function ReturnDialog({ items, all = false, onClose }: { items: Item[]; a
       <Stack gap="sm">
         <DataTable<Item>
           exportable={false}
+          scroll
           rows={items}
           rowKey={(i) => i.id}
           empty={t('person.nothingHeld')}

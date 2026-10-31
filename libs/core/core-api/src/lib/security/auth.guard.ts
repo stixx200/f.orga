@@ -53,7 +53,7 @@ export class AuthGuard implements CanActivate {
     }
     if (required.some((permission) => !user.can(permission))) throw user.stepUpRequired();
     const stepUp = this.reflector.getAllAndOverride<boolean>(STEP_UP, targets) ?? false;
-    if (stepUp && !user.elevatedUntil) throw user.stepUpRequired();
+    if (stepUp && !user.elevatedUntil && (await this.auth.securitySettings()).mfaEnabled) throw user.stepUpRequired();
     return true;
   }
 

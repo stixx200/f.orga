@@ -252,7 +252,7 @@ describe('EvD reports', () => {
 
   it('deletes the draft EvD report with the last department report', async () => {
     const created = await incident('2026-300006', {}, writer);
-    await del(`/incidents/reports/${created.reports.find((r) => r.departmentId)!.id}`, writer).expect(204);
+    await del(`/incidents/reports/${created.reports.find((r) => r.departmentId)!.id}`).expect(204);
     await get(`/incidents/incidents/${created.id}`).expect(404);
     await get(`/incidents/reports/${evdOf(created)!.id}`).expect(404);
   });

@@ -272,6 +272,25 @@ describe('reset by an administrator', () => {
   });
 });
 
+describe('second factor switched off', () => {
+  it('opens sensitive areas and the administration without a code', async () => {
+    const confirmed = await test.login(ADMIN);
+    await http.put('/api/core/settings/security').set('Cookie', confirmed).set(UI).send({ mfaEnabled: false }).expect(200);
+    try {
+      const locked = await test.login(ADMIN, { elevated: false });
+      const state = await session(locked);
+      expect(state.mfa.enabled).toBe(false);
+      expect(state.stepUpPermissions).toEqual([]);
+      await http.get('/api/core/users').set('Cookie', locked).expect(200);
+      await http.get('/api/core/step-up').set('Cookie', locked).expect(204);
+      const users = (await http.get('/api/core/users').set('Cookie', locked).expect(200)).body as { username: string; mfaNeeded: boolean; mfaEnrolled: boolean }[];
+      expect(users.find((u) => u.username === 'admin')).toMatchObject({ mfaNeeded: false, mfaEnrolled: true });
+    } finally {
+      await http.put('/api/core/settings/security').set('Cookie', confirmed).set(UI).send({ mfaEnabled: true }).expect(200);
+    }
+  });
+});
+
 describe('without server key', () => {
   it('cannot set up a factor', async () => {
     const key = process.env['FORGA_SECRET_KEY'];
