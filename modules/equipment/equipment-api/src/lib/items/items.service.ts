@@ -484,7 +484,7 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
   }
 
   /** All or nothing: every item is checked (permission, inspection type, dates) before the first inspection is written. */
-  async bulkInspect(user: AuthenticatedUser, input: ReturnType<typeof BulkInspectionInput.parse>): Promise<{ recorded: number }> {
+  async bulkInspect(user: AuthenticatedUser, input: ReturnType<typeof BulkInspectionInput.parse>): Promise<{ recorded: number; ids: string[] }> {
     const { itemIds, ...single } = input;
     const parsed: ParsedInspection = { ...single, checklist: [], nextDueOn: null };
     return this.inTransaction(async (em, after) => {
@@ -493,9 +493,10 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
       const types = await this.inspectionsOf(em, items);
       const breathing = await this.breathingCategories(em);
       const checked = items.map((item) => ({ item, type: this.inspectable(user, item, parsed, types.get(item.id) ?? [], breathing.has(item.categoryKey)) }));
-      for (const { item, type } of checked) await this.record(em, user, item, parsed, type, types.get(item.id) ?? [], breathing.has(item.categoryKey), after);
+      const ids: string[] = [];
+      for (const { item, type } of checked) ids.push((await this.record(em, user, item, parsed, type, types.get(item.id) ?? [], breathing.has(item.categoryKey), after)).id);
       await em.flush();
-      return { recorded: items.length };
+      return { recorded: items.length, ids };
     });
   }
 

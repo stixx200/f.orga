@@ -34,8 +34,50 @@ export const PersonalView = z.object({
       color: z.enum(['green', 'yellow', 'red', 'grey']),
       nextDue: z.string().nullable(),
       evidence: z.array(z.object({ kind: z.string(), date: z.string(), validUntil: z.string().nullable(), passed: z.boolean().nullable() })),
+      /** Certificate outcome only: no examiner, no restrictions, no note. */
+      examinations: z.array(z.object({
+        date: z.string(),
+        validUntil: z.string().nullable(),
+        result: z.enum(['no-concerns', 'no-concerns-limited', 'no-concerns-conditional', 'concerns']).nullable(),
+      })),
     })
     .nullable(),
+  /** `null` when the incidents module is not installed. Newest first, without the report text or pay. */
+  incidents: z.array(z.object({
+    alarmedAt: z.string(),
+    alarmKeyword: z.string(),
+    dispatchNumber: z.string(),
+    location: z.string(),
+    hours: z.number(),
+  })).nullable(),
+  /** `null` when the training module is not installed. Newest first, without the excuse note. */
+  sessions: z.array(z.object({
+    startsAt: z.string(),
+    title: z.string(),
+    status: z.enum(['present', 'excused', 'absent']),
+  })).nullable(),
+  /** `null` when the training module is not installed. The next 10 sessions of the person's departments. */
+  upcoming: z.array(z.object({
+    startsAt: z.string(),
+    endsAt: z.string(),
+    title: z.string(),
+    typeName: LocalizedText,
+  })).nullable(),
+  /** Open course nominations, soonest first. */
+  courses: z.array(z.object({
+    name: LocalizedText,
+    status: z.enum(['nominated', 'registered', 'confirmed']),
+    startsOn: z.string().nullable(),
+    endsOn: z.string().nullable(),
+    location: z.string(),
+  })),
+  /** `null` when the clothing module is not installed. Pieces currently issued to the person. */
+  clothing: z.array(z.object({
+    name: LocalizedText,
+    size: z.string(),
+    inventoryNumber: z.string(),
+    issuedOn: z.string().nullable(),
+  })).nullable(),
 });
 export type PersonalView = z.infer<typeof PersonalView>;
 
@@ -62,6 +104,9 @@ export type PersonalLinkCreated = z.infer<typeof PersonalLinkCreated>;
 
 export const ShownLink = z.object({ url: z.string(), key: z.string() });
 export type ShownLink = z.infer<typeof ShownLink>;
+
+export const MailedLink = z.object({ email: z.string() });
+export type MailedLink = z.infer<typeof MailedLink>;
 
 export const KioskSessionInput = z.object({ key: z.string().min(1).max(200) });
 export type KioskSessionInput = z.infer<typeof KioskSessionInput>;

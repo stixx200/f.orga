@@ -4,6 +4,7 @@ import { EmptyState } from '@forga/web-ui';
 import { READ } from './api';
 import { DueTile } from './dashboard';
 import { translations } from './i18n';
+import { BulkPage } from './pages/BulkPage';
 import { DefectsPage } from './pages/DefectsPage';
 import { InspectionsPage } from './pages/InspectionsPage';
 import { MyDefects } from './pages/MyDefects';
@@ -25,6 +26,7 @@ export default defineWebModule({
     { path: 'items', element: <ItemsPage /> },
     { path: 'items/:id', element: <ItemPage /> },
     { path: 'inspections', element: <InspectionsPage /> },
+    { path: 'bulk', element: <BulkPage /> },
     { path: 'defects', element: <DefectsPage /> },
     { path: 'labels', element: <LabelsPage /> },
     { path: 'settings', element: <SettingsPage /> },

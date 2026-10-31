@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { berlinDayAfter, berlinDayStart } from '@forga/core-api';
-import type { ChargeableIncident, CompensationPreview, CompensationRate, IncidentForCostRecovery, IncidentsLookup, Location, ReportReference, Rounding } from '@forga/incidents-contracts';
+import type { ChargeableIncident, CompensationPreview, CompensationRate, IncidentForCostRecovery, IncidentsLookup, Location, PersonalIncident, ReportReference, Rounding } from '@forga/incidents-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { AlarmKeywordEntity, IncidentEntity, ReportEntity } from '../incidents.entities.js';
 import { computeCompensation } from '../domain/compensation.js';
@@ -69,6 +69,34 @@ export class IncidentsLookupService implements IncidentsLookup {
       { populate: ['reports'], orderBy: { alarmedAt: 'desc' } },
     );
     return Promise.all(incidents.map((i) => this.summary(i)));
+  }
+
+  /** Newest incidents of a person for the personal access link. One row per incident, without the report text or pay. */
+  async recentForPerson(personId: string): Promise<PersonalIncident[]> {
+    const reports = await this.em.fork().find(
+      ReportEntity,
+      { personnel: { personId } },
+      { populate: ['incident', 'personnel', 'vehicles'], orderBy: { alarmedAt: 'desc' }, limit: 40 },
+    );
+    const byIncident = new Map<string, PersonalIncident>();
+    for (const report of reports) {
+      const entry = report.personnel.getItems().find((person) => person.personId === personId);
+      if (!entry) continue;
+      const times = assignmentTimes(entry, report);
+      const hours = Math.max(0, (new Date(times.to).getTime() - new Date(times.from).getTime()) / 3_600_000);
+      const existing = byIncident.get(report.incident.id);
+      if (existing) existing.hours += hours;
+      else {
+        byIncident.set(report.incident.id, {
+          alarmedAt: report.incident.alarmedAt.toISOString(),
+          alarmKeyword: report.incident.alarmKeyword,
+          dispatchNumber: report.incident.dispatchNumber,
+          location: locationText(report.incident.location),
+          hours,
+        });
+      }
+    }
+    return [...byIncident.values()].slice(0, 15).map((incident) => ({ ...incident, hours: Math.round(incident.hours * 10) / 10 }));
   }
 
   async reports(reportIds: readonly string[]): Promise<ReportReference[]> {

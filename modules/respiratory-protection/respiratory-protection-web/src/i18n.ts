@@ -5,7 +5,7 @@ const de = {
   module: 'Atemschutz',
   loading: 'Wird geladen …',
   notFound: 'Diese Seite gibt es nicht.',
-  color: { green: 'Einsatzbereit', yellow: 'Läuft bald ab', red: 'Nicht einsetzen', grey: 'Kein Geräteträger' },
+  color: { green: 'Einsatzbereit', yellow: 'Läuft bald ab', red: 'Nicht tauglich', grey: 'Kein Geräteträger' },
   condition: {
     qualification: 'Kennzeichen Atemschutzgeräteträger',
     'minimum-age': 'Mindestalter 18 Jahre',

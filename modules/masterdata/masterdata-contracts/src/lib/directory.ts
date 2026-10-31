@@ -71,6 +71,17 @@ export interface PersonDirectory {
    * and offices. No bank account, no employer, no internal notes. `null` when the person does not exist or was anonymised.
    */
   personalFile(personId: string): Promise<PersonalFile | null>;
+  /** Open course nominations of the person (nominated, registered, confirmed), soonest run first. No planner notes. */
+  openCourses(personId: string): Promise<PersonalCourse[]>;
+}
+
+/** A course the person is still due to attend, for the personal access link. */
+export interface PersonalCourse {
+  name: LocalizedText;
+  status: 'nominated' | 'registered' | 'confirmed';
+  startsOn: string | null;
+  endsOn: string | null;
+  location: string;
 }
 
 /** What a person may see about themselves through a personal access link. */

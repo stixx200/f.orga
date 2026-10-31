@@ -15,6 +15,8 @@ import {
   SessionInput,
   TRAINING_EVENTS,
   type SessionCategory,
+  type PersonalSession,
+  type PersonalUpcoming,
   type SessionReference,
   type TrainingCasualties,
   type TrainingSessions,
@@ -80,6 +82,33 @@ export class SessionsService implements TrainingCasualties, TrainingSessions {
     if (!sessionIds.length) return [];
     const sessions = await this.em.fork().find(SessionEntity, { id: { $in: [...sessionIds] } });
     return sessions.map((s) => ({ sessionId: s.id, departmentIds: [...s.departmentIds], status: s.status }));
+  }
+
+  /** Next sessions of the given departments for the personal access link. */
+  async upcomingForDepartments(departmentIds: readonly string[]): Promise<PersonalUpcoming[]> {
+    if (!departmentIds.length) return [];
+    const em = this.em.fork();
+    const now = new Date();
+    const [sessions, types] = await Promise.all([
+      em.find(SessionEntity, { departmentIds: { $overlap: [...departmentIds] }, endsAt: { $gte: now }, status: { $ne: 'closed' } }, { orderBy: { startsAt: 'asc' }, limit: 10 }),
+      em.find(SessionTypeEntity, {}),
+    ]);
+    const names = new Map(types.map((type) => [type.key, type.name]));
+    return sessions.map((session) => ({
+      startsAt: session.startsAt.toISOString(),
+      endsAt: session.endsAt.toISOString(),
+      title: session.title,
+      typeName: names.get(session.type) ?? { de: session.type, en: session.type },
+    }));
+  }
+
+  /** Newest sessions of a person for the personal access link. The excuse note stays out. */
+  async recentForPerson(personId: string): Promise<PersonalSession[]> {
+    const sessions = await this.em.fork().find(SessionEntity, { attendance: { personId } }, { populate: ['attendance'], orderBy: { startsAt: 'desc' }, limit: 15 });
+    return sessions.flatMap((session) => {
+      const own = session.attendance.getItems().find((row) => row.personId === personId);
+      return own ? [{ startsAt: session.startsAt.toISOString(), title: session.title, status: own.status }] : [];
+    });
   }
 
   /** Sessions in a period; `category` keeps those whose type belongs to it (e.g. only special services). */

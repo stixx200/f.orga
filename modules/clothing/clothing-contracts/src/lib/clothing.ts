@@ -252,6 +252,23 @@ export type ClothingSettings = z.infer<typeof ClothingSettings>;
 export const CLOTHING_SETTINGS = { 'clothing.settings': ClothingSettings } as const;
 
 /**
+ * Pieces issued to a person, for the personal access link.
+ * Inject optionally: `@Optional() @Inject(CLOTHING_HELD) clothing?: ClothingHeld`.
+ */
+export const CLOTHING_HELD = 'clothing.Held';
+
+export interface HeldPiece {
+  name: LocalizedText;
+  size: string;
+  inventoryNumber: string;
+  issuedOn: string | null;
+}
+
+export interface ClothingHeld {
+  heldBy(personId: string): Promise<HeldPiece[]>;
+}
+
+/**
  * Stock of one article in one size. Inventory articles: pieces of the visible departments in stock (`available` may
  * be issued, `blocked` are to repair or to wash) and issued. Consumables: received minus handed out (`available`).
  */

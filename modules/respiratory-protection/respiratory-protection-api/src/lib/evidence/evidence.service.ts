@@ -193,17 +193,19 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     return new Map((await this.statuses(persons, date)).map((s) => [s.personId, s.color]));
   }
 
-  /** Fitness for a personal access link: no medical examination (no date, no result, no reason). */
+  /** Fitness for a personal access link. Examinations carry only date, validity and the certificate outcome. */
   async personalView(personId: string): Promise<PersonalFitnessView | null> {
     const [person] = await this.directory.snapshots([personId]);
     if (!person) return null;
     const [status] = await this.statuses([person]);
     if (!status) return null;
-    const rows = await this.em.fork().find(EvidenceEntity, { personId, kind: { $ne: 'examination' }, withdrawn: false }, { orderBy: { date: 'desc' } });
+    const rows = await this.em.fork().find(EvidenceEntity, { personId, withdrawn: false }, { orderBy: { date: 'desc' } });
+    const examinations = rows.filter((row) => row.kind === 'examination');
     return {
       color: status.color,
       nextDue: status.nextDue,
-      evidence: rows.map((row) => ({ kind: row.kind, date: row.date, validUntil: row.validUntil ?? null, passed: row.passed ?? null })),
+      evidence: rows.filter((row) => row.kind !== 'examination').map((row) => ({ kind: row.kind, date: row.date, validUntil: row.validUntil ?? null, passed: row.passed ?? null })),
+      examinations: examinations.map((row) => ({ date: row.date, validUntil: row.validUntil ?? null, result: row.result ?? null })),
     };
   }
 

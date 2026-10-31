@@ -9,6 +9,7 @@ import type {
   PaymentDetails,
   PersonCareer,
   PersonDirectory,
+  PersonalCourse,
   PersonalFile,
   PersonSnapshot,
   PersonSummary,
@@ -19,6 +20,7 @@ import type {
 } from '@forga/masterdata-contracts';
 import { CatalogEntry, toCatalogDto } from '../catalog/catalog.js';
 import { toDepartmentDto, toStationDto, toVehicleDto } from '../organization/organization.controller.js';
+import { CourseNomination } from '../courses/course.entities.js';
 import { Department, OfficeAssignment, Person, RankAssignment, Station, Vehicle } from '../masterdata.entities.js';
 import { currentQualifications, currentRank, PersonsService } from '../persons/persons.service.js';
 import { today } from '../shared/access.js';
@@ -190,6 +192,28 @@ export class PersonDirectoryService implements PersonDirectory {
         .map((office) => ({ key: office.office, name: label('office', office.office), from: office.from, to: office.to ?? null })),
     };
   }
+
+  async openCourses(personId: string): Promise<PersonalCourse[]> {
+    if (!/^[0-9a-f-]{36}$/i.test(personId)) return [];
+    const rows = await this.em.fork().find(
+      CourseNomination,
+      { person: personId, status: { $in: ['nominated', 'registered', 'confirmed'] } },
+      { populate: ['course', 'run'] },
+    );
+    return rows
+      .map((row) => ({
+        name: row.course.name,
+        status: row.status as PersonalCourse['status'],
+        startsOn: day(row.run?.startsOn),
+        endsOn: day(row.run?.endsOn),
+        location: row.run?.location ?? '',
+      }))
+      .toSorted((a, b) => String(a.startsOn ?? '9').localeCompare(String(b.startsOn ?? '9')) || a.name.de.localeCompare(b.name.de));
+  }
+}
+
+function day(value: string | Date | null | undefined): string | null {
+  return value ? String(value).slice(0, 10) : null;
 }
 
 /** Organization structure for other modules (`ORGANIZATION`). */

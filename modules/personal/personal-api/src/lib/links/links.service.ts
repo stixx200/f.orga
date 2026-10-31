@@ -1,9 +1,12 @@
-import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Audit, type AuthenticatedUser, CookiePolicy, decryptSecret, encryptSecret, hashSecret, serverKey } from '@forga/core-api';
+import { Audit, type AuthenticatedUser, CookiePolicy, decryptSecret, encryptSecret, hashSecret, MailService, serverKey } from '@forga/core-api';
+import { CLOTHING_HELD, type ClothingHeld } from '@forga/clothing-contracts';
+import { INCIDENTS_LOOKUP, type IncidentsLookup } from '@forga/incidents-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory, type PersonSummary } from '@forga/masterdata-contracts';
-import { type PersonalLink, type PersonalLinkCreated, PERSONAL_MANAGE, PERSONAL_READ, type PersonalView, type ShownLink } from '@forga/personal-contracts';
+import { type MailedLink, type PersonalLink, type PersonalLinkCreated, PERSONAL_MANAGE, PERSONAL_READ, type PersonalView, type ShownLink } from '@forga/personal-contracts';
 import { RESPIRATORY_PROTECTION_FITNESS, type FitnessLookup } from '@forga/respiratory-protection-contracts';
+import { TRAINING_SESSIONS, type TrainingSessions } from '@forga/training-contracts';
 import { AccessLinkEntity } from '../personal.entities.js';
 import { generateAccessKey, sameHash } from '../security/access-keys.js';
 
@@ -13,8 +16,12 @@ export class LinksService {
     private readonly em: EntityManager,
     private readonly audit: Audit,
     private readonly cookies: CookiePolicy,
+    private readonly mailer: MailService,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
     @Optional() @Inject(RESPIRATORY_PROTECTION_FITNESS) private readonly fitness?: FitnessLookup,
+    @Optional() @Inject(INCIDENTS_LOOKUP) private readonly incidents?: IncidentsLookup,
+    @Optional() @Inject(TRAINING_SESSIONS) private readonly sessions?: TrainingSessions,
+    @Optional() @Inject(CLOTHING_HELD) private readonly clothing?: ClothingHeld,
   ) {}
 
   async list(user: AuthenticatedUser): Promise<PersonalLink[]> {
@@ -74,12 +81,59 @@ export class LinksService {
     return this.toDto(row, person);
   }
 
-  /** The file behind a valid access key. Medical examinations are not included. */
+  /**
+   * Sends the link to the person's e-mail address. Without an active link, one is created first.
+   * The clear-text key is only in the mail.
+   */
+  async mail(user: AuthenticatedUser, personId: string): Promise<MailedLink> {
+    const person = await this.person(user, personId, PERSONAL_MANAGE);
+    if (!person.email.trim()) throw new BadRequestException({ code: 'personal.noEmail' });
+    const base = await this.publicBase();
+    const secret = this.secret();
+    const row = await this.em.fork().findOne(AccessLinkEntity, { personId }, { populate: ['keyEncrypted'] });
+    const stored = row && !row.revokedAt && row.keyEncrypted ? decryptSecret(row.keyEncrypted, secret) : null;
+    const created = stored ? null : await this.create(user, personId);
+    const key = stored ?? created?.key;
+    if (!key) throw new ConflictException({ code: 'personal.linkUnavailable' });
+    const url = this.url(base, key);
+    const name = `${person.firstName} ${person.lastName}`.trim();
+    await this.mailer.send({
+      to: person.email,
+      subject: 'f.orga: Persönlicher Zugang / Personal access',
+      text: [
+        `Hallo ${name},`,
+        '',
+        'mit diesem Link sehen Sie in f.orga Ihre eigenen Daten. Er gilt nur für Sie:',
+        url,
+        '',
+        'Wenn Sie den Link nicht erwartet haben, ignorieren Sie diese E-Mail.',
+        '',
+        `Hello ${name},`,
+        '',
+        'this link shows your own data in f.orga. It is meant only for you:',
+        url,
+        '',
+        'If you did not expect this link, ignore this e-mail.',
+      ].join('\n'),
+    });
+    await this.audit.log('personal.link-mailed', { personId, linkId: created?.link.id ?? row?.id }, user.id);
+    return { email: person.email };
+  }
+
+  /** The file behind a valid access key. Examinations have no medical detail; incidents have no report text or pay. */
   async view(link: AccessLinkEntity): Promise<PersonalView> {
     const file = await this.directory.personalFile(link.personId);
     if (!file) throw new NotFoundException({ code: 'personal.gone' });
-    const respiratory = this.fitness ? await this.fitness.personalView(link.personId) : null;
-    return { ...file, respiratory };
+    const departmentIds = file.memberships.map((membership) => membership.departmentId);
+    const [respiratory, incidents, sessions, upcoming, courses, clothing] = await Promise.all([
+      this.fitness ? this.fitness.personalView(link.personId) : null,
+      this.incidents ? this.incidents.recentForPerson(link.personId) : null,
+      this.sessions ? this.sessions.recentForPerson(link.personId) : null,
+      this.sessions ? this.sessions.upcomingForDepartments(departmentIds) : null,
+      this.directory.openCourses(link.personId),
+      this.clothing ? this.clothing.heldBy(link.personId) : null,
+    ]);
+    return { ...file, respiratory, incidents, sessions, upcoming, courses, clothing };
   }
 
   /** Marks the link as seen without writing history. */

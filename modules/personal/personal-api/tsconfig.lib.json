@@ -21,6 +21,15 @@
       "path": "../personal-contracts/tsconfig.lib.json"
     },
     {
+      "path": "../../incidents/incidents-contracts/tsconfig.lib.json"
+    },
+    {
+      "path": "../../training/training-contracts/tsconfig.lib.json"
+    },
+    {
+      "path": "../../clothing/clothing-contracts/tsconfig.lib.json"
+    },
+    {
       "path": "../../respiratory-protection/respiratory-protection-contracts/tsconfig.lib.json"
     },
     {

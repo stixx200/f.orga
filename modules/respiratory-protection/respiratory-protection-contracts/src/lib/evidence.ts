@@ -179,11 +179,15 @@ export type PersonRespiratoryProtection = z.infer<typeof PersonRespiratoryProtec
  */
 export const RESPIRATORY_PROTECTION_FITNESS = 'respiratory-protection.Fitness';
 
-/** Fitness a person may see about themselves: the traffic light, the next deadline, and evidence except medical examinations. */
+/**
+ * Fitness a person may see about themselves: the traffic light, the next deadline, evidence, and examinations
+ * without medical detail (no examiner, no restrictions, no note).
+ */
 export interface PersonalFitnessView {
   color: FitnessColor;
   nextDue: string | null;
   evidence: { kind: string; date: string; validUntil: string | null; passed: boolean | null }[];
+  examinations: { date: string; validUntil: string | null; result: ExaminationResult | null }[];
 }
 
 export interface FitnessLookup {

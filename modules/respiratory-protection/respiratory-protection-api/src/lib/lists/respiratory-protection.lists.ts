@@ -14,7 +14,7 @@ const department = { key: 'departmentId', label: { de: 'Abteilung', en: 'Departm
 export const COLORS: Record<FitnessColor, LocalizedText> = {
   green: { de: 'einsatzbereit', en: 'fit' },
   yellow: { de: 'läuft bald ab', en: 'expires soon' },
-  red: { de: 'nicht einsetzen', en: 'not fit' },
+  red: { de: 'nicht tauglich', en: 'not fit' },
   grey: { de: 'kein Geräteträger', en: 'no wearer' },
 };
 const DEVICES: Record<BreathingDevice, LocalizedText> = {

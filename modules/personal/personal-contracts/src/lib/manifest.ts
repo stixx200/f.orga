@@ -8,7 +8,7 @@ export const PERSONAL_MANIFEST = {
   name: { de: 'Persönlicher Zugang', en: 'Personal access' },
   version: '0.1.0',
   requires: ['masterdata'],
-  optional: ['respiratory-protection'],
+  optional: ['respiratory-protection', 'incidents', 'training', 'clothing'],
   permissions: [
     {
       id: PERSONAL_READ,
@@ -17,7 +17,7 @@ export const PERSONAL_MANIFEST = {
     },
     {
       id: PERSONAL_MANAGE,
-      name: { de: 'Persönlichen Zugang anlegen, Link anzeigen, widerrufen', en: 'Create a personal access link, show it, revoke it' },
+      name: { de: 'Persönlichen Zugang anlegen, Link anzeigen, per E-Mail senden, widerrufen', en: 'Create a personal access link, show it, send it by e-mail, revoke it' },
       scope: 'department',
     },
   ],

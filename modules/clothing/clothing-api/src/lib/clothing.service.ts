@@ -18,6 +18,7 @@ import {
   InspectionsInput,
   IssueManyInput,
   type IssueRecord,
+  type HeldPiece,
   type Item,
   type ItemBlock,
   type ItemDetail,
@@ -663,5 +664,19 @@ export class ClothingService {
   /** Pieces a person still holds; leaving and the transfer to the veterans are refused while there are any. */
   held(personId: string): Promise<number> {
     return this.em.fork().count(ClothingItemEntity, { holderId: personId, status: 'issued' });
+  }
+
+  /** Issued pieces for the personal access link: article, size and number, no notes. */
+  async heldBy(personId: string): Promise<HeldPiece[]> {
+    const em = this.em.fork();
+    const items = await em.find(ClothingItemEntity, { holderId: personId, status: 'issued' }, { orderBy: { inventoryNumber: 'asc' } });
+    if (!items.length) return [];
+    const names = new Map((await em.find(ArticleEntity, { key: { $in: [...new Set(items.map((item) => item.articleKey))] } })).map((article) => [article.key, article.name]));
+    return items.map((item) => ({
+      name: names.get(item.articleKey) ?? { de: item.articleKey, en: item.articleKey },
+      size: item.size,
+      inventoryNumber: item.inventoryNumber,
+      issuedOn: item.issuedOn ?? null,
+    }));
   }
 }

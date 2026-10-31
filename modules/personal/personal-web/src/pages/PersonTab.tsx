@@ -22,6 +22,10 @@ export function PersonTab({ personId }: { personId?: unknown }) {
     invalidate: [linkKey(id)],
     onSuccess: (result) => setShown(result),
   });
+  const mail = useAction(() => send('POST', `personal/persons/${id}/link/mail`), {
+    success: t('person.mailed'),
+    invalidate: [linkKey(id), ['personal', 'links']],
+  });
   const revoke = useAction(() => send('DELETE', `personal/persons/${id}/link`), {
     success: t('person.revokedDone'),
     invalidate: [linkKey(id), ['personal', 'links']],
@@ -56,6 +60,7 @@ export function PersonTab({ personId }: { personId?: unknown }) {
           <Group>
             <Button loading={create.isPending} onClick={() => create.mutate(undefined)}>{t('person.create')}</Button>
             {link?.active ? <Button variant="default" loading={reveal.isPending} onClick={() => reveal.mutate(undefined)}>{t('person.show')}</Button> : null}
+            <Button variant="default" loading={mail.isPending} onClick={() => mail.mutate(undefined)}>{t('person.mail')}</Button>
             {link?.active ? <Button variant="default" loading={revoke.isPending} onClick={() => revoke.mutate(undefined)}>{t('person.revoke')}</Button> : null}
           </Group>
         ) : null}

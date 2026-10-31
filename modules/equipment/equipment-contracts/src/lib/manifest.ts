@@ -20,8 +20,9 @@ export const EQUIPMENT_MANIFEST = {
   ],
   navigation: [
     { label: { de: 'Geräte', en: 'Equipment' }, path: 'items', permission: 'equipment.read', icon: 'tool' },
-    // Readers see the due inspections; recording them needs `equipment.inspect` or, for breathing apparatus, `equipment.breathing.inspect`.
-    { label: { de: 'Prüfungen', en: 'Inspections' }, path: 'inspections', permission: 'equipment.read', icon: 'check' },
+    { label: { de: 'Fällige Prüfungen', en: 'Inspections due' }, path: 'inspections', permission: 'equipment.read', icon: 'calendar' },
+    // Recording needs `equipment.inspect` or, for breathing apparatus, `equipment.breathing.inspect`; readers see no items.
+    { label: { de: 'Sammelprüfungen', en: 'Bulk inspections' }, path: 'bulk', permission: 'equipment.read', icon: 'check' },
     { label: { de: 'Mängel', en: 'Defects' }, path: 'defects', permission: 'equipment.read', icon: 'alert' },
     { label: { de: 'Geräte', en: 'Equipment' }, path: 'settings', permission: 'equipment.settings.manage', icon: 'settings', section: 'settings' },
   ],

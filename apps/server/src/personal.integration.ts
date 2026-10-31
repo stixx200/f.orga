@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { MailService } from '@forga/core-api';
 import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
 
 let test: TestApp;
@@ -62,9 +63,16 @@ describe('personal access', () => {
     expect(JSON.stringify(file.body)).not.toContain('DE89370400440532013000');
     expect(JSON.stringify(file.body)).not.toContain('nur Filtergerät');
     expect(file.body.respiratory.evidence.map((row: { kind: string }) => row.kind)).toEqual(['briefing']);
+    expect(file.body.respiratory.examinations).toEqual([{ date: '2026-01-15', validUntil: '2029-01-15', result: 'no-concerns' }]);
     expect(file.body.respiratory.color).toBeTruthy();
 
     await test.http.post('/api/personal/kiosk/session').set(UI).send({ key: 'fpa_nope' }).expect(401);
+
+    const mail = test.app.get(MailService);
+    const sent = mail.sent.length;
+    expect((await post(`/personal/persons/${personId}/link/mail`).expect(201)).body.email).toBe('jonas@example.org');
+    expect(mail.sent[sent]).toMatchObject({ to: 'jonas@example.org', subject: 'f.orga: Persönlicher Zugang / Personal access' });
+    expect(mail.sent[sent]?.text).toContain(url);
   });
 
   it('stops a revoked key', async () => {

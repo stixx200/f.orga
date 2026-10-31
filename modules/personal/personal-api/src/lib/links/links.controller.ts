@@ -32,6 +32,12 @@ export class LinksController {
     return this.links.show(user, personId);
   }
 
+  @Post('persons/:personId/link/mail')
+  @RequirePermissions(PERSONAL_MANAGE)
+  mail(@CurrentUser() user: AuthenticatedUser, @Param('personId') personId: string) {
+    return this.links.mail(user, personId);
+  }
+
   @Delete('persons/:personId/link')
   @RequirePermissions(PERSONAL_MANAGE)
   revoke(@CurrentUser() user: AuthenticatedUser, @Param('personId') personId: string) {

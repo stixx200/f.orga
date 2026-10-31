@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { RouteObject } from 'react-router';
 import type { LocalizedText } from '@forga/core-contracts';
 import type { Translations } from './i18n';
@@ -27,6 +27,8 @@ export interface Extension {
   order?: number;
   /** Props depend on the extension point, e.g. `{ personId }`. */
   component: ComponentType<Record<string, unknown>>;
+  /** Gets the props of `component` and renders `children` only when the contribution applies, e.g. hides a tab without content. */
+  gate?: ComponentType<Record<string, unknown> & { children: ReactNode }>;
 }
 
 /** What a module frontend hands to the shell through `./Module`. */
