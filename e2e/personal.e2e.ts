@@ -50,24 +50,24 @@ test('personal access: mail, kiosk tiles and hidden respiratory protection', asy
   const kiosk = await openKiosk(browser, url);
   await expect(kiosk.getByRole('heading', { name: `E2E Träger${stamp}` })).toBeVisible();
   await dismissInstallHint(kiosk);
-  await expect(kiosk.getByRole('button', { name: /Atemschutz/ })).toBeVisible();
-  await expect(kiosk.getByRole('button', { name: /Dienste/ })).toBeVisible();
-  await expect(kiosk.getByRole('button', { name: /Einsätze/ })).toBeVisible();
+  await expect(kiosk.getByRole('button', { name: /Atemschutz/ })).toHaveCount(2);
+  await expect(kiosk.getByRole('button', { name: /Dienste/ })).toHaveCount(2);
+  await expect(kiosk.getByRole('button', { name: /Einsätze/ })).toHaveCount(2);
   await expect(kiosk.getByRole('button', { name: /Schutzausrüstung/ })).toBeVisible();
   await expect(kiosk.getByRole('button', { name: /Lehrgänge/ })).toBeVisible();
   await expect(kiosk.getByRole('button', { name: /Qualifikationen/ })).toBeVisible();
   await expect(kiosk.getByRole('button', { name: /Stammdaten/ })).toBeVisible();
 
   await kiosk.getByRole('button', { name: /^Atemschutz/ }).first().click();
-  await expect(kiosk.getByRole('heading', { name: 'Atemschutz' })).toBeVisible();
+  await expect(kiosk.getByRole('heading', { name: 'Atemschutz', level: 1 })).toBeVisible();
   await expect(kiosk).toHaveURL(/[?&]v=respiratory/);
   await kiosk.getByRole('button', { name: 'Zurück' }).click();
-  await expect(kiosk.getByRole('heading', { name: `E2E Träger${stamp}` })).toBeVisible();
+  await expect(kiosk.getByRole('heading', { name: `E2E Träger${stamp}`, level: 1 })).toBeVisible();
 
   await kiosk.getByRole('navigation').getByRole('button', { name: 'Dienste' }).click();
-  await expect(kiosk.getByRole('heading', { name: 'Dienste' })).toBeVisible();
+  await expect(kiosk.getByRole('heading', { name: 'Dienste', level: 1 })).toBeVisible();
   await kiosk.getByRole('navigation').getByRole('button', { name: 'Profil' }).click();
-  await expect(kiosk.getByRole('heading', { name: 'Stammdaten' })).toBeVisible();
+  await expect(kiosk.getByRole('heading', { name: 'Stammdaten', level: 1 })).toBeVisible();
   await expect(kiosk.getByText(`traeger-${stamp}@example.org`)).toBeVisible();
   await kiosk.getByRole('button', { name: 'Abmelden' }).click();
   await expect(kiosk.getByRole('heading', { name: 'Mein Bereich' })).toBeVisible();

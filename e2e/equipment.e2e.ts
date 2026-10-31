@@ -1,4 +1,4 @@
-import { api, choose, chooseFiles, chooseFirst, expect, login, navigate, test, USERS } from './support';
+import { api, choose, chooseFiles, expect, login, navigate, test, USERS } from './support';
 
 /**
  * The equipment officer inspects a breathing apparatus, a group leader reports a defect via the item page
@@ -64,7 +64,7 @@ test('inspection, defect report and handling', async ({ browser }) => {
   const scanField = officer.getByRole('textbox', { name: 'Scannen' });
   await scanField.fill(first.split(' · ')[0]);
   await scanField.press('Enter');
-  await expect(officer.getByText('1 Gerät ausgewählt')).toBeVisible();
+  await expect(officer.getByText('1 Gerät ausgewählt')).toHaveCount(2);
   await officer.goto('/equipment/labels');
   await expect(officer.getByRole('button', { name: 'Drucken' })).toBeVisible();
 
@@ -112,13 +112,14 @@ test('due inspections, bulk inspection with scan and protocol, scan on the item 
 
   await navigate(officer, 'Sammelprüfungen');
   await expect(officer.getByRole('heading', { name: 'Sammelprüfungen', level: 1 })).toBeVisible();
-  await choose(officer, 'Geräteart', /^Schläuche$/);
+  await choose(officer, 'Geräteart', /^Schläuche/);
   await expect(officer.getByRole('row').filter({ hasText: number })).toBeVisible();
-  await chooseFirst(officer, 'Standort');
+  await choose(officer, 'Standort', 'Ohne Standort');
+  await expect(officer.getByRole('row').filter({ hasText: number })).toBeVisible();
   const scanField = officer.getByRole('textbox', { name: 'Scannen' });
   await scanField.fill(number);
   await scanField.press('Enter');
-  await expect(officer.getByText('1 Gerät ausgewählt')).toBeVisible();
+  await expect(officer.getByText('1 Gerät ausgewählt')).toHaveCount(2);
   await choose(officer, 'Prüfart', /Druckprüfung nach Wäsche/);
   await chooseFiles(officer, 'Prüfprotokoll', { name: 'Sammelprotokoll.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%E2E-bulk\n') });
   await officer.getByRole('button', { name: 'Prüfungen buchen' }).click();
@@ -127,6 +128,8 @@ test('due inspections, bulk inspection with scan and protocol, scan on the item 
   await officer.getByRole('main').getByLabel('Suche').fill(number);
   await officer.getByRole('row').filter({ hasText: number }).click();
   await officer.getByRole('tab', { name: 'Prüfungen' }).click();
-  await officer.getByRole('row').filter({ hasText: 'Druckprüfung nach Wäsche' }).first().getByRole('button', { name: 'Anhänge' }).click();
+  const recorded = officer.getByRole('row').filter({ hasText: 'Druckprüfung nach Wäsche' }).filter({ hasText: 'Bestanden' });
+  await expect(recorded).toBeVisible();
+  await recorded.getByRole('button', { name: 'Anhänge' }).click();
   await expect(officer.getByRole('dialog').getByRole('link', { name: 'Sammelprotokoll.pdf' })).toBeVisible();
 });
