@@ -128,6 +128,8 @@ test('due inspections, bulk inspection with scan and protocol, scan on the item 
   await officer.getByRole('main').getByLabel('Suche').fill(number);
   await officer.getByRole('row').filter({ hasText: number }).click();
   await officer.getByRole('tab', { name: 'Prüfungen' }).click();
-  await officer.getByRole('row').filter({ hasText: 'Druckprüfung nach Wäsche' }).first().getByRole('button', { name: 'Anhänge' }).click();
+  const recorded = officer.getByRole('row').filter({ hasText: 'Druckprüfung nach Wäsche' }).filter({ hasText: 'Bestanden' });
+  await expect(recorded).toBeVisible();
+  await recorded.getByRole('button', { name: 'Anhänge' }).click();
   await expect(officer.getByRole('dialog').getByRole('link', { name: 'Sammelprotokoll.pdf' })).toBeVisible();
 });
