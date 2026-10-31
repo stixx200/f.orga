@@ -1,0 +1,15 @@
+name: Änderung
+description: Etwas soll sich ändern.
+body:
+  - type: textarea
+    id: change
+    attributes:
+      label: Was sich ändern soll
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Warum
+    validations:
+      required: true

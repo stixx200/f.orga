@@ -8,19 +8,20 @@ import type { SearchHit } from '@forga/core-contracts';
 import { api, useLocalized, useTranslation, withQuery } from '@forga/web-sdk';
 
 /** Searches all modules at once (`GET /api/core/search`); each module contributes its own hits on the server. */
-export function GlobalSearch() {
+export function GlobalSearch({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useTranslation('shell');
   const localized = useLocalized();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [debounced] = useDebouncedValue(query.trim(), 250);
   const combobox = useCombobox();
-  const { data: hits = [] } = useQuery({
+  const { data: hits = [], isFetching } = useQuery({
     queryKey: ['search', debounced],
     enabled: debounced.length >= 2,
     queryFn: () => api<SearchHit[]>(withQuery('core/search', { q: debounced })),
   });
   const groups = [...new Set(hits.map((h) => localized(h.group)))];
+  const searching = debounced.length >= 2;
 
   return (
     <Combobox
@@ -28,6 +29,7 @@ export function GlobalSearch() {
       onOptionSubmit={(to) => {
         combobox.closeDropdown();
         setQuery('');
+        onNavigate?.();
         navigate(to);
       }}
     >
@@ -47,8 +49,9 @@ export function GlobalSearch() {
           onBlur={() => combobox.closeDropdown()}
         />
       </Combobox.Target>
-      <Combobox.Dropdown hidden={debounced.length < 2 || hits.length === 0}>
+      <Combobox.Dropdown hidden={!searching}>
         <Combobox.Options>
+          {hits.length === 0 && <Combobox.Empty>{isFetching ? t('header.searching') : t('header.noHits')}</Combobox.Empty>}
           {groups.map((group) => (
             <Combobox.Group key={group} label={group}>
               {hits

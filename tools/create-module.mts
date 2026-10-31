@@ -2,10 +2,10 @@
  * Creates the skeleton of a feature module: contracts, backend and frontend, and registers it
  * in the server, the dev ports, the test database and the Docker build.
  *
- *   npx tsx tools/create-module.mts <id> "<Name de>" "<Name en>" <dev-port>
- *   e.g. npx tsx tools/create-module.mts training "Dienste" "Services" 4203
+ *   pnpm exec tsx tools/create-module.mts <id> "<Name de>" "<Name en>" <dev-port>
+ *   e.g. pnpm exec tsx tools/create-module.mts training "Dienste" "Services" 4203
  *
- * Afterwards: `npm install`, `npx nx sync`, then entities and `npm run migration:create -- <id> initial`.
+ * Afterwards: `pnpm install`, `pnpm exec nx sync`, then entities and `pnpm run migration:create -- <id> initial`.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -107,7 +107,7 @@ write(
   `
 import type { MigrationObject } from '@mikro-orm/core';
 
-// Maintained by \`npm run migration:create\`.
+// Maintained by \`pnpm run migration:create\`.
 export const ${constant}_MIGRATIONS: MigrationObject[] = [];
 `,
 );
@@ -141,7 +141,7 @@ const webPackage = JSON.parse(readFileSync('modules/incidents/incidents-web/pack
 webPackage.name = `${id}-web`;
 webPackage.scripts = { dev: `vite --port ${port} --strictPort`, build: 'vite build', preview: `vite preview --port ${port} --strictPort` };
 delete webPackage.dependencies['@forga/incidents-contracts'];
-webPackage.dependencies[`@forga/${id}-contracts`] = '*';
+webPackage.dependencies[`@forga/${id}-contracts`] = 'workspace:*';
 write(`${web}/package.json`, JSON.stringify(webPackage, null, 2) + '\n');
 write(
   `${web}/src/i18n.ts`,
@@ -183,11 +183,11 @@ edit('apps/server/src/app/installed-modules.ts', (s) =>
 );
 edit('apps/server/package.json', (s) => {
   const pkg = JSON.parse(s) as { dependencies: Record<string, string> };
-  pkg.dependencies[`@forga/${id}-api`] = '*';
+  pkg.dependencies[`@forga/${id}-api`] = 'workspace:*';
   return JSON.stringify(pkg, null, 2) + '\n';
 });
 edit('apps/server/src/testing/test-database.ts', (s) => s.replace(/drop schema if exists ([^;]*?) cascade/, (_, list: string) => `drop schema if exists ${list}, ${id.replaceAll('-', '_')} cascade`));
-edit('docker/Dockerfile', (s) => s.replace(/(npx nx run-many -t build -p shell[^\\\n]*?) \\/, `$1 ${id}-web \\`));
+edit('docker/Dockerfile', (s) => s.replace(/(pnpm exec nx run-many -t build -p shell[^\\\n]*?) \\/, `$1 ${id}-web \\`));
 
-console.log(`Created ${root}. Next: npm install && npx nx sync`);
+console.log(`Created ${root}. Next: pnpm install && pnpm exec nx sync`);
 console.log(join(root, `${id}-api/src/lib/${id}.module.ts`));

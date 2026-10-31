@@ -25,6 +25,7 @@ docker compose -f docker/compose.yml up -d --build
 - **Migrationen:** Beim Start spielt der Server ausstehende Datenbank-Migrationen ein. Für ein Update genügen ein neues Image und ein Neustart.
 - **Ersteinrichtung:** Beim ersten Aufruf mit leerer Datenbank fragt die Anwendung den Einrichtungsschlüssel, den Namen der Feuerwehr und das erste Administratorkonto (mit E-Mail-Adresse) ab. Der Schlüssel verhindert, dass jemand, der die frische Installation zuerst erreicht, sich zum Administrator macht. Ist `FORGA_SETUP_TOKEN` gesetzt, ist er dessen Wert; sonst erzeugt der Server beim Start einen zufälligen Schlüssel und schreibt ihn ins Protokoll (`docker compose -f docker/compose.yml logs forga`, Zeile „Setup token: …“). Nach einem Neustart gilt ein neuer Schlüssel. Sobald ein Benutzer existiert, ist die Einrichtung gesperrt.
 - **Nach der Einrichtung:** Die Startseite zeigt Administratoren eine Liste, was noch fehlt: Adresse von f.orga, E-Mail-Versand, Abteilungen, Kataloge, die Einstellungen jedes aktiven Moduls und weitere Benutzer. Weitere Benutzer lädt man unter „Verwaltung → Benutzer“ aus der Personalakte ein; dafür müssen Adresse und E-Mail-Versand eingerichtet sein.
+- **Image:** Nach einem grünen Lauf von `CI` auf `main` liegt das Image unter `ghcr.io/stixx200/f.orga:<Commit>` und `ghcr.io/stixx200/f.orga:main`. Compose baut weiter lokal. Zum Ziehen statt Bauen `image: ghcr.io/stixx200/f.orga:main` setzen und `build` weglassen. Solange das Paket privat ist, braucht der Server ein Lese-Token. Ein Update bleibt: neues Image, Neustart; Migrationen laufen beim Start.
 
 | Variable | Bedeutung | Standard |
 | --- | --- | --- |
@@ -80,10 +81,10 @@ docker compose -f docker/compose.yml --profile https-internal up -d             
 ```bash
 cp docker/.env.example docker/.env      # Passwörter und Einrichtungsschlüssel setzen
 docker compose -f docker/compose.stages.yml up -d --build
-FORGA_URL=http://localhost:8081 FORGA_SETUP_TOKEN=<FORGA_SETUP_TOKEN_TEST> npm run seed   # Demodaten ins Testsystem
+FORGA_URL=http://localhost:8081 FORGA_SETUP_TOKEN=<FORGA_SETUP_TOKEN_TEST> pnpm run seed   # Demodaten ins Testsystem
 ```
 
-`npm run seed` lehnt ein Echtsystem (`FORGA_STAGE=production`) ab. Seine Personen kommen ins Testsystem nur, weil der Import als Demodaten gekennzeichnet ist.
+`pnpm run seed` lehnt ein Echtsystem (`FORGA_STAGE=production`) ab. Seine Personen kommen ins Testsystem nur, weil der Import als Demodaten gekennzeichnet ist.
 
 | System | Adresse | Variablen |
 | --- | --- | --- |
@@ -92,7 +93,7 @@ FORGA_URL=http://localhost:8081 FORGA_SETUP_TOKEN=<FORGA_SETUP_TOKEN_TEST> npm r
 
 Jedes System sichert sich selbst in einen eigenen Ordner (`FORGA_BACKUP_DIR_REAL` bzw. `_TEST`, sonst die Volumes `forga_real_backups` und `forga_test_backups`), mit eigener Passphrase und eigenem `FORGA_SECRET_KEY`. Das Testsystem kann eine Sicherung des Echtsystems wiederherstellen (Wiederherstellungsprobe): Datei unter „Sicherungen“ hochladen, mit der Passphrase des Echtsystems und einer Begründung (Audit-Log). Nach 7 Tagen löscht das Testsystem alle Daten und die hochgeladene Datei und verlangt danach die Einrichtung neu; bis dahin nennt die Übersicht der Datensicherung den Tag.
 
-Die Datei hat den eigenen Projektnamen `forga-stages` und feste Volumenamen (`forga_real_db`, `forga_test_db` …), damit sie nicht mit `docker/compose.dev.yml` im selben Verzeichnis kollidiert. Das Testsystem lässt sich jederzeit neu aufsetzen, ohne das Echtsystem zu berühren: `docker compose -f docker/compose.stages.yml rm -sf forga-test db-test && docker volume rm forga_test_db`, danach `up -d` und erneut `npm run seed`.
+Die Datei hat den eigenen Projektnamen `forga-stages` und feste Volumenamen (`forga_real_db`, `forga_test_db` …), damit sie nicht mit `docker/compose.dev.yml` im selben Verzeichnis kollidiert. Das Testsystem lässt sich jederzeit neu aufsetzen, ohne das Echtsystem zu berühren: `docker compose -f docker/compose.stages.yml rm -sf forga-test db-test && docker volume rm forga_test_db`, danach `up -d` und erneut `pnpm run seed`.
 
 ### Plugins, E-Mail, Anmeldung
 
@@ -125,7 +126,7 @@ Die Anwendung verbindet sich nicht als Superuser: `DATABASE_URL` in `docker/comp
   ```
 
   Das Skript ist wiederholbar: Es legt die Rolle an bzw. setzt ihr Passwort und übergibt Datenbank, Schemas, Tabellen und Sequenzen an `forga_app`.
-- Die Entwicklung (`docker/compose.dev.yml`, `npm run dev`) bleibt beim Benutzer `forga`.
+- Die Entwicklung (`docker/compose.dev.yml`, `pnpm run dev`) bleibt beim Benutzer `forga`.
 
 ### Datenschutz im Betrieb
 
@@ -155,12 +156,12 @@ Optional: Unter „Verwaltung → Datensicherung“ richtet ein Administrator mi
 Eine Sicherung ist eine Datei `forga-<instanz>-JJJJ-MM-TT_HHMM.forgabackup` mit Datenbank (`pg_dump`, alle Schemas), Plugins und einer lesbaren Kopie der Einstellungen ohne Geheimnisse, verschlüsselt mit der Passphrase. Ohne f.orga, z. B. auf einem anderen Rechner mit dem Repository:
 
 ```bash
-npm run backup -- info forga-real-2026-10-28_0230.forgabackup
-FORGA_BACKUP_PASSPHRASE=… npm run backup -- decrypt forga-real-2026-10-28_0230.forgabackup ./entpackt
+pnpm run backup -- info forga-real-2026-10-28_0230.forgabackup
+FORGA_BACKUP_PASSPHRASE=… pnpm run backup -- decrypt forga-real-2026-10-28_0230.forgabackup ./entpackt
 createdb forga && pg_restore --no-owner --dbname forga ./entpackt/database.dump
 ```
 
-**Wiederherstellung und Neustart:** Am Ende einer Wiederherstellung beendet sich der Prozess mit Exit-Code 0; Docker startet den Container wegen `restart: unless-stopped` neu, beim Start laufen die Migrationen und die Wiederherstellung wird abgeschlossen. Ohne Neustart-Regel (oder in der Entwicklung mit `npm run dev`) bleibt der Server beendet; die Seite zeigt nach zwei Minuten „Bitte den Container neu starten: `docker compose restart forga`“. Der Wartungsmodus steht in `/tmp/forga-maintenance` im Container und übersteht den Neustart, nicht aber ein Neuanlegen des Containers (`docker compose up` mit geändertem Image); während einer Wiederherstellung den Container also nicht neu anlegen.
+**Wiederherstellung und Neustart:** Am Ende einer Wiederherstellung beendet sich der Prozess mit Exit-Code 0; Docker startet den Container wegen `restart: unless-stopped` neu, beim Start laufen die Migrationen und die Wiederherstellung wird abgeschlossen. Ohne Neustart-Regel (oder in der Entwicklung mit `pnpm run dev`) bleibt der Server beendet; die Seite zeigt nach zwei Minuten „Bitte den Container neu starten: `docker compose restart forga`“. Der Wartungsmodus steht in `/tmp/forga-maintenance` im Container und übersteht den Neustart, nicht aber ein Neuanlegen des Containers (`docker compose up` mit geändertem Image); während einer Wiederherstellung den Container also nicht neu anlegen.
 
 **Rücktausch von Hand,** falls der Server nach einer Wiederherstellung nicht startet (z. B. weil eine Migration scheitert): Die vorige Datenbank heißt `forga_before_<JJJJMMTT_HHMMSS>` (UTC) und bleibt 7 Tage liegen.
 

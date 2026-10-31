@@ -117,6 +117,12 @@
     text-transform: uppercase;
     color: var(--forga-meta);
   }
+  .stack td[data-label=''] {
+    grid-template-columns: 1fr;
+  }
+  .stack td[data-label='']::before {
+    content: none;
+  }
 }
 
 .badge {

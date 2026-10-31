@@ -1,10 +1,10 @@
-import { Button, Group, Stack, Tabs } from '@mantine/core';
+import { Button, Group, Loader, Stack, Tabs } from '@mantine/core';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import type { Session } from '@forga/training-contracts';
 import { can, extensionsOf, formatDateTime, formatTime, fromLocalInput, send, useLocalized, useSession as useLogin, useTranslation } from '@forga/web-sdk';
 import { Attachments, ConfirmDialog, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, useAction } from '@forga/web-ui';
-import { ATTENDANCE, CLOSE, keys, PLAN, usePersons, useSession, useTypeName } from '../api';
+import { ATTENDANCE, CLOSE, keys, PLAN, useSession, useTypeName } from '../api';
 import { SessionStatusBadge } from '../parts';
 import { AttendanceTab } from './AttendanceTab';
 import { copyOf, draftOf, SessionForm } from './SessionForm';
@@ -38,14 +38,13 @@ export function SessionPage() {
   const typeName = useTypeName();
   const localized = useLocalized();
   const { data: session, isLoading } = useSession(id);
-  const { isSuccess: personsLoaded } = usePersons();
   const [confirm, setConfirm] = useState<'close' | 'reopen' | 'delete' | null>(null);
   const [copying, setCopying] = useState(false);
   const opts = { invalidate: [keys.sessions], onSuccess: () => setConfirm(null) };
   const close = useAction(() => send('POST', `training/sessions/${id}/close`), { ...opts, success: t('session.closedNotice') });
   const reopen = useAction(() => send('POST', `training/sessions/${id}/reopen`), { ...opts, success: t('session.reopened') });
   const remove = useAction(() => send('DELETE', `training/sessions/${id}`), { success: t('session.deleted'), invalidate: [keys.sessions], onSuccess: () => navigate('/training/sessions') });
-  if (!session) return isLoading ? null : <EmptyState title={t('session.notFound')} />;
+  if (!session) return isLoading ? <Loader m="xl" /> : <EmptyState title={t('session.notFound')} />;
 
   const inDepartment = (permission: string) => session.departmentIds.some((d) => can(login, permission, d));
   // Other modules add tabs (extension point `training.session.sections`, e.g. equipment used).
@@ -80,7 +79,7 @@ export function SessionPage() {
           <Tabs.Tab value="history">{t('session.tabs.history')}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="details"><DetailsTab key={`${session.id}:${session.version}`} session={session} editable={!closed && inDepartment(PLAN)} /></Tabs.Panel>
-        <Tabs.Panel value="attendance">{personsLoaded && <AttendanceTab key={session.id} session={session} editable={!closed && inDepartment(ATTENDANCE)} />}</Tabs.Panel>
+        <Tabs.Panel value="attendance"><AttendanceTab key={session.id} session={session} editable={!closed && inDepartment(ATTENDANCE)} /></Tabs.Panel>
         {sections.map(({ module, component: Section }) => (
           <Tabs.Panel key={module} value={`ext-${module}`}>
             <Section sessionId={session.id} departmentIds={session.departmentIds} disabled={closed || !(inDepartment(PLAN) || inDepartment(ATTENDANCE))} />

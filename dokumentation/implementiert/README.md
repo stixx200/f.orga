@@ -20,7 +20,7 @@ Was hier steht, existiert im Code. Umgesetzt sind:
 - der zweite Faktor (TOTP) als Step-up beim Öffnen sensibler Daten und der Verwaltung
 - Datenschutz Phase 1: HTTPS mit Caddy und Sicherheitsheadern, Echt-/Testsystem (`FORGA_STAGE`), Verletzte nur mit Recht, Entschuldigungsgrund als Auswahl, E-Mails ohne Gesundheitsbezug
 - Datenschutz Phase 3, Teil 1: Verzeichnis der Verarbeitungstätigkeiten mit technischen Maßnahmen (PDF, Excel), Datenpannen mit 72-Stunden-Frist und Hilfen
-- Demodaten für die Entwicklung (`npm run seed`)
+- Demodaten für die Entwicklung (`pnpm run seed`)
 
 Der Code ist durchgehend englisch, die Dokumentation deutsch. Die Zuordnung der Begriffe steht im [Glossar](../geplant/fachmodell.md#glossar-fachbegriff--code).
 

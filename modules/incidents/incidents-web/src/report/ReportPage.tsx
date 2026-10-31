@@ -1,7 +1,7 @@
-import { Button, Group, Stack, Text } from '@mantine/core';
+import { Button, Group, Loader, Menu, Stack, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { Report } from '@forga/incidents-contracts';
 import { apiUrl, can, extensionsOf, formatDateTime, formatMoney, formatTime, send, useSession, useTranslation } from '@forga/web-sdk';
@@ -47,6 +47,10 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
   const { data: incident } = useIncident(report.incidentId);
   const { content, update, flush, reset, saveState, restorable, restoreLocal, discardLocal, loadServer, keepMine, newBookings, dismissBookings } = useReportEditor(report, userId);
   const [step, setStep] = useState<StepId>('times');
+  const steps = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    steps.current?.children[STEPS.indexOf(step)]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }, [step]);
   const { reasons, setReason, clearReasons } = useStoredReasons(userId, report.id);
   const [dialog, setDialog] = useState<'submit' | 'versions' | 'history' | 'takeOver' | 'mpFeuer' | 'delete' | null>(null);
   const { data: settings } = useSettings();
@@ -210,7 +214,7 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
       {report.locked && <Notice kind="info">{t('editor.lockedBy', { by: report.lockedBy ?? '', at: formatDateTime(report.lockedAt, i18n.language) })}</Notice>}
       <WorkflowActions report={report} framed />
 
-      <ol className={classes.steps} aria-label={t('editor.sections')}>
+      <ol ref={steps} className={classes.steps} aria-label={t('editor.sections')}>
         {STEPS.map((s, index) => {
           const state = stepState(s, content, report);
           return (
@@ -259,13 +263,6 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
         <CheckSection findings={report.findings} reasons={reasons} setReason={setReason} goTo={goTo} editable={editable && report.status === 'draft'} incidentId={report.incidentId} />
       )}
 
-      <Group justify="space-between">
-        {STEPS.indexOf(step) > 0 ? <Button variant="default" onClick={() => goTo(STEPS[STEPS.indexOf(step) - 1])}>‹ {t(`steps.${STEPS[STEPS.indexOf(step) - 1]}`)}</Button> : <span />}
-        {STEPS.indexOf(step) < STEPS.length - 1 && (
-          <Button variant="outline" onClick={() => goTo(STEPS[STEPS.indexOf(step) + 1])}>{t('editor.next', { step: t(`steps.${STEPS[STEPS.indexOf(step) + 1]}`) })} ›</Button>
-        )}
-      </Group>
-
       <ActionBar
         info={
           <Text component="span" size="sm">
@@ -273,10 +270,19 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
           </Text>
         }
       >
+        {STEPS.indexOf(step) > 0 && <Button variant="default" onClick={() => goTo(STEPS[STEPS.indexOf(step) - 1])}>‹ {t(`steps.${STEPS[STEPS.indexOf(step) - 1]}`)}</Button>}
+        {STEPS.indexOf(step) < STEPS.length - 1 && (
+          <Button variant="outline" onClick={() => goTo(STEPS[STEPS.indexOf(step) + 1])}>{t('editor.next', { step: t(`steps.${STEPS[STEPS.indexOf(step) + 1]}`) })} ›</Button>
+        )}
         {deletable && <Button variant="default" onClick={() => setDialog('delete')}>{t('editor.delete')}</Button>}
-        <Button component="a" href={apiUrl(`incidents/reports/${report.id}/pdf`, { lang: i18n.language })} target="_blank" variant="subtle">{t('editor.pdf')}</Button>
-        <Button variant="subtle" onClick={() => setDialog('history')}>{t('editor.history')}</Button>
-        <Button variant="subtle" onClick={() => setDialog('versions')}>{t('editor.versions')}</Button>
+        <Menu position="top-end">
+          <Menu.Target><Button variant="default">{t('editor.more')}</Button></Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item component="a" href={apiUrl(`incidents/reports/${report.id}/pdf`, { lang: i18n.language })} target="_blank">{t('editor.pdf')}</Menu.Item>
+            <Menu.Item onClick={() => setDialog('history')}>{t('editor.history')}</Menu.Item>
+            <Menu.Item onClick={() => setDialog('versions')}>{t('editor.versions')}</Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
         {editable && report.status === 'draft' && <Button onClick={askSubmit}>{t('editor.submit')}</Button>}
       </ActionBar>
 
@@ -371,7 +377,7 @@ export function ReportPage() {
   const { data: report, error, isFetchedAfterMount } = useReport(id);
   if (error) return <EmptyState title={t('editor.notFound')} />;
   // The editor starts from the current state of the server, not from an older copy in the cache.
-  if (!report || !isFetchedAfterMount || !userId) return null;
+  if (!report || !isFetchedAfterMount || !userId) return <Loader m="xl" />;
   // The editor keeps its own copy of the content; a different report gets a new editor.
   return <Editor key={report.id} report={report} userId={userId} />;
 }

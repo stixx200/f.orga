@@ -1,16 +1,16 @@
 # Builds server, shell and all module frontends into one image.
 FROM node:24-alpine AS build
 WORKDIR /repo
-COPY package.json package-lock.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps apps
 COPY libs libs
 COPY modules modules
 COPY tools tools
 COPY nx.json tsconfig.base.json tsconfig.json jest.preset.js jest.config.ts ./
-RUN npm ci --no-audit --no-fund
+RUN corepack enable && pnpm install --frozen-lockfile
 ENV NX_DAEMON=false NX_NO_CLOUD=true
-RUN npx nx run-many -t build -p shell masterdata-web incidents-web training-web respiratory-protection-web compensation-web equipment-web cost-recovery-web promotions-web clothing-web duty-officer-web info-terminal-web mp-feuer-web backup-web privacy-web personal-web \
- && npx nx run @forga/server:prune
+RUN pnpm exec nx run-many -t build -p shell masterdata-web incidents-web training-web respiratory-protection-web compensation-web equipment-web cost-recovery-web promotions-web clothing-web duty-officer-web info-terminal-web mp-feuer-web backup-web privacy-web personal-web \
+ && pnpm exec nx run @forga/server:prune
 RUN mkdir -p /web/modules \
  && cp -r apps/shell/dist /web/shell \
  && for m in modules/*/*-web; do cp -r "$m/dist" "/web/modules/$(basename "$m" -web)"; done
@@ -22,7 +22,8 @@ WORKDIR /app
 # Real data unless the container says otherwise (FORGA_STAGE=test for the test system).
 ENV NODE_ENV=production FORGA_WEB_DIR=/app/web PORT=3000 FORGA_STAGE=production
 COPY --from=build /repo/apps/server/dist ./
-RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+COPY --from=build /repo/.npmrc ./.npmrc
+RUN corepack enable && corepack prepare pnpm@10.9.0 --activate && pnpm install --frozen-lockfile --prod && rm -rf /root/.local/share/pnpm
 COPY --from=build /web ./web
 RUN mkdir -p /plugins /backups && chown node:node /plugins /backups
 USER node

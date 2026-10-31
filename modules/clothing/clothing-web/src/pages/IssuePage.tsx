@@ -26,6 +26,7 @@ async function lookup(code: string): Promise<Item | undefined> {
  */
 export function IssuePage() {
   const { t } = useTranslation('clothing');
+  const { t: common } = useTranslation('common');
   const localized = useLocalized();
   const [params, setParams] = useSearchParams();
   const personId = params.get('person');
@@ -124,7 +125,7 @@ export function IssuePage() {
     <Stack gap="lg">
       <PageHeader breadcrumbs={[{ label: t('module') }, { label: t('issue.title') }]} title={t('issue.title')} subtitle={t('issue.subtitle')} />
       <Panel>
-        <SimpleGrid cols={{ base: 1, sm: 3 }}>
+        <SimpleGrid cols={{ base: 1, lg: 3 }}>
           <Select
             label={t('history.person')}
             data={persons.filter((p) => (p.status !== 'left' || p.id === personId) && !p.restricted).map((p) => ({ value: p.id, label: `${p.lastName}, ${p.firstName}` }))}
@@ -160,14 +161,15 @@ export function IssuePage() {
                   scroll
                   rows={rows}
                   rowKey={(i) => i.id}
+                  onRowClick={(i) => { if (!refused && i.blockedBy.length === 0) toggle(i.id, !selected.has(i.id)); }}
                   empty={t('issue.noStock')}
                   columns={[
                     {
                       key: 'select',
-                      header: '',
+                      header: common('table.select'),
                       width: 40,
                       render: (i) => (
-                        <Checkbox aria-label={i.inventoryNumber} disabled={refused || i.blockedBy.length > 0} checked={selected.has(i.id)} onChange={(e) => toggle(i.id, e.currentTarget.checked)} />
+                        <Checkbox aria-label={i.inventoryNumber} disabled={refused || i.blockedBy.length > 0} checked={selected.has(i.id)} onClick={(e) => e.stopPropagation()} onChange={(e) => toggle(i.id, e.currentTarget.checked)} />
                       ),
                     },
                     { key: 'number', header: t('items.inventoryNumber'), render: (i) => <Text fw={700} size="sm">{i.inventoryNumber}</Text> },

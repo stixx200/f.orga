@@ -59,6 +59,8 @@ export class AccessAuth {
       throw new UnauthorizedException({ code: 'personal.invalidKey' });
     }
     if (link.revokedAt) throw new ForbiddenException({ code: 'personal.revoked' });
+    // A processing restriction (Art. 18) closes the kiosk even for a key that was issued before it.
+    await this.links.assertNotRestricted(link);
     return link;
   }
 

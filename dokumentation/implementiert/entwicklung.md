@@ -2,13 +2,13 @@
 
 ## Voraussetzungen
 
-- Node.js 24 und npm 11
+- Node.js 24 und pnpm 10 (`corepack enable`, Version aus `packageManager` in der `package.json`)
 - Docker für die Datenbank
 
 ## Einrichten
 
 ```bash
-npm install
+pnpm install
 docker compose -f docker/compose.dev.yml up -d   # PostgreSQL auf Port 5433
 ```
 
@@ -17,7 +17,7 @@ Nx lädt beim Start des Servers die Datei `apps/server/.env` mit `DATABASE_URL`,
 ## Starten
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 | Dienst | Adresse |
@@ -34,24 +34,24 @@ npm run dev
 
 | Zweck | Befehl |
 | --- | --- |
-| Alles wie in der CI, vor jedem Commit | `npm run check` |
-| Lint und Modulgrenzen | `npm run lint` |
-| Typprüfung aller Projekte (Nx-Ziele, danach `tools/typecheck-sources.mjs`: jedes Projekt mit `tsc --noEmit` aus den Quellen, weil `tsc --build` Änderungen in Verträgen anderer Projekte übersehen kann) | `npm run typecheck` |
-| Unit-Tests | `npm run test` |
-| Integrationstests (PostgreSQL) | `npm run integration` |
-| Alles bauen | `npm run build` |
-| Migration erstellen | `npm run migration:create -- <modul\|core> <name>` |
-| Migrationen einspielen | `npm run migration:run` |
-| Demodaten einspielen (Server muss laufen) | `npm run seed` |
-| Plugin-Schlüssel erzeugen, Plugin-Paket bauen und signieren | `npm run plugin -- keygen <name>`, `npm run plugin -- pack <ordner> --key <datei>` |
-| Plugins in der Entwicklung | `FORGA_PLUGIN_DIR=<ordner> FORGA_PLUGINS_ALLOW_UNSIGNED=true npm run dev` |
-| E2E-Tests gegen eine frische Instanz (bauen, Datenbank neu, Server, Demodaten, Tests) | `npm run e2e:fresh` |
-| E2E-Tests gegen eine laufende Instanz mit Demodaten | `npm run e2e` |
-| Projektgraph | `npx nx graph` |
+| Alles wie in der CI, vor jedem Commit | `pnpm run check` |
+| Lint und Modulgrenzen | `pnpm run lint` |
+| Typprüfung aller Projekte (Nx-Ziele, danach `tools/typecheck-sources.mjs`: jedes Projekt mit `tsc --noEmit` aus den Quellen, weil `tsc --build` Änderungen in Verträgen anderer Projekte übersehen kann) | `pnpm run typecheck` |
+| Unit-Tests | `pnpm run test` |
+| Integrationstests (PostgreSQL) | `pnpm run integration` |
+| Alles bauen | `pnpm run build` |
+| Migration erstellen | `pnpm run migration:create -- <modul\|core> <name>` |
+| Migrationen einspielen | `pnpm run migration:run` |
+| Demodaten einspielen (Server muss laufen) | `pnpm run seed` |
+| Plugin-Schlüssel erzeugen, Plugin-Paket bauen und signieren | `pnpm run plugin -- keygen <name>`, `pnpm run plugin -- pack <ordner> --key <datei>` |
+| Plugins in der Entwicklung | `FORGA_PLUGIN_DIR=<ordner> FORGA_PLUGINS_ALLOW_UNSIGNED=true pnpm run dev` |
+| E2E-Tests gegen eine frische Instanz (bauen, Datenbank neu, Server, Demodaten, Tests) | `pnpm run e2e:fresh` |
+| E2E-Tests gegen eine laufende Instanz mit Demodaten | `pnpm run e2e` |
+| Projektgraph | `pnpm exec nx graph` |
 
 ## Demodaten
 
-`npm run seed` (`tools/seed.mts`) füllt eine laufende Instanz über die API mit erfundenen Daten. Echte Personen kommen nicht vor. Für die Ersteinrichtung einer leeren Datenbank nimmt es den Einrichtungsschlüssel aus `FORGA_SETUP_TOKEN` oder aus `apps/server/.env` (Entwicklung: `dev-setup-token`).
+`pnpm run seed` (`tools/seed.mts`) füllt eine laufende Instanz über die API mit erfundenen Daten. Echte Personen kommen nicht vor. Für die Ersteinrichtung einer leeren Datenbank nimmt es den Einrichtungsschlüssel aus `FORGA_SETUP_TOKEN` oder aus `apps/server/.env` (Entwicklung: `dev-setup-token`).
 
 Verwaltung und sensible Daten verlangen den zweiten Faktor ([Step-up](datenschutz.md#zweiter-faktor-bei-sensiblen-daten-step-up)). Beim ersten Lauf richtet das Skript den Faktor des Administrators ein, gibt das Geheimnis aus (zum Eintragen in eine Authenticator-App) und legt es in `tmp/seed-totp.json` ab (anderer Ort über `FORGA_TOTP_FILE`); spätere Läufe nehmen es von dort oder aus `FORGA_ADMIN_TOTP_SECRET`. Nach dem Neuanlegen der Datenbank die Datei löschen. Demobenutzer mit sensiblen Rechten (z. B. `commander`, `administration`) richten ihren Faktor beim ersten Öffnen sensibler Daten im Browser ein; im Testsystem setzt ihn der Administrator in der Benutzerverwaltung zurück.
 
@@ -85,7 +85,7 @@ Ein fester Zufallsstartwert je Schritt erzeugt bei jedem Lauf dieselben Daten. E
 - Die Integrationstests laufen gegen die Datenbank aus `TEST_DATABASE_URL`. Ohne Angabe nutzen sie `forga_test` auf der Entwicklungsdatenbank (Port 5433).
 - Vor jeder Testdatei löscht `resetTestDatabase()` (`apps/server/src/testing/test-database.ts`) die f.orga-Schemas und spielt alle Migrationen neu ein.
 - `testing/test-app.ts` startet die komplette Nest-Anwendung gegen die leere Testdatenbank (`startTestApp`) und führt die Ersteinrichtung aus (`setUp`). Dabei sammelt sie E-Mails nur im Speicher (`FORGA_MAIL_TRANSPORT=memory`) und schaltet den automatischen Versand der Sammel-E-Mail, die tägliche Aufbewahrungsprüfung und die tägliche Ampelprüfung ab (`FORGA_DIGEST_SCHEDULER=off`, `FORGA_RETENTION_SCHEDULER=off`, `FORGA_STATUS_SCHEDULER=off`).
-- **PostgreSQL-Werkzeuge** (`pg_dump`, `pg_restore`, `psql` der Version 17) braucht das Modul Datensicherung, auch `backup.integration.ts`. Sie kommen aus `FORGA_PG_BIN` (Ordner, relativ zum Repository) oder aus dem `PATH`; die CI installiert `postgresql-client-17` aus dem PGDG-Repository (`/usr/lib/postgresql/17/bin`). Die Verbindung kommt aus `TEST_DATABASE_URL`. Fehlen die Werkzeuge lokal oder sind sie älter: `FORGA_PG_BIN=tools/pg-docker npm run integration`. Die Wrapper in `tools/pg-docker/` rufen das gleichnamige Werkzeug im Datenbank-Container von `docker/compose.dev.yml` auf (`docker exec`, Container `FORGA_PG_CONTAINER`, Standard `docker-db-1`) und reichen Benutzer, Passwort und Datenbank aus den `PG*`-Variablen weiter (Host und Port nicht, im Container gilt der Socket). Für den Entwicklungsserver: `FORGA_PG_BIN=<repository>/tools/pg-docker` und `FORGA_BACKUP_ROOT=<ordner>` in `apps/server/.env` eintragen; ohne `FORGA_BACKUP_ROOT` zeigt das Modul nur einen Hinweis. Nach einer Wiederherstellung beendet sich der Server; `npm run dev` neu starten.
+- **PostgreSQL-Werkzeuge** (`pg_dump`, `pg_restore`, `psql` der Version 17) braucht das Modul Datensicherung, auch `backup.integration.ts`. Sie kommen aus `FORGA_PG_BIN` (Ordner, relativ zum Repository) oder aus dem `PATH`; die CI installiert `postgresql-client-17` aus dem PGDG-Repository (`/usr/lib/postgresql/17/bin`). Die Verbindung kommt aus `TEST_DATABASE_URL`. Fehlen die Werkzeuge lokal oder sind sie älter: `FORGA_PG_BIN=tools/pg-docker pnpm run integration`. Die Wrapper in `tools/pg-docker/` rufen das gleichnamige Werkzeug im Datenbank-Container von `docker/compose.dev.yml` auf (`docker exec`, Container `FORGA_PG_CONTAINER`, Standard `docker-db-1`) und reichen Benutzer, Passwort und Datenbank aus den `PG*`-Variablen weiter (Host und Port nicht, im Container gilt der Socket). Für den Entwicklungsserver: `FORGA_PG_BIN=<repository>/tools/pg-docker` und `FORGA_BACKUP_ROOT=<ordner>` in `apps/server/.env` eintragen; ohne `FORGA_BACKUP_ROOT` zeigt das Modul nur einen Hinweis. Nach einer Wiederherstellung beendet sich der Server; `pnpm run dev` neu starten.
 - Testdateien:
   - `backup.integration.ts`: Rechte (`backup.manage`, kein API-Token), ohne `FORGA_BACKUP_ROOT` nur lesbar, Passphrase verschlüsselt und nur schreibbar (nicht in Antworten, Historie mit `••••••`), Ziel unterhalb der Wurzel, „Jetzt sichern“ mit Prüfung, Wiederherstellung testen in eine temporäre Datenbank, Herunterladen mit Audit, fremde und hochgeladene Dateien, Löschen, geplante Sicherung mit Aufbewahrung, Fehlschlag mit Aufgabe und E-Mail an `backup.notify`, Ablehnung bei falschem Namen, falscher Passphrase und neuerer Version, gescheitertes Einspielen lässt die Datenbank unverändert, Wiederherstellung mit Wartungsmodus (`503`), Tausch der Datenbanken und Abschluss nach dem Neustart (eigene, temporäre Datenbanken `<testdatenbank>_restore_…`/`_before_…`)
   - `history.integration.ts`: Historie und optimistisches Sperren auf ORM-Ebene
@@ -116,39 +116,39 @@ Ein fester Zufallsstartwert je Schritt erzeugt bei jedem Lauf dieselben Daten. E
 
 ## E2E-Tests
 
-Playwright-Tests (`e2e/*.e2e.ts`, Konfiguration `e2e/playwright.config.ts`) bedienen die Oberfläche wie die Benutzer aus `npm run seed`. Sie brauchen eine laufende Instanz mit Demodaten und laufen nacheinander (`workers: 1`), weil sie diese teilen.
+Playwright-Tests (`e2e/*.e2e.ts`, Konfiguration `e2e/playwright.config.ts`) bedienen die Oberfläche wie die Benutzer aus `pnpm run seed`. Sie brauchen eine laufende Instanz mit Demodaten und laufen nacheinander (`workers: 1`), weil sie diese teilen.
 
 ### Ausführen
 
 ```bash
-npx playwright install chromium        # einmalig: der Browser der Tests
-npm run e2e:fresh                      # alles: bauen, frische Instanz, Demodaten, alle Tests
-npm run e2e:fresh -- e2e/shell.e2e.ts --headed   # weitere Argumente gehen an Playwright
+pnpm exec playwright install chromium        # einmalig: der Browser der Tests
+pnpm run e2e:fresh                      # alles: bauen, frische Instanz, Demodaten, alle Tests
+pnpm run e2e:fresh -- e2e/shell.e2e.ts --headed   # weitere Argumente gehen an Playwright
 ```
 
-`npm run e2e:fresh` (`tools/e2e.mts`) arbeitet wie das Docker-Image, nur ohne Container:
+`pnpm run e2e:fresh` (`tools/e2e.mts`) arbeitet wie das Docker-Image, nur ohne Container:
 
 1. Server, Shell und Modul-Frontends bauen (`nx run-many -t build`, mit Nx-Cache; `--no-build` überspringt das).
 2. Die Datenbank `forga_e2e` auf der Entwicklungsdatenbank löschen und neu anlegen (`FORGA_E2E_DATABASE_URL`, Vorgabe `postgresql://forga:forga@localhost:5433/forga_e2e`; die Datenbank `forga` lehnt das Skript ab).
 3. Den gebauten Server (`apps/server/dist/main.js`) auf Port 3100 starten (`FORGA_E2E_PORT`). Er liefert die gebauten Frontends selbst aus (`FORGA_WEB_DIR` mit `shell` und `modules/<id>`, Verweise auf die Build-Ordner in einem temporären Ordner des Systems), mit `NODE_ENV=production`, `FORGA_STAGE=development` (`FORGA_E2E_STAGE`), neuem `FORGA_SECRET_KEY` und Einrichtungsschlüssel, `FORGA_PUBLIC_URL` (Links der Infoterminals), E-Mails nur im Speicher, ohne geplante Hintergrundläufe (Sammel-E-Mail, Aufbewahrung, Ampel, Datenschutz, Sicherung), mit Sicherungen nach `dist/e2e/backups` (`FORGA_BACKUP_ROOT`, bei einem frischen Lauf geleert; `pg_dump`, `pg_restore` und `psql` der Version 17 aus `FORGA_PG_BIN` oder dem `PATH`, lokal z. B. `FORGA_PG_BIN=<repository>/tools/pg-docker`) und mit Kalenderimporten von lokalen Adressen (`FORGA_IMPORT_URL_ALLOW_PRIVATE=true`, der Test liefert den Kalender selbst aus).
-4. `npm run seed` gegen diese Instanz.
+4. `pnpm run seed` gegen diese Instanz.
 5. `playwright test` und danach den Server beenden.
 
-Server-Protokoll, Server-Schlüssel und die Geheimnisse des zweiten Faktors liegen in `dist/e2e`, Ergebnisse und Traces in `dist/e2e-results`, der HTML-Bericht in `dist/e2e-report` (`npx playwright show-report dist/e2e-report`, einzelner Trace: `npx playwright show-trace <trace.zip>`).
+Server-Protokoll, Server-Schlüssel und die Geheimnisse des zweiten Faktors liegen in `dist/e2e`, Ergebnisse und Traces in `dist/e2e-results`, der HTML-Bericht in `dist/e2e-report` (`pnpm exec playwright show-report dist/e2e-report`, einzelner Trace: `pnpm exec playwright show-trace <trace.zip>`).
 
 Zum Schreiben neuer Tests die Instanz stehen lassen und einzelne Tests wiederholen:
 
 ```bash
-npm run e2e:fresh -- --serve           # frische Instanz mit Demodaten, läuft bis Strg+C
-npm run e2e:fresh -- --serve --reuse   # später: dieselben Daten wieder starten (ohne neue Datenbank und Seed)
-FORGA_E2E_URL=http://localhost:3100 FORGA_TOTP_FILE=dist/e2e/totp.json TZ=Europe/Berlin npm run e2e -- e2e/shell.e2e.ts --ui
+pnpm run e2e:fresh -- --serve           # frische Instanz mit Demodaten, läuft bis Strg+C
+pnpm run e2e:fresh -- --serve --reuse   # später: dieselben Daten wieder starten (ohne neue Datenbank und Seed)
+FORGA_E2E_URL=http://localhost:3100 FORGA_TOTP_FILE=dist/e2e/totp.json TZ=Europe/Berlin pnpm run e2e -- e2e/shell.e2e.ts --ui
 ```
 
-`npm run e2e` allein testet gegen `FORGA_E2E_URL` (Vorgabe `http://localhost:4200`, die Entwicklungsumgebung aus `npm run dev` mit `npm run seed`; Geheimnisse des zweiten Faktors dann aus `tmp/seed-totp.json`). Browser ist das Playwright-Chromium, lokal wie in CI; `FORGA_E2E_CHANNEL=chrome` nimmt das installierte Chrome. `TZ=Europe/Berlin` hält die im Test berechneten Daten in der Zeitzone des Browsers.
+`pnpm run e2e` allein testet gegen `FORGA_E2E_URL` (Vorgabe `http://localhost:4200`, die Entwicklungsumgebung aus `pnpm run dev` mit `pnpm run seed`; Geheimnisse des zweiten Faktors dann aus `tmp/seed-totp.json`). Browser ist das Playwright-Chromium, lokal wie in CI; `FORGA_E2E_CHANNEL=chrome` nimmt das installierte Chrome. `TZ=Europe/Berlin` hält die im Test berechneten Daten in der Zeitzone des Browsers.
 
 ### CI
 
-Der Job `e2e` in `.github/workflows/ci.yml` läuft parallel zu den anderen Jobs mit einem eigenen PostgreSQL-17-Dienst: `npm ci`, `postgresql-client-17` aus dem PGDG-Repository (für die Datensicherung), `npx playwright install --with-deps chromium`, `npm run e2e:fresh`. Schlägt er fehl, hängt er HTML-Bericht, Traces, Bildschirmfotos und das Server-Protokoll als Artefakt `e2e-report` an (14 Tage). Ein Lauf dauert lokal rund 20 Minuten: Bau aus dem Nx-Cache unter einer Minute, Demodaten rund 6 bis 8 Minuten, Tests rund 10 Minuten.
+Der Job `e2e` in `.github/workflows/ci.yml` läuft parallel zu den anderen Jobs mit einem eigenen PostgreSQL-17-Dienst: `pnpm install --frozen-lockfile`, `postgresql-client-17` aus dem PGDG-Repository (für die Datensicherung), `pnpm exec playwright install --with-deps chromium`, `pnpm run e2e:fresh`. Schlägt er fehl, hängt er HTML-Bericht, Traces, Bildschirmfotos und das Server-Protokoll als Artefakt `e2e-report` an (14 Tage). Ein Lauf dauert lokal rund 20 Minuten: Bau aus dem Nx-Cache unter einer Minute, Demodaten rund 6 bis 8 Minuten, Tests rund 10 Minuten.
 
 ### Tests schreiben
 
@@ -203,25 +203,25 @@ Der Job `e2e` in `.github/workflows/ci.yml` läuft parallel zu den anderen Jobs 
 
 ## Projektverweise
 
-`npm run typecheck` schlägt fehl, wenn die TypeScript-Projektverweise nicht zu den Abhängigkeiten in den `package.json`-Dateien passen (Meldung „The workspace is out of sync“). Dann `npx nx sync` ausführen und die geänderten `tsconfig`-Dateien mit committen.
+`pnpm run typecheck` schlägt fehl, wenn die TypeScript-Projektverweise nicht zu den Abhängigkeiten in den `package.json`-Dateien passen (Meldung „The workspace is out of sync“). Dann `pnpm exec nx sync` ausführen und die geänderten `tsconfig`-Dateien mit committen.
 
 ## Migrationen
 
 **Bis zum ersten Release gibt es keine fortlaufenden Migrationen:** Core und jedes Modul haben genau eine Migration `initial`. Nach einer Änderung an Entitäten werden alle Migrationen neu erzeugt und die Entwicklungsdatenbank neu angelegt:
 
 ```bash
-npm run migration:reset   # löscht alle Migrationen, erzeugt je Modul eine neue `initial`
+pnpm run migration:reset   # löscht alle Migrationen, erzeugt je Modul eine neue `initial`
 ```
 
 1. `migration:reset` arbeitet in einer eigenen, vorübergehenden Datenbank (`forga_migration_reset`, anderer Name über `FORGA_RESET_DATABASE`, z. B. je Worktree). Ein laufender Entwicklungsserver bleibt ungestört. Integrationstests nutzen `TEST_DATABASE_URL` (Standard `forga_test`).
-2. Danach die Entwicklungsdatenbank neu anlegen. Der Server spielt die neuen Migrationen beim nächsten Start ein, `npm run seed` füllt die Demodaten.
+2. Danach die Entwicklungsdatenbank neu anlegen. Der Server spielt die neuen Migrationen beim nächsten Start ein, `pnpm run seed` füllt die Demodaten.
 3. Datenmigrationen (`--blank`) braucht es bis dahin nicht.
 
 Die einzelnen Befehle (ab dem ersten Release wieder der normale Weg):
 
 ```bash
-npm run migration:create -- <modul|core> <name>   # z. B. masterdata persons
-npm run migration:run
+pnpm run migration:create -- <modul|core> <name>   # z. B. masterdata persons
+pnpm run migration:run
 ```
 
 `migration:create` geht so vor:
@@ -233,7 +233,7 @@ npm run migration:run
 
 Verweist eine Anweisung auf das Schema eines Moduls, das nicht in `requires` steht, bricht der Befehl ab. Migrationen nie von Hand anlegen.
 
-Für Datenänderungen ohne Schemaänderung (z. B. Werte bereinigen) legt `npm run migration:create -- <modul|core> <name> --blank` eine leere, schon eingetragene Migration an; das SQL kommt in deren `up`.
+Für Datenänderungen ohne Schemaänderung (z. B. Werte bereinigen) legt `pnpm run migration:create -- <modul|core> <name> --blank` eine leere, schon eingetragene Migration an; das SQL kommt in deren `up`.
 
 Indizes, die MikroORM nicht aus Eigenschaften ableiten kann (z. B. partielle Indizes), werden in der Entität mit `expression` deklariert, wie `report_one_primary_per_incident` in `incidents.entities.ts`. Stehen sie nur in einer Migration, erzeugt `migration:create` beim nächsten Lauf Anweisungen, die sie wieder löschen.
 
@@ -253,20 +253,20 @@ Indizes, die MikroORM nicht aus Eigenschaften ableiten kann (z. B. partielle Ind
 
 Beispiel-ID `<m>`: englisch, Kleinbuchstaben, Bindestriche erlaubt.
 
-1. **Contracts:** `npx nx g @nx/js:library modules/<m>/<m>-contracts --bundler=tsc --linter=none --unitTestRunner=jest`.
+1. **Contracts:** `pnpm exec nx g @nx/js:library modules/<m>/<m>-contracts --bundler=tsc --linter=none --unitTestRunner=jest`.
    - Das Manifest heißt `<M>_MANIFEST`.
    - Name, Berechtigungen und Navigation brauchen `{ de, en }`.
-2. **Backend:** `npx nx g @nx/nest:library modules/<m>/<m>-api --buildable --linter=none --unitTestRunner=jest`.
+2. **Backend:** `pnpm exec nx g @nx/nest:library modules/<m>/<m>-api --buildable --linter=none --unitTestRunner=jest`.
    - In `package.json` `"type": "module"` setzen.
    - `src/migrations/index.ts` mit `<M>_MIGRATIONS` anlegen.
    - Das Modul mit `defineModule` exportieren und in `apps/server/src/app/installed-modules.ts` eintragen.
    - Das Datenbankschema heißt wie die Modul-ID, mit `_` statt `-`.
-3. **Frontend:** `npx nx g @nx/react:provider modules/<m>/<m>-web --bundler=vite --consumer=shell`.
+3. **Frontend:** `pnpm exec nx g @nx/react:provider modules/<m>/<m>-web --bundler=vite --consumer=shell`.
    - In `vite.config.mts` nach dem Muster der vorhandenen Module `base: '/modules/<m>/'` setzen, `./Module` exponieren und `SHARED` aus `tools/federation.mts` verwenden.
    - `src/module.tsx` exportiert `defineWebModule({ routes, translations: { de, en } })`.
    - Den Port in `MODULE_PORTS` eintragen.
 4. **Tags:** In jedem neuen Projekt `scope:module-<m>` und `type:contracts|api|web` setzen.
-5. **Abhängigkeiten:** Abhängigkeiten zwischen Workspace-Paketen in der jeweiligen `package.json` eintragen, danach `npm install` und `npx nx sync` ausführen.
+5. **Abhängigkeiten:** Abhängigkeiten zwischen Workspace-Paketen in der jeweiligen `package.json` eintragen, danach `pnpm install` und `pnpm exec nx sync` ausführen.
 
 ## Konventionen
 

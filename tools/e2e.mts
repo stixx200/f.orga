@@ -8,14 +8,14 @@
  *    (`FORGA_E2E_STAGE`), a fresh `FORGA_SECRET_KEY` and setup token, e-mails in memory, the schedulers off,
  *    backups to `dist/e2e/backups` (`FORGA_BACKUP_ROOT`; PostgreSQL 17 tools from `FORGA_PG_BIN` or the `PATH`) and
  *    calendar imports from local addresses allowed (`FORGA_IMPORT_URL_ALLOW_PRIVATE`),
- * 4. fills it with `npm run seed`,
+ * 4. fills it with `pnpm run seed`,
  * 5. runs `playwright test` (further arguments go to Playwright) and stops the server.
  *
- *   npm run e2e:fresh                              all tests
- *   npm run e2e:fresh -- e2e/shell.e2e.ts --headed  one file, browser visible
- *   npm run e2e:fresh -- --serve                    only the instance, keeps running until Ctrl+C;
- *                                                   then `npm run e2e -- …` with the printed variables
- *   npm run e2e:fresh -- --serve --reuse            the instance again on the data of the last run (no new database,
+ *   pnpm run e2e:fresh                              all tests
+ *   pnpm run e2e:fresh -- e2e/shell.e2e.ts --headed  one file, browser visible
+ *   pnpm run e2e:fresh -- --serve                    only the instance, keeps running until Ctrl+C;
+ *                                                   then `pnpm run e2e -- …` with the printed variables
+ *   pnpm run e2e:fresh -- --serve --reuse            the instance again on the data of the last run (no new database,
  *                                                   no seed)
  *
  * Everything the run writes goes to `dist/e2e` (server log, server key, secrets of the second factor), the report to
@@ -171,7 +171,7 @@ async function main(): Promise<void> {
   }
 
   if (serveOnly) {
-    console.log(`\nInstance ready. In another terminal:\n  FORGA_E2E_URL=${URL} FORGA_TOTP_FILE=${TOTP_FILE} TZ=Europe/Berlin npm run e2e -- <files or options>\nCtrl+C stops the server.`);
+    console.log(`\nInstance ready. In another terminal:\n  FORGA_E2E_URL=${URL} FORGA_TOTP_FILE=${TOTP_FILE} TZ=Europe/Berlin pnpm run e2e -- <files or options>\nCtrl+C stops the server.`);
     await new Promise<void>((done) => server.on('exit', () => done()));
     return;
   }

@@ -17,13 +17,13 @@
   },
   "dependencies": {
     "tslib": "^2.3.0",
-    "@forga/core-api": "*",
-    "@forga/masterdata-contracts": "*",
+    "@forga/core-api": "workspace:*",
+    "@forga/masterdata-contracts": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@mikro-orm/core": "^7.2.5",
     "uuid": "^14.0.3",
     "@mikro-orm/migrations": "^7.2.5",
-    "@forga/core-contracts": "*"
+    "@forga/core-contracts": "workspace:*"
   },
   "nx": {
     "tags": [

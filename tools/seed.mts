@@ -10,10 +10,10 @@
  * the script again only updates what changed. A production system (`FORGA_STAGE=production`) is refused; the test
  * system takes the persons only because the import is marked as demo data.
  *
- *   npm run seed
- *   npm run seed -- --only clothing      (only the clothing store, into an instance with persons)
- *   FORGA_URL=http://localhost:3000 FORGA_ADMIN_USER=admin FORGA_ADMIN_PASSWORD=… npm run seed
- *   FORGA_SETUP_TOKEN=… npm run seed     (empty instance: the setup token from the server log or its environment)
+ *   pnpm run seed
+ *   pnpm run seed -- --only clothing      (only the clothing store, into an instance with persons)
+ *   FORGA_URL=http://localhost:3000 FORGA_ADMIN_USER=admin FORGA_ADMIN_PASSWORD=… pnpm run seed
+ *   FORGA_SETUP_TOKEN=… pnpm run seed     (empty instance: the setup token from the server log or its environment)
  *
  * Users and settings need a session confirmed with the second factor (step-up). On the first run the script sets up
  * the administrator's factor (TOTP) and keeps the secret in `tmp/seed-totp.json` (ignored by version control), printing

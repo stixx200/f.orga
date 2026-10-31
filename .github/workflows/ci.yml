@@ -9,6 +9,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  actions: write
+
 env:
   NX_NO_CLOUD: true
   NX_DAEMON: false
@@ -34,11 +38,12 @@ jobs:
       TEST_DATABASE_URL: postgresql://forga:forga@localhost:5432/forga
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci --no-audit --no-fund
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: PostgreSQL 17 client (pg_dump, pg_restore, psql for the backup module)
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
@@ -51,18 +56,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .nx/cache
-          key: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
-          restore-keys: nx-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+          key: nx-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: nx-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Lint and module boundaries
-        run: npm run lint
+        run: pnpm run lint
       - name: Typecheck
-        run: npm run typecheck
+        run: pnpm run typecheck
       - name: Unit tests
-        run: npm run test
+        run: pnpm run test
       - name: Integration tests (PostgreSQL)
-        run: npm run integration
+        run: pnpm run integration
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
   e2e:
     name: End-to-end tests (Playwright)
@@ -85,11 +90,12 @@ jobs:
       FORGA_E2E_DATABASE_URL: postgresql://forga:forga@localhost:5432/forga_e2e
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci --no-audit --no-fund
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: PostgreSQL 17 client (pg_dump, pg_restore, psql for the backup module)
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
@@ -102,12 +108,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .nx/cache
-          key: nx-e2e-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
-          restore-keys: nx-e2e-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+          key: nx-e2e-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: nx-e2e-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
       - name: Build, start a fresh instance, seed and run the tests
-        run: npm run e2e:fresh
+        run: pnpm run e2e:fresh
       - name: Report and traces
         if: failure()
         uses: actions/upload-artifact@v4

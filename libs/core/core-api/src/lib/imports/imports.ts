@@ -138,7 +138,7 @@ export class ImportService {
     const profile = this.registry.get(input.profile);
     if (!profile || !user.holds(profile.permission)) throw new NotFoundException({ code: 'imports.unknownProfile' });
     if (!user.can(profile.permission)) throw user.stepUpRequired();
-    // Real personal data stay out of the test system; only the made-up data of `npm run seed` may come in.
+    // Real personal data stay out of the test system; only the made-up data of `pnpm run seed` may come in.
     if (profile.personData && isTestStage() && !input.demoData) throw new ForbiddenException({ code: 'imports.lockedInTestStage' });
     const options = Object.fromEntries((profile.options ?? []).map((o) => [o.key, input.options?.[o.key] ?? o.default]));
     const remembered = input.mappingList === 'core' ? await this.mappings.remembered() : input.remembered;

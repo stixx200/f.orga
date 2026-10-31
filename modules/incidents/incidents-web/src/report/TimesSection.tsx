@@ -55,7 +55,7 @@ export function TimesSection({ content, incident, owner, update, disabled }: {
   return (
     <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
       <Panel title={t('times.title')}>
-        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+        <SimpleGrid cols={{ base: 1, xl: 2 }}>
           {field('alarmedAt', true)}
           {field('departedAt')}
           {field('arrivedAt')}

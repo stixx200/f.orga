@@ -1,4 +1,4 @@
-import { Anchor, Button, Collapse, Grid, Group, Select, SimpleGrid, Stack, Text, UnstyledButton } from '@mantine/core';
+import { Anchor, Button, Collapse, Grid, Group, Loader, Select, SimpleGrid, Stack, Text, UnstyledButton } from '@mantine/core';
 import { IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -25,10 +25,12 @@ function brigadeScope(session: Session): boolean {
 function TaskList({ modules }: { modules: LoadedModule[] }) {
   const { t } = useTranslation('shell');
   const localized = useLocalized();
-  const { data = [] } = useTasks();
+  const { data, isPending } = useTasks();
+  const tasks = data ?? [];
   const [module, setModule] = useState<string | null>(null);
-  if (!data.length) return <EmptyState title={t('start.noTasks')} />;
-  const present = [...new Set(data.map((d) => d.module))];
+  if (isPending && !tasks.length) return <Loader m="md" />;
+  if (!tasks.length) return <EmptyState title={t('start.noTasks')} />;
+  const present = [...new Set(tasks.map((d) => d.module))];
   const moduleName = (id: string) => {
     const loaded = modules.find((m) => m.info.id === id);
     return loaded ? localized(loaded.info.name) : id === 'core' ? t('nav.administration') : id;
@@ -47,7 +49,7 @@ function TaskList({ modules }: { modules: LoadedModule[] }) {
           maw={260}
         />
       )}
-      <TaskGroups tasks={module ? data.filter((d) => d.module === module) : data} />
+      <TaskGroups tasks={module ? tasks.filter((d) => d.module === module) : tasks} />
     </Stack>
   );
 }
@@ -96,7 +98,7 @@ function Onboarding() {
 /** Start page: greeting, figures and cards of the modules, deadlines and tasks for the user's roles. */
 export function StartPage({ modules, session }: { modules: LoadedModule[]; session: Session }) {
   const { t, i18n } = useTranslation('shell');
-  const { data: tasks = [] } = useTasks();
+  const { data: tasks = [], isPending: tasksPending } = useTasks();
   const [now] = useState(() => new Date());
   const items = modules
     // Item IDs are unique per module only, so the key includes the module.
@@ -118,7 +120,7 @@ export function StartPage({ modules, session }: { modules: LoadedModule[]; sessi
         {area('kpi').map(({ id, component: Item }) => (
           <Item key={id} />
         ))}
-        <KpiTile value={overdue} label={t('start.deadlinesOverdue')} hint={t('start.deadlinesUpcoming', { count: upcoming })} attention={overdue > 0} />
+        <KpiTile value={tasksPending ? <Loader size="sm" /> : overdue} label={t('start.deadlinesOverdue')} hint={tasksPending ? undefined : t('start.deadlinesUpcoming', { count: upcoming })} attention={!tasksPending && overdue > 0} />
       </SimpleGrid>
       <Grid gap="lg">
         {area('main').length > 0 && (

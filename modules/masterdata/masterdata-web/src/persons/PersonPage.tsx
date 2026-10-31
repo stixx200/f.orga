@@ -1,4 +1,4 @@
-import { Avatar, Button, Group, Stack, Tabs, Text } from '@mantine/core';
+import { Avatar, Button, Group, Loader, Stack, Tabs, Text } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
@@ -155,11 +155,16 @@ function PersonFile({ person }: { person: Person }) {
           </Panel>
         </Tabs.Panel>
       </Tabs>
-      {editable && (
+      {editable && (tab === 'master' || tab === 'brigade') && (
         <ActionBar info={t(dirty ? 'person.unsaved' : 'person.allSaved')}>
           <Button variant="default" disabled={!dirty} onClick={() => setForm(toForm(person))}>{common('actions.cancel')}</Button>
           <Button disabled={!dirty || ibanInvalid} loading={save.isPending} onClick={() => save.mutate(form)}>{common('actions.save')}</Button>
         </ActionBar>
+      )}
+      {editable && tab !== 'master' && tab !== 'brigade' && (dirty || ibanInvalid) && (
+        <Notice kind="warning" action={<Button size="xs" variant="default" onClick={() => setTab('master')}>{t('person.tabs.master')}</Button>}>
+          {t(ibanInvalid ? 'person.invalidIban' : 'person.unsaved')}
+        </Notice>
       )}
     </Stack>
   );
@@ -178,6 +183,6 @@ export function PersonPage() {
   const { data: person, error } = usePerson(id);
   if (error instanceof ApiError && error.code === 'privacy.processingRestricted') return <EmptyState title={t('person.restrictedBadge')} text={t('person.restrictedPage')} />;
   if (error) return <EmptyState title={t('person.notFound')} />;
-  if (!person) return null;
+  if (!person) return <Loader m="xl" />;
   return <PersonFile key={person.id} person={person} />;
 }

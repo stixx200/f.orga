@@ -17,16 +17,16 @@
   },
   "dependencies": {
     "tslib": "^2.3.0",
-    "@forga/core-api": "*",
-    "@forga/core-contracts": "*",
-    "@forga/masterdata-contracts": "*",
-    "@forga/duty-officer-contracts": "*",
+    "@forga/core-api": "workspace:*",
+    "@forga/core-contracts": "workspace:*",
+    "@forga/masterdata-contracts": "workspace:*",
+    "@forga/duty-officer-contracts": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@mikro-orm/core": "^7.2.5",
     "@mikro-orm/migrations": "^7.2.5",
     "uuid": "^14.0.3",
     "zod": "^4.6.7",
-    "@forga/incidents-contracts": "*"
+    "@forga/incidents-contracts": "workspace:*"
   },
   "nx": {
     "tags": [

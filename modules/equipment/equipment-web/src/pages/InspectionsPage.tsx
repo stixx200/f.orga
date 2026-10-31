@@ -47,6 +47,7 @@ export function InspectionsPage() {
         scroll
         rows={rows}
         rowKey={(r) => `${r.item.id}:${r.due.key}`}
+        onRowClick={(r) => navigate(`/equipment/items/${r.item.id}?tab=inspections`)}
         empty={isLoading ? t('loading') : t('duePage.empty')}
         columns={[
           { key: 'due', header: t('inspection.due'), render: (r) => <DueDate dueOn={r.due.dueOn} /> },

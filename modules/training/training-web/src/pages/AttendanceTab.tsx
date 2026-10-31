@@ -1,4 +1,4 @@
-import { Button, Checkbox, Group, NumberInput, SegmentedControl, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Checkbox, Group, Loader, NumberInput, SegmentedControl, Stack, Text, TextInput } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useQuery } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
@@ -19,9 +19,9 @@ const REFRESH = 10_000;
  */
 function CheckInPanel({ session }: { session: Session }) {
   const { t, i18n } = useTranslation('training');
-  const { data } = useQuery({ queryKey: [...keys.session(session.id), 'check-in'], queryFn: () => api<CheckIn>(`training/sessions/${session.id}/check-in`), refetchInterval: 20_000 });
+  const { data, isPending } = useQuery({ queryKey: [...keys.session(session.id), 'check-in'], queryFn: () => api<CheckIn>(`training/sessions/${session.id}/check-in`), refetchInterval: 20_000 });
   useSession(session.id, REFRESH);
-  if (!data) return null;
+  if (!data) return isPending ? <Loader m="md" /> : null;
   // The server exchanges the code for a ticket valid some minutes before the login page opens.
   const link = `${window.location.origin}/api/training/check-in/start?code=${encodeURIComponent(data.code)}`;
   const checkedIn = session.attendance.filter((a) => a.checkedInAt).length;
@@ -52,7 +52,7 @@ const toRow = (a: Session['attendance'][number]): Row => ({
  */
 export function AttendanceTab({ session, editable }: { session: Session; editable: boolean }) {
   const { t } = useTranslation('training');
-  const { data: persons = [] } = usePersons();
+  const { data: persons = [], isSuccess: personsLoaded } = usePersons();
   const { data: types = [] } = useTypes();
   const mobile = useMediaQuery('(max-width: 48em)');
   const record = types.find((x) => x.key === session.type)?.record;
@@ -90,6 +90,13 @@ export function AttendanceTab({ session, editable }: { session: Session; editabl
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
+  // The member list arrives after the recorded rows; until then the department members are missing from the list.
+  useEffect(() => {
+    if (!personsLoaded || dirty) return;
+    setRows(build(session));
+    // The list is rebuilt once the full member set is known.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personsLoaded]);
 
   // Leaving the page with unsaved changes asks first.
   const blocker = useBlocker(({ currentLocation, nextLocation }) => editable && dirty && currentLocation.pathname !== nextLocation.pathname);
@@ -125,6 +132,7 @@ export function AttendanceTab({ session, editable }: { session: Session; editabl
   });
   const present = rows.filter((r) => r.status === 'present').length;
   const unconfirmed = new Set(session.attendance.filter((a) => !a.confirmed).map((a) => a.personId));
+  if (!personsLoaded) return <Loader m="xl" />;
   if (!rows.length) return <EmptyState title={t('attendance.noPersons')} />;
   const size = mobile ? 'md' : 'sm';
 

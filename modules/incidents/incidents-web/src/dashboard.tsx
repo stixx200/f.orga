@@ -1,4 +1,4 @@
-import { Text } from '@mantine/core';
+import { Loader, Text } from '@mantine/core';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import type { Incident } from '@forga/incidents-contracts';
@@ -24,10 +24,10 @@ function useReviewer() {
 export function ReviewTile() {
   const { t } = useTranslation('incidents');
   const { reviewer, reviews } = useReviewer();
-  const { data = [] } = useIncidents({ status: 'review' }, reviewer);
+  const { data, isPending } = useIncidents({ status: 'review' }, reviewer);
   if (!reviewer) return null;
-  const count = countReports(data, 'review', reviews);
-  return <KpiTile value={count} label={t('dashboard.review')} hint={t('dashboard.reviewHint')} to="/incidents/review" attention={count > 0} />;
+  const count = countReports(data ?? [], 'review', reviews);
+  return <KpiTile value={isPending ? <Loader size="sm" /> : count} label={t('dashboard.review')} hint={isPending ? undefined : t('dashboard.reviewHint')} to="/incidents/review" attention={!isPending && count > 0} />;
 }
 
 /** Second step of the release: reports released for compensation wait for the release for billing. */
@@ -35,31 +35,31 @@ export function BillingTile() {
   const { t } = useTranslation('incidents');
   const { data: settings } = useSettings();
   const twoSteps = twoStepRelease(settings);
-  const { data = [] } = useIncidents({ status: 'released-compensation' }, twoSteps);
+  const { data, isPending } = useIncidents({ status: 'released-compensation' }, twoSteps);
   if (!twoSteps) return null;
-  const count = countReports(data, 'released-compensation');
-  return <KpiTile value={count} label={t('dashboard.billing')} hint={t('dashboard.billingHint')} to="/incidents/review?status=released-compensation" attention={count > 0} />;
+  const count = countReports(data ?? [], 'released-compensation');
+  return <KpiTile value={isPending ? <Loader size="sm" /> : count} label={t('dashboard.billing')} hint={isPending ? undefined : t('dashboard.billingHint')} to="/incidents/review?status=released-compensation" attention={!isPending && count > 0} />;
 }
 
 export function MyOpenTile() {
   const { t } = useTranslation('incidents');
-  const { data = [] } = useIncidents({ status: 'draft', mine: true });
-  const count = countReports(data, 'draft');
-  return <KpiTile value={count} label={t('dashboard.myOpen')} hint={t('dashboard.myOpenHint')} to="/incidents/incidents" attention={count > 0} />;
+  const { data, isPending } = useIncidents({ status: 'draft', mine: true });
+  const count = countReports(data ?? [], 'draft');
+  return <KpiTile value={isPending ? <Loader size="sm" /> : count} label={t('dashboard.myOpen')} hint={isPending ? undefined : t('dashboard.myOpenHint')} to="/incidents/incidents" attention={!isPending && count > 0} />;
 }
 
 export function RecentIncidents() {
   const { t, i18n: { language } } = useTranslation('incidents');
   const names = useNames();
   const [from] = useState(() => localDate(new Date(Date.now() - 60 * 86_400_000)));
-  const { data = [] } = useIncidents({ from });
+  const { data = [], isLoading } = useIncidents({ from, limit: 5 });
   return (
     <Panel title={t('dashboard.recent')} aside={<Text component={Link} to="/incidents/incidents" size="sm" c="brand" fw={700}>{t('dashboard.all')}</Text>}>
       <DataTable<Incident>
         exportable={false}
-        rows={data.slice(0, 5)}
+        rows={data}
         rowKey={(i) => i.id}
-        empty={t('incidents.empty')}
+        empty={isLoading ? t('loading') : t('incidents.empty')}
         columns={[
           {
             key: 'keyword',

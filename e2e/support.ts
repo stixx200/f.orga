@@ -29,10 +29,10 @@ export const test = base.extend<{ closeContexts: void }>({
 
 // ----- Users of the demo data -----------------------------------------------------------------------------------------
 
-/** The administrator created by the initial setup of `npm run seed`. */
+/** The administrator created by the initial setup of `pnpm run seed`. */
 export const ADMIN = { username: process.env['FORGA_ADMIN_USER'] ?? 'admin', password: process.env['FORGA_ADMIN_PASSWORD'] ?? 'sehr-geheim-123' };
 
-/** Password of the users created by `npm run seed`, one per standard role. */
+/** Password of the users created by `pnpm run seed`, one per standard role. */
 export const PASSWORD = process.env['FORGA_SEED_PASSWORD'] ?? 'demo-passwort-2026';
 
 /**
@@ -87,7 +87,7 @@ export async function login(browser: Browser, username: string, options: LoginOp
 
 // ----- Second factor (step-up) ----------------------------------------------------------------------------------------
 
-/** Secrets of the second factor of the demo users; `npm run seed` writes the administrator's, `login` the others. */
+/** Secrets of the second factor of the demo users; `pnpm run seed` writes the administrator's, `login` the others. */
 const TOTP_FILE = process.env['FORGA_TOTP_FILE'] ?? 'tmp/seed-totp.json';
 const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const PERIOD_MS = 30_000;

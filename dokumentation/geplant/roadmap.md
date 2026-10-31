@@ -35,7 +35,7 @@ Ziel: MP-Feuer für Personal und Einsatzberichte ablösen, inklusive Abrechnungs
 - Mehrsprachigkeit (Deutsch/Englisch)
 - funktionale Einrichtungs- und Anmeldeseite
 - Mockups der Shell (freigegeben) und Frontend danach: Rahmen, Startseite mit Aufgaben, Profil, Listen, Import-Assistent, Benutzer, Rollen, Module, API-Tokens, Einstellungen, Audit-Ansicht; Historie-Komponente in `web-ui`
-- Demodaten (`npm run seed`)
+- Demodaten (`pnpm run seed`)
 
 Offen:
 

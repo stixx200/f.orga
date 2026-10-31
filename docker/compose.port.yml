@@ -1,4 +1,4 @@
-# Publishes the database of docker/compose.yml on the host, so `npm run dev` can use it.
+# Publishes the database of docker/compose.yml on the host, so `pnpm run dev` can use it.
 # The volume stays. Start only the database:
 #   docker compose --env-file docker/.env -f docker/compose.yml -f docker/compose.port.yml -p docker up -d db
 services:

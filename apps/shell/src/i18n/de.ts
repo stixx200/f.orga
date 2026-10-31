@@ -52,6 +52,8 @@ export const de = {
   },
   header: {
     search: 'Personen, Fahrzeuge, Einsätze suchen',
+    searching: 'Suche …',
+    noHits: 'Keine Treffer',
     tasks: 'Aufgaben',
     noTasks: 'Keine offenen Aufgaben.',
     allTasks: 'Alle Aufgaben',

@@ -2,7 +2,7 @@
  * Until the first release there are no incremental migrations: this replaces all migrations of core and modules by
  * one `initial` migration each, generated from the entities.
  *
- *   npm run migration:reset
+ *   pnpm run migration:reset
  *
  * Works on a temporary database next to the development database, so a running dev server is not disturbed.
  * Afterwards the development database has to be recreated (it still holds the old migrations).

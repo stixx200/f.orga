@@ -201,12 +201,11 @@ export class EvidenceService implements OnModuleInit, OnApplicationBootstrap, On
     if (!status) return null;
     const rows = await this.em.fork().find(EvidenceEntity, { personId, withdrawn: false }, { orderBy: { date: 'desc' } });
     const examinations = rows.filter((row) => row.kind === 'examination');
-    return {
-      color: status.color,
-      nextDue: status.nextDue,
-      evidence: rows.filter((row) => row.kind !== 'examination').map((row) => ({ kind: row.kind, date: row.date, validUntil: row.validUntil ?? null, passed: row.passed ?? null })),
-      examinations: examinations.map((row) => ({ date: row.date, validUntil: row.validUntil ?? null, result: row.result ?? null })),
-    };
+    const evidence = rows.filter((row) => row.kind !== 'examination').map((row) => ({ kind: row.kind, date: row.date, validUntil: row.validUntil ?? null, passed: row.passed ?? null }));
+    const examinationRows = examinations.map((row) => ({ date: row.date, validUntil: row.validUntil ?? null, result: row.result ?? null }));
+    // Same rule as the kiosk: no respiratory block for a person who is not a wearer and has no records.
+    if (status.color === 'grey' && evidence.length === 0 && examinationRows.length === 0) return null;
+    return { color: status.color, nextDue: status.nextDue, evidence, examinations: examinationRows };
   }
 
   /** "My area": the own status and all own records, examinations included (own data). */

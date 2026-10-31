@@ -1,9 +1,10 @@
-import { ActionIcon, Button, FileButton, FileInput, Group, Image, Stack, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Button, FileButton, FileInput, Group, Image, Input, SegmentedControl, Select, Stack, Text, Tooltip } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { IconNfc } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { type CSSProperties, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import type { Attachment } from '@forga/core-contracts';
-import type { Defect, ItemStatus } from '@forga/equipment-contracts';
+import type { Defect, InspectionResult, ItemStatus } from '@forga/equipment-contracts';
 import { api, apiUrl, formatDate, send, upload, useLocalized, useTranslation } from '@forga/web-sdk';
 import { attachmentsKey, Attachments, CodeInput, nfcSupported, readNfc, ResponsiveDialog, StatusBadge, type Tone, useAction } from '@forga/web-ui';
 import { useDueSoon } from './api';
@@ -24,6 +25,22 @@ export function DueDate({ dueOn, notRecorded = false }: { dueOn: string | null; 
   if (!dueOn) return <Text size="sm" c="dimmed">{notRecorded ? t('due.notRecorded') : '–'}</Text>;
   const color = dueOn <= today ? 'red.8' : dueOn <= soon ? 'orange.8' : undefined;
   return <Text size="sm" c={color} fw={color ? 700 : undefined}>{dueOn <= today ? t('due.overdue', { date: formatDate(dueOn, i18n.language) }) : formatDate(dueOn, i18n.language)}</Text>;
+}
+
+/** Result of an inspection: a labelled select on a phone, a segmented control on a wider screen. */
+export function InspectionResultField({ value, onChange }: { value: InspectionResult; onChange: (value: InspectionResult) => void }) {
+  const { t } = useTranslation('equipment');
+  const phone = useMediaQuery('(max-width: 48em)');
+  const data = (['passed', 'passed-with-defects', 'failed'] as const).map((result) => ({ value: result, label: t(`result.${result}`) }));
+  return (
+    <Input.Wrapper label={t('inspection.result')}>
+      {phone ? (
+        <Select mt={4} data={data} value={value} onChange={(next) => next && onChange(next as InspectionResult)} allowDeselect={false} />
+      ) : (
+        <SegmentedControl mt={4} fullWidth value={value} onChange={(next) => onChange(next as InspectionResult)} data={data} />
+      )}
+    </Input.Wrapper>
+  );
 }
 
 /** Text of a defect: as reported, or for a finding of an inspection "<inspection type>: <notes or result>". */
@@ -125,6 +142,7 @@ export function ScanField({ onCode, ...props }: { onCode: (code: string) => void
   return (
     <Group gap="xs" align="end" wrap="nowrap" style={props.style}>
       <CodeInput
+        repeat
         label={props.label ?? t('scan.label')}
         placeholder={t('scan.placeholder')}
         value={value}
