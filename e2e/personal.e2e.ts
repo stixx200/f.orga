@@ -50,9 +50,9 @@ test('personal access: mail, kiosk tiles and hidden respiratory protection', asy
   const kiosk = await openKiosk(browser, url);
   await expect(kiosk.getByRole('heading', { name: `E2E Träger${stamp}` })).toBeVisible();
   await dismissInstallHint(kiosk);
-  await expect(kiosk.getByRole('button', { name: /Atemschutz/ })).toBeVisible();
-  await expect(kiosk.getByRole('button', { name: /Dienste/ })).toBeVisible();
-  await expect(kiosk.getByRole('button', { name: /Einsätze/ })).toBeVisible();
+  await expect(kiosk.getByRole('button', { name: /Atemschutz/ })).toHaveCount(2);
+  await expect(kiosk.getByRole('button', { name: /Dienste/ })).toHaveCount(2);
+  await expect(kiosk.getByRole('button', { name: /Einsätze/ })).toHaveCount(2);
   await expect(kiosk.getByRole('button', { name: /Schutzausrüstung/ })).toBeVisible();
   await expect(kiosk.getByRole('button', { name: /Lehrgänge/ })).toBeVisible();
   await expect(kiosk.getByRole('button', { name: /Qualifikationen/ })).toBeVisible();
