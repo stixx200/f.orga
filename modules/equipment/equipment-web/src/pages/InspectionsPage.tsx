@@ -34,7 +34,7 @@ export function InspectionsPage() {
         subtitle={t('duePage.subtitle')}
         actions={
           <Group gap="sm">
-            {access.inspectsAnything && <Button component={Link} to="/equipment/bulk" variant="default">{t('bulk.title')}</Button>}
+            {access.booksAnything && <Button component={Link} to="/equipment/bulk" variant="default">{t('bulk.title')}</Button>}
             <Button component="a" href={apiUrl('core/lists/equipment.inspection-report/export/pdf', { departmentId: departmentId ?? undefined, lang: i18n.language })} target="_blank" variant="default">{t('protocol.today')}</Button>
           </Group>
         }

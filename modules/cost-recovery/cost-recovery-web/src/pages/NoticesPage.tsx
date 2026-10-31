@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { Notice, NoticeStatus } from '@forga/cost-recovery-contracts';
 import { can, formatDate, formatMoney, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, notifySuccess, PageHeader, useAction } from '@forga/web-ui';
+import { ConfirmDialog, DataTable, HeaderCheckbox, notifySuccess, PageHeader, useAction } from '@forga/web-ui';
 import { download, keys, type ListFilter, useCostSettings, useNotices, useOffenseName, WRITE } from '../api';
 import { NoticeStatusBadge } from '../parts';
 
@@ -67,16 +67,6 @@ export function NoticesPage() {
         <Switch label={t('notices.onlyRefund')} checked={refund} onChange={(e) => setRefund(e.currentTarget.checked)} mb={8} />
       </Group>
       <Group gap="md">
-        <Checkbox
-          label={t('notices.selectAll')}
-          checked={allChosen}
-          indeterminate={chosen.length > 0 && !allChosen}
-          onChange={(e) => {
-            const checked = e.currentTarget.checked;
-            setSelection(checked ? new Set(data.map((n) => n.id)) : new Set());
-          }}
-          disabled={!data.length}
-        />
         <Text size="sm" c="dimmed">{chosen.length ? t('notices.selected', { count: chosen.length }) : t('notices.selectHint')}</Text>
         {chosen.length > 0 && <Button variant="subtle" size="compact-sm" onClick={() => setSelection(new Set())}>{t('notices.clearSelection')}</Button>}
       </Group>
@@ -90,6 +80,15 @@ export function NoticesPage() {
             key: 'select',
             header: '',
             width: 40,
+            heading: (
+              <HeaderCheckbox
+                label={t('notices.selectAll')}
+                checked={allChosen}
+                indeterminate={chosen.length > 0 && !allChosen}
+                disabled={!data.length}
+                onChange={(checked) => setSelection(checked ? new Set(data.map((n) => n.id)) : new Set())}
+              />
+            ),
             render: (n) => (
               // The checkbox does not open the notice like a click on the row.
               <Checkbox aria-label={t('notices.select')} checked={selection.has(n.id)} onClick={(e) => e.stopPropagation()} onChange={(e) => toggle(n.id, e.currentTarget.checked)} />

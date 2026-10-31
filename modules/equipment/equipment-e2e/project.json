@@ -1,0 +1,13 @@
+{
+  "name": "equipment-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/equipment/equipment-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-equipment",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "equipment-web"
+  ]
+}

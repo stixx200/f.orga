@@ -8,7 +8,7 @@ import { registerAuditReferences } from './audit/audit.references.js';
 import { CatalogController } from './catalog/catalog.controller.js';
 import { EquipmentData } from './data/equipment.data.js';
 import { EquipmentRetention } from './data/equipment.retention.js';
-import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, UsageEntity } from './equipment.entities.js';
+import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, RecentBulkCategoryEntity, UsageEntity } from './equipment.entities.js';
 import { InventoryImport } from './imports/inventory.import.js';
 import { EquipmentLookups } from './imports/lookups.js';
 import { ItemsController } from './items/items.controller.js';
@@ -134,7 +134,7 @@ export class EquipmentModule implements OnModuleInit {
 export const equipmentModule = defineModule({
   manifest: EQUIPMENT_MANIFEST,
   nestModule: EquipmentModule,
-  entities: [CategoryEntity, EquipmentTypeEntity, EquipmentItemEntity, InspectionEntity, DefectEntity, UsageEntity],
+  entities: [CategoryEntity, EquipmentTypeEntity, EquipmentItemEntity, InspectionEntity, DefectEntity, UsageEntity, RecentBulkCategoryEntity],
   historized: [CategoryEntity, EquipmentTypeEntity, EquipmentItemEntity, { entity: InspectionEntity, parent: 'item' }, { entity: DefectEntity, parent: 'item' }],
   migrations: EQUIPMENT_MIGRATIONS,
   settings: EQUIPMENT_SETTINGS,

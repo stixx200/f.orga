@@ -19,7 +19,7 @@ import {
 import type { Response } from 'express';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { z } from 'zod';
-import { assertVersion, Audit, type AuthenticatedUser, berlinDayAfter, berlinDayStart, CurrentUser, MailService, Notifications, RequirePermissions, User, ZodPipe } from '@forga/core-api';
+import { assertVersion, Attachments, Audit, type AuthenticatedUser, berlinDayAfter, berlinDayStart, CurrentUser, MailService, Notifications, RequirePermissions, User, ZodPipe } from '@forga/core-api';
 import type { Language } from '@forga/core-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import {
@@ -115,6 +115,7 @@ export class IncidentsController {
     private readonly mail: MailService,
     private readonly notifications: Notifications,
     private readonly audit: Audit,
+    private readonly attachments: Attachments,
     private readonly pdf: ReportPdf,
     private readonly writers: ReportWriters,
     private readonly unitReports: UnitReportsService,
@@ -717,6 +718,37 @@ export class IncidentsController {
    * incident as well, with the drafts of brigade-wide units, so no incident is left that nobody finds in the list.
    * Reports of units are removed by their module (e.g. "no duty officer at this incident").
    */
+  /**
+   * Deletes the incident and every report, including reports of brigade-wide units (e.g. the only EvD report).
+   * Every report must be an unlocked draft; a submitted, released or locked report blocks the whole deletion.
+   */
+  @Delete('incidents/:id')
+  @HttpCode(204)
+  @RequirePermissions(DELETE_REPORT)
+  async deleteIncident(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<void> {
+    const em = this.em.fork();
+    const incident = await em.findOne(IncidentEntity, id, { populate: ['reports'] });
+    if (!incident || !this.visible(user, incident)) throw new NotFoundException();
+    const reports = incident.reports.getItems();
+    for (const report of reports) {
+      await this.reports.assertNotLedExternally(report);
+      if (report.status.startsWith('released') || report.locked || report.status !== 'draft') {
+        throw new ConflictException({ code: 'incidents.incidentNotDeletable', status: report.locked && report.status === 'draft' ? 'locked' : report.status });
+      }
+    }
+    const deleted = reports.map((report) => ({ id: report.id, number: report.number, incident }));
+    if (reports.length) await this.attachments.removeFor('incidents.report', reports.map((report) => report.id));
+    for (const report of reports) em.remove(report);
+    em.remove(incident);
+    await em.flush();
+    for (const report of deleted) {
+      await this.audit.log('incidents.report-deleted', { reportId: report.id, reportNumber: report.number, dispatchNumber: incident.dispatchNumber });
+      await this.reports.publishUnlocked(report, 'deleted');
+    }
+    await this.audit.log('incidents.incident-deleted', { incidentId: incident.id, dispatchNumber: incident.dispatchNumber });
+    await this.reports.publishDeleted(incident);
+  }
+
   @Delete('reports/:id')
   @HttpCode(204)
   @RequirePermissions(DELETE_REPORT)

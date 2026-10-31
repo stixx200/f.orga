@@ -61,6 +61,7 @@ describe('equipment', () => {
   });
 
   it('manages items with due inspections per department', async () => {
+    await put('/core/settings/equipment.settings', { locations: ['Atemschutzwerkstatt', 'Gesamtlager', 'Gesamtlager – verschmutzt'] }).expect(200);
     const item = { inventoryNumber: 'AS-PA-0001', name: 'Pressluftatmer 1', typeKey: 'scba', categoryKey: 'breathing', departmentId: ids.musterstadt, vehicleId: ids.lf, loadingPlace: 'G1', location: 'Atemschutzwerkstatt' };
     ids.scba = (await post('/equipment/items', item, officer).expect(201)).body.id;
     await post('/equipment/items', { ...item, name: 'Doppelt' }, officer).expect(400);
@@ -164,10 +165,22 @@ describe('equipment', () => {
     await post(`/equipment/items/${ids.hose}/trigger`, { inspectionKey: 'hose-washing' }, officer).expect(200);
     let hose = (await get(`/equipment/items/${ids.hose}`, officer)).body;
     expect(hose.dues[0]).toMatchObject({ dueOn: today, overdue: true });
-    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], inspectionKey: 'hose-washing', date: today, result: 'passed' }, officer).expect(200)).body).toEqual({ recorded: 1, ids: [expect.any(String)] });
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], categoryKey: 'missing', inspection: { inspectionKey: 'hose-washing', date: today, result: 'passed' } }, officer).expect(400)).body.code).toBe('equipment.unknownCategory');
+    expect((await get('/equipment/inspections/bulk/recent', officer).expect(200)).body).toEqual({ categoryKeys: [] });
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], categoryKey: 'hoses', inspection: { inspectionKey: 'hose-washing', date: today, result: 'passed' } }, officer).expect(200)).body).toEqual({ recorded: 1, ids: [expect.any(String)], triggered: 0, moved: 0 });
+    expect((await get('/equipment/inspections/bulk/recent', officer).expect(200)).body).toEqual({ categoryKeys: ['hoses'] });
+    expect((await get('/equipment/inspections/bulk/recent', agw).expect(200)).body).toEqual({ categoryKeys: [] });
     hose = (await get(`/equipment/items/${ids.hose}`, officer)).body;
     expect(hose.dues[0].dueOn).toBeNull();
     expect((await get(`/equipment/items/${ids.scba}/inspections`, officer)).body).toHaveLength(2);
+
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], categoryKey: 'hoses', inspection: { inspectionKey: 'hose-washing', date: today, result: 'passed' }, triggerKey: 'hose-washing' }, officer).expect(400)).body.code).toBe('equipment.bulkConflict');
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], categoryKey: 'hoses' }, officer).expect(400)).body.code).toBe('equipment.bulkEmpty');
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], categoryKey: 'hoses', triggerKey: 'hose-washing' }, officer).expect(200)).body).toEqual({ recorded: 0, ids: [], triggered: 1, moved: 0 });
+    hose = (await get(`/equipment/items/${ids.hose}`, officer)).body;
+    expect(hose.dues.find((d: { key: string }) => d.key === 'hose-washing')).toMatchObject({ dueOn: today, overdue: true });
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], categoryKey: 'hoses', place: { vehicleId: ids.tsf, location: '', loadingPlace: 'Heck' } }, officer).expect(200)).body).toEqual({ recorded: 0, ids: [], triggered: 0, moved: 1 });
+    expect((await get(`/equipment/items/${ids.hose}`, officer)).body).toMatchObject({ vehicleId: ids.tsf, loadingPlace: 'Heck' });
   });
 
   it('corrects and cancels inspections with a reason', async () => {
@@ -285,9 +298,11 @@ describe('equipment', () => {
     const counts = async () => [await count(ids.hose2), await count(ids.scba), await count(ids.ladder2)];
     const initial = await counts();
     // The breathing apparatus officer may inspect the breathing apparatus but not the ladder: nothing is written.
-    await post('/equipment/inspections/bulk', { itemIds: [ids.scba, ids.ladder2], inspectionKey: 'scba-check', date: today, result: 'failed' }, agw).expect(403);
+    await post('/equipment/inspections/bulk', { itemIds: [ids.scba, ids.ladder2], categoryKey: 'breathing', inspection: { inspectionKey: 'scba-check', date: today, result: 'failed' } }, agw).expect(403);
     // The ladder has no inspection type "after washing": nothing is written, not even the hose.
-    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose2, ids.ladder2], inspectionKey: 'hose-washing', date: today, result: 'failed' }, officer).expect(400)).body.code).toBe('equipment.unknownInspection');
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose2, ids.ladder2], categoryKey: 'ladders', inspection: { inspectionKey: 'hose-washing', date: today, result: 'failed' } }, officer).expect(400)).body.code).toBe('equipment.unknownInspection');
+    expect((await get('/equipment/inspections/bulk/recent', officer).expect(200)).body).toEqual({ categoryKeys: ['hoses'] });
+    expect((await get('/equipment/inspections/bulk/recent', agw).expect(200)).body).toEqual({ categoryKeys: [] });
     expect(await counts()).toEqual(initial);
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(test.app.get(MailService).sent.length).toBe(mails);
@@ -341,9 +356,26 @@ describe('equipment', () => {
     const tasks = (await get(`/core/tasks?asOf=${today}`, officer).expect(200)).body as { kind: string; subject: { id: string }; to?: string }[];
     expect(tasks.find((t) => t.kind === 'equipment-inspection' && t.subject.id === ids.ladder)?.to).toBe(`/equipment/items/${ids.ladder}?tab=inspections`);
     expect(tasks.find((t) => t.kind === 'equipment-defect' && t.subject.id === ids.ladder)?.to).toBe(`/equipment/items/${ids.ladder}?tab=defects`);
-    // Lead times come from the settings.
-    expect((await put('/core/settings/equipment.settings', { inspectionLeadDays: 0, expiryLeadDays: 10, dueSoonDays: 14 }).expect(200)).body).toMatchObject({ dueSoonDays: 14 });
-    await put('/core/settings/equipment.settings', {}).expect(200);
+    // Lead times and bookable places come from the settings.
+    expect((await put('/core/settings/equipment.settings', {
+      inspectionLeadDays: 0,
+      expiryLeadDays: 10,
+      dueSoonDays: 14,
+      locations: ['Atemschutzwerkstatt', 'Gesamtlager', 'Gesamtlager – verschmutzt'],
+    }).expect(200)).body).toMatchObject({
+      dueSoonDays: 14,
+      locations: ['Atemschutzwerkstatt', 'Gesamtlager', 'Gesamtlager – verschmutzt'],
+    });
+    const hoseBase = { inventoryNumber: 'S-B-0001', name: 'B-Schlauch 20 m', typeKey: 'pressure-hose-b', categoryKey: 'hoses', departmentId: ids.musterstadt, quantity: 1, properties: { Länge: '20 m' } };
+    const hoseVersion = async () => (await get(`/equipment/items/${ids.hose}`, officer).expect(200)).body.version as number;
+    expect((await put(`/equipment/items/${ids.hose}`, { ...hoseBase, location: 'Keller freitext', version: await hoseVersion() }, officer).expect(400)).body.code).toBe('equipment.unknownLocation');
+    await put(`/equipment/items/${ids.hose}`, { ...hoseBase, location: 'Gesamtlager', version: await hoseVersion() }, officer).expect(200);
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], categoryKey: 'hoses', place: { location: 'Keller freitext', loadingPlace: '' } }, officer).expect(400)).body.code).toBe('equipment.unknownLocation');
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], categoryKey: 'hoses', place: { location: '', loadingPlace: 'asfasdfasdfasdfas' } }, officer).expect(400)).body.code).toBe('equipment.loadingPlaceWithoutVehicle');
+    expect((await put(`/equipment/items/${ids.hose}`, { ...hoseBase, loadingPlace: 'Keller freitext', version: await hoseVersion() }, officer).expect(400)).body.code).toBe('equipment.loadingPlaceWithoutVehicle');
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], categoryKey: 'hoses', place: { location: 'Gesamtlager – verschmutzt', loadingPlace: '' } }, officer).expect(200)).body).toMatchObject({ moved: 1 });
+    // Keep the bookable places for later tests; only reset the lead times.
+    await put('/core/settings/equipment.settings', { locations: ['Atemschutzwerkstatt', 'Gesamtlager', 'Gesamtlager – verschmutzt'] }).expect(200);
   });
 
   it('blocks items of locking categories while an inspection is overdue', async () => {

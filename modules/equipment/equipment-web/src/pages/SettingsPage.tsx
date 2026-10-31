@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Checkbox, Group, NumberInput, Radio, Select, SimpleGrid, Stack, Table, Tabs, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Checkbox, Group, NumberInput, Radio, Select, SimpleGrid, Stack, Table, Tabs, TagsInput, Text, TextInput } from '@mantine/core';
 import { IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 import { type Category, type CategoryInput, EquipmentSettings, type EquipmentType, type EquipmentTypeInput, type InspectionType, type Tracking } from '@forga/equipment-contracts';
@@ -184,7 +184,7 @@ function TemplateDialog({ onDone, onClose }: { onDone: (r: { categories: number;
   );
 }
 
-/** Lead times of the deadlines and "due soon" (setting `equipment.settings`). */
+/** Lead times, "due soon" and bookable places (setting `equipment.settings`). */
 function LeadTimes() {
   const { t } = useTranslation('equipment');
   const { t: common } = useTranslation('common');
@@ -192,14 +192,23 @@ function LeadTimes() {
   const [form, setForm] = useState<EquipmentSettings | null>(null);
   const value = form ?? data ?? EquipmentSettings.parse({});
   const save = useAction(() => send('PUT', 'core/settings/equipment.settings', value), { success: t('settings.saved'), invalidate: [['core', 'settings', 'equipment.settings']], onSuccess: () => setForm(null) });
-  const set = (key: keyof EquipmentSettings, v: string | number) => setForm({ ...value, [key]: Number(v) || 0 });
+  const setDays = (key: 'inspectionLeadDays' | 'expiryLeadDays' | 'dueSoonDays', v: string | number) => setForm({ ...value, [key]: Number(v) || 0 });
   return (
     <Panel title={t('settings.leadTimes')} aside={<Button size="xs" disabled={!form} loading={save.isPending} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>}>
-      <SimpleGrid cols={{ base: 1, sm: 3 }}>
-        <NumberInput label={t('settings.inspectionLeadDays')} description={t('settings.inspectionLeadDaysHint')} value={value.inspectionLeadDays} onChange={(v) => set('inspectionLeadDays', v)} min={0} max={365} />
-        <NumberInput label={t('settings.expiryLeadDays')} description={t('settings.expiryLeadDaysHint')} value={value.expiryLeadDays} onChange={(v) => set('expiryLeadDays', v)} min={0} max={365} />
-        <NumberInput label={t('settings.dueSoonDays')} description={t('settings.dueSoonDaysHint')} value={value.dueSoonDays} onChange={(v) => set('dueSoonDays', v)} min={0} max={365} />
-      </SimpleGrid>
+      <Stack gap="md">
+        <SimpleGrid cols={{ base: 1, sm: 3 }}>
+          <NumberInput label={t('settings.inspectionLeadDays')} description={t('settings.inspectionLeadDaysHint')} value={value.inspectionLeadDays} onChange={(v) => setDays('inspectionLeadDays', v)} min={0} max={365} />
+          <NumberInput label={t('settings.expiryLeadDays')} description={t('settings.expiryLeadDaysHint')} value={value.expiryLeadDays} onChange={(v) => setDays('expiryLeadDays', v)} min={0} max={365} />
+          <NumberInput label={t('settings.dueSoonDays')} description={t('settings.dueSoonDaysHint')} value={value.dueSoonDays} onChange={(v) => setDays('dueSoonDays', v)} min={0} max={365} />
+        </SimpleGrid>
+        <TagsInput
+          label={t('settings.locations')}
+          description={t('settings.locationsHint')}
+          value={value.locations}
+          onChange={(locations) => setForm({ ...value, locations })}
+          placeholder={t('settings.locationsPlaceholder')}
+        />
+      </Stack>
     </Panel>
   );
 }

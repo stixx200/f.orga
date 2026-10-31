@@ -1,0 +1,13 @@
+{
+  "name": "incidents-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/incidents/incidents-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-incidents",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "incidents-web"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "info-terminal-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/info-terminal/info-terminal-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-info-terminal",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "info-terminal-web"
+  ]
+}

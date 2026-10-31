@@ -1,0 +1,13 @@
+{
+  "name": "masterdata-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/masterdata/masterdata-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-masterdata",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "masterdata-web"
+  ]
+}

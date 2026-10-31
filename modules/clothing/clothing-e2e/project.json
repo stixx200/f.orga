@@ -1,0 +1,13 @@
+{
+  "name": "clothing-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/clothing/clothing-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-clothing",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "clothing-web"
+  ]
+}

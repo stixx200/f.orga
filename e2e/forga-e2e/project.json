@@ -1,0 +1,16 @@
+{
+  "name": "forga-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "e2e/forga-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:app",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "shell",
+    "equipment-web",
+    "masterdata-web",
+    "duty-officer-web"
+  ]
+}

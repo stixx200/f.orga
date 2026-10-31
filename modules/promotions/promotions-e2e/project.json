@@ -1,0 +1,13 @@
+{
+  "name": "promotions-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/promotions/promotions-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-promotions",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "promotions-web"
+  ]
+}

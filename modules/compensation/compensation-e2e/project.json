@@ -1,0 +1,13 @@
+{
+  "name": "compensation-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/compensation/compensation-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-compensation",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "compensation-web"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "mp-feuer-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/mp-feuer/mp-feuer-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-mp-feuer",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "mp-feuer-web"
+  ]
+}

@@ -1,5 +1,5 @@
 import { type ReactNode, useRef } from 'react';
-import { Button, Group, Text } from '@mantine/core';
+import { Button, Checkbox, Group, Text } from '@mantine/core';
 import { IconFileSpreadsheet } from '@tabler/icons-react';
 import { useTranslation } from '@forga/web-sdk';
 import classes from './components.module.css';
@@ -9,11 +9,57 @@ import { downloadXlsx } from './xlsx';
 export interface Column<T> {
   key: string;
   header: string;
+  /** Replaces the header text, e.g. a checkbox. `header` stays the phone label and the Excel title. */
+  heading?: ReactNode;
   render?: (row: T) => ReactNode;
   width?: number | string;
   align?: 'left' | 'right' | 'center';
   /** `false` leaves the column out of the Excel export; columns without header (e.g. buttons) are left out anyway. */
   export?: boolean;
+}
+
+/** Check mark, or a filled square when only some rows are selected. */
+function HeaderCheckIcon({ indeterminate, className }: { indeterminate: boolean | undefined; className: string }) {
+  if (indeterminate) {
+    return (
+      <svg viewBox="0 0 10 10" className={className} aria-hidden>
+        <rect width="10" height="10" fill="currentColor" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 10 7" fill="none" className={className} aria-hidden>
+      <path d="M4 4.586L1.707 2.293A1 1 0 0 0 .293 3.707l3 3a1 1 0 0 0 1.414 0l5-5A1 1 0 0 0 8.293.293L4 4.586z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Selects or clears every shown row. A partial selection shows a dark square inside the box. */
+export function HeaderCheckbox({
+  checked,
+  indeterminate,
+  label,
+  disabled,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  label: string;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <Checkbox
+      className={classes.headerCheck}
+      aria-label={label}
+      checked={checked}
+      indeterminate={indeterminate}
+      disabled={disabled}
+      icon={HeaderCheckIcon}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => onChange(e.currentTarget.checked)}
+    />
+  );
 }
 
 const pick = <V,>(values: V[], included: boolean[]) => values.filter((_, i) => included[i]);
@@ -86,8 +132,8 @@ export function DataTable<T>({
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.key} style={{ width: c.width }} className={c.align ? classes[c.align] : undefined}>
-                {c.header}
+              <th key={c.key} style={{ width: c.width }} className={[c.align ? classes[c.align] : '', c.heading ? classes.headerControl : ''].filter(Boolean).join(' ') || undefined}>
+                {c.heading ?? c.header}
               </th>
             ))}
           </tr>

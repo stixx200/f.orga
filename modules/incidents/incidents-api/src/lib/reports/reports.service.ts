@@ -8,6 +8,7 @@ import {
   type Finding,
   type Incident,
   type IncidentCreatedEvent,
+  type IncidentDeletedEvent,
   INCIDENTS_EVENTS,
   type IncidentUnit,
   type IncidentStatistics,
@@ -1047,6 +1048,11 @@ export class ReportsService {
    */
   async publishUnlocked(report: Pick<ReportEntity, 'id' | 'incident'>, reason: string): Promise<void> {
     await this.events.publish<ReportUnlockedEvent>(INCIDENTS_EVENTS.reportUnlocked, { reportId: report.id, incidentId: report.incident.id, reason });
+  }
+
+  /** Other modules drop what they kept for the incident (e.g. the expected EvD report). */
+  async publishDeleted(incident: Pick<IncidentEntity, 'id' | 'dispatchNumber'>): Promise<void> {
+    await this.events.publish<IncidentDeletedEvent>(INCIDENTS_EVENTS.incidentDeleted, { incidentId: incident.id, dispatchNumber: incident.dispatchNumber });
   }
 
   // ----- Incident -----

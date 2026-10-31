@@ -15,7 +15,7 @@
     "migration:reset": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/migration-reset.mts",
     "dev": "nx run-many -t serve --parallel=20",
     "seed": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/seed.mts",
-    "e2e": "playwright test -c e2e/playwright.config.ts",
+    "e2e": "nx run-many -t e2e --parallel=1",
     "e2e:fresh": "tsx --tsconfig tools/tsconfig.json tools/e2e.mts",
     "check": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run integration && pnpm run build"
   },
@@ -75,6 +75,7 @@
     "@nx/js": "24.0.2",
     "@nx/nest": "^24.0.0",
     "@nx/node": "24.0.2",
+    "@nx/playwright": "24.0.2",
     "@nx/react": "^24.0.0",
     "@nx/rspack": "^24.0.0",
     "@nx/vite": "24.0.2",

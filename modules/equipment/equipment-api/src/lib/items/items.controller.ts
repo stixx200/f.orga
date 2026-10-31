@@ -16,6 +16,7 @@ import {
   ItemStatus,
   type ItemSummary,
   LabelsPrintedInput,
+  type RecentBulkCategories,
   type ReportableItem,
   type ReportUsage,
   ReportUsageInput,
@@ -105,6 +106,13 @@ export class ItemsController {
   @HttpCode(200)
   trigger(@Param('id') id: string, @Body(new ZodPipe(TriggerInput)) input: Parsed<typeof TriggerInput>, @CurrentUser() user: AuthenticatedUser): Promise<Item> {
     return this.items.trigger(user, id, input.inspectionKey);
+  }
+
+  /** Kinds this user booked most recently. */
+  @Get('inspections/bulk/recent')
+  @RequirePermissions(READ)
+  recentBulk(@CurrentUser() user: AuthenticatedUser): Promise<RecentBulkCategories> {
+    return this.items.recentBulkCategories(user.id);
   }
 
   @Post('inspections/bulk')

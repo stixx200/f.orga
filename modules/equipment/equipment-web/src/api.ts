@@ -9,6 +9,7 @@ import { treeLabel } from '@forga/web-ui';
 export const READ = 'equipment.read';
 export const WRITE = 'equipment.write';
 export const INSPECT = 'equipment.inspect';
+export const TRIGGER = 'equipment.trigger';
 export const REPORT = 'equipment.defects.report';
 export const SETTINGS = 'equipment.settings.manage';
 /** For items of breathing apparatus categories only (breathing apparatus officer). */
@@ -34,6 +35,7 @@ const useBrigade = () => useQuery({ queryKey: ['core', 'settings', 'brigade'], q
 export const useItemIncidents = (id: string) => useQuery({ queryKey: [...keys.item(id), 'incidents'], queryFn: () => api<ItemIncident[]>(`equipment/items/${id}/incidents`) });
 export const useDefects = (filter: { open?: string; itemId?: string }) => useQuery({ queryKey: [...keys.all, 'defects', filter], queryFn: () => api<Defect[]>(withQuery('equipment/defects', filter)) });
 export const useCategories = () => useQuery({ queryKey: [...keys.all, 'categories'], queryFn: () => api<Category[]>('equipment/categories'), staleTime: LONG });
+export const useRecentCategories = () => useQuery({ queryKey: [...keys.all, 'bulk-recent'], queryFn: () => api<{ categoryKeys: string[] }>('equipment/inspections/bulk/recent') });
 export const useTypes = () => useQuery({ queryKey: [...keys.all, 'types'], queryFn: () => api<EquipmentType[]>('equipment/types'), staleTime: LONG });
 export const useDepartments = () => useQuery({ queryKey: ['masterdata', 'departments'], queryFn: () => api<Department[]>('masterdata/departments'), staleTime: LONG });
 export const useStations = () => useQuery({ queryKey: ['masterdata', 'stations'], queryFn: () => api<Station[]>('masterdata/stations'), staleTime: LONG });
@@ -51,11 +53,16 @@ export function useItemAccess() {
   const breathing = (categoryKey: string) => Boolean(categories.find((c) => c.key === categoryKey)?.breathingApparatus);
   const may = (general: string, special: string) => (item: { departmentId: string; categoryKey: string }) =>
     can(session, general, item.departmentId) || (breathing(item.categoryKey) && can(session, special, item.departmentId));
+  const canInspect = may(INSPECT, BREATHING_INSPECT);
+  const canTrigger = (item: { departmentId: string; categoryKey: string }) => can(session, TRIGGER, item.departmentId) || canInspect(item);
   return {
     canWrite: may(WRITE, BREATHING_WRITE),
-    canInspect: may(INSPECT, BREATHING_INSPECT),
-    /** Anywhere: whether bulk inspections are offered at all. */
-    inspectsAnything: can(session, INSPECT) || can(session, BREATHING_INSPECT),
+    canInspect,
+    canTrigger,
+    /** Anywhere: bulk booking is offered (recording, marking due, or moving). */
+    booksAnything: can(session, INSPECT) || can(session, BREATHING_INSPECT) || can(session, TRIGGER) || can(session, WRITE) || can(session, BREATHING_WRITE),
+    recordsAnything: can(session, INSPECT) || can(session, BREATHING_INSPECT),
+    movesAnything: can(session, WRITE) || can(session, BREATHING_WRITE),
   };
 }
 

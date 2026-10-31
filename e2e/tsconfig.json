@@ -10,5 +10,12 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["*.ts", "fixtures/*.ts"]
+  "include": [
+    "support/**/*.ts",
+    "playwright.base.ts",
+    "forga-e2e/**/*.ts",
+    "../apps/shell-e2e/**/*.ts",
+    "../libs/core/core-e2e/**/*.ts",
+    "../modules/*/*-e2e/**/*.ts"
+  ]
 }

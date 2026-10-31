@@ -1,0 +1,13 @@
+{
+  "name": "training-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/training/training-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-training",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "training-web"
+  ]
+}

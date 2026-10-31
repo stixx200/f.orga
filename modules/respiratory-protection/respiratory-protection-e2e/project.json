@@ -1,0 +1,13 @@
+{
+  "name": "respiratory-protection-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/respiratory-protection/respiratory-protection-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-respiratory-protection",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "respiratory-protection-web"
+  ]
+}

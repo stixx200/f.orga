@@ -88,7 +88,7 @@ export const ItemInput = z
     vehicleId: z.uuid().nullable().default(null),
     stationId: z.uuid().nullable().default(null),
     loadingPlace: text,
-    /** Current place, free text (a vehicle, a workshop, …). */
+    /** Named place from `equipment.settings.locations` (stations and vehicles are separate fields). */
     location: text,
     /** Stock: quantity instead of a single item. */
     quantity: z.number().int().min(0).default(1),
@@ -188,12 +188,40 @@ export const InspectionInput = z.object({
 });
 export type InspectionInput = z.input<typeof InspectionInput>;
 
-/** Many items of the same kind at once, e.g. 30 hoses after washing. */
-export const BulkInspectionInput = InspectionInput.omit({ checklist: true, nextDueOn: true }).extend({ itemIds: z.array(z.uuid()).min(1) });
+/** New place of the selected items. A vehicle and a station exclude each other. */
+export const BulkPlaceInput = z.object({
+  stationId: z.string().nullable().default(null),
+  vehicleId: z.string().nullable().default(null),
+  location: text,
+  loadingPlace: text,
+});
+export type BulkPlaceInput = z.input<typeof BulkPlaceInput>;
+
+/**
+ * Bulk booking of one kind of equipment. Inspection, marking an inspection due and a new place are each optional;
+ * at least one is required. An inspection and marking due exclude each other.
+ */
+export const BulkInspectionInput = z.object({
+  itemIds: z.array(z.uuid()).min(1),
+  categoryKey: z.string().min(1),
+  inspection: InspectionInput.omit({ checklist: true, nextDueOn: true }).optional(),
+  /** Mark this inspection due now instead of recording it (not for a periodic inspection). */
+  triggerKey: z.string().min(1).optional(),
+  place: BulkPlaceInput.optional(),
+});
 export type BulkInspectionInput = z.input<typeof BulkInspectionInput>;
 
-/** Recorded inspections of a bulk booking; `ids` so a protocol can be attached to each. */
-export const BulkInspectionResult = z.object({ recorded: z.number().int(), ids: z.array(z.uuid()) });
+/** Kinds this user booked most recently on the bulk page, newest first, at most five. */
+export const RecentBulkCategories = z.object({ categoryKeys: z.array(z.string()) });
+export type RecentBulkCategories = z.infer<typeof RecentBulkCategories>;
+
+/** What a bulk booking did. `ids` are the recorded inspections, so a protocol can be attached to each. */
+export const BulkInspectionResult = z.object({
+  recorded: z.number().int(),
+  ids: z.array(z.uuid()),
+  triggered: z.number().int(),
+  moved: z.number().int(),
+});
 export type BulkInspectionResult = z.infer<typeof BulkInspectionResult>;
 
 export const Inspection = z.object({
@@ -269,7 +297,7 @@ export type LabelsPrintedInput = z.input<typeof LabelsPrintedInput>;
 export const TemplateOptions = z.object({ hoseTracking: Tracking.default('item') });
 export type TemplateOptions = z.input<typeof TemplateOptions>;
 
-/** Lead times of the module (setting `equipment.settings`). */
+/** Lead times and bookable places of the module (setting `equipment.settings`). */
 export const EquipmentSettings = z.object({
   /** Days before the due date an inspection appears among the deadlines. */
   inspectionLeadDays: z.number().int().min(0).max(365).default(30),
@@ -277,6 +305,11 @@ export const EquipmentSettings = z.object({
   expiryLeadDays: z.number().int().min(0).max(365).default(60),
   /** Days within which a due date counts as "due soon" (yellow). */
   dueSoonDays: z.number().int().min(0).max(365).default(30),
+  /**
+   * Named places that may be booked as `Item.location` (e.g. "Gesamtlager", "Gesamtlager – verschmutzt").
+   * Free text is not accepted; stations and vehicles stay separate fields.
+   */
+  locations: z.array(z.string().trim().min(1).max(120)).max(100).default([]),
 });
 export type EquipmentSettings = z.infer<typeof EquipmentSettings>;
 

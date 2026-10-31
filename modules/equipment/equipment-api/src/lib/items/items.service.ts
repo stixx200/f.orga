@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, type OnModuleInit, Optional } from '@nestjs/common';
 import { EntityManager, type FilterQuery } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
-import { assertVersion, type AuthenticatedUser, berlinDate, DomainEvents, Notifications, wordsWhere } from '@forga/core-api';
+import { assertVersion, type AuthenticatedUser, berlinDate, DomainEvents, Notifications, SettingsService, wordsWhere } from '@forga/core-api';
 import { type LocalizedText, normalizeRfid } from '@forga/core-contracts';
 import {
   addMonths,
@@ -12,6 +12,7 @@ import {
   type DefectReportedEvent,
   DefectUpdate,
   EQUIPMENT_EVENTS,
+  EquipmentSettings,
   type EquipmentUsageLookup,
   type Inspection,
   InspectionCancellation,
@@ -29,6 +30,7 @@ import {
   type LastInspection,
   OPEN_DEFECT,
   type ReportableItem,
+  type RecentBulkCategories,
   type ReportUsage,
   ReportUsageInput,
   RetireInput,
@@ -37,11 +39,12 @@ import {
 import { INCIDENTS_EVENTS, INCIDENTS_LOOKUP, type IncidentsLookup, type ReportReleasedEvent } from '@forga/incidents-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { type SessionClosedEvent, TRAINING_EVENTS, TRAINING_SESSIONS, type TrainingSessions } from '@forga/training-contracts';
-import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, UsageEntity } from '../equipment.entities.js';
+import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, RecentBulkCategoryEntity, UsageEntity } from '../equipment.entities.js';
 
 export const READ = 'equipment.read';
 export const WRITE = 'equipment.write';
 export const INSPECT = 'equipment.inspect';
+export const TRIGGER = 'equipment.trigger';
 export const REPORT_DEFECTS = 'equipment.defects.report';
 export const NOTIFY_DEFECTS = 'equipment.defects.notify';
 /** The same for items of breathing apparatus categories only (breathing apparatus officer). */
@@ -58,7 +61,7 @@ const SESSIONS_WRITE = ['training.attendance', 'training.plan'];
 
 type ParsedItem = ReturnType<typeof ItemInput.parse>;
 type ParsedInspection = ReturnType<typeof InspectionInput.parse>;
-type Action = 'write' | 'inspect';
+type Action = 'write' | 'inspect' | 'trigger';
 type UsageSource = 'incidents' | 'training';
 /** Events and e-mails that go out only after the transaction has been committed. */
 type AfterCommit = (() => Promise<void>)[];
@@ -107,6 +110,7 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     private readonly em: EntityManager,
     private readonly events: DomainEvents,
     private readonly notifications: Notifications,
+    private readonly settings: SettingsService,
     @Inject(PERSON_DIRECTORY) private readonly directory: PersonDirectory,
     @Inject(ORGANIZATION) private readonly organization: Organization,
     @Optional() @Inject(INCIDENTS_LOOKUP) private readonly incidents?: IncidentsLookup,
@@ -126,15 +130,19 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     return new Set((await em.find(CategoryEntity, { breathingApparatus: true })).map((c) => c.key));
   }
 
-  /** Writing (status, defects) or inspecting: the general permission, or the breathing apparatus one for breathing apparatus. */
+  /** Writing, recording an inspection, or marking one due: the general permission, or the breathing apparatus one for breathing apparatus. Recording an inspection may also mark it due. */
   may(user: AuthenticatedUser, action: Action, item: Pick<EquipmentItemEntity, 'departmentId'>, breathing: boolean): boolean {
+    if (action === 'trigger') {
+      return user.can(TRIGGER, item.departmentId) || user.can(INSPECT, item.departmentId) || (breathing && user.can(BREATHING_INSPECT, item.departmentId));
+    }
     const [general, special] = action === 'write' ? [WRITE, BREATHING_WRITE] : [INSPECT, BREATHING_INSPECT];
     return user.can(general, item.departmentId) || (breathing && user.can(special, item.departmentId));
   }
 
   private requireMay(user: AuthenticatedUser, action: Action, item: Pick<EquipmentItemEntity, 'departmentId'>, breathing: boolean): void {
     if (this.may(user, action, item, breathing)) return;
-    throw new ForbiddenException({ code: 'auth.forbidden', permissions: action === 'write' ? [WRITE, BREATHING_WRITE] : [INSPECT, BREATHING_INSPECT] });
+    const permissions = action === 'write' ? [WRITE, BREATHING_WRITE] : action === 'trigger' ? [TRIGGER, INSPECT, BREATHING_INSPECT] : [INSPECT, BREATHING_INSPECT];
+    throw new ForbiddenException({ code: 'auth.forbidden', permissions });
   }
 
   private async isBreathing(em: EntityManager, item: EquipmentItemEntity): Promise<boolean> {
@@ -281,6 +289,30 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
       if (!keys.has(key)) throw new BadRequestException({ code: 'equipment.unknownInspection', key });
     }
     for (const initial of input.initialInspections) this.checkDates(initial.date, initial.nextDueOn, input.purchasedOn);
+    const previous = id ? (await em.findOne(EquipmentItemEntity, id))?.location : undefined;
+    await this.assertPlace(
+      { stationId: input.stationId, vehicleId: input.vehicleId, location: input.location, loadingPlace: input.loadingPlace },
+      previous,
+    );
+  }
+
+  /**
+   * Named places must be configured under `equipment.settings.locations`. An unchanged legacy value on update stays allowed.
+   * A loading place is only valid on a vehicle — free text must not become a stand-alone “location”.
+   */
+  private async assertLocation(location: string, previous?: string): Promise<void> {
+    if (!location || location === previous) return;
+    const settings = EquipmentSettings.parse((await this.settings.get('equipment.settings')) ?? {});
+    if (!settings.locations.includes(location)) throw new BadRequestException({ code: 'equipment.unknownLocation', value: location });
+  }
+
+  /** Vehicle + optional loading place, or station / configured named place — never a free-text loading place alone. */
+  private async assertPlace(
+    place: { stationId: string | null; vehicleId: string | null; location: string; loadingPlace: string },
+    previousLocation?: string,
+  ): Promise<void> {
+    await this.assertLocation(place.location, previousLocation);
+    if (place.loadingPlace && !place.vehicleId) throw new BadRequestException({ code: 'equipment.loadingPlaceWithoutVehicle' });
   }
 
   /** An inspection lies in the past (or today), not before 1900 or the purchase; its next due date after it. */
@@ -483,21 +515,68 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     return toInspectionDto(inspection);
   }
 
-  /** All or nothing: every item is checked (permission, inspection type, dates) before the first inspection is written. */
-  async bulkInspect(user: AuthenticatedUser, input: ReturnType<typeof BulkInspectionInput.parse>): Promise<{ recorded: number; ids: string[] }> {
-    const { itemIds, ...single } = input;
-    const parsed: ParsedInspection = { ...single, checklist: [], nextDueOn: null };
+/** Kinds this user booked on the bulk page, newest first. Gone categories are left out. */
+  async recentBulkCategories(userId: string): Promise<RecentBulkCategories> {
+    const em = this.em.fork();
+    const keys = (await em.findOne(RecentBulkCategoryEntity, { userId }))?.categoryKeys ?? [];
+    if (!keys.length) return { categoryKeys: [] };
+    const existing = new Set((await em.find(CategoryEntity, { key: { $in: keys } }, { fields: ['key'] })).map((c) => c.key));
+    return { categoryKeys: keys.filter((key) => existing.has(key)) };
+  }
+
+  /**
+   * All or nothing. Inspection, marking due and a new place are each optional; at least one is required.
+   * Every item is checked before the first change is written.
+   */
+  async bulkInspect(user: AuthenticatedUser, input: ReturnType<typeof BulkInspectionInput.parse>): Promise<{ recorded: number; ids: string[]; triggered: number; moved: number }> {
+    const { itemIds, categoryKey, inspection, triggerKey, place } = input;
+    if (!inspection && !triggerKey && !place) throw new BadRequestException({ code: 'equipment.bulkEmpty' });
+    if (inspection && triggerKey) throw new BadRequestException({ code: 'equipment.bulkConflict' });
+    const parsed: ParsedInspection | null = inspection ? { ...inspection, checklist: [], nextDueOn: null } : null;
     return this.inTransaction(async (em, after) => {
+      if (!(await em.count(CategoryEntity, { key: categoryKey }))) throw new BadRequestException({ code: 'equipment.unknownCategory', key: categoryKey });
       const items = await em.find(EquipmentItemEntity, { id: { $in: itemIds } });
       if (items.length !== new Set(itemIds).size) throw new NotFoundException();
       const types = await this.inspectionsOf(em, items);
       const breathing = await this.breathingCategories(em);
-      const checked = items.map((item) => ({ item, type: this.inspectable(user, item, parsed, types.get(item.id) ?? [], breathing.has(item.categoryKey)) }));
       const ids: string[] = [];
-      for (const { item, type } of checked) ids.push((await this.record(em, user, item, parsed, type, types.get(item.id) ?? [], breathing.has(item.categoryKey), after)).id);
+      if (parsed) {
+        const checked = items.map((item) => ({ item, type: this.inspectable(user, item, parsed, types.get(item.id) ?? [], breathing.has(item.categoryKey)) }));
+        for (const { item, type } of checked) ids.push((await this.record(em, user, item, parsed, type, types.get(item.id) ?? [], breathing.has(item.categoryKey), after)).id);
+      }
+      if (triggerKey) {
+        for (const item of items) {
+          if (item.status === 'retired') throw new ConflictException({ code: 'equipment.retired' });
+          this.requireMay(user, 'trigger', item, breathing.has(item.categoryKey));
+          const type = (types.get(item.id) ?? []).find((t) => t.key === triggerKey);
+          if (!type) throw new BadRequestException({ code: 'equipment.unknownInspection', key: triggerKey });
+          if (type.trigger === 'periodic') throw new BadRequestException({ code: 'equipment.notTriggerable', key: triggerKey });
+          item.triggered = { ...item.triggered, [triggerKey]: berlinDate() };
+        }
+      }
+      if (place) {
+        await this.assertPlace(place);
+        for (const item of items) {
+          if (item.status === 'retired') throw new ConflictException({ code: 'equipment.retired' });
+          this.requireMay(user, 'write', item, breathing.has(item.categoryKey));
+          item.stationId = place.stationId;
+          item.vehicleId = place.vehicleId;
+          item.location = place.location;
+          item.loadingPlace = place.vehicleId ? place.loadingPlace : '';
+        }
+      }
+      await this.rememberBulkCategory(em, user.id, categoryKey);
       await em.flush();
-      return { recorded: items.length, ids };
+      return { recorded: ids.length, ids, triggered: triggerKey ? items.length : 0, moved: place ? items.length : 0 };
     });
+  }
+
+  /** Puts the booked kind first and keeps five. */
+  private async rememberBulkCategory(em: EntityManager, userId: string, categoryKey: string): Promise<void> {
+    const row = await em.findOne(RecentBulkCategoryEntity, { userId });
+    const categoryKeys = [categoryKey, ...(row?.categoryKeys ?? []).filter((key) => key !== categoryKey)].slice(0, 5);
+    if (row) row.categoryKeys = categoryKeys;
+    else em.create(RecentBulkCategoryEntity, { userId, categoryKeys });
   }
 
   private async loadInspection(em: EntityManager, user: AuthenticatedUser, id: string): Promise<{ inspection: InspectionEntity; type: InspectionType; types: InspectionType[]; breathing: boolean }> {
@@ -591,10 +670,12 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
   async trigger(user: AuthenticatedUser, id: string, inspectionKey: string): Promise<Item> {
     const em = this.em.fork();
     const item = await this.load(em, id, user);
-    this.requireMay(user, 'inspect', item, await this.isBreathing(em, item));
+    this.requireMay(user, 'trigger', item, await this.isBreathing(em, item));
     if (item.status === 'retired') throw new ConflictException({ code: 'equipment.retired' });
     const types = (await this.inspectionsOf(em, [item])).get(item.id) ?? [];
-    if (!types.some((t) => t.key === inspectionKey)) throw new BadRequestException({ code: 'equipment.unknownInspection', key: inspectionKey });
+    const type = types.find((t) => t.key === inspectionKey);
+    if (!type) throw new BadRequestException({ code: 'equipment.unknownInspection', key: inspectionKey });
+    if (type.trigger === 'periodic') throw new BadRequestException({ code: 'equipment.notTriggerable', key: inspectionKey });
     item.triggered = { ...item.triggered, [inspectionKey]: berlinDate() };
     await em.flush();
     return (await this.toDtos([item]))[0];

@@ -1,14 +1,15 @@
-import { Button, Checkbox, Group, Select, Stack, Switch, Text, TextInput } from '@mantine/core';
+import { Button, Checkbox, Chip, Group, Select, SimpleGrid, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
 import { IconSearch } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { BulkInspectionResult, Category, InspectionResult, InspectionType, Item } from '@forga/equipment-contracts';
+import { vehicleLabel } from '@forga/masterdata-contracts';
 import { formatDate, localDate, send, upload, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { ActionBar, DataTable, matchesSearch, PageHeader, Panel, useAction } from '@forga/web-ui';
-import { keys, useCategories, useCategoryName, useDepartments, useDueSoon, useItemAccess, useItems, usePersons, usePlace } from '../api';
-import { DueDate, InspectionResultField, ProtocolInput, ScanField } from '../parts';
+import { ActionBar, DataTable, HeaderCheckbox, matchesSearch, PageHeader, Panel, useAction } from '@forga/web-ui';
+import { keys, useCategories, useCategoryName, useDepartments, useDueSoon, useItemAccess, useItems, usePersons, usePlace, useRecentCategories, useStations, useVehicles } from '../api';
+import { DueDate, InspectionResultField, LocationField, ProtocolInput, ScanField } from '../parts';
 import { matchesCode, scannedCode } from './ScanDialog';
 
 const label = (item: Item) => `${item.inventoryNumber} · ${item.name}`;
@@ -30,13 +31,11 @@ function withSubcategories(categories: Category[], key: string): Set<string> {
 }
 
 /**
- * Bulk inspection: choose the kind of equipment, tick or scan any of its items (due or not), then record one
- * inspection type all selected items share, e.g. all hoses after washing. The scan field is the same as in the
- * clothing store: a code typed or scanned selects the item at once.
+ * Bulk booking: choose the kind of equipment, tick or scan any of its items, then optionally record one
+ * inspection all selected items share, mark such an inspection due, and move them to another place.
  */
 export function BulkPage() {
   const { t, i18n } = useTranslation('equipment');
-  const { t: common } = useTranslation('common');
   const localized = useLocalized();
   const navigate = useNavigate();
   const place = usePlace();
@@ -45,7 +44,10 @@ export function BulkPage() {
   const session = useSession().data;
   const { soon } = useDueSoon();
   const { data: categories = [] } = useCategories();
+  const { data: recent } = useRecentCategories();
   const { data: departments = [] } = useDepartments();
+  const { data: stations = [] } = useStations();
+  const { data: vehicles = [] } = useVehicles();
   const { data: persons = [] } = usePersons();
   const [categoryKey, setCategoryKey] = useState<string | null>(null);
   const { data: items = [], isLoading } = useItems({}, Boolean(categoryKey));
@@ -59,14 +61,19 @@ export function BulkPage() {
   const [result, setResult] = useState<InspectionResult>('passed');
   const [company, setCompany] = useState('');
   const [inspector, setInspector] = useState<string | null>(() => session?.user.personId ?? null);
-  const [washed, setWashed] = useState(false);
+  const [setDue, setSetDue] = useState(false);
+  const [placeOn, setPlaceOn] = useState(false);
+  const [targetStation, setTargetStation] = useState<string | null>(null);
+  const [targetVehicle, setTargetVehicle] = useState<string | null>(null);
+  const [targetLocation, setTargetLocation] = useState('');
+  const [targetLoading, setTargetLoading] = useState('');
   const [protocol, setProtocol] = useState<File | null>(null);
 
-  // Every item of the kind the user may inspect, not only the due ones.
+  // Every item of the kind the user may book (inspect, mark due or move), not only the due ones.
   const candidates = useMemo(() => {
     if (!categoryKey) return [];
     const kinds = withSubcategories(categories, categoryKey);
-    return items.filter((i) => kinds.has(i.categoryKey) && access.canInspect(i)).toSorted((a, b) => String(a.nextDue ?? '9').localeCompare(String(b.nextDue ?? '9')) || a.inventoryNumber.localeCompare(b.inventoryNumber));
+    return items.filter((i) => kinds.has(i.categoryKey) && (access.canInspect(i) || access.canTrigger(i) || access.canWrite(i))).toSorted((a, b) => String(a.nextDue ?? '9').localeCompare(String(b.nextDue ?? '9')) || a.inventoryNumber.localeCompare(b.inventoryNumber));
   }, [items, categories, categoryKey, access]);
   const due = (item: Item) => Boolean(item.nextDue && item.nextDue <= soon);
   const locations = [...new Map(candidates.map((i) => [placeKey(i), place(i) || t('bulk.noPlace')])).entries()].toSorted((a, b) => a[1].localeCompare(b[1], i18n.language));
@@ -84,14 +91,37 @@ export function BulkPage() {
   const shared: InspectionType[] = chosen.length
     ? chosen[0].inspections.filter((x) => chosen.every((i) => i.inspections.some((y) => y.key === x.key)))
     : [...new Map(candidates.flatMap((i) => i.inspections).map((x) => [x.key, x])).values()];
-  const kinds = shared.toSorted((a, b) => localized(a.name).localeCompare(localized(b.name)));
+  const kinds = shared
+    .filter((k) => access.recordsAnything || k.trigger !== 'periodic')
+    .toSorted((a, b) => localized(a.name).localeCompare(localized(b.name)));
   const kindType = kinds.find((k) => k.key === kind);
-  const afterTrigger = kindType && kindType.trigger !== 'periodic';
+  const afterTrigger = Boolean(kindType && kindType.trigger !== 'periodic');
+  const dueMode = afterTrigger && (setDue || !access.recordsAnything);
+  const stationOptions = stations
+    .map((s) => {
+      const shortName = departments.find((d) => d.id === s.departmentId)?.shortName;
+      return { id: s.id, label: shortName ? `${s.name} (${shortName})` : s.name };
+    })
+    .toSorted((a, b) => a.label.localeCompare(b.label, i18n.language));
 
   const save = useAction(
     async () => {
-      const recorded = await send<BulkInspectionResult>('POST', 'equipment/inspections/bulk', { itemIds: selected, inspectionKey: kind, date, result, inspectorCompany: company, inspectorPersonId: inspector });
-      if (protocol) await Promise.all(recorded.ids.map((id) => upload(`core/attachments?type=equipment.inspection&id=${id}`, protocol)));
+      const recorded = await send<BulkInspectionResult>('POST', 'equipment/inspections/bulk', {
+        itemIds: selected,
+        categoryKey,
+        inspection: kind && !dueMode ? { inspectionKey: kind, date, result, inspectorCompany: company, inspectorPersonId: inspector } : undefined,
+        triggerKey: kind && dueMode ? kind : undefined,
+        place: placeOn
+          ? {
+              stationId: targetStation,
+              vehicleId: targetVehicle,
+              location: targetLocation,
+              // Loading place only belongs on a vehicle; never send free text as a stand-alone place.
+              loadingPlace: targetVehicle ? targetLoading : '',
+            }
+          : undefined,
+      });
+      if (protocol && !dueMode) await Promise.all(recorded.ids.map((id) => upload(`core/attachments?type=equipment.inspection&id=${id}`, protocol)));
       return recorded;
     },
     {
@@ -105,6 +135,18 @@ export function BulkPage() {
     },
   );
   const toggle = (id: string, on: boolean) => setSelected((s) => (on ? [...s, id] : s.filter((x) => x !== id)));
+  const shownIds = rows.map((i) => i.id);
+  const shownSelected = shownIds.filter((id) => selected.includes(id)).length;
+  const allShown = shownIds.length > 0 && shownSelected === shownIds.length;
+  const setShown = (on: boolean) => setSelected(on ? [...new Set([...selected, ...shownIds])] : selected.filter((id) => !shownIds.includes(id)));
+  const chooseCategory = (value: string | null) => {
+    setCategoryKey(value);
+    setSelected([]);
+    setKind(null);
+    setSetDue(false);
+    setLocation(null);
+  };
+  const recentKeys = (recent?.categoryKeys ?? []).filter((key) => categories.some((c) => c.key === key));
 
   const scan = async (text: string) => {
     const code = scannedCode(text);
@@ -114,7 +156,7 @@ export function BulkPage() {
       notifications.show({ color: 'orange', message: other ? t('bulk.otherKind', { item: label(other) }) : t('bulk.unknown', { code: code.code ?? text }) });
       return;
     }
-    if (washed && afterTrigger && item.inspections.some((x) => x.key === kind)) await send('POST', `equipment/items/${item.id}/trigger`, { inspectionKey: kind });
+    if (dueMode && kind && item.inspections.some((x) => x.key === kind)) await send('POST', `equipment/items/${item.id}/trigger`, { inspectionKey: kind });
     setSelected((s) => (s.includes(item.id) ? s : [...s, item.id]));
   };
 
@@ -127,29 +169,19 @@ export function BulkPage() {
           placeholder={t('bulk.categoryPlaceholder')}
           data={categories.map((c) => ({ value: c.key, label: c.parentKey ? `${categoryName(c.parentKey)} › ${localized(c.name)}` : localized(c.name) }))}
           value={categoryKey}
-          onChange={(v) => {
-            setCategoryKey(v);
-            setSelected([]);
-            setKind(null);
-            setWashed(false);
-            setLocation(null);
-          }}
+          onChange={chooseCategory}
           searchable
           clearable
           w={280}
         />
+        {recentKeys.map((key) => (
+          <Chip key={key} checked={categoryKey === key} onChange={() => { if (key !== categoryKey) chooseCategory(key); }}>{categoryName(key)}</Chip>
+        ))}
       </Group>
-      {categoryKey && (
-        <Group align="end">
-          <TextInput type="search" label={t('items.search')} leftSection={<IconSearch size={16} />} value={query} onChange={(e) => setQuery(e.currentTarget.value)} w={220} />
-          <Select label={t('fields.department')} placeholder={t('items.all')} data={departments.map((d) => ({ value: d.id, label: d.name }))} value={departmentId} onChange={setDepartmentId} clearable />
-          <Select label={t('fields.place')} placeholder={t('items.all')} data={locations.map(([value, name]) => ({ value, label: name }))} value={location} onChange={setLocation} clearable searchable />
-          <Switch label={t('bulk.dueOnly')} checked={dueOnly} onChange={(e) => setDueOnly(e.currentTarget.checked)} mb={8} />
-        </Group>
-      )}
-      {categoryKey && (
+      {categoryKey && (access.recordsAnything || access.canTrigger({ departmentId: '', categoryKey: '' }) || candidates.some((i) => access.canTrigger(i))) && (
         <Panel title={t('bulk.record')}>
           <Stack gap="sm">
+            {!access.recordsAnything && <Text size="sm" c="dimmed">{t('bulk.dueOnlyMode')}</Text>}
             <Group align="end">
               <Select
                 label={t('inspection.type')}
@@ -158,35 +190,95 @@ export function BulkPage() {
                 value={kinds.some((k) => k.key === kind) ? kind : null}
                 onChange={(v) => {
                   setKind(v);
-                  setWashed(false);
+                  setSetDue(false);
                 }}
+                clearable
                 w={260}
               />
-              <DateInput label={t('inspection.date')} value={date} onChange={setDate} valueFormat="DD.MM.YYYY" maxDate={localDate()} />
-              <Select
-                label={t('inspection.inspector')}
-                description={kindType ? t(`inspector.${kindType.inspector}`) : undefined}
-                data={persons.filter((p) => p.status !== 'left').map((p) => ({ value: p.id, label: `${p.lastName}, ${p.firstName}` }))}
-                value={inspector}
-                onChange={setInspector}
-                searchable
-                clearable
-              />
-              <TextInput label={t('inspection.company')} value={company} onChange={(e) => setCompany(e.currentTarget.value)} />
-              <InspectionResultField value={result} onChange={setResult} />
+              {access.recordsAnything && !dueMode && (
+                <>
+                  <DateInput label={t('inspection.date')} value={date} onChange={setDate} valueFormat="DD.MM.YYYY" maxDate={localDate()} />
+                  <Select
+                    label={t('inspection.inspector')}
+                    description={kindType ? t(`inspector.${kindType.inspector}`) : undefined}
+                    data={persons.filter((p) => p.status !== 'left').map((p) => ({ value: p.id, label: `${p.lastName}, ${p.firstName}` }))}
+                    value={inspector}
+                    onChange={setInspector}
+                    searchable
+                    clearable
+                  />
+                  <TextInput label={t('inspection.company')} value={company} onChange={(e) => setCompany(e.currentTarget.value)} />
+                </>
+              )}
+              {access.recordsAnything && !dueMode && <InspectionResultField value={result} onChange={setResult} />}
+              {afterTrigger && (
+                <Switch
+                  label={t('bulk.washed', { trigger: t(`trigger.${kindType!.trigger}`) })}
+                  description={t('bulk.washedHint')}
+                  checked={dueMode}
+                  disabled={!access.recordsAnything}
+                  onChange={(e) => setSetDue(e.currentTarget.checked)}
+                  mb={8}
+                />
+              )}
             </Group>
-            <ProtocolInput value={protocol} onChange={setProtocol} />
-            {afterTrigger && <Switch label={t('bulk.washed', { trigger: t(`trigger.${kindType.trigger}`) })} description={t('bulk.washedHint')} checked={washed} onChange={(e) => setWashed(e.currentTarget.checked)} />}
+            {access.recordsAnything && !dueMode && <ProtocolInput value={protocol} onChange={setProtocol} />}
+          </Stack>
+        </Panel>
+      )}
+      {categoryKey && access.movesAnything && (
+        <Panel title={t('bulk.placeTitle')}>
+          <Stack gap="sm">
+            <Switch label={t('bulk.placeOn')} checked={placeOn} onChange={(e) => setPlaceOn(e.currentTarget.checked)} />
+            {placeOn && (
+              <SimpleGrid cols={{ base: 1, sm: 3 }} style={{ alignItems: 'end' }}>
+                <LocationField
+                  stationId={targetStation}
+                  location={targetLocation}
+                  stations={stationOptions}
+                  onChange={({ stationId, location: next }) => {
+                    setTargetStation(stationId);
+                    setTargetLocation(next);
+                    if (stationId) {
+                      setTargetVehicle(null);
+                      setTargetLoading('');
+                    }
+                  }}
+                />
+                <Select
+                  label={t('fields.vehicle')}
+                  data={vehicles.map((v) => ({ value: v.id, label: vehicleLabel(v, departments.find((d) => d.id === v.departmentId)?.shortName) }))}
+                  value={targetVehicle}
+                  onChange={(v) => {
+                    setTargetVehicle(v);
+                    if (v) {
+                      setTargetStation(null);
+                      setTargetLocation('');
+                    } else {
+                      setTargetLoading('');
+                    }
+                  }}
+                  clearable
+                  searchable
+                />
+                {targetVehicle ? (
+                  <TextInput label={t('fields.loadingPlace')} description={t('fields.loadingPlaceHint')} value={targetLoading} onChange={(e) => setTargetLoading(e.currentTarget.value)} />
+                ) : null}
+              </SimpleGrid>
+            )}
           </Stack>
         </Panel>
       )}
       {categoryKey && (
         <Stack gap="xs">
-          <ScanField onCode={(code) => void scan(code)} />
-          <Group justify="space-between">
-            <Text size="sm" fw={700}>{t('bulk.selected', { count: selected.length })}</Text>
-            <Button variant="default" size="compact-sm" onClick={() => setSelected([...new Set([...selected, ...rows.map((i) => i.id)])])}>{t('bulk.selectAll')}</Button>
+          <Group align="end">
+            <TextInput type="search" label={t('items.search')} leftSection={<IconSearch size={16} />} value={query} onChange={(e) => setQuery(e.currentTarget.value)} w={220} />
+            <Select label={t('fields.department')} placeholder={t('items.all')} data={departments.map((d) => ({ value: d.id, label: d.name }))} value={departmentId} onChange={setDepartmentId} clearable />
+            <Select label={t('fields.place')} placeholder={t('items.all')} data={locations.map(([value, name]) => ({ value, label: name }))} value={location} onChange={setLocation} clearable searchable />
+            <Switch label={t('bulk.dueOnly')} checked={dueOnly} onChange={(e) => setDueOnly(e.currentTarget.checked)} mb={8} />
           </Group>
+          <ScanField onCode={(code) => void scan(code)} />
+          <Text size="sm" fw={700}>{t('bulk.selected', { count: selected.length })}</Text>
         </Stack>
       )}
       <DataTable<Item>
@@ -196,7 +288,13 @@ export function BulkPage() {
         onRowClick={(i) => toggle(i.id, !selected.includes(i.id))}
         empty={!categoryKey ? t('bulk.chooseCategory') : isLoading ? t('loading') : t('bulk.noItems')}
         columns={[
-          { key: 'select', header: common('table.select'), width: 40, render: (i) => <Checkbox aria-label={i.inventoryNumber} checked={selected.includes(i.id)} onChange={(e) => toggle(i.id, e.currentTarget.checked)} onClick={(e) => e.stopPropagation()} /> },
+          {
+            key: 'select',
+            header: '',
+            width: 40,
+            heading: <HeaderCheckbox label={t('bulk.selectAll')} checked={allShown} indeterminate={shownSelected > 0 && !allShown} disabled={!rows.length} onChange={setShown} />,
+            render: (i) => <Checkbox aria-label={i.inventoryNumber} checked={selected.includes(i.id)} onChange={(e) => toggle(i.id, e.currentTarget.checked)} onClick={(e) => e.stopPropagation()} />,
+          },
           { key: 'item', header: t('fields.name'), render: (i) => <Text size="sm" fw={700} c="brand" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); navigate(`/equipment/items/${i.id}?tab=inspections`); }}>{label(i)}</Text> },
           { key: 'category', header: t('fields.category'), render: (i) => categoryName(i.categoryKey) },
           { key: 'place', header: t('fields.place'), render: (i) => place(i) },
@@ -206,7 +304,7 @@ export function BulkPage() {
       />
       {categoryKey && (
         <ActionBar info={t('bulk.selected', { count: selected.length })}>
-          <Button loading={save.isPending} disabled={!selected.length || !date || !kindType} onClick={() => save.mutate(undefined)}>{t('bulk.save')}</Button>
+          <Button loading={save.isPending} disabled={!selected.length || (!placeOn && !kind) || (Boolean(kind) && !dueMode && !date)} onClick={() => save.mutate(undefined)}>{t('bulk.save')}</Button>
         </ActionBar>
       )}
     </Stack>
