@@ -155,11 +155,16 @@ function PersonFile({ person }: { person: Person }) {
           </Panel>
         </Tabs.Panel>
       </Tabs>
-      {editable && (
+      {editable && (tab === 'master' || tab === 'brigade') && (
         <ActionBar info={t(dirty ? 'person.unsaved' : 'person.allSaved')}>
           <Button variant="default" disabled={!dirty} onClick={() => setForm(toForm(person))}>{common('actions.cancel')}</Button>
           <Button disabled={!dirty || ibanInvalid} loading={save.isPending} onClick={() => save.mutate(form)}>{common('actions.save')}</Button>
         </ActionBar>
+      )}
+      {editable && tab !== 'master' && tab !== 'brigade' && (dirty || ibanInvalid) && (
+        <Notice kind="warning" action={<Button size="xs" variant="default" onClick={() => setTab('master')}>{t('person.tabs.master')}</Button>}>
+          {t(ibanInvalid ? 'person.invalidIban' : 'person.unsaved')}
+        </Notice>
       )}
     </Stack>
   );

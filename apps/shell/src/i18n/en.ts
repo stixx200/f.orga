@@ -53,6 +53,8 @@ export const en: typeof de = {
   },
   header: {
     search: 'Search persons, vehicles, incidents',
+    searching: 'Searching …',
+    noHits: 'No matches',
     tasks: 'Tasks',
     noTasks: 'No open tasks.',
     allTasks: 'All tasks',

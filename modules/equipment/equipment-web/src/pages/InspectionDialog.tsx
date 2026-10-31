@@ -1,11 +1,11 @@
 import { Button, Group, SegmentedControl, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useState } from 'react';
-import type { Inspection, InspectionInput, InspectionResult, Item } from '@forga/equipment-contracts';
+import type { Inspection, InspectionInput, Item } from '@forga/equipment-contracts';
 import { localDate, send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { Notice, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { keys, usePersons } from '../api';
-import { ProtocolInput, uploadInspectionProtocol } from '../parts';
+import { InspectionResultField, ProtocolInput, uploadInspectionProtocol } from '../parts';
 
 /** The day after an ISO date (earliest next due date). */
 const dayAfter = (date: string) => {
@@ -85,7 +85,7 @@ export function InspectionDialog({ item, inspectionKey, inspection, onClose }: {
             ))}
           </Stack>
         )}
-        <SegmentedControl fullWidth value={form.result} onChange={(v) => setForm({ ...form, result: v as InspectionResult })} data={(['passed', 'passed-with-defects', 'failed'] as const).map((r) => ({ value: r, label: t(`result.${r}`) }))} />
+        <InspectionResultField value={form.result} onChange={(result) => setForm({ ...form, result })} />
         {form.result !== 'passed' && <Notice kind="warning">{t(failed ? 'inspection.failedHint' : 'inspection.withDefectsHint')}</Notice>}
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <TextInput label={t('inspection.measurements')} value={form.measurements} onChange={(e) => setForm({ ...form, measurements: e.currentTarget.value })} />

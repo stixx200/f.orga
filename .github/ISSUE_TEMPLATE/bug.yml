@@ -1,0 +1,32 @@
+name: Fehler
+description: Etwas verhält sich anders als beschrieben.
+body:
+  - type: markdown
+    attributes:
+      value: Keine Passwörter, keine Personendaten und keine Sicherungen in das Issue schreiben.
+  - type: textarea
+    id: actual
+    attributes:
+      label: Was passiert
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Was stattdessen passieren sollte
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit oder Image-Stand
+  - type: dropdown
+    id: system
+    attributes:
+      label: System
+      options:
+        - Echtsystem
+        - Testsystem
+        - Entwicklung
+    validations:
+      required: true

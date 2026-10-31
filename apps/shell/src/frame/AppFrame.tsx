@@ -149,7 +149,7 @@ export function AppFrame({ modules, session }: { modules: LoadedModule[]; sessio
       <AppShell.Navbar py="sm" style={{ overflowY: 'auto' }}>
         {phone && (
           <Stack px="md" pb="md" gap="sm">
-            <GlobalSearch />
+            <GlobalSearch onNavigate={close} />
             <LanguageSwitch loggedIn receiveDigest={session.user.receiveDigest} />
           </Stack>
         )}

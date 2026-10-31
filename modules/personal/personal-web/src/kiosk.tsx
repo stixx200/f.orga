@@ -114,9 +114,6 @@ function InstallHint() {
     return hintOpen;
   });
   useEffect(() => {
-    if (open) localStorage.setItem(HINT, '1');
-  }, [open]);
-  useEffect(() => {
     const onPrompt = (event: Event) => {
       event.preventDefault();
       setPrompt(event as BeforeInstallPromptEvent);
@@ -380,6 +377,7 @@ function File({ view, onLogout }: { view: PersonalView; onLogout: () => void }) 
             <IconChevronLeft size={24} />
           </button>
           <h1 className={classes.name}>{t(`nav.${current}`)}</h1>
+          <LanguageSwitch loggedIn={false} />
         </header>
       )}
       <InstallHint />

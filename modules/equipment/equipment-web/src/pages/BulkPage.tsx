@@ -1,4 +1,4 @@
-import { Button, Checkbox, Group, SegmentedControl, Select, Stack, Switch, Text, TextInput } from '@mantine/core';
+import { Button, Checkbox, Group, Select, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { notifications } from '@mantine/notifications';
 import { IconSearch } from '@tabler/icons-react';
@@ -8,7 +8,7 @@ import type { BulkInspectionResult, Category, InspectionResult, InspectionType, 
 import { formatDate, localDate, send, upload, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ActionBar, DataTable, matchesSearch, PageHeader, Panel, useAction } from '@forga/web-ui';
 import { keys, useCategories, useCategoryName, useDepartments, useDueSoon, useItemAccess, useItems, usePersons, usePlace } from '../api';
-import { DueDate, ProtocolInput, ScanField } from '../parts';
+import { DueDate, InspectionResultField, ProtocolInput, ScanField } from '../parts';
 import { matchesCode, scannedCode } from './ScanDialog';
 
 const label = (item: Item) => `${item.inventoryNumber} · ${item.name}`;
@@ -36,6 +36,7 @@ function withSubcategories(categories: Category[], key: string): Set<string> {
  */
 export function BulkPage() {
   const { t, i18n } = useTranslation('equipment');
+  const { t: common } = useTranslation('common');
   const localized = useLocalized();
   const navigate = useNavigate();
   const place = usePlace();
@@ -172,7 +173,7 @@ export function BulkPage() {
                 clearable
               />
               <TextInput label={t('inspection.company')} value={company} onChange={(e) => setCompany(e.currentTarget.value)} />
-              <SegmentedControl value={result} onChange={(v) => setResult(v as InspectionResult)} data={(['passed', 'passed-with-defects', 'failed'] as const).map((r) => ({ value: r, label: t(`result.${r}`) }))} />
+              <InspectionResultField value={result} onChange={setResult} />
             </Group>
             <ProtocolInput value={protocol} onChange={setProtocol} />
             {afterTrigger && <Switch label={t('bulk.washed', { trigger: t(`trigger.${kindType.trigger}`) })} description={t('bulk.washedHint')} checked={washed} onChange={(e) => setWashed(e.currentTarget.checked)} />}
@@ -192,10 +193,11 @@ export function BulkPage() {
         exportable={false}
         rows={rows}
         rowKey={(i) => i.id}
+        onRowClick={(i) => toggle(i.id, !selected.includes(i.id))}
         empty={!categoryKey ? t('bulk.chooseCategory') : isLoading ? t('loading') : t('bulk.noItems')}
         columns={[
-          { key: 'select', header: '', width: 40, render: (i) => <Checkbox aria-label={i.inventoryNumber} checked={selected.includes(i.id)} onChange={(e) => toggle(i.id, e.currentTarget.checked)} /> },
-          { key: 'item', header: t('fields.name'), render: (i) => <Text size="sm" fw={700} c="brand" style={{ cursor: 'pointer' }} onClick={() => navigate(`/equipment/items/${i.id}?tab=inspections`)}>{label(i)}</Text> },
+          { key: 'select', header: common('table.select'), width: 40, render: (i) => <Checkbox aria-label={i.inventoryNumber} checked={selected.includes(i.id)} onChange={(e) => toggle(i.id, e.currentTarget.checked)} onClick={(e) => e.stopPropagation()} /> },
+          { key: 'item', header: t('fields.name'), render: (i) => <Text size="sm" fw={700} c="brand" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); navigate(`/equipment/items/${i.id}?tab=inspections`); }}>{label(i)}</Text> },
           { key: 'category', header: t('fields.category'), render: (i) => categoryName(i.categoryKey) },
           { key: 'place', header: t('fields.place'), render: (i) => place(i) },
           { key: 'next', header: t('items.nextInspection'), render: (i) => <DueDate dueOn={i.nextDue} notRecorded={i.dues.some((d) => d.notRecorded)} /> },

@@ -82,4 +82,24 @@ describe('personal access', () => {
     await test.http.get('/api/personal/kiosk/file').set('Cookie', cookie).expect(401);
     expect((await get(`/personal/persons/${personId}/link`).expect(200)).body.active).toBe(false);
   });
+
+  it('refuses the link and the kiosk while processing is restricted', async () => {
+    const departmentId = (await get('/masterdata/departments')).body[0].id as string;
+    const restrictedId = (await post('/masterdata/persons', {
+      firstName: 'Eva',
+      lastName: 'Gesperrt',
+      status: 'active',
+      email: 'eva@example.org',
+      memberships: [{ departmentId, from: '2020-01-01', primary: true }],
+    }).expect(201)).body.id as string;
+    await test.http.put(`/api/privacy/persons/${restrictedId}/restriction`).set('Cookie', admin).set(UI).send({ reason: 'retention' }).expect(200);
+    expect((await post(`/personal/persons/${restrictedId}/link`).expect(403)).body.code).toBe('privacy.processingRestricted');
+
+    await test.http.delete(`/api/privacy/persons/${restrictedId}/restriction`).set('Cookie', admin).set(UI).expect(204);
+    const created = await post(`/personal/persons/${restrictedId}/link`).expect(201);
+    const opened = await test.http.post('/api/personal/kiosk/session').set(UI).send({ key: keyOf(created.body.url as string) }).expect(200);
+    const cookie = String(opened.headers['set-cookie']).split(';')[0];
+    await test.http.put(`/api/privacy/persons/${restrictedId}/restriction`).set('Cookie', admin).set(UI).send({ reason: 'retention' }).expect(200);
+    expect((await test.http.get('/api/personal/kiosk/file').set('Cookie', cookie).expect(403)).body.code).toBe('privacy.processingRestricted');
+  });
 });

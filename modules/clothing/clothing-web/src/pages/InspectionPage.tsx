@@ -13,6 +13,7 @@ import { BlockBadges, Due, findByCode, ScanField, useUnknownCode } from '../part
  */
 export function InspectionPage() {
   const { t, i18n } = useTranslation('clothing');
+  const { t: common } = useTranslation('common');
   const { data: articles = [] } = useArticles();
   const { data: items = [], isLoading } = useItems({});
   const articleName = useArticleName();
@@ -67,16 +68,21 @@ export function InspectionPage() {
         <TextInput type="search" label={t('items.search')} placeholder={t('inspections.searchPlaceholder')} value={query} onChange={(e) => setQuery(e.currentTarget.value)} />
       </Group>
       <Group justify="flex-end">
-        <Button variant="default" onClick={() => setSelected(new Set(rows.filter((r) => r.inspectionDueOn && r.inspectionDueOn <= soon).map((r) => r.id)))}>{t('inspections.selectDue')}</Button>
+        <Button variant="default" onClick={() => setSelected((current) => {
+          const next = new Set(current);
+          for (const row of rows) if (row.inspectionDueOn && row.inspectionDueOn <= soon) next.add(row.id);
+          return next;
+        })}>{t('inspections.selectDue')}</Button>
       </Group>
       <DataTable<Item>
         exportable={false}
         scroll
         rows={rows}
         rowKey={(i) => i.id}
+        onRowClick={(i) => set(setSelected, i.id, !selected.has(i.id))}
         empty={isLoading ? t('loading') : t('inspections.noItems')}
         columns={[
-          { key: 'select', header: '', width: 40, render: (i) => <Checkbox aria-label={i.inventoryNumber} checked={selected.has(i.id)} onChange={(e) => set(setSelected, i.id, e.currentTarget.checked)} /> },
+          { key: 'select', header: common('table.select'), width: 40, render: (i) => <Checkbox aria-label={i.inventoryNumber} checked={selected.has(i.id)} onClick={(e) => e.stopPropagation()} onChange={(e) => set(setSelected, i.id, e.currentTarget.checked)} /> },
           {
             key: 'number',
             header: t('items.inventoryNumber'),
@@ -97,6 +103,7 @@ export function InspectionPage() {
             render: (i) => (
               <SegmentedControl
                 size="xs"
+                onClick={(e) => e.stopPropagation()}
                 disabled={!selected.has(i.id)}
                 aria-label={t('inspections.result')}
                 value={failed.has(i.id) ? 'failed' : 'passed'}

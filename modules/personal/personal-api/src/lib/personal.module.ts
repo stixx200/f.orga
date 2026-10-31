@@ -28,14 +28,14 @@ export class PersonalModule implements OnModuleInit {
   }
 
   /**
-   * Data breach („Alle Sitzungen beenden“): every link gets an unknown key, so phones stop working until a new
-   * link is created. The stored link is removed.
+   * Data breach („Alle Sitzungen beenden“): every link gets an unknown key and is marked revoked, so phones stop
+   * working and the list no longer shows the links as active until a new link is created.
    */
   private async blockKeys(): Promise<number> {
     const em = this.em.fork();
     const links = await em.find(AccessLinkEntity, { revokedAt: null }, { fields: ['id'] });
     for (const link of links) {
-      await em.nativeUpdate(AccessLinkEntity, { id: link.id }, { keyHash: hashSecret(generateAccessKey()), keyPrefix: '', keyEncrypted: null });
+      await em.nativeUpdate(AccessLinkEntity, { id: link.id }, { keyHash: hashSecret(generateAccessKey()), keyPrefix: '', keyEncrypted: null, revokedAt: new Date(), revokedBy: 'lockdown' });
     }
     if (links.length) await this.audit.log('personal.keys-blocked', { count: links.length });
     return links.length;

@@ -152,7 +152,7 @@ export function CodeCamera({ onCode, height = 320 }: { onCode: (code: string) =>
  * Field for a barcode or RFID chip. Hand scanners and RFID readers type into it like a keyboard; on phones the
  * camera (barcodes) or NFC (chips) fill it.
  */
-export function CodeInput({ value, onChange, source, ...props }: Omit<TextInputProps, 'value' | 'onChange'> & { value: string; onChange: (value: string) => void; source: 'camera' | 'nfc' }) {
+export function CodeInput({ value, onChange, source, repeat = false, ...props }: Omit<TextInputProps, 'value' | 'onChange'> & { value: string; onChange: (value: string) => void; source: 'camera' | 'nfc'; repeat?: boolean }) {
   const { t } = useTranslation('common');
   const [camera, setCamera] = useState(false);
   const [reading, setReading] = useState<AbortController | null>(null);
@@ -202,7 +202,7 @@ export function CodeInput({ value, onChange, source, ...props }: Omit<TextInputP
             onCode={(code) => {
               signalScan();
               onChange(code);
-              setCamera(false);
+              if (!repeat) setCamera(false);
             }}
           />
         </Modal>

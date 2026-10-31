@@ -26,6 +26,7 @@ async function lookup(code: string): Promise<Item | undefined> {
  */
 export function IssuePage() {
   const { t } = useTranslation('clothing');
+  const { t: common } = useTranslation('common');
   const localized = useLocalized();
   const [params, setParams] = useSearchParams();
   const personId = params.get('person');
@@ -160,14 +161,15 @@ export function IssuePage() {
                   scroll
                   rows={rows}
                   rowKey={(i) => i.id}
+                  onRowClick={(i) => { if (!refused && i.blockedBy.length === 0) toggle(i.id, !selected.has(i.id)); }}
                   empty={t('issue.noStock')}
                   columns={[
                     {
                       key: 'select',
-                      header: '',
+                      header: common('table.select'),
                       width: 40,
                       render: (i) => (
-                        <Checkbox aria-label={i.inventoryNumber} disabled={refused || i.blockedBy.length > 0} checked={selected.has(i.id)} onChange={(e) => toggle(i.id, e.currentTarget.checked)} />
+                        <Checkbox aria-label={i.inventoryNumber} disabled={refused || i.blockedBy.length > 0} checked={selected.has(i.id)} onClick={(e) => e.stopPropagation()} onChange={(e) => toggle(i.id, e.currentTarget.checked)} />
                       ),
                     },
                     { key: 'number', header: t('items.inventoryNumber'), render: (i) => <Text fw={700} size="sm">{i.inventoryNumber}</Text> },

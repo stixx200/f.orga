@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Audit, type AuthenticatedUser, CookiePolicy, decryptSecret, encryptSecret, hashSecret, MailService, serverKey } from '@forga/core-api';
+import { Audit, type AuthenticatedUser, CookiePolicy, decryptSecret, encryptSecret, hashSecret, MailService, refuseRestricted, serverKey } from '@forga/core-api';
 import { CLOTHING_HELD, type ClothingHeld } from '@forga/clothing-contracts';
 import { INCIDENTS_LOOKUP, type IncidentsLookup } from '@forga/incidents-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory, type PersonSummary } from '@forga/masterdata-contracts';
@@ -44,6 +44,7 @@ export class LinksService {
   /** Creates the link, or replaces the key of the existing one. The clear-text key is returned only here. */
   async create(user: AuthenticatedUser, personId: string): Promise<PersonalLinkCreated> {
     const person = await this.person(user, personId, PERSONAL_MANAGE);
+    refuseRestricted(await this.directory.isRestricted(personId));
     const secret = this.secret();
     const base = await this.publicBase();
     const key = generateAccessKey();
@@ -60,6 +61,7 @@ export class LinksService {
   /** Shows the link again. Every time is written to the audit log. */
   async show(user: AuthenticatedUser, personId: string): Promise<ShownLink> {
     const person = await this.person(user, personId, PERSONAL_MANAGE);
+    refuseRestricted(await this.directory.isRestricted(personId));
     const row = await this.em.fork().findOne(AccessLinkEntity, { personId }, { populate: ['keyEncrypted'] });
     if (!row || row.revokedAt) throw new NotFoundException({ code: 'personal.unknownPerson' });
     this.mayOrFail(user, PERSONAL_MANAGE, person);
@@ -87,6 +89,7 @@ export class LinksService {
    */
   async mail(user: AuthenticatedUser, personId: string): Promise<MailedLink> {
     const person = await this.person(user, personId, PERSONAL_MANAGE);
+    refuseRestricted(await this.directory.isRestricted(personId));
     if (!person.email.trim()) throw new BadRequestException({ code: 'personal.noEmail' });
     const base = await this.publicBase();
     const secret = this.secret();
@@ -122,6 +125,7 @@ export class LinksService {
 
   /** The file behind a valid access key. Examinations have no medical detail; incidents have no report text or pay. */
   async view(link: AccessLinkEntity): Promise<PersonalView> {
+    refuseRestricted(await this.directory.isRestricted(link.personId));
     const file = await this.directory.personalFile(link.personId);
     if (!file) throw new NotFoundException({ code: 'personal.gone' });
     const departmentIds = file.memberships.map((membership) => membership.departmentId);
@@ -134,6 +138,11 @@ export class LinksService {
       this.clothing ? this.clothing.heldBy(link.personId) : null,
     ]);
     return { ...file, respiratory, incidents, sessions, upcoming, courses, clothing };
+  }
+
+  /** Refuses the kiosk while processing of this person is restricted (Art. 18). */
+  async assertNotRestricted(link: AccessLinkEntity): Promise<void> {
+    refuseRestricted(await this.directory.isRestricted(link.personId));
   }
 
   /** Marks the link as seen without writing history. */

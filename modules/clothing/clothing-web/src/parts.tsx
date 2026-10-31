@@ -104,6 +104,7 @@ export function ScanField({ onCode, ...props }: { onCode: (code: string) => void
   return (
     <Group gap="xs" align="end" wrap="nowrap" style={props.style}>
       <CodeInput
+        repeat
         label={props.label ?? t('scan.label')}
         placeholder={t('scan.placeholder')}
         value={value}
