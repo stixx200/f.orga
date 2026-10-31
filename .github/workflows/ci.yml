@@ -42,7 +42,7 @@ jobs:
           filter: tree:0
       # Distribute typecheck/test/build across Nx Agents; integration stays on this runner (Postgres).
       # https://nx.dev/ci/reference/nx-cloud-cli#npx-nxcloud-startcirun
-      - run: npx nx-cloud@latest start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="typecheck,test,build"
+      - run: npx nx-cloud@latest start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="typecheck,test,build,integration"
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
@@ -65,7 +65,8 @@ jobs:
           sudo apt-get install -y -q postgresql-client-17
           echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
       - name: Integration tests (PostgreSQL)
-        run: pnpm exec nx affected -t integration --parallel=3
+        # Local only: Agents have no Postgres service. Still listed in stop-agents-after so the CIPE stays open.
+        run: pnpm exec nx affected -t integration --parallel=3 --no-agents
       - run: pnpm exec nx-cloud fix-ci
         if: always()
 
