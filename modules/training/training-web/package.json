@@ -14,7 +14,7 @@
     "@forga/training-contracts": "workspace:*",
     "@forga/web-sdk": "workspace:*",
     "@forga/web-ui": "workspace:*",
-    "@mantine/core": "^9.7.3",
+    "@mantine/core": "^9.7.4",
     "@mantine/dates": "^9.7.3",
     "@mantine/hooks": "^9.7.3",
     "@mantine/notifications": "^9.7.3",
@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@module-federation/vite": "^1.15.5",
-    "@nx/vite": "24.0.0",
+    "@nx/vite": "24.0.2",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.2",
