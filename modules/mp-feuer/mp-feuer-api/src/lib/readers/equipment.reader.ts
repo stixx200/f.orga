@@ -1,5 +1,7 @@
-import { berlinDate } from '@forga/core-api';
 import { groupRows, type TransferArchive, type TransferRow } from '../archive/transfer-archive.js';
+
+/** Calendar date in Europe/Berlin. Local on purpose: this reader is loaded by a unit test that must not pull the core module. */
+const todayInBerlin = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date());
 
 /**
  * Equipment families of an MP-Feuer transfer file. The prefix is the table name (`GSO_STAMM`, …).
@@ -93,7 +95,7 @@ function inventoryNumber(prefix: string, item: Record<string, string>): string {
 }
 
 function latest(rows: readonly Record<string, string>[], prefix: string): { date: string; until: string } | null {
-  const today = berlinDate();
+  const today = todayInBerlin();
   let best: { date: string; until: string } | null = null;
   for (const row of rows) {
     const date = cell(row, `${prefix}_PRUEF_DAT`).slice(0, 10);
