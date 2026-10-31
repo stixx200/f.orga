@@ -1,4 +1,4 @@
-import { Button, Group, Menu, Stack, Text } from '@mantine/core';
+import { Button, Group, Loader, Menu, Stack, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
@@ -380,7 +380,7 @@ export function ReportPage() {
   const { data: report, error, isFetchedAfterMount } = useReport(id);
   if (error) return <EmptyState title={t('editor.notFound')} />;
   // The editor starts from the current state of the server, not from an older copy in the cache.
-  if (!report || !isFetchedAfterMount || !userId) return null;
+  if (!report || !isFetchedAfterMount || !userId) return <Loader m="xl" />;
   // The editor keeps its own copy of the content; a different report gets a new editor.
   return <Editor key={report.id} report={report} userId={userId} />;
 }

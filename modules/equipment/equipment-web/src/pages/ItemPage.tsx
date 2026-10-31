@@ -1,4 +1,4 @@
-import { Button, Group, Menu, SimpleGrid, Stack, Tabs, Text, Textarea, TextInput } from '@mantine/core';
+import { Button, Group, Loader, Menu, SimpleGrid, Stack, Tabs, Text, Textarea, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { QRCodeSVG } from 'qrcode.react';
 import { useState } from 'react';
@@ -285,7 +285,7 @@ export function ItemPage() {
   const [dialog, setDialog] = useState<'edit' | 'inspect' | 'defect' | 'retire' | null>(() => (params.get('report') === 'defect' ? 'defect' : null));
   const status = useAction((next: string) => send('PUT', `equipment/items/${id}/status`, { status: next }), { invalidate: [keys.all] });
   const tab = TABS.find((x) => x === params.get('tab')) ?? 'data';
-  if (!item) return isLoading ? null : <EmptyState title={t('item.notFound')} />;
+  if (!item) return isLoading ? <Loader m="xl" /> : <EmptyState title={t('item.notFound')} />;
   if ('reportOnly' in item) return <ReportOnlyPage item={item} reporting={dialog === 'defect'} setReporting={(on) => setDialog(on ? 'defect' : null)} />;
 
   const may = (permission: string) => can(session, permission, item.departmentId);

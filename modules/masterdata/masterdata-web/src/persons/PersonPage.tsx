@@ -1,4 +1,4 @@
-import { Avatar, Button, Group, Stack, Tabs, Text } from '@mantine/core';
+import { Avatar, Button, Group, Loader, Stack, Tabs, Text } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
@@ -183,6 +183,6 @@ export function PersonPage() {
   const { data: person, error } = usePerson(id);
   if (error instanceof ApiError && error.code === 'privacy.processingRestricted') return <EmptyState title={t('person.restrictedBadge')} text={t('person.restrictedPage')} />;
   if (error) return <EmptyState title={t('person.notFound')} />;
-  if (!person) return null;
+  if (!person) return <Loader m="xl" />;
   return <PersonFile key={person.id} person={person} />;
 }

@@ -30,6 +30,8 @@ export interface IncidentFilter {
   status?: string;
   mine?: boolean;
   withoutStatistics?: boolean;
+  /** Caps the newest incidents. The incidents page keeps the server default so its filters see the whole list. */
+  limit?: number;
 }
 
 export function useIncidents(filter: IncidentFilter = {}, enabled = true) {

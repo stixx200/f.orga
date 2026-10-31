@@ -1,4 +1,4 @@
-import { Button, Group, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Group, Loader, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { Person, SelfContactInput } from '@forga/masterdata-contracts';
@@ -57,13 +57,13 @@ function ContactForm({ person }: { person: Person }) {
 /** "My area": the own file (read), the own driving licence and contact details (editable). */
 export function MyData() {
   const { t, i18n } = useTranslation('masterdata');
-  const { data: person } = useQuery({ queryKey: KEY, queryFn: () => api<Person>('masterdata/me') });
+  const { data: person, isPending } = useQuery({ queryKey: KEY, queryFn: () => api<Person>('masterdata/me') });
   const { data: departments = [] } = useDepartments();
   const rank = useCatalogNames('rank');
   const qualification = useCatalogNames('qualification');
   const honor = useCatalogNames('honor');
   const [today] = useState(todayDate);
-  if (!person) return null;
+  if (!person) return isPending ? <Loader m="xl" /> : null;
   const memberships = person.memberships.filter((m) => !m.to || m.to >= today);
   const lines: [string, string][] = [
     [t('me.departments'), memberships.map((m) => departments.find((d) => d.id === m.departmentId)?.name ?? '').filter(Boolean).join(', ')],

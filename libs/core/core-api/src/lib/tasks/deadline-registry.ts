@@ -85,8 +85,11 @@ export class DeadlineRegistry {
     const restricted = await this.restrictions.restrictedIds();
     const inactive = await this.modules.inactiveIds();
     // Inactive modules have no tasks (their permissions are not granted either, but a task may name a core permission).
-    for (const provider of this.providers.filter((p) => !inactive.has(p.module))) {
-      for (const input of await provider.deadlines(asOf)) {
+    const batches = await Promise.all(
+      this.providers.filter((p) => !inactive.has(p.module)).map(async (provider) => ({ provider, inputs: await provider.deadlines(asOf) })),
+    );
+    for (const { provider, inputs } of batches) {
+      for (const input of inputs) {
         const personId = input.personId ?? (PERSON_SUBJECTS.has(input.subject.type) ? input.subject.id : null);
         if (personId && restricted.has(personId)) continue;
         if (addDays(input.dueOn, -input.leadDays) > asOf) continue;

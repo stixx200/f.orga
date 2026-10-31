@@ -1,4 +1,5 @@
 import { Button, Group, Select, Stack, Text, TextInput } from '@mantine/core';
+import { useDebouncedValue } from '@mantine/hooks';
 import { IconScan, IconSearch } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -21,6 +22,7 @@ export function ItemsPage() {
   const { data: categories = [] } = useCategories();
   const { data: departments = [] } = useDepartments();
   const [q, setQ] = useState('');
+  const [debounced] = useDebouncedValue(q, 250);
   const [categoryKey, setCategoryKey] = useState<string | null>(null);
   const [departmentId, setDepartmentId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -28,7 +30,7 @@ export function ItemsPage() {
   const [creating, setCreating] = useState(false);
   const { soon, today, days } = useDueSoon();
   const { data = [], isLoading } = useItems({
-    q: q.trim() || undefined,
+    q: debounced.trim() || undefined,
     categoryKey: categoryKey ?? undefined,
     departmentId: departmentId ?? undefined,
     status: status ?? undefined,

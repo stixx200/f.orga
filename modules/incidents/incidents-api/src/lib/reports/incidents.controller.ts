@@ -135,6 +135,7 @@ export class IncidentsController {
     @Query('status') status?: string,
     @Query('mine') mine?: string,
     @Query('withoutStatistics') withoutStatistics?: string,
+    @Query('limit') limit?: string,
   ): Promise<IncidentDto[]> {
     const readable = this.reports.readableFilter(user);
     if (!readable) return [];
@@ -151,7 +152,8 @@ export class IncidentsController {
       const counted = (await em.find(AlarmKeywordEntity, { mainType: { $ne: null } })).map((k) => k.key);
       where.push({ statistics: null, alarmKeyword: { $in: counted } });
     }
-    const incidents = await em.find(IncidentEntity, where.length ? { $and: where } : {}, { populate: ['reports'], orderBy: { alarmedAt: 'desc' }, limit: 500 });
+    const cap = Math.min(500, Math.max(1, Number(limit) || 500));
+    const incidents = await em.find(IncidentEntity, where.length ? { $and: where } : {}, { populate: ['reports'], orderBy: { alarmedAt: 'desc' }, limit: cap });
     return this.reports.incidentDtos(em, incidents, user);
   }
 

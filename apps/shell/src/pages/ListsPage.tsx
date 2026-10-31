@@ -1,4 +1,4 @@
-import { Button, Checkbox, Grid, Group, NavLink, NumberInput, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Checkbox, Grid, Group, Loader, NavLink, NumberInput, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { IconFileSpreadsheet, IconFileText, IconFileTypePdf } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
@@ -180,12 +180,13 @@ function ListView({ list }: { list: ListInfo }) {
                   </Button>
                 ))}
               </Group>
-              <Button type="submit" disabled={missing.length > 0}>{t('lists.preview')}</Button>
+              <Button type="submit" loading={preview.isFetching} disabled={missing.length > 0}>{t('lists.preview')}</Button>
             </Group>
           </Stack>
         </form>
       </Panel>
       {preview.error && <Notice kind="error">{t('lists.failed')}</Notice>}
+      {preview.isFetching && !preview.data && <Loader m="md" />}
       {preview.data && (
         <Panel title={preview.data.title} aside={<Text size="sm" c="dimmed">{t('lists.rows', { count: preview.data.rows.length })}</Text>}>
           {preview.data.subtitle && <Text size="sm" c="dimmed" mb="sm">{preview.data.subtitle}</Text>}

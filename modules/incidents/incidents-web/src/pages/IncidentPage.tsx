@@ -1,4 +1,4 @@
-import { Button, Checkbox, Group, Select, SimpleGrid, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core';
+import { Button, Checkbox, Group, Loader, Select, SimpleGrid, Stack, Switch, Text, Textarea, TextInput } from '@mantine/core';
 import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -159,7 +159,7 @@ function ReportCard({ summary, report, readable, onMakePrimary, onDelete }: {
       <Stack gap={4}>
         <Text size="sm"><Text span c="dimmed">{t('report.number')}: </Text>{summary.number}</Text>
         <Text size="sm"><Text span c="dimmed">{t('report.author')}: </Text>{names.person(summary.authorPersonId) || '–'}</Text>
-        {report && (
+        {readable && !report ? <Loader size="sm" /> : report && (
           <>
             <Text size="sm">
               <Text span c="dimmed">{t('report.time')}: </Text>
@@ -249,7 +249,7 @@ export function IncidentPage() {
   );
 
   if (error) return <EmptyState title={t('incident.notFound')} />;
-  if (!incident) return null;
+  if (!incident) return <Loader m="xl" />;
   const missing = departments.filter((d) => d.type === 'operational' && canWrite(d.id) && !incident.reports.some((r) => r.departmentId === d.id));
   const primary = incident.reports.find((r) => r.primary);
   // A unit report may be primary only while the incident has no department report.
