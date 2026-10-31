@@ -61,8 +61,9 @@ test('inspection, defect report and handling', async ({ browser }) => {
   await expect(officer.getByRole('heading', { name: 'Sammelprüfungen', level: 1 })).toBeVisible();
   await choose(officer, 'Geräteart', /^Atemschutz$/);
   const first = (await officer.getByRole('row').nth(1).getByText(/ · /).first().textContent())!;
-  await officer.getByLabel('Scannen').fill(first.split(' · ')[0]);
-  await officer.getByLabel('Scannen').press('Enter');
+  const scanField = officer.getByRole('textbox', { name: 'Scannen' });
+  await scanField.fill(first.split(' · ')[0]);
+  await scanField.press('Enter');
   await expect(officer.getByText('1 Gerät ausgewählt')).toBeVisible();
   await officer.goto('/equipment/labels');
   await expect(officer.getByRole('button', { name: 'Drucken' })).toBeVisible();
@@ -100,7 +101,7 @@ test('due inspections, bulk inspection with scan and protocol, scan on the item 
 
   await navigate(officer, 'Fällige Prüfungen');
   await expect(officer.getByRole('heading', { name: 'Fällige Prüfungen', level: 1 })).toBeVisible();
-  await expect(officer.getByRole('link', { name: 'Sammelprüfungen' })).toBeVisible();
+  await expect(officer.getByRole('main').getByRole('link', { name: 'Sammelprüfungen' })).toBeVisible();
 
   await officer.goto('/equipment/items');
   await officer.getByRole('button', { name: 'Scannen' }).click();
@@ -114,8 +115,9 @@ test('due inspections, bulk inspection with scan and protocol, scan on the item 
   await choose(officer, 'Geräteart', /^Schläuche$/);
   await expect(officer.getByRole('row').filter({ hasText: number })).toBeVisible();
   await chooseFirst(officer, 'Standort');
-  await officer.getByLabel('Scannen').fill(number);
-  await officer.getByLabel('Scannen').press('Enter');
+  const scanField = officer.getByRole('textbox', { name: 'Scannen' });
+  await scanField.fill(number);
+  await scanField.press('Enter');
   await expect(officer.getByText('1 Gerät ausgewählt')).toBeVisible();
   await choose(officer, 'Prüfart', /Druckprüfung nach Wäsche/);
   await chooseFiles(officer, 'Prüfprotokoll', { name: 'Sammelprotokoll.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%E2E-bulk\n') });

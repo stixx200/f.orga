@@ -43,7 +43,7 @@ test('personal access: mail, kiosk tiles and hidden respiratory protection', asy
   await commander.getByRole('button', { name: 'Link per E-Mail senden' }).click();
   await expect(commander.getByText('Der Link wurde per E-Mail gesendet.')).toBeVisible();
   await commander.getByRole('button', { name: 'Link anzeigen' }).click();
-  const linkField = commander.getByRole('textbox');
+  const linkField = commander.locator('input[readonly]');
   await expect(linkField).toHaveValue(/\/personal#k=fpa_/);
   const url = await linkField.inputValue();
 
