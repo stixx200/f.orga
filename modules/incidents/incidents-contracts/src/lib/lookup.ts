@@ -103,9 +103,21 @@ export interface CompensationPreview {
   }[];
 }
 
+/** An incident the person took part in, for a personal access link: no report narrative and no pay. */
+export interface PersonalIncident {
+  alarmedAt: string;
+  alarmKeyword: string;
+  dispatchNumber: string;
+  location: string;
+  /** Hours on scene, summed when the person is on more than one report of the incident. */
+  hours: number;
+}
+
 export interface IncidentsLookup {
   /** Chargeable incidents in the period (alarm date, Europe/Berlin). */
   chargeable(from: string, to: string): Promise<ChargeableIncident[]>;
+  /** Newest incidents the person is recorded on, at most 15. */
+  recentForPerson(personId: string): Promise<PersonalIncident[]>;
   forCostRecovery(incidentId: string): Promise<IncidentForCostRecovery | null>;
   /** The given reports with their incident, newest first; unknown IDs are omitted. */
   reports(reportIds: readonly string[]): Promise<ReportReference[]>;

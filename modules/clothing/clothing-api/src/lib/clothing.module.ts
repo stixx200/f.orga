@@ -1,7 +1,7 @@
-import { Inject, Module, type OnModuleInit } from '@nestjs/common';
+import { Global, Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { CodeRegistry, DeadlineRegistry, defineModule, ExportRegistry, HistoryAccessRegistry, ImportRegistry, ListRegistry, PersonDataRegistry, SearchRegistry } from '@forga/core-api';
-import { CLOTHING_MANIFEST, CLOTHING_SETTINGS } from '@forga/clothing-contracts';
+import { CLOTHING_HELD, CLOTHING_MANIFEST, CLOTHING_SETTINGS } from '@forga/clothing-contracts';
 import { ORGANIZATION_REFERENCES, type OrganizationReferences, PERSON_HOLDINGS, type PersonHoldings } from '@forga/masterdata-contracts';
 import { CLOTHING_MIGRATIONS } from '../migrations/index.js';
 import { ClothingController } from './clothing.controller.js';
@@ -10,7 +10,13 @@ import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity
 import { ClothingService, ISSUE, MANAGE, READ } from './clothing.service.js';
 import { ClothingInventoryImport } from './imports/inventory.import.js';
 
-@Module({ controllers: [ClothingController], providers: [ClothingService, ClothingData, ClothingInventoryImport] })
+/** Global, so other modules can inject `CLOTHING_HELD`. */
+@Global()
+@Module({
+  controllers: [ClothingController],
+  providers: [ClothingService, ClothingData, ClothingInventoryImport, { provide: CLOTHING_HELD, useExisting: ClothingService }],
+  exports: [CLOTHING_HELD],
+})
 export class ClothingModule implements OnModuleInit {
   constructor(
     private readonly em: EntityManager,

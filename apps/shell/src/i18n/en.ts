@@ -369,6 +369,7 @@ export const en: typeof de = {
       clothing: 'Clothing store: protective and service clothing, issue and return, sizes, washing and impregnation.',
       'duty-officer': 'Duty officer: duty roster with daily flat rates and a duty officer report for every incident.',
       'info-terminal': 'Info terminal at the station: members book themselves into incidents and sessions, with vehicle, function and details for the compensation.',
+      personal: 'Personal access: each person gets a link and sees their own master data and respiratory protection on a phone, without signing in.',
       'mp-feuer': 'Data transfer from MP-Feuer transfer files in the background, with a mapping list of its own; switch it off after the switch to f.orga.',
       backup: 'Backup: regular encrypted backups into a folder on the server, verification and restore without a console.',
     },

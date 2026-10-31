@@ -275,7 +275,7 @@ describe('reset by an administrator', () => {
 describe('second factor switched off', () => {
   it('opens sensitive areas and the administration without a code', async () => {
     const confirmed = await test.login(ADMIN);
-    await http.put('/api/core/settings/security', { mfaEnabled: false }).set('Cookie', confirmed).set(UI).expect(200);
+    await http.put('/api/core/settings/security').set('Cookie', confirmed).set(UI).send({ mfaEnabled: false }).expect(200);
     try {
       const locked = await test.login(ADMIN, { elevated: false });
       const state = await session(locked);
@@ -286,7 +286,7 @@ describe('second factor switched off', () => {
       const users = (await http.get('/api/core/users').set('Cookie', locked).expect(200)).body as { username: string; mfaNeeded: boolean; mfaEnrolled: boolean }[];
       expect(users.find((u) => u.username === 'admin')).toMatchObject({ mfaNeeded: false, mfaEnrolled: true });
     } finally {
-      await http.put('/api/core/settings/security', { mfaEnabled: true }).set('Cookie', confirmed).set(UI).expect(200);
+      await http.put('/api/core/settings/security').set('Cookie', confirmed).set(UI).send({ mfaEnabled: true }).expect(200);
     }
   });
 });

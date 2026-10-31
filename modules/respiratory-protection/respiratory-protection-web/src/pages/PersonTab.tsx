@@ -1,6 +1,6 @@
 import { ActionIcon, Anchor, Button, Group, Stack, Text } from '@mantine/core';
 import { IconPencil, IconTrash } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { Evidence } from '@forga/respiratory-protection-contracts';
 import { apiUrl, can, formatDate, send, useSession, useTranslation } from '@forga/web-sdk';
@@ -8,6 +8,12 @@ import { ConfirmDialog, DataTable, Notice, Panel, StepUpButton, useAction } from
 import { EVIDENCE, EXAMINATIONS, keys, usePersonRespiratoryProtection } from '../api';
 import { ConditionList, FitnessBadge } from '../parts';
 import { EvidenceDialog, KINDS } from './EvidenceDialog';
+
+/** Persons without the wearer qualification and without any evidence have no tab. */
+export function PersonTabGate({ personId, children }: { personId?: unknown; children: ReactNode }) {
+  const { data } = usePersonRespiratoryProtection(String(personId));
+  return data && (data.status.color !== 'grey' || data.evidence.length > 0) ? children : null;
+}
 
 /** Tab "Atemschutz" in the person file (extension point `masterdata.person.tab`). */
 export function PersonTab({ personId }: { personId?: unknown }) {

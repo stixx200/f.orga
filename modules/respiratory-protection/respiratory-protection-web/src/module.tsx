@@ -6,7 +6,7 @@ import { NotFitTile } from './dashboard';
 import { translations } from './i18n';
 import { OverviewPage } from './pages/OverviewPage';
 import { MyRecords } from './pages/MyRecords';
-import { PersonTab } from './pages/PersonTab';
+import { PersonTab, PersonTabGate } from './pages/PersonTab';
 import { QuickEntryPage } from './pages/QuickEntryPage';
 import { SettingsPage } from './pages/SettingsPage';
 
@@ -26,7 +26,7 @@ export default defineWebModule({
   ],
   dashboard: [{ id: 'not-fit', area: 'kpi', permission: READ, order: 40, component: NotFitTile }],
   extensions: {
-    'masterdata.person.tab': { label: { de: 'Atemschutz', en: 'Respiratory protection' }, permission: READ, component: PersonTab },
+    'masterdata.person.tab': { label: { de: 'Atemschutz', en: 'Respiratory protection' }, permission: READ, component: PersonTab, gate: PersonTabGate },
     'core.me.sections': { label: { de: 'Mein Atemschutz', en: 'My respiratory protection' }, order: 30, permission: 'respiratory-protection.self', component: MyRecords },
   },
 });

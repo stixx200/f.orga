@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { classNames, isValidIban, type Person, type PersonInput } from '@forga/masterdata-contracts';
-import { ApiError, can, extensionsOf, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
+import { ApiError, can, extensionsOf, send, useLocalized, useSession, useTranslation, type Extension } from '@forga/web-sdk';
 import { ActionBar, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, StatusBadge, StepUpButton, useAction } from '@forga/web-ui';
 import { keys, today as todayDate, useCatalogNames, useDepartments, usePerson, WRITE } from '../api';
 import { BrigadeTab } from './BrigadeTab';
@@ -132,7 +132,7 @@ function PersonFile({ person }: { person: Person }) {
           <Tabs.Tab value="qualifications">{t('person.tabs.qualifications')}</Tabs.Tab>
           <Tabs.Tab value="honors">{t('person.tabs.honors')}</Tabs.Tab>
           <Tabs.Tab value="offices">{t('person.tabs.offices')}</Tabs.Tab>
-          {extensions.map((e) => <Tabs.Tab key={e.module} value={`ext:${e.module}`}>{localized(e.label)}</Tabs.Tab>)}
+          {extensions.map((e) => <ExtensionTab key={e.module} extension={e} personId={person.id} label={localized(e.label)} />)}
           <Tabs.Tab value="history">{t('person.tabs.history')}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="master"><MasterDataTab person={person} form={form} setForm={setForm} disabled={!editable} /></Tabs.Panel>
@@ -163,6 +163,12 @@ function PersonFile({ person }: { person: Person }) {
       )}
     </Stack>
   );
+}
+
+function ExtensionTab({ extension, personId, label }: { extension: Extension & { module: string }; personId: string; label: string }) {
+  const tab = <Tabs.Tab value={`ext:${extension.module}`}>{label}</Tabs.Tab>;
+  const Gate = extension.gate;
+  return Gate ? <Gate personId={personId}>{tab}</Gate> : tab;
 }
 
 /** Person file with master data, brigade career, courses, qualifications, honors, extensions and history. */

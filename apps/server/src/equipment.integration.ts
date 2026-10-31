@@ -164,7 +164,7 @@ describe('equipment', () => {
     await post(`/equipment/items/${ids.hose}/trigger`, { inspectionKey: 'hose-washing' }, officer).expect(200);
     let hose = (await get(`/equipment/items/${ids.hose}`, officer)).body;
     expect(hose.dues[0]).toMatchObject({ dueOn: today, overdue: true });
-    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], inspectionKey: 'hose-washing', date: today, result: 'passed' }, officer).expect(200)).body).toEqual({ recorded: 1 });
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], inspectionKey: 'hose-washing', date: today, result: 'passed' }, officer).expect(200)).body).toEqual({ recorded: 1, ids: [expect.any(String)] });
     hose = (await get(`/equipment/items/${ids.hose}`, officer)).body;
     expect(hose.dues[0].dueOn).toBeNull();
     expect((await get(`/equipment/items/${ids.scba}/inspections`, officer)).body).toHaveLength(2);

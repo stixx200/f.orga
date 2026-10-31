@@ -1,5 +1,5 @@
 import { Button, Group, Select, Stack, Text, TextInput } from '@mantine/core';
-import { IconSearch } from '@tabler/icons-react';
+import { IconScan, IconSearch } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { Item } from '@forga/equipment-contracts';
@@ -8,6 +8,7 @@ import { DataTable, PageHeader, StatusBadge, treeOptions } from '@forga/web-ui';
 import { BREATHING_WRITE, useCategories, useCategoryName, useDepartments, useDueSoon, useItems, usePlace, WRITE } from '../api';
 import { DueDate, ItemStatusBadge } from '../parts';
 import { ItemDialog } from './ItemDialog';
+import { matchesCode, ScanDialog, scannedCode } from './ScanDialog';
 
 /** Equipment with search and filters; next inspection with traffic light. */
 export function ItemsPage() {
@@ -33,6 +34,16 @@ export function ItemsPage() {
     status: status ?? undefined,
     dueBefore: due === 'overdue' ? today : due === 'soon' ? soon : undefined,
   });
+  const [scanning, setScanning] = useState(false);
+  // Searches every item the user may see, not only the filtered table.
+  const all = useItems({ includeRetired: 'true' }, scanning);
+  const onScan = async (text: string) => {
+    const items = all.data ?? (await all.refetch()).data ?? [];
+    const item = items.find((i) => matchesCode(i, scannedCode(text)));
+    if (!item) return { message: t('itemScan.unknown', { code: scannedCode(text).code ?? text }), ok: false };
+    void navigate(`/equipment/items/${item.id}`);
+    return { message: t('itemScan.found', { item: `${item.inventoryNumber} · ${item.name}` }), ok: true };
+  };
 
   return (
     <Stack gap="lg">
@@ -41,6 +52,7 @@ export function ItemsPage() {
         title={t('items.title')}
         actions={
           <Group gap="sm">
+            <Button variant="default" leftSection={<IconScan size={16} />} onClick={() => setScanning(true)}>{t('itemScan.open')}</Button>
             <Button component={Link} to="/equipment/labels" variant="default">{t('labels.title')}</Button>
             {(can(session, WRITE) || can(session, BREATHING_WRITE)) && <Button onClick={() => setCreating(true)}>{t('item.new')}</Button>}
           </Group>
@@ -67,6 +79,7 @@ export function ItemsPage() {
         ]}
       />
       {creating && <ItemDialog onClose={() => setCreating(false)} />}
+      {scanning && <ScanDialog onScan={onScan} onClose={() => setScanning(false)} />}
     </Stack>
   );
 }

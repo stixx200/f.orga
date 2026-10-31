@@ -96,11 +96,10 @@ export class EquipmentModule implements OnModuleInit {
     });
     // Photo and documents belong to the kind of device (category, type, name), not to one inventory number.
     const itemOf = (id: string) => /^[0-9a-f-]{36}$/i.test(id) ? this.em.fork().findOne(EquipmentItemEntity, id) : Promise.resolve(null);
-    const groupKey = (item: Pick<EquipmentItemEntity, 'categoryKey' | 'typeKey' | 'name'>) => equipmentGroupKey(item);
     const inGroup = async (id: string) => {
       if (!id.startsWith('group:')) return [];
       const items = await this.em.fork().find(EquipmentItemEntity, {}, { fields: ['categoryKey', 'typeKey', 'name', 'departmentId'] });
-      return items.filter((item) => groupKey(item) === id);
+      return items.filter((item) => equipmentGroupKey(item) === id);
     };
     const shared = {
       read: async (user: AuthenticatedUser, id: string) => {
@@ -118,7 +117,7 @@ export class EquipmentModule implements OnModuleInit {
       },
       locate: async (id: string) => {
         const item = await itemOf(id);
-        return item ? groupKey(item) : id;
+        return item ? equipmentGroupKey(item) : id;
       },
     };
     this.attachments.register('equipment.item', { ...shared, max: 1, imagesOnly: true });

@@ -1,4 +1,4 @@
-import { choose, chooseFirst, expect, login, test } from './support';
+import { api, choose, chooseFiles, expect, login, navigate, test, USERS } from './support';
 
 /**
  * The equipment officer inspects a breathing apparatus, a group leader reports a defect via the item page
@@ -21,6 +21,7 @@ test('inspection, defect report and handling', async ({ browser }) => {
   await officer.getByRole('row').filter({ hasText: 'Sicht- und Funktionsprüfung' }).getByRole('button', { name: 'Prüfen' }).click();
   const dialog = officer.getByRole('dialog');
   await expect(dialog.getByText('Warnsignal')).toBeVisible();
+  await chooseFiles(officer, 'Prüfprotokoll', { name: 'Pruefstand.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%E2E\n') });
   await dialog.getByRole('button', { name: 'Speichern' }).click();
   await expect(officer.getByText('Prüfung gespeichert')).toBeVisible();
   await expect(officer.getByRole('cell', { name: 'Bestanden' }).first()).toBeVisible();
@@ -54,16 +55,16 @@ test('inspection, defect report and handling', async ({ browser }) => {
 
   // Due inspections and QR labels.
   await officer.goto('/equipment/inspections');
-  await expect(officer.getByRole('heading', { name: 'Prüfungen', level: 1 })).toBeVisible();
-  // Bulk inspection: choose an inspection type and select an item by its label (typed here, the camera scans in the field).
-  await chooseFirst(officer, 'Prüfart');
+  await expect(officer.getByRole('heading', { name: 'Fällige Prüfungen', level: 1 })).toBeVisible();
+  // Bulk inspection: choose the kind of equipment and select an item by its label (typed here, the camera scans in the field).
+  await officer.goto('/equipment/bulk');
+  await expect(officer.getByRole('heading', { name: 'Sammelprüfungen', level: 1 })).toBeVisible();
+  await choose(officer, 'Geräteart', /^Atemschutz$/);
   const first = (await officer.getByRole('row').nth(1).getByText(/ · /).first().textContent())!;
-  await officer.getByRole('button', { name: 'Per Scan auswählen' }).click();
-  await officer.getByRole('dialog').getByLabel('Code oder Inventarnummer').fill(first.split(' · ')[0]);
-  await officer.getByRole('dialog').getByRole('button', { name: 'Übernehmen' }).click();
-  await expect(officer.getByRole('dialog').getByText(/ausgewählt \(1 insgesamt\)/)).toBeVisible();
-  await officer.getByRole('dialog').getByRole('button', { name: 'Schließen' }).click();
-  await expect(officer.getByText('1 Gerät ausgewählt')).toBeVisible();
+  const scanField = officer.getByRole('textbox', { name: 'Scannen' });
+  await scanField.fill(first.split(' · ')[0]);
+  await scanField.press('Enter');
+  await expect(officer.getByText('1 Gerät ausgewählt')).toHaveCount(2);
   await officer.goto('/equipment/labels');
   await expect(officer.getByRole('button', { name: 'Drucken' })).toBeVisible();
 
@@ -77,4 +78,58 @@ test('inspection, defect report and handling', async ({ browser }) => {
   await categoryDialog.getByLabel(/^Bezeichnung \(deutsch\)/).fill('E2E Unterkategorie');
   await categoryDialog.getByRole('button', { name: 'Speichern' }).click();
   await expect(officer.getByRole('row').filter({ hasText: key })).toContainText('└ E2E Unterkategorie');
+});
+
+/**
+ * The due-inspections page is a list only; bulk inspections scan from the field above the table, filter by location
+ * and attach a protocol. Scanning on the item list opens the item.
+ */
+test('due inspections, bulk inspection with scan and protocol, scan on the item list', async ({ browser }) => {
+  const officer = await login(browser, USERS.equipmentOfficer);
+  const stamp = Date.now();
+  const departments = await api<{ id: string; name: string }[]>(officer, 'GET', 'masterdata/departments');
+  const departmentId = departments.find((d) => d.name === 'Abteilung Musterstadt')!.id;
+  const number = `E2E-S-${stamp}`;
+  await api(officer, 'POST', 'equipment/items', {
+    inventoryNumber: number,
+    name: 'E2E-Druckschlauch',
+    typeKey: 'pressure-hose-b',
+    categoryKey: 'hoses',
+    departmentId,
+    barcode: number,
+  });
+
+  await navigate(officer, 'Fällige Prüfungen');
+  await expect(officer.getByRole('heading', { name: 'Fällige Prüfungen', level: 1 })).toBeVisible();
+  await expect(officer.getByRole('main').getByRole('link', { name: 'Sammelprüfungen' })).toBeVisible();
+
+  await officer.goto('/equipment/items');
+  await officer.getByRole('button', { name: 'Scannen' }).click();
+  const scan = officer.getByRole('dialog');
+  await scan.getByLabel('Code oder Inventarnummer').fill(number);
+  await scan.getByRole('button', { name: 'Übernehmen' }).click();
+  await expect(officer.getByRole('heading', { name: 'E2E-Druckschlauch', level: 1 })).toBeVisible();
+
+  await navigate(officer, 'Sammelprüfungen');
+  await expect(officer.getByRole('heading', { name: 'Sammelprüfungen', level: 1 })).toBeVisible();
+  await choose(officer, 'Geräteart', /^Schläuche/);
+  await expect(officer.getByRole('row').filter({ hasText: number })).toBeVisible();
+  await choose(officer, 'Standort', 'Ohne Standort');
+  await expect(officer.getByRole('row').filter({ hasText: number })).toBeVisible();
+  const scanField = officer.getByRole('textbox', { name: 'Scannen' });
+  await scanField.fill(number);
+  await scanField.press('Enter');
+  await expect(officer.getByText('1 Gerät ausgewählt')).toHaveCount(2);
+  await choose(officer, 'Prüfart', /Druckprüfung nach Wäsche/);
+  await chooseFiles(officer, 'Prüfprotokoll', { name: 'Sammelprotokoll.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%E2E-bulk\n') });
+  await officer.getByRole('button', { name: 'Prüfungen buchen' }).click();
+  await expect(officer.getByText('Prüfungen gespeichert')).toBeVisible();
+  await officer.goto(`/equipment/items`);
+  await officer.getByRole('main').getByLabel('Suche').fill(number);
+  await officer.getByRole('row').filter({ hasText: number }).click();
+  await officer.getByRole('tab', { name: 'Prüfungen' }).click();
+  const recorded = officer.getByRole('row').filter({ hasText: 'Druckprüfung nach Wäsche' }).filter({ hasText: 'Bestanden' });
+  await expect(recorded).toBeVisible();
+  await recorded.getByRole('button', { name: 'Anhänge' }).click();
+  await expect(officer.getByRole('dialog').getByRole('link', { name: 'Sammelprotokoll.pdf' })).toBeVisible();
 });

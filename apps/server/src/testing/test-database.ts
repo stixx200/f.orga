@@ -10,7 +10,7 @@ export async function resetTestDatabase(): Promise<void> {
   try {
     await orm.em
       .getConnection()
-      .execute('drop schema if exists core, masterdata, incidents, training, respiratory_protection, compensation, equipment, cost_recovery, promotions, clothing, duty_officer, info_terminal, mp_feuer, backup, privacy cascade; drop table if exists forga_migrations;');
+      .execute('drop schema if exists core, masterdata, incidents, training, respiratory_protection, compensation, equipment, cost_recovery, promotions, clothing, duty_officer, info_terminal, mp_feuer, backup, privacy, personal cascade; drop table if exists forga_migrations;');
     await orm.migrator.up();
   } finally {
     await orm.close();
