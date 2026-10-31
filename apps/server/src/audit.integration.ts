@@ -58,7 +58,10 @@ describe('readable audit log', () => {
     const gone = '0190c0de-0000-7000-8000-000000000000';
     await test.app.get(Audit).log('data.person-exported', { personId: ids.erika });
     await test.app.get(Audit).log('data.person-exported', { personId: gone });
-    const [deleted, anonymized] = await entries('data.person-exported');
+    // Look up by personId: equal timestamps are not ordered stably.
+    const exported = await entries('data.person-exported');
+    const anonymized = exported.find((e) => e.details['personId'] === ids.erika)!;
+    const deleted = exported.find((e) => e.details['personId'] === gone)!;
     expect(anonymized.references[ids.erika]).toEqual({ kind: 'masterdata.person', label: null, anonymized: true });
     expect(deleted.references[gone]).toEqual({ kind: 'masterdata.person', label: null });
   });
