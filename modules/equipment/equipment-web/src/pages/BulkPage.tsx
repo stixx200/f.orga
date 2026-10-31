@@ -111,15 +111,7 @@ export function BulkPage() {
         categoryKey,
         inspection: kind && !dueMode ? { inspectionKey: kind, date, result, inspectorCompany: company, inspectorPersonId: inspector } : undefined,
         triggerKey: kind && dueMode ? kind : undefined,
-        place: placeOn
-          ? {
-              stationId: targetStation,
-              vehicleId: targetVehicle,
-              location: targetLocation,
-              // Loading place only belongs on a vehicle; never send free text as a stand-alone place.
-              loadingPlace: targetVehicle ? targetLoading : '',
-            }
-          : undefined,
+        place: placeOn ? { stationId: targetStation, vehicleId: targetVehicle, location: targetLocation, loadingPlace: targetLoading } : undefined,
       });
       if (protocol && !dueMode) await Promise.all(recorded.ids.map((id) => upload(`core/attachments?type=equipment.inspection&id=${id}`, protocol)));
       return recorded;
@@ -239,10 +231,7 @@ export function BulkPage() {
                   onChange={({ stationId, location: next }) => {
                     setTargetStation(stationId);
                     setTargetLocation(next);
-                    if (stationId) {
-                      setTargetVehicle(null);
-                      setTargetLoading('');
-                    }
+                    if (stationId) setTargetVehicle(null);
                   }}
                 />
                 <Select
@@ -254,16 +243,12 @@ export function BulkPage() {
                     if (v) {
                       setTargetStation(null);
                       setTargetLocation('');
-                    } else {
-                      setTargetLoading('');
                     }
                   }}
                   clearable
                   searchable
                 />
-                {targetVehicle ? (
-                  <TextInput label={t('fields.loadingPlace')} description={t('fields.loadingPlaceHint')} value={targetLoading} onChange={(e) => setTargetLoading(e.currentTarget.value)} />
-                ) : null}
+                <TextInput label={t('fields.loadingPlace')} value={targetLoading} onChange={(e) => setTargetLoading(e.currentTarget.value)} />
               </SimpleGrid>
             )}
           </Stack>

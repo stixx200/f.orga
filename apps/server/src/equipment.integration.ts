@@ -371,9 +371,8 @@ describe('equipment', () => {
     expect((await put(`/equipment/items/${ids.hose}`, { ...hoseBase, location: 'Keller freitext', version: await hoseVersion() }, officer).expect(400)).body.code).toBe('equipment.unknownLocation');
     await put(`/equipment/items/${ids.hose}`, { ...hoseBase, location: 'Gesamtlager', version: await hoseVersion() }, officer).expect(200);
     expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], categoryKey: 'hoses', place: { location: 'Keller freitext', loadingPlace: '' } }, officer).expect(400)).body.code).toBe('equipment.unknownLocation');
-    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], categoryKey: 'hoses', place: { location: '', loadingPlace: 'asfasdfasdfasdfas' } }, officer).expect(400)).body.code).toBe('equipment.loadingPlaceWithoutVehicle');
-    expect((await put(`/equipment/items/${ids.hose}`, { ...hoseBase, loadingPlace: 'Keller freitext', version: await hoseVersion() }, officer).expect(400)).body.code).toBe('equipment.loadingPlaceWithoutVehicle');
-    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], categoryKey: 'hoses', place: { location: 'Gesamtlager – verschmutzt', loadingPlace: '' } }, officer).expect(200)).body).toMatchObject({ moved: 1 });
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.hose], categoryKey: 'hoses', place: { location: 'Gesamtlager – verschmutzt', loadingPlace: 'Regal A' } }, officer).expect(200)).body).toMatchObject({ moved: 1 });
+    expect((await get(`/equipment/items/${ids.hose}`, officer)).body).toMatchObject({ location: 'Gesamtlager – verschmutzt', loadingPlace: 'Regal A' });
     // Keep the bookable places for later tests; only reset the lead times.
     await put('/core/settings/equipment.settings', { locations: ['Atemschutzwerkstatt', 'Gesamtlager', 'Gesamtlager – verschmutzt'] }).expect(200);
   });

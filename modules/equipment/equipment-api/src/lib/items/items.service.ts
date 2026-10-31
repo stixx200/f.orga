@@ -290,29 +290,17 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     }
     for (const initial of input.initialInspections) this.checkDates(initial.date, initial.nextDueOn, input.purchasedOn);
     const previous = id ? (await em.findOne(EquipmentItemEntity, id))?.location : undefined;
-    await this.assertPlace(
-      { stationId: input.stationId, vehicleId: input.vehicleId, location: input.location, loadingPlace: input.loadingPlace },
-      previous,
-    );
+    await this.assertLocation(input.location, previous);
   }
 
   /**
    * Named places must be configured under `equipment.settings.locations`. An unchanged legacy value on update stays allowed.
-   * A loading place is only valid on a vehicle — free text must not become a stand-alone “location”.
+   * Free text belongs in `loadingPlace` (Beladeplatz / Lagerort), not here.
    */
   private async assertLocation(location: string, previous?: string): Promise<void> {
     if (!location || location === previous) return;
     const settings = EquipmentSettings.parse((await this.settings.get('equipment.settings')) ?? {});
     if (!settings.locations.includes(location)) throw new BadRequestException({ code: 'equipment.unknownLocation', value: location });
-  }
-
-  /** Vehicle + optional loading place, or station / configured named place — never a free-text loading place alone. */
-  private async assertPlace(
-    place: { stationId: string | null; vehicleId: string | null; location: string; loadingPlace: string },
-    previousLocation?: string,
-  ): Promise<void> {
-    await this.assertLocation(place.location, previousLocation);
-    if (place.loadingPlace && !place.vehicleId) throw new BadRequestException({ code: 'equipment.loadingPlaceWithoutVehicle' });
   }
 
   /** An inspection lies in the past (or today), not before 1900 or the purchase; its next due date after it. */
@@ -555,14 +543,14 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
         }
       }
       if (place) {
-        await this.assertPlace(place);
+        await this.assertLocation(place.location);
         for (const item of items) {
           if (item.status === 'retired') throw new ConflictException({ code: 'equipment.retired' });
           this.requireMay(user, 'write', item, breathing.has(item.categoryKey));
           item.stationId = place.stationId;
           item.vehicleId = place.vehicleId;
           item.location = place.location;
-          item.loadingPlace = place.vehicleId ? place.loadingPlace : '';
+          item.loadingPlace = place.loadingPlace;
         }
       }
       await this.rememberBulkCategory(em, user.id, categoryKey);

@@ -124,23 +124,21 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
           <NumberInput label={t('fields.price')} value={form.price ?? ''} onChange={(v) => set('price', v === '' ? null : Number(v))} min={0} decimalScale={2} suffix=" €" />
           <DateInput label={t('fields.expiresOn')} value={form.expiresOn} onChange={(v) => set('expiresOn', v)} valueFormat="DD.MM.YYYY" clearable />
           <Select label={t('fields.department')} data={writable.map((d) => ({ value: d.id, label: d.name }))} value={departmentId || null} onChange={(v) => set('departmentId', v ?? '')} required />
+          <LocationField
+            stationId={form.stationId}
+            location={form.location}
+            stations={stationOptions}
+            onChange={({ stationId, location }) => setForm((f) => ({ ...f, stationId, location, vehicleId: stationId ? null : f.vehicleId }))}
+          />
           <Select
             label={t('fields.vehicle')}
             data={vehicles.map((v) => ({ value: v.id, label: vehicleLabel(v, departments.find((d) => d.id === v.departmentId)?.shortName) }))}
             searchable
             value={form.vehicleId}
-            onChange={(v) => setForm((f) => ({ ...f, vehicleId: v, stationId: v ? null : f.stationId, location: v ? '' : f.location, loadingPlace: v ? f.loadingPlace : '' }))}
+            onChange={(v) => setForm((f) => ({ ...f, vehicleId: v, stationId: v ? null : f.stationId, location: v ? '' : f.location }))}
             clearable
           />
-          <LocationField
-            stationId={form.stationId}
-            location={form.location}
-            stations={stationOptions}
-            onChange={({ stationId, location }) => setForm((f) => ({ ...f, stationId, location, vehicleId: stationId ? null : f.vehicleId, loadingPlace: stationId || location ? '' : f.loadingPlace }))}
-          />
-          {form.vehicleId ? (
-            <TextInput label={t('fields.loadingPlace')} description={t('fields.loadingPlaceHint')} value={form.loadingPlace} onChange={(e) => set('loadingPlace', e.currentTarget.value)} />
-          ) : null}
+          <TextInput label={t('fields.loadingPlace')} value={form.loadingPlace} onChange={(e) => set('loadingPlace', e.currentTarget.value)} />
           {stock && <NumberInput label={t('fields.quantity')} value={form.quantity} onChange={(v) => set('quantity', Number(v) || 0)} min={0} />}
           {(type?.properties ?? []).map((name) => (
             <TextInput key={name} label={name} value={form.properties[name] ?? ''} onChange={(e) => set('properties', { ...form.properties, [name]: e.currentTarget.value })} />

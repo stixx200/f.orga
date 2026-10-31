@@ -10,7 +10,7 @@ const de = {
   fields: {
     type: 'Gerätetyp', category: 'Kategorie', inventoryNumber: 'Inventar-Nr.', name: 'Bezeichnung', serialNumber: 'Seriennummer', manufacturer: 'Hersteller',
     yearBuilt: 'Baujahr', purchasedOn: 'Beschafft am', price: 'Preis', expiresOn: 'Ablaufdatum', department: 'Abteilung', vehicle: 'Fahrzeug', station: 'Wache / Lager',
-    loadingPlace: 'Beladeplatz', loadingPlaceHint: 'Nur am Fahrzeug, z. B. G1 oder Heck.', location: 'Standort', locationHint: 'Nur Wache oder konfigurierter Standort (Einstellungen) — keine freie Eingabe.', locationGroup: 'Standorte', stationGroup: 'Wachen', locationEmpty: 'Kein Treffer — Standort unter Einstellungen anlegen oder Wache wählen.', quantity: 'Menge', notes: 'Bemerkung', status: 'Status', place: 'Standort',
+    loadingPlace: 'Beladeplatz / Lagerort', location: 'Standort', locationHint: 'Nur Wache oder konfigurierter Standort (Einstellungen) — keine freie Eingabe.', locationGroup: 'Standorte', stationGroup: 'Wachen', locationEmpty: 'Kein Treffer — Standort unter Einstellungen anlegen oder Wache wählen.', quantity: 'Menge', notes: 'Bemerkung', status: 'Status', place: 'Standort',
   },
   items: {
     title: 'Geräte', search: 'Suche', all: 'Alle', active: 'Alle aktiven', due: 'Prüfung', overdue: 'fällig', dueSoon_one: 'in {{count}} Tag fällig', dueSoon_other: 'in {{count}} Tagen fällig', empty: 'Keine Geräte gefunden.',
@@ -137,7 +137,6 @@ const de = {
     'equipment.resolutionRequired': 'Bitte die Erledigung eintragen.',
     'equipment.otherDepartment': '„{{item}}“ gehört zu einer anderen Abteilung.',
     'equipment.unknownLocation': 'Standort „{{value}}“ ist nicht konfiguriert. Ergänzen Sie ihn unter Geräte → Einstellungen.',
-    'equipment.loadingPlaceWithoutVehicle': 'Ein Beladeplatz geht nur zusammen mit einem Fahrzeug. Für Lagerorte einen konfigurierten Standort oder eine Wache wählen.',
     'incidents.notDraft': 'Der Bericht ist nicht mehr in Bearbeitung.',
     'incidents.reportLocked': 'Der Bericht ist gesperrt.',
     'training.closed': 'Der Dienst ist abgeschlossen.',
@@ -153,7 +152,7 @@ const en: typeof de = {
   fields: {
     type: 'Equipment type', category: 'Category', inventoryNumber: 'Inventory no.', name: 'Name', serialNumber: 'Serial number', manufacturer: 'Manufacturer',
     yearBuilt: 'Year built', purchasedOn: 'Purchased on', price: 'Price', expiresOn: 'Expiry date', department: 'Department', vehicle: 'Vehicle', station: 'Station / store',
-    loadingPlace: 'Loading place', loadingPlaceHint: 'Only on a vehicle, e.g. G1 or rear.', location: 'Location', locationHint: 'Only a station or a configured place (settings) — no free text.', locationGroup: 'Places', stationGroup: 'Stations', locationEmpty: 'No match — add a place in settings or pick a station.', quantity: 'Quantity', notes: 'Notes', status: 'Status', place: 'Location',
+    loadingPlace: 'Loading place / storage', location: 'Location', locationHint: 'Only a station or a configured place (settings) — no free text.', locationGroup: 'Places', stationGroup: 'Stations', locationEmpty: 'No match — add a place in settings or pick a station.', quantity: 'Quantity', notes: 'Notes', status: 'Status', place: 'Location',
   },
   items: {
     title: 'Equipment', search: 'Search', all: 'All', active: 'All active', due: 'Inspection', overdue: 'due', dueSoon_one: 'due within {{count}} day', dueSoon_other: 'due within {{count}} days', empty: 'No equipment found.',
@@ -280,7 +279,6 @@ const en: typeof de = {
     'equipment.resolutionRequired': 'Please enter the resolution.',
     'equipment.otherDepartment': '"{{item}}" belongs to another department.',
     'equipment.unknownLocation': 'Place "{{value}}" is not configured. Add it under Equipment → Settings.',
-    'equipment.loadingPlaceWithoutVehicle': 'A loading place requires a vehicle. For stores pick a configured place or a station.',
     'incidents.notDraft': 'The report is no longer being edited.',
     'incidents.reportLocked': 'The report is locked.',
     'training.closed': 'The session is closed.',
