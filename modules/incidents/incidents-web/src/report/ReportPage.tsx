@@ -263,13 +263,6 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
         <CheckSection findings={report.findings} reasons={reasons} setReason={setReason} goTo={goTo} editable={editable && report.status === 'draft'} incidentId={report.incidentId} />
       )}
 
-      <Group justify="space-between">
-        {STEPS.indexOf(step) > 0 ? <Button variant="default" onClick={() => goTo(STEPS[STEPS.indexOf(step) - 1])}>‹ {t(`steps.${STEPS[STEPS.indexOf(step) - 1]}`)}</Button> : <span />}
-        {STEPS.indexOf(step) < STEPS.length - 1 && (
-          <Button variant="outline" onClick={() => goTo(STEPS[STEPS.indexOf(step) + 1])}>{t('editor.next', { step: t(`steps.${STEPS[STEPS.indexOf(step) + 1]}`) })} ›</Button>
-        )}
-      </Group>
-
       <ActionBar
         info={
           <Text component="span" size="sm">
@@ -277,6 +270,10 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
           </Text>
         }
       >
+        {STEPS.indexOf(step) > 0 && <Button variant="default" onClick={() => goTo(STEPS[STEPS.indexOf(step) - 1])}>‹ {t(`steps.${STEPS[STEPS.indexOf(step) - 1]}`)}</Button>}
+        {STEPS.indexOf(step) < STEPS.length - 1 && (
+          <Button variant="outline" onClick={() => goTo(STEPS[STEPS.indexOf(step) + 1])}>{t('editor.next', { step: t(`steps.${STEPS[STEPS.indexOf(step) + 1]}`) })} ›</Button>
+        )}
         {deletable && <Button variant="default" onClick={() => setDialog('delete')}>{t('editor.delete')}</Button>}
         <Menu position="top-end">
           <Menu.Target><Button variant="default">{t('editor.more')}</Button></Menu.Target>

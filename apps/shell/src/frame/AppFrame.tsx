@@ -128,7 +128,7 @@ export function AppFrame({ modules, session }: { modules: LoadedModule[]; sessio
       <AppShell.Header className={classes.header}>
         <Group h="100%" px="md" justify="space-between" wrap="nowrap" gap="md">
           <Group wrap="nowrap" gap="sm">
-            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label={t('nav.menu')} />
+            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size={36} className={classes.menu} aria-label={t('nav.menu')} />
             <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
               <BrigadeLogo size={40} />
               <Stack gap={0} visibleFrom="xs">

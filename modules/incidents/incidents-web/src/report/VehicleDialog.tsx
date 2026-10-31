@@ -64,7 +64,7 @@ export function VehicleDialog({ name, entry, times, disabled, onSave, onClose }:
     >
       <Stack gap="sm">
         <Text size="sm" c="dimmed">{t('personnel.vehicleTimesHint')}</Text>
-        <SimpleGrid cols={{ base: 1, sm: 3 }}>
+        <SimpleGrid cols={1}>
           {time('alarmedAt', t('personnel.alarmedAtHint'))}
           {time('departedAt')}
           {time('returnedAt')}

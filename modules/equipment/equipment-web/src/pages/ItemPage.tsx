@@ -1,4 +1,4 @@
-import { Button, Group, Loader, Menu, SimpleGrid, Stack, Tabs, Text, Textarea, TextInput } from '@mantine/core';
+import { Button, Grid, Group, Loader, Menu, SimpleGrid, Stack, Tabs, Text, Textarea, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { QRCodeSVG } from 'qrcode.react';
 import { useState } from 'react';
@@ -135,7 +135,7 @@ function InspectionsTab({ item, canInspect }: { item: Item; canInspect: boolean 
               align: 'right',
               render: (d) =>
                 canInspect && (
-                  <Group gap={4} justify="flex-end" wrap="nowrap">
+                  <Group gap={4} justify="flex-end">
                     {item.inspections.find((x) => x.key === d.key)?.trigger !== 'periodic' && !d.dueOn && (
                       <Button size="compact-xs" variant="default" onClick={() => trigger.mutate(d.key)}>{t('inspection.makeDue')}</Button>
                     )}
@@ -177,7 +177,7 @@ function InspectionsTab({ item, canInspect }: { item: Item; canInspect: boolean 
               header: '',
               align: 'right',
               render: (i) => (
-                <Group gap={4} justify="flex-end" wrap="nowrap">
+                <Group gap={4} justify="flex-end">
                   <Button size="compact-xs" variant="subtle" onClick={() => setFiles(i)}>{t('attachmentsButton')}</Button>
                   <Button size="compact-xs" variant="subtle" component="a" href={apiUrl('core/lists/equipment.inspection-report/export/pdf', { inspectionId: i.id, lang: i18n.language })} target="_blank">{t('protocol.single')}</Button>
                   {canInspect && !i.cancelled && (
@@ -348,14 +348,17 @@ export function ItemPage() {
             {TABS.map((x) => <Tabs.Tab key={x} value={x}>{t(`item.tabs.${x}`)}</Tabs.Tab>)}
           </Tabs.List>
           <Tabs.Panel value="data">
-            <SimpleGrid cols={{ base: 1, md: 3 }} spacing="lg">
-              <Panel style={{ gridColumn: 'span 2' }}>
+            <Grid>
+              <Grid.Col span={{ base: 12, md: 8 }}>
+              <Panel>
                 <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
                   {fields.filter(([, v]) => v).map(([label, value]) => (
                     <div key={label}><Text size="xs" c="dimmed">{label}</Text><Text size="sm">{value}</Text></div>
                   ))}
                 </SimpleGrid>
               </Panel>
+              </Grid.Col>
+              <Grid.Col span={{ base: 12, md: 4 }}>
               <Stack gap="lg">
                 <Panel title={t('item.photo')}>
                   <ItemPhoto id={item.id} editable={canWrite && !retired} />
@@ -374,7 +377,8 @@ export function ItemPage() {
                 </Stack>
               </Panel>
               </Stack>
-            </SimpleGrid>
+              </Grid.Col>
+            </Grid>
           </Tabs.Panel>
           <Tabs.Panel value="inspections"><InspectionsTab item={item} canInspect={canInspect && !retired} /></Tabs.Panel>
           <Tabs.Panel value="defects"><DefectsTab item={item} canWrite={canWrite} /></Tabs.Panel>

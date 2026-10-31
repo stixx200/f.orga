@@ -125,7 +125,7 @@ export function IssuePage() {
     <Stack gap="lg">
       <PageHeader breadcrumbs={[{ label: t('module') }, { label: t('issue.title') }]} title={t('issue.title')} subtitle={t('issue.subtitle')} />
       <Panel>
-        <SimpleGrid cols={{ base: 1, sm: 3 }}>
+        <SimpleGrid cols={{ base: 1, lg: 3 }}>
           <Select
             label={t('history.person')}
             data={persons.filter((p) => (p.status !== 'left' || p.id === personId) && !p.restricted).map((p) => ({ value: p.id, label: `${p.lastName}, ${p.firstName}` }))}
