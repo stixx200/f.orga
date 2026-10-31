@@ -9,11 +9,11 @@
     "preview": "vite preview --port 4206 --strictPort"
   },
   "dependencies": {
-    "@forga/core-contracts": "*",
-    "@forga/equipment-contracts": "*",
-    "@forga/masterdata-contracts": "*",
-    "@forga/web-sdk": "*",
-    "@forga/web-ui": "*",
+    "@forga/core-contracts": "workspace:*",
+    "@forga/equipment-contracts": "workspace:*",
+    "@forga/masterdata-contracts": "workspace:*",
+    "@forga/web-sdk": "workspace:*",
+    "@forga/web-ui": "workspace:*",
     "@mantine/core": "^9.7.3",
     "@mantine/dates": "^9.7.3",
     "@mantine/hooks": "^9.7.3",

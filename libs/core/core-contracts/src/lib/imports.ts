@@ -83,7 +83,7 @@ export const ImportRequest = z.object({
   options: z.record(z.string(), z.boolean()).default({}),
   mappings: ImportValueMappings.default({}),
   /**
-   * Made-up demo data (`npm run seed`): the only way to import persons into the test system. The UI never sends it;
+   * Made-up demo data (`pnpm run seed`): the only way to import persons into the test system. The UI never sends it;
    * the audit entry records it.
    */
   demoData: z.boolean().optional(),

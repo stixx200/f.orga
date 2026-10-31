@@ -317,7 +317,7 @@ Sonderdienste werden als Dienst erfasst, nicht als Einsatz. Für sie braucht es 
 | Stufe der Installation (Echt-, Test-, Entwicklungssystem) | stage (`FORGA_STAGE`: `production`, `test`, `development`; `ForgaStage`, `forgaStage()`, `isTestStage()`, `useStage()`) |
 | Band „Testsystem – nur Demodaten“ | `StageBand` |
 | Im Testsystem gesperrt | locked in test stage (`imports.lockedInTestStage`, `mp-feuer.lockedInTestStage`, `ImportProfile.personData`, `lockedInTestStage`) |
-| Demodaten (erfunden, `npm run seed`) | demo data (`demoData` im Import) |
+| Demodaten (erfunden, `pnpm run seed`) | demo data (`demoData` im Import) |
 | Echtdaten im Testsystem (Wiederherstellung mit Begründung, Löschen nach 7 Tagen) | real data (`RestoreCheck.realData`, `realDataReason`, `realDataUntil`, `REAL_DATA_DAYS`, `deleteExpiredRealData`) |
 | Sicherheitsheader | security headers (`securityHeaders`, `CONTENT_SECURITY_POLICY`, `PERMISSIONS_POLICY`) |
 | Sichere Cookies | `CookiePolicy` (`Secure` bei `https://`-Adresse, HTTPS oder `FORGA_SECURE_COOKIES`) |

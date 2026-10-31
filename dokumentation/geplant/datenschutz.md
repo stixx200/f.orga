@@ -124,7 +124,7 @@ Priorität: **kritisch** (Pflicht nach DSGVO oder hohes Risiko, vor dem Echtbetr
 
 ### L6 Echtdaten nur im Echtsystem (kritisch)
 
-- **Umgesetzt:** `FORGA_STAGE` mit Band, Sperren und Löschen nach 7 Tagen, `.gitignore`, `npm run seed` nicht ins Echtsystem; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#echt--test--und-entwicklungssystem-l6). Abweichung: Der Tabellen-Import von Personen nimmt im Testsystem die als Demodaten gekennzeichneten Daten von `npm run seed` an (`demoData`), sonst ließe sich das Testsystem nicht füllen; die Oberfläche bietet das nicht an.
+- **Umgesetzt:** `FORGA_STAGE` mit Band, Sperren und Löschen nach 7 Tagen, `.gitignore`, `pnpm run seed` nicht ins Echtsystem; siehe [implementiert/datenschutz.md](../implementiert/datenschutz.md#echt--test--und-entwicklungssystem-l6). Abweichung: Der Tabellen-Import von Personen nimmt im Testsystem die als Demodaten gekennzeichneten Daten von `pnpm run seed` an (`demoData`), sonst ließe sich das Testsystem nicht füllen; die Oberfläche bietet das nicht an.
 - **Organisatorisch:** Echte Dateien nach der Umstellung löschen; Entwicklungsrechner mit verschlüsselter Festplatte; Testsystem nicht für alle Benutzer freigeben.
 
 ### L7 Betroffenenanfragen, Löschung und Einschränkung (kritisch)

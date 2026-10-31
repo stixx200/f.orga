@@ -11,8 +11,8 @@
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@forga/web-sdk": "*",
-    "@forga/web-ui": "*",
+    "@forga/web-sdk": "workspace:*",
+    "@forga/web-ui": "workspace:*",
     "@mantine/core": "^9.7.3",
     "@mantine/hooks": "^9.7.3",
     "@tanstack/react-query": "^5.104.5",
@@ -23,9 +23,9 @@
     "@mantine/dates": "^9.7.3",
     "@mantine/notifications": "^9.7.3",
     "dayjs": "^1.11.23",
-    "@forga/masterdata-contracts": "*",
-    "@forga/core-contracts": "*",
-    "@forga/privacy-contracts": "*"
+    "@forga/masterdata-contracts": "workspace:*",
+    "@forga/core-contracts": "workspace:*",
+    "@forga/privacy-contracts": "workspace:*"
   },
   "devDependencies": {
     "@module-federation/vite": "^1.15.5",

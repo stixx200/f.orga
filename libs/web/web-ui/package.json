@@ -15,8 +15,8 @@
   "dependencies": {
     "@mantine/core": "^9.7.3",
     "react": "^19.0.0",
-    "@forga/web-sdk": "*",
-    "@forga/core-contracts": "*",
+    "@forga/web-sdk": "workspace:*",
+    "@forga/core-contracts": "workspace:*",
     "@mantine/hooks": "^9.7.3",
     "@tabler/icons-react": "^3.49.0",
     "@tanstack/react-query": "^5.104.5",

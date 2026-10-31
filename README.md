@@ -5,10 +5,10 @@ Modular administration software for small and medium-sized volunteer fire brigad
 Tech stack: Nx monorepo, NestJS + MikroORM + PostgreSQL, React + Vite + Module Federation + Mantine, i18next.
 
 ```bash
-npm install
+pnpm install
 docker compose -f docker/compose.dev.yml up -d
-npx nx run-many -t serve -p @forga/server shell masterdata-web incidents-web   # http://localhost:4200
-npm run check                                                                  # lint, typecheck, tests, build
+pnpm exec nx run-many -t serve -p @forga/server shell masterdata-web incidents-web   # http://localhost:4200
+pnpm run check                                                                  # lint, typecheck, tests, build
 ```
 
 The documentation is written in German:

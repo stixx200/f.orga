@@ -1,9 +1,9 @@
 /**
  * Plugin packages for f.orga.
  *
- *   npm run plugin -- keygen <name>                 Ed25519 key pair: <name>.key.pem (keep secret) and the public key
+ *   pnpm run plugin -- keygen <name>                 Ed25519 key pair: <name>.key.pem (keep secret) and the public key
  *                                                   to put into FORGA_PLUGIN_KEYS or <plugin dir>/trusted-keys
- *   npm run plugin -- pack <folder> --key <file>    signed package <id>-<version>.tgz from <folder>
+ *   pnpm run plugin -- pack <folder> --key <file>    signed package <id>-<version>.tgz from <folder>
  *
  * <folder> contains `plugin.json` ({ id, version, backend, frontend }) and the built files, e.g.
  * `backend/index.js` (ESM, default export from `defineModule`, server packages not bundled) and
@@ -48,6 +48,6 @@ if (command === 'keygen' && target) {
   writeFileSync(out, buildPackage(files(target), { id: description.id, version: description.version, backend: description.backend, frontend: description.frontend ?? null }, key));
   console.log(`Package written: ${out}`);
 } else {
-  console.error('Usage: npm run plugin -- keygen <name> | pack <folder> --key <private key> [--out <file>]');
+  console.error('Usage: pnpm run plugin -- keygen <name> | pack <folder> --key <private key> [--out <file>]');
   process.exit(1);
 }

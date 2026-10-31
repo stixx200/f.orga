@@ -17,9 +17,9 @@
   },
   "dependencies": {
     "tslib": "^2.3.0",
-    "@forga/core-api": "*",
-    "@forga/core-contracts": "*",
-    "@forga/backup-contracts": "*",
+    "@forga/core-api": "workspace:*",
+    "@forga/core-contracts": "workspace:*",
+    "@forga/backup-contracts": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@mikro-orm/core": "^7.2.5",
     "@mikro-orm/migrations": "^7.2.5",

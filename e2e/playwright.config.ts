@@ -1,8 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
 /**
- * End-to-end tests against a running instance with demo data (`npm run seed`); `npm run e2e:fresh` starts a fresh one.
- * Browser: the Playwright Chromium (`npx playwright install chromium`), locally and in CI; `FORGA_E2E_CHANNEL=chrome`
+ * End-to-end tests against a running instance with demo data (`pnpm run seed`); `pnpm run e2e:fresh` starts a fresh one.
+ * Browser: the Playwright Chromium (`pnpm exec playwright install chromium`), locally and in CI; `FORGA_E2E_CHANNEL=chrome`
  * uses an installed Chrome instead.
  */
 export default defineConfig({

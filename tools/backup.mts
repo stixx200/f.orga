@@ -1,8 +1,8 @@
 /**
  * Backups of f.orga (`*.forgabackup`) without a running f.orga, e.g. on another computer.
  *
- *   npm run backup -- info <file>                 header: installation, version, time, encryption
- *   npm run backup -- decrypt <file> [<folder>]   decrypts and unpacks into <folder> (default: <file> without extension):
+ *   pnpm run backup -- info <file>                 header: installation, version, time, encryption
+ *   pnpm run backup -- decrypt <file> [<folder>]   decrypts and unpacks into <folder> (default: <file> without extension):
  *                                                 manifest.json, database.dump (pg_dump custom format), plugins.tgz,
  *                                                 settings.json; checks all checksums
  *
@@ -85,6 +85,6 @@ if (command === 'info' && file) {
     process.exit(1);
   }
 } else {
-  console.log('Usage: npm run backup -- info <file> | decrypt <file> [<folder>]');
+  console.log('Usage: pnpm run backup -- info <file> | decrypt <file> [<folder>]');
   process.exit(command ? 1 : 0);
 }

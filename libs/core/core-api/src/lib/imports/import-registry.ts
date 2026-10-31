@@ -115,7 +115,7 @@ export interface ImportProfile {
   options?: ImportOption[];
   /**
    * Brings personal data of the members (e.g. the persons themselves): locked on the test system (`FORGA_STAGE=test`),
-   * which is only for demo data. The demo data of `npm run seed` passes `demoData`.
+   * which is only for demo data. The demo data of `pnpm run seed` passes `demoData`.
    */
   personData?: boolean;
   /** Must be idempotent: a second run with the same file updates instead of duplicating. */

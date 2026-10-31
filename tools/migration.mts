@@ -1,9 +1,9 @@
 /**
  * Migrations for core and modules.
  *
- *   npm run migration:create -- <module|core> <name>   create a migration from the difference entities ↔ database
- *   npm run migration:create -- <module|core> <name> --blank   empty migration for data changes (fill in `up`)
- *   npm run migration:run                              apply pending migrations
+ *   pnpm run migration:create -- <module|core> <name>   create a migration from the difference entities ↔ database
+ *   pnpm run migration:create -- <module|core> <name> --blank   empty migration for data changes (fill in `up`)
+ *   pnpm run migration:run                              apply pending migrations
  *
  * A migration belongs to exactly one module and may only change its schema (schema = module ID).
  * References to schemas of modules listed in `requires` are allowed.

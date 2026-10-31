@@ -17,9 +17,13 @@
     "seed": "tsx --conditions=@forga/source --tsconfig tools/tsconfig.json tools/seed.mts",
     "e2e": "playwright test -c e2e/playwright.config.ts",
     "e2e:fresh": "tsx --tsconfig tools/tsconfig.json tools/e2e.mts",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run integration && npm run build"
+    "check": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run integration && pnpm run build"
   },
   "private": true,
+  "packageManager": "pnpm@10.9.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["@parcel/watcher", "@swc/core", "esbuild", "nx", "unrs-resolver"]
+  },
   "devDependencies": {
     "@babel/core": "^7.14.5",
     "@babel/preset-react": "^7.14.5",
@@ -73,11 +77,6 @@
     "webpack-cli": "^7.0.0",
     "webpack-dev-server": "^5.2.1"
   },
-  "workspaces": [
-    "apps/*",
-    "libs/*/*",
-    "modules/*/*"
-  ],
   "dependencies": {
     "@mantine/core": "^9.7.3",
     "@mantine/dates": "^9.7.3",

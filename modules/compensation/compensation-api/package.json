@@ -17,19 +17,19 @@
   },
   "dependencies": {
     "tslib": "^2.3.0",
-    "@forga/compensation-contracts": "*",
-    "@forga/core-api": "*",
-    "@forga/core-contracts": "*",
-    "@forga/incidents-contracts": "*",
-    "@forga/masterdata-contracts": "*",
-    "@forga/training-contracts": "*",
+    "@forga/compensation-contracts": "workspace:*",
+    "@forga/core-api": "workspace:*",
+    "@forga/core-contracts": "workspace:*",
+    "@forga/incidents-contracts": "workspace:*",
+    "@forga/masterdata-contracts": "workspace:*",
+    "@forga/training-contracts": "workspace:*",
     "@mikro-orm/core": "^7.2.5",
     "@mikro-orm/migrations": "^7.2.5",
     "@nestjs/common": "^11.0.0",
     "exceljs": "^4.4.0",
     "uuid": "^14.0.3",
     "zod": "^4.6.7",
-    "@forga/duty-officer-contracts": "*"
+    "@forga/duty-officer-contracts": "workspace:*"
   },
   "nx": {
     "tags": [
