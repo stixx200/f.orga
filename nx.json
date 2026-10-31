@@ -60,6 +60,10 @@
   "targetDefaults": {
     "test": {
       "dependsOn": ["^build"]
+    },
+    "integration": {
+      "cache": true,
+      "inputs": ["default", "^production", { "env": "TEST_DATABASE_URL" }]
     }
   },
   "generators": {

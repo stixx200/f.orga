@@ -148,7 +148,7 @@ FORGA_E2E_URL=http://localhost:3100 FORGA_TOTP_FILE=dist/e2e/totp.json TZ=Europe
 
 ### CI
 
-Der Job `e2e` in `.github/workflows/ci.yml` läuft parallel zu den anderen Jobs mit einem eigenen PostgreSQL-17-Dienst: `pnpm install --frozen-lockfile`, `postgresql-client-17` aus dem PGDG-Repository (für die Datensicherung), `pnpm exec playwright install --with-deps chromium`, `pnpm run e2e:fresh`. Schlägt er fehl, hängt er HTML-Bericht, Traces, Bildschirmfotos und das Server-Protokoll als Artefakt `e2e-report` an (14 Tage). Ein Lauf dauert lokal rund 20 Minuten: Bau aus dem Nx-Cache unter einer Minute, Demodaten rund 6 bis 8 Minuten, Tests rund 10 Minuten.
+Der Job `e2e` in `.github/workflows/ci.yml` startet erst nach dem grünen Job `pruefen`, damit der Bau von Server, Shell und Modul-Frontends den Remote-Cache (Nx Replay) nutzen kann. Er hat einen eigenen PostgreSQL-17-Dienst: `pnpm install --frozen-lockfile`, `postgresql-client-17` aus dem PGDG-Repository (für die Datensicherung), `pnpm exec playwright install --with-deps chromium`, `pnpm run e2e:fresh`. Schlägt er fehl, hängt er HTML-Bericht, Traces, Bildschirmfotos und das Server-Protokoll als Artefakt `e2e-report` an (14 Tage). Ein Lauf dauert lokal rund 20 Minuten: Bau aus dem Nx-Cache unter einer Minute, Demodaten rund 6 bis 8 Minuten, Tests rund 10 Minuten.
 
 ### Tests schreiben
 
@@ -239,15 +239,11 @@ Indizes, die MikroORM nicht aus Eigenschaften ableiten kann (z. B. partielle Ind
 
 ## CI
 
-`.github/workflows/ci.yml` läuft bei jedem Push auf `main` und bei Pull Requests:
+`.github/workflows/ci.yml` läuft bei jedem Push auf `main` und bei Pull Requests. Der Workspace ist an Nx Cloud angebunden (`nxCloudId` in `nx.json`): Remote-Cache (Nx Replay), Verteilung von Typprüfung, Unit-Tests und Build auf Nx Agents, Self-Healing CI (`nx-cloud fix-ci`). `nrwl/nx-set-shas` setzt `NX_BASE`/`NX_HEAD` auf den letzten erfolgreichen Lauf auf `main`, die Nx-Schritte laufen mit `nx affected`. Der Docker-Image-Bau im Dockerfile bleibt ohne Cloud (`NX_NO_CLOUD=true`).
 
-1. Lint und Modulgrenzen
-2. Typprüfung (auch der E2E-Tests, `e2e/tsconfig.json`)
-3. Unit-Tests
-4. Integrationstests mit einem PostgreSQL-17-Dienst
-5. Build
-6. Bau des Docker-Images
-7. Parallel dazu im Job `e2e`: die [E2E-Tests](#e2e-tests) gegen eine frische Instanz mit Demodaten
+1. Job `pruefen`: Lint und Modulgrenzen; danach `nx affected` für Typprüfung, Unit-Tests und Build (auf Agents); workspace-weite Quell-Typprüfung (`tools/typecheck-sources.mjs`, inkl. `e2e/tsconfig.json`); Integrationstests auf dem Runner mit PostgreSQL-17-Dienst
+2. Job `docker` (nach `pruefen`): Bau des Docker-Images
+3. Job `e2e` (nach `pruefen`): die [E2E-Tests](#e2e-tests) gegen eine frische Instanz mit Demodaten; Bau über Nx Replay
 
 ## Neues Modul anlegen
 
