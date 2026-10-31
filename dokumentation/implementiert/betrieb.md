@@ -10,7 +10,7 @@
 
 So entsteht das Image aus `docker/Dockerfile`:
 
-1. Abhängigkeiten installieren.
+1. Abhängigkeiten installieren (Build-Kontext inkl. `e2e/`, damit Nx die Playwright-Konfigurationen der `*-e2e`-Projekte laden kann).
 2. Shell und Modul-Frontends bauen. Den Server mit `prune` bauen: Bundle, gekürzte `package.json` mit Lockfile und die Workspace-Pakete.
 3. Das Laufzeit-Image aus den Produktionsabhängigkeiten zusammenstellen, mit `postgresql17-client` aus Alpine. Die Frontends liegen dort unter `/app/web/shell` und `/app/web/modules/<id>`.
 
