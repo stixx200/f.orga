@@ -58,6 +58,10 @@
   ],
   "analytics": false,
   "targetDefaults": {
+    "build": {
+      "cache": true,
+      "outputs": ["{projectRoot}/dist"]
+    },
     "test": {
       "dependsOn": ["^build"]
     },
