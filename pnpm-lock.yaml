@@ -120,6 +120,111 @@ importers:
       '@babel/preset-react':
         specifier: ^7.14.5
         version: 7.29.7(@babel/core@7.29.7)
+      '@forga/backup-api':
+        specifier: workspace:*
+        version: link:modules/backup/backup-api
+      '@forga/backup-contracts':
+        specifier: workspace:*
+        version: link:modules/backup/backup-contracts
+      '@forga/clothing-api':
+        specifier: workspace:*
+        version: link:modules/clothing/clothing-api
+      '@forga/clothing-contracts':
+        specifier: workspace:*
+        version: link:modules/clothing/clothing-contracts
+      '@forga/compensation-api':
+        specifier: workspace:*
+        version: link:modules/compensation/compensation-api
+      '@forga/compensation-contracts':
+        specifier: workspace:*
+        version: link:modules/compensation/compensation-contracts
+      '@forga/core-api':
+        specifier: workspace:*
+        version: link:libs/core/core-api
+      '@forga/core-contracts':
+        specifier: workspace:*
+        version: link:libs/core/core-contracts
+      '@forga/cost-recovery-api':
+        specifier: workspace:*
+        version: link:modules/cost-recovery/cost-recovery-api
+      '@forga/cost-recovery-contracts':
+        specifier: workspace:*
+        version: link:modules/cost-recovery/cost-recovery-contracts
+      '@forga/duty-officer-api':
+        specifier: workspace:*
+        version: link:modules/duty-officer/duty-officer-api
+      '@forga/duty-officer-contracts':
+        specifier: workspace:*
+        version: link:modules/duty-officer/duty-officer-contracts
+      '@forga/equipment-api':
+        specifier: workspace:*
+        version: link:modules/equipment/equipment-api
+      '@forga/equipment-contracts':
+        specifier: workspace:*
+        version: link:modules/equipment/equipment-contracts
+      '@forga/incidents-api':
+        specifier: workspace:*
+        version: link:modules/incidents/incidents-api
+      '@forga/incidents-contracts':
+        specifier: workspace:*
+        version: link:modules/incidents/incidents-contracts
+      '@forga/info-terminal-api':
+        specifier: workspace:*
+        version: link:modules/info-terminal/info-terminal-api
+      '@forga/info-terminal-contracts':
+        specifier: workspace:*
+        version: link:modules/info-terminal/info-terminal-contracts
+      '@forga/masterdata-api':
+        specifier: workspace:*
+        version: link:modules/masterdata/masterdata-api
+      '@forga/masterdata-contracts':
+        specifier: workspace:*
+        version: link:modules/masterdata/masterdata-contracts
+      '@forga/mp-feuer-api':
+        specifier: workspace:*
+        version: link:modules/mp-feuer/mp-feuer-api
+      '@forga/mp-feuer-contracts':
+        specifier: workspace:*
+        version: link:modules/mp-feuer/mp-feuer-contracts
+      '@forga/personal-api':
+        specifier: workspace:*
+        version: link:modules/personal/personal-api
+      '@forga/personal-contracts':
+        specifier: workspace:*
+        version: link:modules/personal/personal-contracts
+      '@forga/privacy-api':
+        specifier: workspace:*
+        version: link:modules/privacy/privacy-api
+      '@forga/privacy-contracts':
+        specifier: workspace:*
+        version: link:modules/privacy/privacy-contracts
+      '@forga/promotions-api':
+        specifier: workspace:*
+        version: link:modules/promotions/promotions-api
+      '@forga/promotions-contracts':
+        specifier: workspace:*
+        version: link:modules/promotions/promotions-contracts
+      '@forga/respiratory-protection-api':
+        specifier: workspace:*
+        version: link:modules/respiratory-protection/respiratory-protection-api
+      '@forga/respiratory-protection-contracts':
+        specifier: workspace:*
+        version: link:modules/respiratory-protection/respiratory-protection-contracts
+      '@forga/server':
+        specifier: workspace:*
+        version: link:apps/server
+      '@forga/training-api':
+        specifier: workspace:*
+        version: link:modules/training/training-api
+      '@forga/training-contracts':
+        specifier: workspace:*
+        version: link:modules/training/training-contracts
+      '@forga/web-sdk':
+        specifier: workspace:*
+        version: link:libs/web/web-sdk
+      '@forga/web-ui':
+        specifier: workspace:*
+        version: link:libs/web/web-ui
       '@module-federation/vite':
         specifier: ^1.15.5
         version: 1.23.5(typescript@6.0.3)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(less@4.8.1)(sass-embedded@1.106.1)(sass@1.106.1)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0))
