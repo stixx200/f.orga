@@ -286,7 +286,8 @@ describe('incidents and reports', () => {
     expect(rules(ahornfeld.body)).not.toContain('error:statistics-missing');
     expect((await get(`/incidents/reports/${ids.musterstadtReport}`).expect(200)).body.primary).toBe(false);
     expect((await get(`/incidents/incidents/${ids.incident}`).expect(200)).body.statistics).toMatchObject({ mainType: 'fire', fireSize: 'small-b' });
-    await test.http.delete(`/api/incidents/reports/${ids.ahornfeldReport}`).set('Cookie', admin).set(UI).expect(409);
+    // The releaser locked the draft by editing it, so it is not deleted (and it is the primary report besides).
+    expect((await del(`/incidents/reports/${ids.ahornfeldReport}`).expect(403)).body.code).toBe('incidents.reportLocked');
   });
 
   it('shows changes of personnel in the history of the report and limits reading to the department', async () => {
@@ -646,7 +647,9 @@ describe('review fixes', () => {
   it('needs a department of writers and deletes the incident with its last report', async () => {
     expect((await post('/incidents/incidents', { alarmKeyword: 'B1', alarmedAt: day('09:00') }, writer).expect(400)).body.code).toBe('incidents.departmentRequired');
     const incident = await draft('2026-900001', [ids.musterstadt], writer);
-    await del(`/incidents/reports/${incident.reports[0].id}`, writer).expect(204);
+    // Writing a report does not include deleting it.
+    expect((await del(`/incidents/reports/${incident.reports[0].id}`, writer).expect(403)).body.code).toBe('auth.forbidden');
+    await del(`/incidents/reports/${incident.reports[0].id}`).expect(204);
     await get(`/incidents/incidents/${incident.id}`).expect(404);
   });
 
@@ -935,6 +938,31 @@ describe('review round 2', () => {
     expect(watch).toMatchObject({ statisticsCounted: false, statisticsSuggestion: null });
     const refused = await put(`/incidents/incidents/${watch.id}/statistics`, { statistics, version: watch.version }).expect(400);
     expect(refused.body.code).toBe('incidents.statisticsNotCounted');
+  });
+
+  it('deletes only an unlocked draft, and not through the module wildcard', async () => {
+    const incident = await draft('2026-900020', [ids.musterstadt, ids.ahornfeld]);
+    const reports = incident.reports as { id: string; primary: boolean }[];
+    const primary = reports.find((report) => report.primary)!;
+    const other = reports.find((report) => !report.primary)!;
+    expect((await del(`/incidents/reports/${primary.id}`).expect(409)).body.code).toBe('incidents.primaryHasSiblings');
+    await del(`/incidents/reports/${other.id}`).expect(204);
+    const reportId = primary.id;
+    const role = (await post('/core/roles', { name: 'Kommandant Muster', permissions: ['incidents.*'] }).expect(201)).body.id;
+    await post('/core/users', { username: 'kdt.muster', displayName: 'Kommandant Muster', password: 'auch-sehr-geheim', roles: [{ roleId: role }] }).expect(201);
+    const commander = await test.login({ username: 'kdt.muster', password: 'auch-sehr-geheim' });
+    expect((await del(`/incidents/reports/${reportId}`, commander).expect(403)).body.code).toBe('auth.forbidden');
+
+    await setStatistics(incident.id);
+    await save(reportId, ready()).expect(200);
+    expect((await del(`/incidents/reports/${reportId}`).expect(403)).body.code).toBe('incidents.reportLocked');
+    await post(`/incidents/reports/${reportId}/unlock`, { reason: 'doch löschen', toStatus: 'draft' }).expect(200);
+    const saved = (await get(`/incidents/reports/${reportId}`).expect(200)).body as { findings: { rule: string; level: string; subject: string | null }[] };
+    const acknowledgements = saved.findings.filter((f) => f.level === 'warning').map((f) => ({ rule: f.rule, subject: f.subject, reason: 'Test' }));
+    await post(`/incidents/reports/${reportId}/submit`, { acknowledgements }).expect(200);
+    expect((await del(`/incidents/reports/${reportId}`).expect(403)).body.code).toBe('incidents.notDraft');
+    await post(`/incidents/reports/${reportId}/release`, { level: 'billing' }).expect(200);
+    expect((await del(`/incidents/reports/${reportId}`).expect(403)).body.code).toBe('incidents.reportReleased');
   });
 
   it('logs releases with the report number and tells the receivers about deleted reports', async () => {

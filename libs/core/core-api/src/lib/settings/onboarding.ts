@@ -1,7 +1,7 @@
 import { Controller, ForbiddenException, Get, Inject, Injectable, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { EntityManager } from '@mikro-orm/core';
-import type { BrigadeSettings, OnboardingItem, SmtpSettings } from '@forga/core-contracts';
+import { SecuritySettings, type BrigadeSettings, type OnboardingItem, type SmtpSettings } from '@forga/core-contracts';
 import { ModuleStateService } from '../module/modules.js';
 import { FORGA_CORE_OPTIONS, type ForgaCoreOptions } from '../options.js';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
@@ -55,7 +55,7 @@ export class OnboardingController {
       { key: 'publicUrl', done: Boolean(brigade?.publicUrl || process.env.FORGA_PUBLIC_URL), to: '/admin/settings' },
       { key: 'smtp', done: process.env.FORGA_MAIL_TRANSPORT === 'memory' || Boolean(smtp?.host && smtp.sender), to: '/admin/settings?tab=smtp' },
       // Without the server key no second factor can be set up, and the areas with step-up stay locked.
-      { key: 'secretKey', done: serverKey() !== null, to: '/profile' },
+      { key: 'secretKey', done: !SecuritySettings.parse((await this.settings.get('security')) ?? {}).mfaEnabled || serverKey() !== null, to: '/profile' },
     ];
     // Passwords, sessions and health data only encrypted: warns while f.orga is opened over plain HTTP (not on the
     // developer's machine). Behind a TLS proxy this needs `FORGA_TRUST_PROXY`, so the request counts as HTTPS.

@@ -15,7 +15,7 @@ import type {
 } from '@forga/core-contracts';
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { isTestStage } from '../stage.js';
-import { normalizeHeading } from './parse.js';
+import { mappingNormalized, normalizeHeading } from './parse.js';
 
 export interface ImportContext {
   user: AuthenticatedUser;
@@ -26,8 +26,9 @@ export interface ImportContext {
   source: ImportSource;
   /**
    * Key of the entry chosen for a value that matches no entry of the lookup `kind`, or `undefined`: first the
-   * mappings of the request, then the remembered mappings of the caller's list. Profiles ask only after their own
-   * matching (key, name, abbreviation) failed; every answer counts as used and is remembered after an apply.
+   * mappings of the request, then the remembered mappings of the caller's list. A blank cell is the value `""`.
+   * Profiles ask only after their own matching (key, name, abbreviation) failed; every answer counts as used and
+   * is remembered after an apply.
    */
   mapped(kind: string, value: string): string | undefined;
   /** Reports a value that matches no entry of the lookup `kind` (once per row); the result lists it with its count. */
@@ -80,8 +81,10 @@ export interface ImportLookup {
   /** Creating entries from the import; without, entries can only be chosen. */
   create?: {
     permission: string;
+    /** Entries of this lookup are the category a new entry must belong to (`categoryKey` of `run`). */
+    categoryKind?: string;
     /** Throws the module's error codes, e.g. `catalog.keyTaken`. */
-    run(input: { key: string; name: string }): Promise<ImportLookupEntry>;
+    run(input: { key: string; name: string; categoryKey?: string }): Promise<ImportLookupEntry>;
   };
 }
 
@@ -196,6 +199,7 @@ export class ImportRegistry {
       name: l.name,
       keyFormat: l.keyFormat,
       creatable: !!l.create && user.can(l.create.permission),
+      createCategoryKind: l.create?.categoryKind ?? null,
     }));
   }
 
@@ -211,11 +215,11 @@ export class ImportRegistry {
     const result = await profile.run(rows, {
       ...input,
       mapped: (kind, value) => {
+        // A blank cell is a value of its own (`""`), so it can be mapped, e.g. a missing department.
         const text = value.trim();
-        if (!text) return undefined;
         const values = mappings[kind];
         const chosen = values && Object.hasOwn(values, text) ? values[text] : undefined;
-        const key = chosen ?? remembered?.get(kind)?.get(normalizeHeading(text));
+        const key = chosen ?? remembered?.get(kind)?.get(mappingNormalized(text));
         if (key === undefined) return undefined;
         used.set(JSON.stringify([kind, text]), { kind, value: text, key, remembered: chosen === undefined });
         return key;

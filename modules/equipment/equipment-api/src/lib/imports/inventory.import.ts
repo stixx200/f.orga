@@ -22,9 +22,11 @@ const FIELDS = [
   field('barcode', 'Barcode', 'Barcode', ['Barcode', 'Strichcode', 'EAN', 'QR-Code']),
   field('rfid', 'RFID-Chip', 'RFID chip', ['RFID', 'RFID-Chip', 'Transponder', 'Chip-ID', 'UID']),
   field('manufacturer', 'Hersteller', 'Manufacturer', ['Hersteller']),
-  field('department', 'Abteilung', 'Department', ['Abteilung', 'Abt.'], true),
+  // Blank cells and a missing column are the value "" and can be mapped to a department after the check.
+  field('department', 'Abteilung', 'Department', ['Abteilung', 'Abt.']),
   field('vehicle', 'Fahrzeug', 'Vehicle', ['Fahrzeug', 'Funkrufname']),
   field('loadingPlace', 'Beladeplatz', 'Loading place', ['Beladeplatz', 'Lagerort', 'G-Raum']),
+  field('location', 'Standort', 'Location', ['Standort', 'aktueller Standort']),
   field('quantity', 'Menge', 'Quantity', ['Menge', 'Anzahl', 'Bestand']),
   field('inspectionType', 'Prüfart', 'Inspection type', ['Prüfart', 'Prüfung', 'Prüfungsart']),
   field('lastInspection', 'Letzte Prüfung', 'Last inspection', ['letzte Prüfung', 'geprüft am', 'Prüfdatum']),
@@ -44,8 +46,8 @@ export class InventoryImport {
       id: 'equipment.inventory',
       name: { de: 'Inventar', en: 'Inventory' },
       description: {
-        de: 'Eine Zeile je Gerät und Prüfart. Vorhandene Inventarnummern werden aktualisiert. Eine „letzte Prüfung“ gilt für die Prüfart der Zeile (Schlüssel oder Name), ohne Prüfart für die erste regelmäßige Prüfart des Gerätetyps. Mehrere Zeilen derselben Inventarnummer übernehmen die letzten Prüfungen mehrerer Prüfarten.',
-        en: 'One row per item and inspection type. Existing inventory numbers are updated. A "last inspection" applies to the inspection type of the row (key or name), without one to the first periodic inspection type of the equipment type. Several rows of the same inventory number take over the last inspections of several inspection types.',
+        de: 'Eine Zeile je Gerät und Prüfart. Vorhandene Inventarnummern werden aktualisiert. Eine „letzte Prüfung“ gilt für die Prüfart der Zeile (Schlüssel oder Name), ohne Prüfart für die erste regelmäßige Prüfart des Gerätetyps. Mehrere Zeilen derselben Inventarnummer übernehmen die letzten Prüfungen mehrerer Prüfarten. Eine leere oder unbekannte Abteilung und ein unbekannter Gerätetyp lassen sich nach der Prüfung zuordnen; ein Gerätetyp kann dort neu angelegt werden.',
+        en: 'One row per item and inspection type. Existing inventory numbers are updated. A "last inspection" applies to the inspection type of the row (key or name), without one to the first periodic inspection type of the equipment type. Several rows of the same inventory number take over the last inspections of several inspection types. A blank or unknown department and an unknown equipment type can be assigned after the check; an equipment type can be created there.',
       },
       permission: WRITE,
       fields: FIELDS,
@@ -55,10 +57,13 @@ export class InventoryImport {
 
   /**
    * Only the columns of the file are taken over: an existing item keeps the fields whose columns the file lacks (type,
-   * category, vehicle, serial number …). A type or category that is given but unknown is an error. A "last inspection"
-   * that cannot be assigned to an inspection type is not taken over; the row says so (`equipment.import.inspectionDiscarded`).
+   * category, vehicle, serial number …). A blank or unknown department and an unknown equipment type are reported as
+   * unmatched, so they can be assigned (or the type created) and the check run again. A category that is given but
+   * unknown is an error when the row has no type to take the category from. A "last inspection" that cannot be
+   * assigned to an inspection type is not taken over; the row says so (`equipment.import.inspectionDiscarded`).
    */
-  private async run(rows: ImportRow[], { user, dryRun }: ImportContext): Promise<ImportRunResult> {
+  private async run(rows: ImportRow[], context: ImportContext): Promise<ImportRunResult> {
+    const { user, dryRun } = context;
     const em = this.em.fork();
     const departments = await this.organization.departments();
     const vehicles = await this.organization.vehicles();
@@ -75,16 +80,34 @@ export class InventoryImport {
       // A column of the file (mapped), even if the cell is empty; `given` = with a value.
       const has = (key: string) => key in values;
       const given = (key: string) => (values[key] ?? '').trim() !== '';
-      const department = match(departments, values['department']?.replace(/^(abteilung|abt\.?)\s*/i, ''), (d) => [d.name, d.shortName]) ?? match(departments, values['department'], (d) => [d.name, d.shortName]);
-      if (!department) { error('masterdata.import.unknownDepartment', { name: values['department'] ?? '' }); continue; }
+      const departmentName = (has('department') ? values['department'] : '').trim();
+      const department = this.department(departments, departmentName, context);
+      const typeText = (values['type'] ?? '').trim();
+      let named = given('type') ? match(types, typeText, (t) => [t.key, t.name.de, t.name.en]) : undefined;
+      if (given('type') && !named) {
+        const key = context.mapped('equipment-type', typeText);
+        named = key ? types.find((t) => t.key === key) : undefined;
+        if (!named) context.unmatched('equipment-type', typeText);
+      }
+      // Both stay visible in one check, so a blank department and an unknown type can be assigned together.
+      if (!department || (given('type') && !named)) {
+        results.push({
+          row,
+          action: 'error',
+          label,
+          messages: [
+            ...(!department ? [{ code: 'masterdata.import.unknownDepartment', params: { name: departmentName } }] : []),
+            ...(given('type') && !named ? [{ code: 'equipment.unknownType', params: { key: typeText } }] : []),
+          ],
+        });
+        continue;
+      }
       if (!user.can(WRITE, department.id)) { error('auth.forbidden'); continue; }
       const inventoryNumber = values['inventoryNumber']!;
       const fresh = created.get(inventoryNumber);
       const stored = fresh ?? (await em.findOne(EquipmentItemEntity, { inventoryNumber }));
       if (stored && !user.can(WRITE, stored.departmentId)) { error('auth.forbidden'); continue; }
 
-      const named = given('type') ? match(types, values['type'], (t) => [t.key, t.name.de, t.name.en]) : undefined;
-      if (given('type') && !named) { error('equipment.unknownType', { key: values['type']! }); continue; }
       const type = named ?? (stored?.typeKey ? types.find((t) => t.key === stored.typeKey) : undefined);
       const namedCategory = given('category') ? match(categories, values['category'], (c) => [c.key, c.name.de, c.name.en]) : undefined;
       if (given('category') && !named && !namedCategory) { error('equipment.unknownCategory', { key: values['category']! }); continue; }
@@ -117,6 +140,7 @@ export class InventoryImport {
         ...(has('vehicle') || !stored ? { vehicleId: vehicle?.id ?? null } : {}),
         ...(vehicle ? { stationId: null } : {}),
         ...(has('loadingPlace') || !stored ? { loadingPlace: values['loadingPlace'] ?? '' } : {}),
+        ...(has('location') || !stored ? { location: values['location'] ?? '' } : {}),
         ...(has('quantity') || !stored ? { quantity: Number(values['quantity'] || 1) || 1 } : {}),
       };
       // Codes are only set when the file has them, so an import without these columns keeps the stored ones.
@@ -147,6 +171,22 @@ export class InventoryImport {
     const counts = { create: 0, update: 0, unchanged: 0, error: 0 };
     for (const r of results) counts[r.action]++;
     return { dryRun, counts, rows: results };
+  }
+
+  /**
+   * The department of a cell: by name or short name (a leading "Abteilung" is ignored), then by a chosen mapping.
+   * A blank cell and a missing column are the value `""`. `undefined` reports the value as unmatched.
+   */
+  private department(departments: { id: string; name: string; shortName: string }[], raw: string | undefined, context: ImportContext) {
+    const text = (raw ?? '').trim();
+    const stripped = text.replace(/^(abteilung|abt\.?)\s*/i, '').trim();
+    const found = match(departments, stripped || text, (d) => [d.name, d.shortName]) ?? (stripped && stripped !== text ? match(departments, text, (d) => [d.name, d.shortName]) : undefined);
+    if (found) return found;
+    const id = context.mapped('department', text);
+    const mapped = id ? departments.find((d) => d.id === id) : undefined;
+    if (mapped) return mapped;
+    context.unmatched('department', text);
+    return undefined;
   }
 
   /** The code if another item (stored or earlier in the file) already carries it. */

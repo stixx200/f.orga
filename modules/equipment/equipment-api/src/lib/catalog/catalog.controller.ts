@@ -46,6 +46,11 @@ export class CatalogController {
     return toCategory(category);
   }
 
+  /**
+   * Deletes a category. Subcategories move up one level. Types of a subcategory fall back to its parent.
+   * A top-level category that still has types stays (`equipment.categoryHasTypes`); items always block deletion
+   * (`equipment.categoryInUse`).
+   */
   @Delete('categories/:id')
   @HttpCode(204)
   @RequirePermissions(SETTINGS)
@@ -54,6 +59,10 @@ export class CatalogController {
     const category = await em.findOne(CategoryEntity, id);
     if (!category) throw new NotFoundException();
     if (await em.count(EquipmentItemEntity, { categoryKey: category.key })) throw new BadRequestException({ code: 'equipment.categoryInUse' });
+    const types = await em.find(EquipmentTypeEntity, { categoryKey: category.key });
+    if (types.length && !category.parentKey) throw new BadRequestException({ code: 'equipment.categoryHasTypes' });
+    for (const type of types) type.categoryKey = category.parentKey!;
+    for (const child of await em.find(CategoryEntity, { parentKey: category.key })) child.parentKey = category.parentKey;
     await em.remove(category).flush();
   }
 

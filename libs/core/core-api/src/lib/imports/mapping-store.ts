@@ -4,7 +4,7 @@ import type { ImportMappingTargetState, RememberedMapping } from '@forga/core-co
 import type { AuthenticatedUser } from '../security/authenticated-user.js';
 import { searchWords } from '../data/search-words.js';
 import type { ImportRegistry, MappingTarget, RememberedValues, UsedMapping } from './import-registry.js';
-import { normalizeHeading } from './parse.js';
+import { mappingNormalized } from './parse.js';
 
 /**
  * Columns of a list of remembered mappings (`core.import_mapping` of the table import, `mp_feuer.mapping` of the
@@ -16,7 +16,7 @@ export const mappingProperties = () => ({
   kind: p.string(),
   /** The value as in the first import. */
   value: p.string(),
-  /** `normalizeHeading(value)`: what the imports compare. */
+  /** `mappingNormalized(value)`: what the imports compare (`#empty` for a blank cell). */
   normalized: p.string(),
   /** Key of the target entry or extra (e.g. `incidents:ignore`). */
   key: p.string(),
@@ -86,8 +86,7 @@ export class MappingStore {
     const byValue = new Map(records.map((r) => [`${r.kind}|${r.normalized}`, r]));
     const touched: string[] = [];
     for (const mapping of used) {
-      const normalized = normalizeHeading(mapping.value);
-      if (!normalized) continue;
+      const normalized = mappingNormalized(mapping.value);
       const existing = byValue.get(`${mapping.kind}|${normalized}`);
       if (existing && existing.key === mapping.key) {
         touched.push(existing.id);

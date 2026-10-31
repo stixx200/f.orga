@@ -157,6 +157,7 @@ export function IssuePage() {
                 {Object.keys(sizes).length > 0 && <Switch label={t('issue.onlySizes')} checked={onlySizes} onChange={(e) => setOnlySizes(e.currentTarget.checked)} />}
                 <DataTable<Item>
                   exportable={false}
+                  scroll
                   rows={rows}
                   rowKey={(i) => i.id}
                   empty={t('issue.noStock')}

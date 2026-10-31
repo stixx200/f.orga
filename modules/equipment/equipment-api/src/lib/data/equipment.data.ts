@@ -102,7 +102,7 @@ export class EquipmentData implements DeadlineProvider {
   async search(user: AuthenticatedUser, query: string): Promise<SearchHit[]> {
     const visible = this.items.visible(user);
     if (!visible) return [];
-    const words = wordsWhere(query, ['name', 'inventoryNumber', 'serialNumber', 'barcode']);
+    const words = wordsWhere(query, ['name', 'inventoryNumber', 'serialNumber', 'barcode', 'location']);
     const found = await this.em.fork().find(EquipmentItemEntity, { $and: [visible, { $or: [...(words ? [words] : []), { rfid: { $ilike: `%${normalizeRfid(query) || query}%` } }] }] } as never, { limit: 6 });
     return found.map((i) => this.hit(i));
   }

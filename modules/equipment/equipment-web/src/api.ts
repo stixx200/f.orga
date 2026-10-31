@@ -4,6 +4,7 @@ import type { BrigadeSettings } from '@forga/core-contracts';
 import { type Category, type Defect, EquipmentSettings, type EquipmentType, type Inspection, type Item, type ItemIncident, type ItemSummary } from '@forga/equipment-contracts';
 import type { Department, PersonSummary, Station, Vehicle } from '@forga/masterdata-contracts';
 import { api, can, localDate, useLocalized, useSession, withQuery } from '@forga/web-sdk';
+import { treeLabel } from '@forga/web-ui';
 
 export const READ = 'equipment.read';
 export const WRITE = 'equipment.write';
@@ -81,22 +82,18 @@ export function useLabelBase(): { base: string; configured: boolean } {
 export function useCategoryName() {
   const { data = [] } = useCategories();
   const localized = useLocalized();
-  return (key: string) => {
-    const c = data.find((x) => x.key === key);
-    return c ? localized(c.name) : key;
-  };
+  return (key: string) => treeLabel(data, key, (c) => localized(c.name));
 }
 
-/** "Florian Musterstadt 1/44 · G1" or the station. */
+/** Current place, then "Florian Musterstadt 1/44 · G1" or the station. */
 export function usePlace() {
   const { data: vehicles = [] } = useVehicles();
   const { data: stations = [] } = useStations();
-  return (item: Pick<Item, 'vehicleId' | 'stationId' | 'loadingPlace'>) => {
-    if (item.vehicleId) {
-      const v = vehicles.find((x) => x.id === item.vehicleId);
-      return [v ? v.radioCallSign || v.designation : '', item.loadingPlace].filter(Boolean).join(' · ');
-    }
-    const s = stations.find((x) => x.id === item.stationId);
-    return [s?.name, item.loadingPlace].filter(Boolean).join(' · ');
+  return (item: Pick<Item, 'vehicleId' | 'stationId' | 'loadingPlace' | 'location'>) => {
+    const vehicle = vehicles.find((x) => x.id === item.vehicleId);
+    const assigned = item.vehicleId
+      ? [vehicle ? vehicle.radioCallSign || vehicle.designation : '', item.loadingPlace].filter(Boolean).join(' · ')
+      : [stations.find((x) => x.id === item.stationId)?.name, item.loadingPlace].filter(Boolean).join(' · ');
+    return [item.location, assigned].filter(Boolean).join(' · ');
   };
 }

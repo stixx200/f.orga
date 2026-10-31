@@ -88,6 +88,8 @@ export const ItemInput = z
     vehicleId: z.uuid().nullable().default(null),
     stationId: z.uuid().nullable().default(null),
     loadingPlace: text,
+    /** Current place, free text (a vehicle, a workshop, …). */
+    location: text,
     /** Stock: quantity instead of a single item. */
     quantity: z.number().int().min(0).default(1),
     expiresOn: date.nullable().default(null),
@@ -133,6 +135,7 @@ export const Item = z.object({
   vehicleId: z.uuid().nullable(),
   stationId: z.uuid().nullable(),
   loadingPlace: z.string(),
+  location: z.string(),
   quantity: z.number(),
   expiresOn: z.string().nullable(),
   /** Effective inspection types (own or of the type, with the interval overrides of the item). */

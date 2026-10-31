@@ -2,8 +2,9 @@ import { ActionIcon, Button, Checkbox, Group, NumberInput, Radio, Select, Simple
 import { IconTrash } from '@tabler/icons-react';
 import { useState } from 'react';
 import { type Category, type CategoryInput, EquipmentSettings, type EquipmentType, type EquipmentTypeInput, type InspectionType, type Tracking } from '@forga/equipment-contracts';
+import type { LocalizedText } from '@forga/core-contracts';
 import { send, useLocalized, useTranslation } from '@forga/web-sdk';
-import { DataTable, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { ConfirmDialog, DataTable, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, treeOptions, useAction } from '@forga/web-ui';
 import { keys, useCategories, useEquipmentSettings, useTypes } from '../api';
 
 /** Categories depth-first with their depth; categories of a cycle or with an unknown parent count as top level. */
@@ -30,21 +31,62 @@ function treeOrder(categories: Category[]): { category: Category; depth: number 
   return result;
 }
 
+/** One table per category that has types, grouped under the top-level category, siblings by name. */
+function typeGroups(categories: Category[], types: EquipmentType[], nameOf: (text: LocalizedText) => string): { groups: { root: Category; sections: { category: Category; types: EquipmentType[] }[] }[]; loose: EquipmentType[] } {
+  const byName = (a: { name: LocalizedText }, b: { name: LocalizedText }) => nameOf(a.name).localeCompare(nameOf(b.name), 'de', { sensitivity: 'base' });
+  const known = new Set(categories.map((c) => c.key));
+  const children = new Map<string | null, Category[]>();
+  for (const c of categories) {
+    const parent = c.parentKey && known.has(c.parentKey) && c.parentKey !== c.key ? c.parentKey : null;
+    children.set(parent, [...(children.get(parent) ?? []), c]);
+  }
+  for (const list of children.values()) list.sort(byName);
+  const byCategory = new Map<string, EquipmentType[]>();
+  const loose: EquipmentType[] = [];
+  for (const type of types) {
+    if (!known.has(type.categoryKey)) loose.push(type);
+    else byCategory.set(type.categoryKey, [...(byCategory.get(type.categoryKey) ?? []), type]);
+  }
+  for (const list of byCategory.values()) list.sort(byName);
+  loose.sort(byName);
+  const seen = new Set<string>();
+  const sectionsOf = (key: string): { category: Category; types: EquipmentType[] }[] => {
+    if (seen.has(key)) return [];
+    seen.add(key);
+    const category = categories.find((c) => c.key === key);
+    if (!category) return [];
+    const own = byCategory.get(key) ?? [];
+    const nested = (children.get(key) ?? []).flatMap((child) => sectionsOf(child.key));
+    return [...(own.length ? [{ category, types: own }] : []), ...nested];
+  };
+  const roots = [...(children.get(null) ?? [])];
+  const groups = roots.map((root) => ({ root, sections: sectionsOf(root.key) })).filter((g) => g.sections.length);
+  for (const c of categories) {
+    if (seen.has(c.key)) continue;
+    const sections = sectionsOf(c.key);
+    if (sections.length) groups.push({ root: c, sections });
+  }
+  return { groups, loose };
+}
+
 function CategoryDialog({ category, parentKey = null, onClose }: { category?: Category; parentKey?: string | null; onClose: () => void }) {
   const { t } = useTranslation('equipment');
   const { t: common } = useTranslation('common');
   const localized = useLocalized();
   const { data: categories = [] } = useCategories();
   const [form, setForm] = useState<Required<CategoryInput>>(() => ({ key: category?.key ?? '', name: category?.name ?? { de: '', en: '' }, parentKey: category?.parentKey ?? parentKey, tracking: category?.tracking ?? 'item', breathingApparatus: category?.breathingApparatus ?? false, lockWhenOverdue: category?.lockWhenOverdue ?? false }));
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const save = useAction(() => {
     const body = { ...form, name: { de: form.name.de, en: form.name.en || form.name.de } };
     return category ? send('PUT', `equipment/categories/${category.id}`, body) : send('POST', 'equipment/categories', body);
   }, { success: t('settings.saved'), invalidate: [keys.all], onSuccess: onClose });
+  const remove = useAction(() => send('DELETE', `equipment/categories/${category!.id}`), { success: t('settings.deleted'), invalidate: [keys.all], onSuccess: onClose });
   return (
-    <ResponsiveDialog opened onClose={onClose} title={category ? t('settings.editCategory') : t('settings.newCategory')} actions={<Group justify="flex-end"><Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button><Button loading={save.isPending} disabled={!form.key || !form.name.de} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button></Group>}>
+    <>
+    <ResponsiveDialog opened onClose={onClose} title={category ? t('settings.editCategory') : t('settings.newCategory')} actions={<Group justify="space-between">{category ? <Button variant="subtle" onClick={() => setConfirmDelete(true)}>{common('actions.delete')} …</Button> : <span />}<Group><Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button><Button loading={save.isPending} disabled={!form.key || !form.name.de} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button></Group></Group>}>
       <SimpleGrid cols={{ base: 1, sm: 2 }}>
         <TextInput label={t('settings.key')} value={form.key} onChange={(e) => setForm({ ...form, key: e.currentTarget.value })} disabled={Boolean(category)} required />
-        <Select label={t('settings.parent')} data={categories.filter((c) => c.key !== form.key).map((c) => ({ value: c.key, label: localized(c.name) }))} value={form.parentKey} onChange={(v) => setForm({ ...form, parentKey: v })} clearable />
+        <Select label={t('settings.parent')} data={treeOptions(categories, (c) => localized(c.name), { exclude: form.key })} value={form.parentKey} onChange={(v) => setForm({ ...form, parentKey: v })} clearable searchable />
         <TextInput label={t('settings.nameDe')} value={form.name.de} onChange={(e) => setForm({ ...form, name: { ...form.name, de: e.currentTarget.value } })} required />
         <TextInput label={t('settings.nameEn')} value={form.name.en} onChange={(e) => setForm({ ...form, name: { ...form.name, en: e.currentTarget.value } })} />
         <Select label={t('settings.tracking')} data={(['item', 'stock'] as const).map((x) => ({ value: x, label: t(`tracking.${x}`) }))} value={form.tracking} onChange={(v) => v && setForm({ ...form, tracking: v as Category['tracking'] })} allowDeselect={false} />
@@ -52,6 +94,18 @@ function CategoryDialog({ category, parentKey = null, onClose }: { category?: Ca
         <Checkbox label={t('settings.lockWhenOverdue')} description={t('settings.lockWhenOverdueHint')} checked={form.lockWhenOverdue} onChange={(e) => setForm({ ...form, lockWhenOverdue: e.currentTarget.checked })} />
       </SimpleGrid>
     </ResponsiveDialog>
+    {category && (
+      <ConfirmDialog
+        opened={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title={t('settings.deleteCategoryTitle', { name: localized(category.name) })}
+        description={t('settings.deleteCategoryText')}
+        confirmLabel={common('actions.delete')}
+        loading={remove.isPending}
+        onConfirm={() => remove.mutate(undefined)}
+      />
+    )}
+    </>
   );
 }
 
@@ -77,7 +131,7 @@ function TypeDialog({ type, onClose }: { type?: EquipmentType; onClose: () => vo
           <TextInput label={t('settings.key')} value={form.key} onChange={(e) => setForm({ ...form, key: e.currentTarget.value })} disabled={Boolean(type)} required />
           <TextInput label={t('settings.nameDe')} value={form.name.de} onChange={(e) => setForm({ ...form, name: { ...form.name, de: e.currentTarget.value } })} required />
           <TextInput label={t('settings.nameEn')} value={form.name.en} onChange={(e) => setForm({ ...form, name: { ...form.name, en: e.currentTarget.value } })} />
-          <Select label={t('fields.category')} data={categories.map((c) => ({ value: c.key, label: localized(c.name) }))} value={form.categoryKey || null} onChange={(v) => setForm({ ...form, categoryKey: v ?? '' })} required />
+          <Select label={t('fields.category')} data={treeOptions(categories, (c) => localized(c.name))} value={form.categoryKey || null} onChange={(v) => setForm({ ...form, categoryKey: v ?? '' })} required searchable />
           <TextInput label={t('fields.manufacturer')} value={form.manufacturer} onChange={(e) => setForm({ ...form, manufacturer: e.currentTarget.value })} />
           <TextInput label={t('settings.model')} value={form.model} onChange={(e) => setForm({ ...form, model: e.currentTarget.value })} />
         </SimpleGrid>
@@ -150,7 +204,24 @@ function LeadTimes() {
   );
 }
 
-/** Administration: categories, equipment types with inspection types, DGUV template, vehicles, lead times. */
+function TypeTable({ rows, onRowClick, exportName }: { rows: EquipmentType[]; onRowClick: (type: EquipmentType) => void; exportName: string }) {
+  const { t } = useTranslation('equipment');
+  const localized = useLocalized();
+  return (
+    <DataTable<EquipmentType>
+      rows={rows}
+      rowKey={(x) => x.id}
+      onRowClick={onRowClick}
+      exportName={exportName}
+      columns={[
+        { key: 'name', header: t('fields.name'), render: (x) => <><Text size="sm" fw={700}>{localized(x.name)}</Text><Text size="xs" c="dimmed">{x.key}</Text></> },
+        { key: 'inspections', header: t('settings.inspections'), render: (x) => x.inspections.map((i) => `${localized(i.name)}${i.intervalMonths ? ` (${i.intervalMonths} M.)` : ''}`).join(' · ') },
+      ]}
+    />
+  );
+}
+
+/** Administration: categories, equipment types with inspection types, DGUV template, lead times. */
 export function SettingsPage() {
   const { t } = useTranslation('equipment');
   const localized = useLocalized();
@@ -161,11 +232,7 @@ export function SettingsPage() {
   const [editType, setEditType] = useState<EquipmentType | 'new' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [template, setTemplate] = useState(false);
-  const vehicles = useAction(() => send<{ created: number }>('POST', 'equipment/vehicles/sync'), { invalidate: [keys.all], onSuccess: (r) => setNotice(t('settings.vehiclesDone', r)) });
-  const category = (key: string) => {
-    const c = categories.find((x) => x.key === key);
-    return c ? localized(c.name) : key;
-  };
+  const { groups, loose } = typeGroups(categories, types, localized);
   return (
     <Stack gap="lg">
       <PageHeader
@@ -174,7 +241,6 @@ export function SettingsPage() {
         actions={
           <Group gap="sm">
             <Button variant="default" onClick={() => setTemplate(true)}>{t('settings.template')}</Button>
-            <Button variant="default" loading={vehicles.isPending} onClick={() => vehicles.mutate(undefined)}>{t('settings.vehicles')}</Button>
           </Group>
         }
       />
@@ -187,19 +253,33 @@ export function SettingsPage() {
         </Tabs.List>
         <Tabs.Panel value="lead-times"><LeadTimes /></Tabs.Panel>
         <Tabs.Panel value="types">
-          <Panel aside={<Button size="xs" onClick={() => setEditType('new')}>{t('settings.newType')}</Button>}>
-            <DataTable<EquipmentType>
-              rows={types}
-              rowKey={(x) => x.id}
-              onRowClick={setEditType}
-              empty={t('settings.noTypes')}
-              columns={[
-                { key: 'name', header: t('fields.name'), render: (x) => <><Text size="sm" fw={700}>{localized(x.name)}</Text><Text size="xs" c="dimmed">{x.key}</Text></> },
-                { key: 'category', header: t('fields.category'), render: (x) => category(x.categoryKey) },
-                { key: 'inspections', header: t('settings.inspections'), render: (x) => x.inspections.map((i) => `${localized(i.name)}${i.intervalMonths ? ` (${i.intervalMonths} M.)` : ''}`).join(' · ') },
-              ]}
-            />
-          </Panel>
+          <Stack gap="md">
+            <Group justify="flex-end">
+              <Button size="xs" onClick={() => setEditType('new')}>{t('settings.newType')}</Button>
+            </Group>
+            {!types.length && <Panel><Text size="sm" c="dimmed">{t('settings.noTypes')}</Text></Panel>}
+            {groups.map((group) => (
+              <Panel
+                key={group.root.id}
+                title={localized(group.root.name)}
+                aside={group.root.breathingApparatus || group.root.lockWhenOverdue ? <Group gap={4}>{group.root.breathingApparatus && <StatusBadge>{t('settings.breathingShort')}</StatusBadge>}{group.root.lockWhenOverdue && <StatusBadge tone="warning">{t('settings.lockShort')}</StatusBadge>}</Group> : undefined}
+              >
+                <Stack gap="lg">
+                  {group.sections.map((section) => (
+                    <Stack key={section.category.id} gap={6}>
+                      {section.category.key !== group.root.key && <Text component="h3" size="sm" fw={700} m={0}>{localized(section.category.name)}</Text>}
+                      <TypeTable rows={section.types} onRowClick={setEditType} exportName={section.category.key === group.root.key ? localized(group.root.name) : `${localized(group.root.name)} – ${localized(section.category.name)}`} />
+                    </Stack>
+                  ))}
+                </Stack>
+              </Panel>
+            ))}
+            {loose.length > 0 && (
+              <Panel title={t('settings.unknownCategory')}>
+                <TypeTable rows={loose} onRowClick={setEditType} exportName={t('settings.unknownCategory')} />
+              </Panel>
+            )}
+          </Stack>
         </Tabs.Panel>
         <Tabs.Panel value="categories">
           <Panel aside={<Button size="xs" onClick={() => { setNewParent(null); setEditCategory('new'); }}>{t('settings.newCategory')}</Button>}>

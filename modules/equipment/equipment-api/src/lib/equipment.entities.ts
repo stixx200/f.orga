@@ -66,6 +66,8 @@ export const ItemSchema = defineEntity({
     vehicleId: p.string().nullable().index(),
     stationId: p.string().nullable(),
     loadingPlace: p.string().default(''),
+    /** Current place, free text, e.g. a vehicle or the breathing-apparatus workshop. */
+    location: p.string().default(''),
     quantity: p.integer().default(1),
     expiresOn: p.string().length(10).nullable(),
     /** `null` = inspections of the type. */

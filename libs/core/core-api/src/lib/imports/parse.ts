@@ -135,6 +135,18 @@ export function normalizeHeading(text: string): string {
     .replace(/[^a-z0-9]/g, '');
 }
 
+/**
+ * Normalized form of a blank cell. `normalizeHeading` drops everything that is not a letter or digit, so a blank
+ * cell would otherwise have nothing to remember a mapping under. The result always contains `#`, which
+ * `normalizeHeading` never produces.
+ */
+export const BLANK_MAPPING = '#empty';
+
+/** What remembered mappings compare: headings like `normalizeHeading`, and `BLANK_MAPPING` for a blank cell. */
+export function mappingNormalized(value: string): string {
+  return normalizeHeading(value) || BLANK_MAPPING;
+}
+
 /** Converts `TT.MM.JJJJ`, `JJJJ-MM-TT` (and `TT.MM.JJ`) to `JJJJ-MM-TT`; `null` if not a date. */
 export function parseDate(text: string): string | null {
   const value = text.trim();

@@ -37,6 +37,7 @@ const musterstadt = transferZip({
     { PER_ID: 'H1', PER_INDEX: 'P-ANNA', PER_HIST_KATEGORIE_OW: 'Dienstgrad', PER_HIST_KURZ: '', PER_HIST_LANG: 'Oberfeuerwehrmann', PER_ZEITRAUM_VD: '2019-01-01' },
     { PER_ID: 'H2', PER_INDEX: 'P-ANNA', PER_HIST_KATEGORIE_OW: 'Ehrung', PER_HIST_KURZ: '', PER_HIST_LANG: 'Feuerwehr-Ehrenzeichen in Silber', PER_ZEITRAUM_VD: '2024-01-01' },
     { PER_ID: 'H3', PER_INDEX: 'P-ANNA', PER_HIST_KATEGORIE_OW: 'Funktion', PER_HIST_KURZ: '', PER_HIST_LANG: 'Maschinist', PER_ZEITRAUM_VD: '2020-01-01' },
+    { PER_ID: 'H4', PER_INDEX: 'P-ANNA', PER_HIST_KATEGORIE_OW: 'Funktion', PER_HIST_KURZ: '', PER_HIST_LANG: 'Abteilungskommandant', PER_ZEITRAUM_VD: '2021-01-01', PER_ZEITRAUM_BD: '' },
   ],
   PER_PRUEF: [
     { PER_ID: 'C1', PER_INDEX: 'P-ANNA', PER_PRUEF_KURZ: 'G26.3(3)', PER_PRUEF_LANG: 'G26.3 - Untersuchung (3 Jahre)', PER_PRUEF_DAT: '2025-02-01', PER_GUELTIG_BD: '2028-02-01', PER_PRUEF_OK: 1, PER_PRUEF_ORT: 'Betriebsarzt' },
@@ -53,14 +54,14 @@ const musterstadt = transferZip({
       EIN_ID: 'E1', EIN_NR: '2025-001', EIN_LS_NR: '1250000001', EIN_ZEIT_V: '2025-06-01 10:00:00.000', EIN_ZEIT_B: '2025-06-01 11:30:00.000',
       EIN_ALARMSTICHWORT: 'B1-MPT', EIN_ART: 'Kleinbrand', EIN_KATEGORIE_OW: 'Brand', EIN_ERLAEUTERUNG: 'Mülleimer brennt', EIN_ORT: '', EIN_ORT_STRASSE: 'Bahnhofstr. 3', EIN_ORT_PLZ: '12345',
       EIN_ORT_ORT: 'Musterstadt', EIN_ORT_ORTSTEIL: '', EIN_ORT_ZUSATZ: '', EIN_ORT_OBJEKT: '', EIN_MERKMAL_ST_GLOBAL: 1, EIN_MERKMAL_KO: 0, EIN_ZUSATZ_2: 'zur Abrechnung freigegeben',
-      EIN_LAGE: 'Mülleimer in Vollbrand', EIN_VERLAUF: 'Abgelöscht', EIN_BERICHT: 'Mit Kübelspritze gelöscht.', EIN_URSACHE: '', EIN_LEITUNG: 'Probe Anna', EIN_STATISTIK: '#L Kleinbrände A',
-      EIN_RETTUNG_P_S: '', EIN_VERLUSTE_S: '', EIN_RETTUNG_T_S: '',
+      EIN_LAGE: 'Mülleimer in Vollbrand', EIN_VERLAUF: 'Abgelöscht', EIN_BERICHT: 'Mit Kübelspritze gelöscht.', EIN_BEMERKUNG: 'Nachkontrolle', EIN_URSACHE: '', EIN_LEITUNG: 'Probe Anna', EIN_STATISTIK: '#L Kleinbrände A',
+      EIN_RETTUNG_P_S: '', EIN_VERLUSTE_S: '', EIN_RETTUNG_T_S: '', EIN_WETTEREINFLUSS: 'negativer Einfluß', EIN_WETTERLAGE: 'Starkregen',
     },
     {
       EIN_ID: 'E2', EIN_NR: '2025-002', EIN_LS_NR: '', EIN_ZEIT_V: '2025-06-02 08:00:00.000', EIN_ZEIT_B: '2025-06-02 09:00:00.000',
       EIN_ALARMSTICHWORT: '', EIN_ART: 'Unterstützung Verwaltung', EIN_KATEGORIE_OW: 'Sonstiges', EIN_ERLAEUTERUNG: '', EIN_ORT: 'Musterstadt', EIN_ORT_STRASSE: '', EIN_ORT_PLZ: '',
       EIN_ORT_ORT: '', EIN_ORT_ORTSTEIL: '', EIN_ORT_ZUSATZ: '', EIN_ORT_OBJEKT: '', EIN_MERKMAL_ST_GLOBAL: 1, EIN_MERKMAL_KO: 0, EIN_ZUSATZ_2: '',
-      EIN_LAGE: '', EIN_VERLAUF: '', EIN_BERICHT: '', EIN_URSACHE: '', EIN_LEITUNG: '', EIN_STATISTIK: '', EIN_RETTUNG_P_S: '', EIN_VERLUSTE_S: '', EIN_RETTUNG_T_S: '',
+      EIN_LAGE: '', EIN_VERLAUF: '', EIN_BERICHT: 'Nur im Bericht beschrieben.', EIN_URSACHE: '', EIN_LEITUNG: '', EIN_STATISTIK: '', EIN_RETTUNG_P_S: '', EIN_VERLUSTE_S: '', EIN_RETTUNG_T_S: '',
     },
     {
       EIN_ID: 'E3', EIN_NR: '2025-003', EIN_LS_NR: '1250000001', EIN_ZEIT_V: '2025-06-01 10:30:00.000', EIN_ZEIT_B: '2025-06-01 12:00:00.000',
@@ -77,7 +78,14 @@ const musterstadt = transferZip({
   // The vehicle of the report with its own times and kilometres.
   EIN_FAHRZ: [
     { EIN_ID: 'EF1', EIN_INDEX: 'E1', EIN_FZG_INDEX: 'F-LF', EIN_FZG_BEZEICHNUNG: 'LF 20/16', EIN_FZG_ZEIT_ALARM: '2025-06-01 10:00:00.000', EIN_FZG_ZEIT_AUS: '2025-06-01 10:05:00.000', EIN_FZG_ZEIT_EIN: '2025-06-01 11:15:00.000', EIN_FZG_KILOMETER: '12' },
+    { EIN_ID: 'EF2', EIN_INDEX: 'E1', EIN_FZG_INDEX: 'F-MTW', EIN_FZG_BEZEICHNUNG: 'MTW', EIN_FZG_ZEIT_AUS: '2025-06-01 10:06:00.000', EIN_FZG_ZEIT_EIN: '2025-06-01 11:20:00.000', EIN_FZG_KILOMETER: '8' },
   ],
+  EIN_MAT: [{ EIN_ID: 'EM1', EIN_INDEX: 'E1', EIN_MAT_BEZEICHNUNG: 'Scheinwerfer', EIN_MAT_ANZAHL: '2', EIN_MAT_EINHEIT: 'Stk.', EIN_MAT_INVENTAR_NR: '' }],
+  EIN_SOEK: [{ EIN_ID: 'ES1', EIN_INDEX: 'E1', EIN_SOEK_BEZEICHNUNG: 'Polizei', EIN_SOEK_BESATZUNG: '2', EIN_SOEK_FAHRZEUG: '1' }],
+  EIN_BETR: [{ EIN_ID: 'EB1', EIN_INDEX: 'E1', EIN_BETR_VORNAME: 'Eva', EIN_BETR_NACHNAME: 'Zeugin', EIN_BETR_MERKMAL_ZE: 1, EIN_BETR_STRASSE: 'Hauptstr. 1', EIN_BETR_PLZ: '12345', EIN_BETR_ORT: 'Musterstadt', EIN_BETR_KENNZEICHEN: 'UL-EZ 1', EIN_BETR_FIRMA: '' }],
+  GSO_STAMM: [{ GSO_ID: 'G1', GSO_NR: '16', GSO_BEZEICHNUNG: 'Motorsäge', GSO_GRUPPE: 'Rettungsgeräte', GSO_HERSTELLER: 'Dönges', GSO_HERST_NR: '50', GSO_STATUS: 'aktiv', GSO_ANZAHL: '1' }],
+  GSO_PRUEF: [{ GSO_ID: 'GP1', GSO_INDEX: 'G1', GSO_PRUEF_DAT: '2024-04-01', GSO_PRUEF_LANG: 'Jährliche Prüfung', GSO_GUELTIG_BD: '2025-04-01', GSO_PRUEF_OK: 1 }],
+  KLD_STAMM: [{ KLD_ID: 'K1', KLD_NR: '1', KLD_BEZEICHNUNG: 'Einsatz-Jacke', KLD_GROESSE: '52', KLD_HERSTELLER: 'S-GARD', KLD_STATUS: 'aktiv', KLD_INVENTAR_NR: 'JK-1' }],
 });
 
 const veterans = transferZip({
@@ -96,9 +104,12 @@ beforeAll(async () => {
   await post('/masterdata/catalog/templates/bw', {}).expect(201);
   await post('/masterdata/courses/templates/bw', {}).expect(201);
   await post('/training/types/templates/bw', {}).expect(201);
+  await post('/equipment/templates/dguv', {}).expect(201);
+  await post('/clothing/articles/template', {}).expect(201);
   ids.musterstadt = (await post('/masterdata/departments', { name: 'Abteilung Musterstadt', shortName: 'Musterstadt', type: 'operational' }).expect(201)).body.id;
   ids.veterans = (await post('/masterdata/departments', { name: 'Altersabteilung Musterstadt', shortName: 'Alters Musterstadt', type: 'veterans', parentId: ids.musterstadt }).expect(201)).body.id;
   ids.lf = (await post('/masterdata/vehicles', { designation: 'LF 20/16', vehicleType: 'lf-20-16', departmentId: ids.musterstadt }).expect(201)).body.id;
+  ids.mtw = (await post('/masterdata/vehicles', { designation: 'MTW', vehicleType: 'mtw', departmentId: ids.musterstadt }).expect(201)).body.id;
 });
 
 afterAll(() => test?.app.close());
@@ -120,11 +131,13 @@ describe('MP-Feuer: a run from upload to apply', () => {
     ]);
     expect(run.datasets.map((d) => [d.profile, d.rowCount, d.enabled, d.locked])).toEqual([
       ['masterdata.persons', 3, true, false],
-      ['masterdata.career', 4, true, false],
+      ['masterdata.career', 6, true, false],
       ['respiratory-protection.examinations', 1, true, false],
       ['respiratory-protection.stress-exercises', 1, true, false],
       ['training.sessions', 3, true, false],
-      ['incidents.personnel', 5, true, false],
+      ['equipment.inventory', 1, true, false],
+      ['clothing.inventory', 1, true, false],
+      ['incidents.personnel', 6, true, false],
     ]);
     // Choosing entries replaces creating catalog entries blindly; options of the profiles otherwise as offered.
     expect(run.datasets.find((d) => d.profile === 'masterdata.career')?.optionInfo).toEqual([]);
@@ -155,13 +168,16 @@ describe('MP-Feuer: a run from upload to apply', () => {
   it('applies in the background and reports counts, messages and progress', async () => {
     await mp.dryRun(run.id);
     const applied = await mp.apply(run.id);
-    expect(applied).toMatchObject({ status: 'applied', phase: 'apply', error: null, progress: { rowsDone: 17, rows: 17 } });
+    expect(applied).toMatchObject({ status: 'applied', phase: 'apply', error: null, progress: { rowsDone: 22, rows: 22 } });
     expect(countsOf(applied, 'masterdata.persons')).toMatchObject({ create: 3, error: 0 });
-    expect(countsOf(applied, 'masterdata.career')).toMatchObject({ create: 3, error: 1 });
-    expect(countsOf(applied, 'incidents.personnel')).toMatchObject({ create: 3, update: 2, error: 0 });
+    expect(countsOf(applied, 'masterdata.career')).toMatchObject({ create: 4, error: 2 });
+    expect(countsOf(applied, 'clothing.inventory')).toMatchObject({ create: 1, error: 0 });
+    expect(countsOf(applied, 'equipment.inventory')).toMatchObject({ create: 1, error: 0 });
+    expect(countsOf(applied, 'incidents.personnel')).toMatchObject({ create: 4, update: 2, error: 0 });
     // Unknown keywords are created (option) and offered for a mapping.
     expect(applied.unmatched).toEqual([
       { kind: 'qualification', value: 'Motorsägen-Grundlehrgang', count: 1 },
+      { kind: 'office', value: 'Maschinist', count: 1 },
       { kind: 'alarm-keyword', value: 'B1-MPT', count: 2 },
       { kind: 'alarm-keyword', value: 'Unterstützung Verwaltung', count: 1 },
     ]);
@@ -169,18 +185,33 @@ describe('MP-Feuer: a run from upload to apply', () => {
     const anna = (await get(`/masterdata/persons/${await personId('Probe')}`)).body;
     expect(anna).toMatchObject({ status: 'active', personnelNumber: null, gender: 'female', email: 'anna@example.org' });
     expect(anna.qualifications).toMatchObject([{ qualification: 'squad-leader', acquiredOn: '2018-05-05' }]);
+    expect(anna.offices).toMatchObject([{ office: 'department-commander', departmentId: ids.musterstadt, from: '2021-01-01', to: null }]);
     expect((await get(`/masterdata/persons/${await personId('Alt')}`)).body.memberships).toMatchObject([{ departmentId: ids.veterans, to: null }]);
     const evidence = (await get(`/respiratory-protection/persons/${await personId('Probe')}`).expect(200)).body.evidence as { kind: string; date: string }[];
     expect(evidence.map((e) => [e.kind, e.date])).toEqual(expect.arrayContaining([['examination', '2025-02-01'], ['training-track', '2025-03-01']]));
     const [session] = (await get('/training/sessions?from=2025-05-05&to=2025-05-05')).body as { title: string }[];
     expect(session.title).toBe('Löschangriff');
+    const pieces = (await get('/clothing/items')).body as { inventoryNumber: string; articleKey: string; size: string; status: string }[];
+    expect(pieces).toContainEqual(expect.objectContaining({ inventoryNumber: 'JK-1', articleKey: 'jacket', size: '52', status: 'stock' }));
 
     // Incidents: report text, status from "Zusatzfeld 2", statistics from the key, managed by MP-Feuer.
-    const incidents = (await get('/incidents/incidents?from=2025-06-01&to=2025-06-02')).body as { dispatchNumber: string; reports: { id: string; primary: boolean; status: string }[] }[];
+    const incidents = (await get('/incidents/incidents?from=2025-06-01&to=2025-06-02')).body as { dispatchNumber: string; alarmKeyword: string; reports: { id: string; primary: boolean; status: string }[] }[];
     const fire = incidents.find((i) => i.dispatchNumber === '1250000001')!;
     expect(fire.reports).toMatchObject([{ primary: true, status: 'released-billing' }]);
     const report = (await get(`/incidents/reports/${fire.reports[0].id}`)).body;
-    expect(report).toMatchObject({ managedBy: 'mp-feuer', lockedBy: 'MP-Feuer', situation: 'Mülleimer in Vollbrand', actions: 'Abgelöscht\n\nMit Kübelspritze gelöscht.' });
+    expect(report).toMatchObject({
+      managedBy: 'mp-feuer',
+      lockedBy: 'MP-Feuer',
+      situation: 'Mülleimer in Vollbrand',
+      actions: 'Abgelöscht\n\nMit Kübelspritze gelöscht.\n\nNachkontrolle',
+      equipment: '2 Stk. Scheinwerfer',
+      weather: { influence: true, conditions: ['rain'] },
+      otherAgencies: [{ organization: 'police', forces: 2, vehicles: 1 }],
+      involvedParties: [{ role: 'witness', name: 'Eva Zeugin', licensePlate: 'UL-EZ 1', city: 'Musterstadt' }],
+    });
+    expect(report.vehicles.map((v: { vehicleId: string }) => v.vehicleId).toSorted()).toEqual([ids.lf, ids.mtw].toSorted());
+    const support = incidents.find((i) => i.alarmKeyword === 'Unterstützung Verwaltung')!;
+    expect((await get(`/incidents/reports/${support.reports[0].id}`)).body.situation).toBe('siehe Bericht');
     expect((await get(`/incidents/incidents/${report.incidentId}`)).body.statistics).toMatchObject({ mainType: 'fire', fireSize: 'small-a' });
     expect(report.personnel).toMatchObject([{ personId: await personId('Probe'), vehicleId: ids.lf, function: 'machinist' }, { personId: await personId('Alt') }]);
 
@@ -202,7 +233,7 @@ describe('MP-Feuer: a run from upload to apply', () => {
     // Audit: the run and every part, with the source.
     expect((await audit('mp-feuer.run-applied'))[0].details).toMatchObject({ runId: run.id, counts: expect.objectContaining({ 'masterdata.persons': expect.any(Object) }) });
     const parts = (await audit('imports.applied')).filter((e) => (e.details['source'] as { runId?: string })?.runId === run.id);
-    expect(parts).toHaveLength(6);
+    expect(parts).toHaveLength(8);
     expect(parts[0].details).toMatchObject({ source: { module: 'mp-feuer', runId: run.id }, part: 1, parts: 1 });
   });
 
@@ -216,7 +247,7 @@ describe('MP-Feuer: a run from upload to apply', () => {
     await mp.dryRun(again.id);
     const applied = await mp.apply(again.id);
     expect(countsOf(applied, 'masterdata.persons')).toMatchObject({ create: 0, unchanged: 3 });
-    expect(countsOf(applied, 'incidents.personnel')).toMatchObject({ create: 0, update: 5, error: 0 });
+    expect(countsOf(applied, 'incidents.personnel')).toMatchObject({ create: 0, update: 6, error: 0 });
     expect((await get('/incidents/incidents?from=2025-06-01&to=2025-06-02')).body).toHaveLength(2);
   });
 
@@ -492,6 +523,8 @@ describe('MP-Feuer: permissions and module state', () => {
       ['respiratory-protection.examinations', true],
       ['respiratory-protection.stress-exercises', true],
       ['training.sessions', true],
+      ['equipment.inventory', true],
+      ['clothing.inventory', true],
       ['incidents.personnel', true],
     ]);
     expect(run.datasets.filter((d) => d.locked).every((d) => !d.enabled)).toBe(true);

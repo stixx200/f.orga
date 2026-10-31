@@ -41,6 +41,8 @@ import { type ReportContext, ReportContextLoader } from './report-context.js';
 
 export const READ = 'incidents.reports.read';
 export const WRITE = 'incidents.reports.write';
+/** Delete unlocked drafts. Not included in `incidents.*`; the administrator role holds it through `*`. */
+export const DELETE_REPORT = 'incidents.reports.delete';
 export const RELEASE = 'incidents.reports.release';
 export const UNLOCK = 'incidents.reports.unlock';
 /** Department-level pre-review: return reports to their authors and remind authors (e.g. department commanders). */

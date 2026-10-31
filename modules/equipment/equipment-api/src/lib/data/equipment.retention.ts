@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
 import { ANONYMIZED_NAME, Attachments, type ErasureArea, type ErasureAreaInput, type ErasureContext, HistoryEntry, type RetentionCandidate, type RetentionExportRecord, type RetentionQuery, RetentionRegistry, User } from '@forga/core-api';
 import { DefectEntity, EquipmentItemEntity, InspectionEntity, UsageEntity } from '../equipment.entities.js';
+import { equipmentGroupKey } from '../items/item-group.js';
 
 const cutoffDay = (query: RetentionQuery) => query.cutoff.toISOString().slice(0, 10);
 
@@ -52,8 +53,16 @@ export class EquipmentRetention {
   private async owners(em: EntityManager, itemIds: string[]) {
     const inspections = await em.find(InspectionEntity, { item: { $in: itemIds } }, { fields: ['id', 'item'] });
     const defects = await em.find(DefectEntity, { item: { $in: itemIds } }, { fields: ['id', 'item'] });
-    const [a, b] = await Promise.all([this.attachments.count('equipment.inspection', inspections.map((i) => i.id)), this.attachments.count('equipment.defect', defects.map((d) => d.id))]);
+    const items = await em.find(EquipmentItemEntity, { id: { $in: itemIds } }, { fields: ['id', 'categoryKey', 'typeKey', 'name'] });
+    const groupOf = new Map(items.map((item) => [item.id, equipmentGroupKey(item)]));
+    const [a, b, photos, documents] = await Promise.all([
+      this.attachments.count('equipment.inspection', inspections.map((i) => i.id)),
+      this.attachments.count('equipment.defect', defects.map((d) => d.id)),
+      this.attachments.count('equipment.item', [...new Set(groupOf.values())]),
+      this.attachments.count('equipment.item-document', [...new Set(groupOf.values())]),
+    ]);
     const counts = new Map<string, number>();
+    for (const [id, key] of groupOf) counts.set(id, (photos.get(key) ?? 0) + (documents.get(key) ?? 0));
     for (const i of inspections) counts.set(i.item.id, (counts.get(i.item.id) ?? 0) + (a.get(i.id) ?? 0));
     for (const d of defects) counts.set(d.item.id, (counts.get(d.item.id) ?? 0) + (b.get(d.id) ?? 0));
     return { inspections, defects, counts };
@@ -80,7 +89,7 @@ export class EquipmentRetention {
           { label: { de: 'Mängel', en: 'Defects' }, value: String(found.length) },
         ],
         data: { item: wrap(i).toObject(), inspections: own.map((x) => ({ ...wrap(x).toObject(), item: i.id })), defects: found.map((d) => ({ ...wrap(d).toObject(), item: i.id })) },
-        attachments: [...own.map((x) => ({ ownerType: 'equipment.inspection', ownerId: x.id })), ...found.map((d) => ({ ownerType: 'equipment.defect', ownerId: d.id }))],
+        attachments: [{ ownerType: 'equipment.item', ownerId: equipmentGroupKey(i) }, { ownerType: 'equipment.item-document', ownerId: equipmentGroupKey(i) }, ...own.map((x) => ({ ownerType: 'equipment.inspection', ownerId: x.id })), ...found.map((d) => ({ ownerType: 'equipment.defect', ownerId: d.id }))],
       };
     });
   }
@@ -88,6 +97,12 @@ export class EquipmentRetention {
   private async delete(ids: readonly string[]): Promise<number> {
     const em = this.em.fork();
     const { inspections, defects } = await this.owners(em, [...ids]);
+    const going = await em.find(EquipmentItemEntity, { id: { $in: [...ids] } }, { fields: ['categoryKey', 'typeKey', 'name'] });
+    const staying = await em.find(EquipmentItemEntity, { id: { $nin: [...ids] } }, { fields: ['categoryKey', 'typeKey', 'name'] });
+    const kept = new Set(staying.map((item) => equipmentGroupKey(item)));
+    const orphaned = [...new Set(going.map((item) => equipmentGroupKey(item)))].filter((key) => !kept.has(key));
+    await this.attachments.removeFor('equipment.item', orphaned);
+    await this.attachments.removeFor('equipment.item-document', orphaned);
     await this.attachments.removeFor('equipment.inspection', inspections.map((i) => i.id));
     await this.attachments.removeFor('equipment.defect', defects.map((d) => d.id));
     await em.nativeDelete(HistoryEntry, { $or: [{ entity: 'equipment.item', entityId: { $in: [...ids] } }, { parentEntity: 'equipment.item', parentId: { $in: [...ids] } }] });

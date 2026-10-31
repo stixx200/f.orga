@@ -8,7 +8,7 @@ export const MP_FEUER_MANIFEST = {
   name: { de: 'MP-Feuer', en: 'MP-Feuer' },
   version: '0.1.0',
   requires: ['masterdata'],
-  optional: ['incidents', 'training', 'respiratory-protection'],
+  optional: ['incidents', 'training', 'respiratory-protection', 'equipment', 'clothing'],
   permissions: [
     { id: MP_FEUER_TRANSFER, name: { de: 'MP-Feuer-Datenübernahme durchführen', en: 'Run the MP-Feuer data transfer' }, scope: 'brigade' },
     { id: MP_FEUER_READ, name: { de: 'Verlauf der Datenübernahmen lesen', en: 'Read the history of data transfers' }, scope: 'brigade' },

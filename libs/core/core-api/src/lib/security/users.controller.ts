@@ -119,7 +119,8 @@ export class UsersController {
 
   private async mfaInfo(user: User, enrolled: ReadonlySet<string>): Promise<MfaInfo> {
     const grants = await this.auth.grantsFor(user.roles.getItems().map((a) => ({ role: a.role, departmentId: a.departmentId ?? null })));
-    return { mfaEnrolled: enrolled.has(user.id), mfaNeeded: [...grants.keys()].some((p) => this.registry.stepUp.has(p)) };
+    const enabled = (await this.auth.securitySettings()).mfaEnabled;
+    return { mfaEnrolled: enrolled.has(user.id), mfaNeeded: enabled && [...grants.keys()].some((p) => this.registry.stepUp.has(p)) };
   }
 
   private async toDto(user: User): Promise<UserDto> {

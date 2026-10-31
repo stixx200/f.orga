@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import type { Incident, ReleaseManyResult, Report } from '@forga/incidents-contracts';
 import { api, apiUrl, can, extensionsOf, formatDate, formatDateTime, formatMoney, fromLocalInput, send, toLocalInput, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { ConfirmDialog, EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, useAction } from '@forga/web-ui';
-import { COSTS, keys, ledByMpFeuer, useDepartments, useIncident, useKeywords, useNames, useReportAccess, useSettings } from '../api';
+import { COSTS, DELETE_REPORT, keys, ledByMpFeuer, useDepartments, useIncident, useKeywords, useNames, useReportAccess, useSettings } from '../api';
 import { DepartmentBadge, keywordLabel, locationLabel, notifyReleaseResult, ReportStatusBadge } from '../parts';
 import { StatisticsPanel } from './StatisticsPanel';
 
@@ -134,7 +134,13 @@ function RetentionPanel({ incident }: { incident: Incident }) {
   );
 }
 
-function ReportCard({ summary, report, readable, onMakePrimary }: { summary: Incident['reports'][number]; report?: Report; readable: boolean; onMakePrimary?: () => void }) {
+function ReportCard({ summary, report, readable, onMakePrimary, onDelete }: {
+  summary: Incident['reports'][number];
+  report?: Report;
+  readable: boolean;
+  onMakePrimary?: () => void;
+  onDelete?: () => void;
+}) {
   const { t, i18n } = useTranslation('incidents');
   const names = useNames();
   const errors = report?.findings.filter((f) => f.level === 'error' && f.rule !== 'primary-missing').length ?? 0;
@@ -174,6 +180,7 @@ function ReportCard({ summary, report, readable, onMakePrimary }: { summary: Inc
           <Group gap="xs">
             <Button component="a" href={apiUrl(`incidents/reports/${summary.id}/pdf`, { lang: i18n.language })} target="_blank" variant="subtle" size="xs">{t('editor.pdf')}</Button>
             <Button component={Link} to={`/incidents/reports/${summary.id}`} variant="outline" size="xs">{t('incident.openReport')}</Button>
+            {onDelete && <Button variant="subtle" size="xs" onClick={onDelete}>{t('editor.delete')}</Button>}
           </Group>
         ) : (
           <Text size="xs" c="dimmed">{t(summary.unit ? 'incident.otherUnit' : 'incident.otherDepartment')}</Text>
@@ -205,6 +212,7 @@ export function IncidentPage() {
   const [releasingAll, setReleasingAll] = useState(false);
   const [editing, setEditing] = useState(false);
   const [primaryFor, setPrimaryFor] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Incident['reports'][number] | null>(null);
   const [departmentId, setDepartmentId] = useState<string | null>(null);
   const canWrite = (department: string) => access.write({ departmentId: department });
 
@@ -226,6 +234,15 @@ export function IncidentPage() {
       },
     },
   );
+  const removeReport = useAction((reportId: string) => send('DELETE', `incidents/reports/${reportId}`), {
+    success: t('editor.deleted'),
+    invalidate: [keys.incidents],
+    onSuccess: (_result, reportId) => {
+      setDeleting(null);
+      // The last department report takes the incident and the drafts of brigade-wide units with it.
+      if (!incident?.reports.some((other) => other.id !== reportId && other.departmentId)) navigate('/incidents/incidents');
+    },
+  });
   const addReport = useAction(
     (department: string) => send<Report>('POST', `incidents/incidents/${id}/reports`, { departmentId: department }),
     { invalidate: [keys.incidents], onSuccess: (report) => navigate(`/incidents/reports/${report.id}`) },
@@ -281,6 +298,7 @@ export function IncidentPage() {
             report={reports[index]?.data}
             readable={access.read(summary)}
             onMakePrimary={!summary.primary && !ledByMpFeuer(settings, summary) && (summary.departmentId ? canWrite(summary.departmentId) : !hasDepartmentReport && access.write(summary)) && !summary.locked && !summary.status.startsWith('released') && !primary?.status.startsWith('released') ? () => setPrimaryFor(summary.id) : undefined}
+            onDelete={can(session, DELETE_REPORT) && summary.departmentId && summary.status === 'draft' && !summary.locked && !ledByMpFeuer(settings, summary) ? () => setDeleting(summary) : undefined}
           />
         ))}
       </SimpleGrid>
@@ -326,6 +344,15 @@ export function IncidentPage() {
           if (target) makePrimary.mutate(target.id);
           setPrimaryFor(null);
         }}
+      />
+      <ConfirmDialog
+        opened={Boolean(deleting)}
+        onClose={() => setDeleting(null)}
+        title={t('editor.deleteTitle')}
+        description={t('editor.deleteText', { report: deleting ? `${names.ownerName(deleting)} · ${deleting.number}` : '' })}
+        confirmLabel={t('editor.delete')}
+        loading={removeReport.isPending}
+        onConfirm={() => deleting && removeReport.mutate(deleting.id)}
       />
     </Stack>
   );

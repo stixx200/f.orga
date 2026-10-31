@@ -44,6 +44,7 @@ export function InspectionsPage() {
         <Select label={t('fields.department')} placeholder={t('items.all')} data={departments.map((d) => ({ value: d.id, label: d.name }))} value={departmentId} onChange={setDepartmentId} clearable />
       </Group>
       <DataTable<Row>
+        scroll
         rows={rows}
         rowKey={(r) => `${r.item.id}:${r.due.key}`}
         empty={isLoading ? t('loading') : t('duePage.empty')}

@@ -23,6 +23,11 @@ export const Permission = z.object({
   stepUp: z.boolean().optional(),
   /** A permission with `stepUp` that API tokens may nevertheless hold (explicit exception). */
   tokenAllowed: z.boolean().optional(),
+  /**
+   * Not covered by a module wildcard (`incidents.*`). Only `*` and the exact id grant it, so it stays off the
+   * standard roles and is assigned on its own (the administrator role holds `*`).
+   */
+  explicit: z.boolean().optional(),
 });
 export type Permission = z.infer<typeof Permission>;
 

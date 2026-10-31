@@ -34,7 +34,10 @@ export class EquipmentLists {
   private async places(): Promise<(i: Item) => string> {
     const vehicles = new Map((await this.organization.vehicles({ includeRetired: true })).map((v) => [v.id, v.radioCallSign || v.designation]));
     const stations = new Map((await this.organization.stations()).map((s) => [s.id, s.name]));
-    return (i) => (i.vehicleId ? `${vehicles.get(i.vehicleId) ?? ''}${i.loadingPlace ? ` · ${i.loadingPlace}` : ''}` : i.stationId ? (stations.get(i.stationId) ?? '') : i.loadingPlace);
+    return (i) => {
+      const assigned = i.vehicleId ? `${vehicles.get(i.vehicleId) ?? ''}${i.loadingPlace ? ` · ${i.loadingPlace}` : ''}` : i.stationId ? (stations.get(i.stationId) ?? '') : i.loadingPlace;
+      return [i.location, assigned].filter(Boolean).join(' · ');
+    };
   }
 
   private async categoryNames(language: 'de' | 'en'): Promise<Map<string, string>> {

@@ -134,6 +134,7 @@ export function AttendanceTab({ session, editable }: { session: Session; editabl
       {unconfirmed.size > 0 && <Notice kind="warning">{t(editable ? 'attendance.unconfirmedHint' : 'attendance.unconfirmedInfo', { count: unconfirmed.size })}</Notice>}
       <TextInput type="search" label={t('attendance.search')} value={query} onChange={(e) => setQuery(e.currentTarget.value)} maw={400} />
       <DataTable<Row>
+        scroll
         rows={sorted}
         rowKey={(r) => r.personId}
         columns={[

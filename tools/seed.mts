@@ -899,20 +899,11 @@ async function qualifyUser(persons: PersonRef[], username: string, qualification
   console.log(`  ${person.firstName} ${person.lastName} (${username}) hat die Qualifikation ${qualification}`);
 }
 
-/** Equipment: DGUV template, vehicles, typical equipment per vehicle with past inspections, some defects. */
+/** Equipment: DGUV template and typical equipment per vehicle with past inspections, some defects. Vehicles stay master data, not equipment items. */
 async function equipment(persons: PersonRef[]): Promise<void> {
   reseed(305);
   await qualifyUser(persons, 'equipment-officer', 'equipment-officer');
   await call('POST', 'equipment/templates/dguv', {});
-  await call('POST', 'equipment/vehicles/sync', {});
-  // Vehicles are taken over without dates ("not recorded yet"): the last inspections as from the vehicle papers.
-  const synced = await call<{ id: string; dues: { key: string; notRecorded: boolean }[]; inspections: { key: string; intervalMonths: number | null; inspector: string }[] }[]>('GET', 'equipment/items?categoryKey=vehicles');
-  for (const vehicle of synced) {
-    for (const inspection of vehicle.inspections.filter((i) => i.intervalMonths && vehicle.dues.some((d) => d.key === i.key && d.notRecorded))) {
-      const date = daysAgo(between(10, inspection.intervalMonths! * 30 - 10));
-      await call('POST', `equipment/items/${vehicle.id}/inspections`, { inspectionKey: inspection.key, date, inspectorCompany: inspection.inspector === 'expert' ? 'Prüfstelle (Beispiel)' : '', result: 'passed' });
-    }
-  }
   const existing = await call<unknown[]>('GET', 'equipment/items?categoryKey=breathing');
   if (existing.length) {
     console.log('  Geräte vorhanden');

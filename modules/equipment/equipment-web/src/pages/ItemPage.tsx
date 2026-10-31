@@ -5,9 +5,9 @@ import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import type { Defect, Inspection, Item, ItemIncident, ItemSummary } from '@forga/equipment-contracts';
 import { apiUrl, can, formatDate, formatMoney, localDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { DataTable, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { Attachments, DataTable, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, READ, useCategoryName, useDefects, useDepartments, useInspections, useItem, useItemAccess, useItemIncidents, useLabelBase, usePersons, usePlace } from '../api';
-import { AttachmentsDialog, DefectPhotoInput, DueDate, ItemStatusBadge, uploadDefectPhoto, useDefectText } from '../parts';
+import { AttachmentsDialog, DefectPhotoInput, DueDate, ItemPhoto, ItemStatusBadge, uploadDefectPhoto, useDefectText } from '../parts';
 import { InspectionDialog } from './InspectionDialog';
 import { ItemDialog } from './ItemDialog';
 
@@ -261,6 +261,7 @@ function ReportOnlyPage({ item, reporting, setReporting }: { item: ItemSummary; 
         actions={item.status !== 'retired' && <Button onClick={() => setReporting(true)}>{t('defect.report')}</Button>}
       />
       {(item.blocked || item.status === 'defective' || item.status === 'in-repair') && item.status !== 'retired' && <Notice kind="error">{t('item.notReady')}</Notice>}
+      <Panel title={t('item.photo')}><ItemPhoto id={item.id} editable={false} /></Panel>
       <Notice kind="info">{t('item.reportOnly')}</Notice>
       {reporting && <DefectDialog item={item} onClose={() => setReporting(false)} />}
     </Stack>
@@ -321,11 +322,11 @@ export function ItemPage() {
             <Group gap="sm">
               <Button variant="default" onClick={() => setDialog('defect')}>{t('defect.report')}</Button>
               {canInspect && item.inspections.length > 0 && <Button onClick={() => setDialog('inspect')}>{t('inspection.inspect')}</Button>}
+              {canWrite && <Button variant="default" onClick={() => setDialog('edit')}>{t('item.edit')}</Button>}
               {canWrite && (
                 <Menu position="bottom-end">
                   <Menu.Target><Button variant="default">{t('item.more')}</Button></Menu.Target>
                   <Menu.Dropdown>
-                    <Menu.Item onClick={() => setDialog('edit')}>{t('item.edit')}</Menu.Item>
                     {(['ready', 'in-inspection', 'defective', 'in-repair'] as const).filter((s) => s !== item.status).map((s) => (
                       <Menu.Item key={s} onClick={() => status.mutate(s)}>{t('item.setStatus', { status: t(`status.${s}`) })}</Menu.Item>
                     ))}
@@ -355,7 +356,15 @@ export function ItemPage() {
                   ))}
                 </SimpleGrid>
               </Panel>
-              <Panel title={t('item.qr')}>
+              <Stack gap="lg">
+                <Panel title={t('item.photo')}>
+                  <ItemPhoto id={item.id} editable={canWrite && !retired} />
+                  <Text size="xs" c="dimmed" ta="center">{t('item.sharedFiles')}</Text>
+                </Panel>
+                <Panel title={t('item.documents')}>
+                  <Attachments type="equipment.item-document" id={item.id} editable={canWrite && !retired} hint={t('item.sharedFiles')} />
+                </Panel>
+                <Panel title={t('item.qr')}>
                 <Stack align="center" gap={4}>
                   <QRCodeSVG value={link} size={140} />
                   <Text size="xs" fw={700}>{item.inventoryNumber}</Text>
@@ -364,6 +373,7 @@ export function ItemPage() {
                   <Button size="xs" variant="default" onClick={() => navigate(`/equipment/labels?ids=${item.id}`)}>{t('labels.single')}</Button>
                 </Stack>
               </Panel>
+              </Stack>
             </SimpleGrid>
           </Tabs.Panel>
           <Tabs.Panel value="inspections"><InspectionsTab item={item} canInspect={canInspect && !retired} /></Tabs.Panel>

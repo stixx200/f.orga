@@ -16,12 +16,10 @@ export const DGUV_CATEGORIES: CategoryInput[] = [
   c('ladders', 'Leitern', 'Ladders'),
   c('rescue', 'Rettungsgeräte', 'Rescue equipment'),
   c('electrical', 'Elektro', 'Electrical'),
-  c('ppe', 'Persönliche Schutzausrüstung', 'Personal protective equipment'),
   c('extinguishers', 'Feuerlöscher', 'Fire extinguishers'),
   c('pumps', 'Pumpen', 'Pumps'),
   c('radio', 'Funk und Messgeräte', 'Radio and measuring devices'),
   c('consumables', 'Verbrauchsmaterial', 'Consumables', { tracking: 'stock' }),
-  c('vehicles', 'Fahrzeuge', 'Vehicles'),
 ];
 
 /** Equipment types with inspections per DGUV Grundsatz 305-002 (2021, table 1). */
@@ -41,30 +39,12 @@ export const DGUV_TYPES: EquipmentTypeInput[] = [
   t('cable-reel', 'Leitungsroller', 'Cable reel', 'electrical', [i('electrical', 'Elektrische Prüfung', 'Electrical test', 12, 'electrician')]),
   t('floodlight', 'Strahler', 'Floodlight', 'electrical', [i('electrical', 'Elektrische Prüfung', 'Electrical test', 12, 'electrician')]),
   t('chainsaw', 'Motorsäge', 'Chainsaw', 'rescue', [i('annual', 'Jährliche Prüfung', 'Annual inspection', 12)]),
-  t('helmet', 'Feuerwehrhelm', 'Fire helmet', 'ppe', [i('ppe-check', 'Prüfung PSA', 'PPE inspection', 12)]),
-  t('turnout-gear', 'Schutzkleidung', 'Turnout gear', 'ppe', [i('ppe-check', 'Prüfung PSA', 'PPE inspection', 12)]),
   t('extinguisher', 'Feuerlöscher', 'Fire extinguisher', 'extinguishers', [i('extinguisher-check', 'Prüfung', 'Inspection', 24)]),
   t('portable-pump', 'Tragkraftspritze', 'Portable pump', 'pumps', [i('annual', 'Jährliche Prüfung', 'Annual inspection', 12)]),
   t('handheld-radio', 'Handfunkgerät', 'Handheld radio', 'radio', [i('radio-check', 'Funktionsprüfung', 'Function check', 6, 'user')]),
   t('gas-detector', 'Gasmessgerät', 'Gas detector', 'radio', [i('calibration', 'Kalibrierung nach Hersteller', 'Calibration per manufacturer', 12, 'expert')]),
   t('fuel-can', 'Kraftstoffkanister PE', 'Fuel can PE', 'consumables', [i('can-check', 'Sichtprüfung', 'Visual check', 6)]),
   t('oil-binder', 'Ölbindemittel (Sack)', 'Oil binder (bag)', 'consumables', []),
-  // Vehicles by weight class (permissible total mass). The intervals of the roadworthiness test (HU) and of the safety
-  // inspection (SP) are template values, not legal advice: check them against the registration of each vehicle and
-  // override them per item where they differ. The safety inspection is only in the class over 7.5 t.
-  t('fire-vehicle-light', 'Feuerwehrfahrzeug bis 3,5 t (z. B. KdoW, MTW) – Vorlagewerte prüfen', 'Fire vehicle up to 3.5 t (e.g. command car, crew van) – check template values', 'vehicles', [
-    i('vehicle-annual', 'Jährliche Prüfung (DGUV Vorschrift 70, Grundsatz 305-002)', 'Annual inspection (DGUV regulation 70, principle 305-002)', 12),
-    i('vehicle-hu', 'Hauptuntersuchung (HU)', 'Roadworthiness test', 24, 'expert'),
-  ]),
-  t('fire-vehicle-medium', 'Feuerwehrfahrzeug über 3,5 t bis 7,5 t (z. B. TSF, MLF, ELW 1) – Vorlagewerte prüfen', 'Fire vehicle over 3.5 t up to 7.5 t (e.g. TSF, MLF, ELW 1) – check template values', 'vehicles', [
-    i('vehicle-annual', 'Jährliche Prüfung (DGUV Vorschrift 70, Grundsatz 305-002)', 'Annual inspection (DGUV regulation 70, principle 305-002)', 12),
-    i('vehicle-hu', 'Hauptuntersuchung (HU)', 'Roadworthiness test', 12, 'expert'),
-  ]),
-  t('fire-vehicle', 'Feuerwehrfahrzeug über 7,5 t – Vorlagewerte prüfen', 'Fire vehicle over 7.5 t – check template values', 'vehicles', [
-    i('vehicle-annual', 'Jährliche Prüfung (DGUV Vorschrift 70, Grundsatz 305-002)', 'Annual inspection (DGUV regulation 70, principle 305-002)', 12),
-    i('vehicle-hu', 'Hauptuntersuchung (HU)', 'Roadworthiness test', 12, 'expert'),
-    i('vehicle-safety', 'Sicherheitsprüfung (SP)', 'Safety inspection', 6, 'expert'),
-  ]),
 ];
 
 /**

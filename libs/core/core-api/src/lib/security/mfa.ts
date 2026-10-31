@@ -170,6 +170,11 @@ export class MfaService {
     return { elevatedUntil: elevatedUntil.toISOString() };
   }
 
+  /** Whether the brigade still asks for the second factor (`security.mfaEnabled`). */
+  enabled(): Promise<boolean> {
+    return this.auth.securitySettings().then((settings) => settings.mfaEnabled);
+  }
+
   /** Ends the confirmation of the session early. */
   async endStepUp(current: AuthenticatedUser): Promise<void> {
     if (current.sessionId) await this.em.fork().nativeUpdate(Session, { id: current.sessionId }, { elevatedUntil: null });
@@ -264,10 +269,11 @@ export class MfaService {
 export class MfaController {
   constructor(private readonly mfa: MfaService) {}
 
-  /** `204` while the session is confirmed, otherwise `403 auth.stepUpRequired` (the UI asks for the code then). */
+  /** `204` while the session is confirmed or the second factor is switched off, otherwise `403 auth.stepUpRequired`. */
   @Get('step-up')
   @HttpCode(204)
-  check(@CurrentUser() user: AuthenticatedUser): void {
+  async check(@CurrentUser() user: AuthenticatedUser): Promise<void> {
+    if (!(await this.mfa.enabled())) return;
     if (!user.elevatedUntil) throw user.stepUpRequired();
   }
 

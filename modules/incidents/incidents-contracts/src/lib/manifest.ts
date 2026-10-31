@@ -14,6 +14,13 @@ export const INCIDENTS_MANIFEST = {
       scope: 'department',
     },
     {
+      id: 'incidents.reports.delete',
+      name: { de: 'Einsatzberichte löschen', en: 'Delete incident reports' },
+      scope: 'brigade',
+      // Not part of `incidents.*`: only the administrator role (`*`) has it, unless a role lists the id itself.
+      explicit: true,
+    },
+    {
       id: 'incidents.reports.review',
       name: { de: 'Einsatzberichte vorprüfen (zurückgeben, Verfasser erinnern)', en: 'Pre-review incident reports (return, remind authors)' },
       scope: 'department',
