@@ -10,9 +10,9 @@ test('fitness overview, evidence in the person file and quick entry', async ({ b
   await expect(page.getByRole('heading', { name: 'Atemschutztauglichkeit', level: 1 })).toBeVisible();
 
   // Filter by the red tile and open the first person.
-  await page.getByRole('button', { name: /Nicht einsetzen/ }).click();
+  await page.getByRole('button', { name: /Nicht tauglich/ }).click();
   const first = page.getByRole('row').nth(1);
-  await expect(first.getByText('Nicht einsetzen')).toBeVisible();
+  await expect(first.getByText('Nicht tauglich')).toBeVisible();
   await first.click();
   await expect(page).toHaveURL(/\/masterdata\/persons\//);
   await page.getByRole('tab', { name: 'Atemschutz' }).click();

@@ -1,7 +1,9 @@
-import { Button, FileInput, Group, Text } from '@mantine/core';
+import { ActionIcon, Button, FileInput, Group, Text, Tooltip } from '@mantine/core';
+import { IconNfc } from '@tabler/icons-react';
+import { type CSSProperties, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import type { Defect, ItemStatus } from '@forga/equipment-contracts';
 import { formatDate, upload, useLocalized, useTranslation } from '@forga/web-sdk';
-import { Attachments, ResponsiveDialog, StatusBadge, type Tone } from '@forga/web-ui';
+import { Attachments, CodeInput, nfcSupported, readNfc, ResponsiveDialog, StatusBadge, type Tone } from '@forga/web-ui';
 import { useDueSoon } from './api';
 
 const TONES: Record<ItemStatus, Tone> = { ready: 'done', 'in-inspection': 'primary', defective: 'error', 'in-repair': 'warning', retired: 'neutral' };
@@ -46,3 +48,78 @@ export function DefectPhotoInput({ value, onChange }: { value: File | null; onCh
 }
 
 export const uploadDefectPhoto = (defectId: string, photo: File | null) => (photo ? upload(`core/attachments?type=equipment.defect&id=${defectId}`, photo) : Promise.resolve(null));
+
+/** Protocol of an inspection (PDF or photo); uploaded after the inspection has been created. */
+export function ProtocolInput({ value, onChange }: { value: File | null; onChange: (file: File | null) => void }) {
+  const { t } = useTranslation('equipment');
+  return <FileInput label={t('inspection.protocol')} placeholder={t('inspection.protocolPlaceholder')} accept="application/pdf,image/png,image/jpeg,image/webp" value={value} onChange={onChange} clearable />;
+}
+
+export const uploadInspectionProtocol = (inspectionId: string, file: File | null) =>
+  file ? upload(`core/attachments?type=equipment.inspection&id=${inspectionId}`, file) : Promise.resolve(null);
+
+/**
+ * Field for scanning items: hand scanners and RFID readers type into it and end with Enter, the phone camera and
+ * NFC fill it at once. Each code is passed on and the field is cleared.
+ */
+export function ScanField({ onCode, ...props }: { onCode: (code: string) => void; label?: string; style?: CSSProperties }) {
+  const { t } = useTranslation('equipment');
+  const { t: common } = useTranslation('common');
+  const [value, setValue] = useState('');
+  const [reading, setReading] = useState<AbortController | null>(null);
+  const report = useRef(onCode);
+  useEffect(() => {
+    report.current = onCode;
+  });
+  useEffect(() => () => reading?.abort(), [reading]);
+  const submit = (code: string) => {
+    if (code.trim()) report.current(code.trim());
+    setValue('');
+  };
+  const change = (next: string) => {
+    if (next.length - value.length > 1) submit(next);
+    else setValue(next);
+  };
+  const nfc = () => {
+    if (reading) {
+      reading.abort();
+      setReading(null);
+      return;
+    }
+    const controller = new AbortController();
+    setReading(controller);
+    readNfc(controller.signal)
+      .then(submit)
+      .catch(() => undefined)
+      .finally(() => {
+        controller.abort();
+        setReading(null);
+      });
+  };
+  return (
+    <Group gap="xs" align="end" wrap="nowrap" style={props.style}>
+      <CodeInput
+        label={props.label ?? t('scan.label')}
+        placeholder={t('scan.placeholder')}
+        value={value}
+        onChange={change}
+        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submit(value);
+          }
+        }}
+        source="camera"
+        style={{ flex: 1 }}
+      />
+      {nfcSupported() && (
+        <Tooltip label={reading ? common('codes.nfcWaiting') : common('codes.nfc')}>
+          <ActionIcon size="lg" mb={2} variant={reading ? 'filled' : 'default'} onClick={nfc} aria-label={common('codes.nfc')}>
+            <IconNfc size={18} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+    </Group>
+  );
+}
+

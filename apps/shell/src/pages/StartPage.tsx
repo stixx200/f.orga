@@ -1,4 +1,5 @@
-import { Anchor, Button, Grid, Group, Select, SimpleGrid, Stack, Text } from '@mantine/core';
+import { Anchor, Button, Collapse, Grid, Group, Select, SimpleGrid, Stack, Text, UnstyledButton } from '@mantine/core';
+import { IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -56,6 +57,7 @@ function Onboarding() {
   const { t } = useTranslation('shell');
   const localized = useLocalized();
   const { data = [] } = useQuery({ queryKey: ['core', 'onboarding'], queryFn: () => api<OnboardingItem[]>('core/onboarding') });
+  const [expanded, setExpanded] = useState(true);
   const open = data.filter((item) => !item.done);
   if (!open.length) return null;
   const label = (item: OnboardingItem) =>
@@ -65,17 +67,28 @@ function Onboarding() {
         item.label
         ? localized(item.label)
         : t(`onboarding.items.${item.key}`);
+  const Chevron = expanded ? IconChevronDown : IconChevronRight;
   return (
-    <Panel title={t('onboarding.title')} aside={<Text size="xs" c="dimmed">{t('onboarding.done', { done: data.length - open.length, total: data.length })}</Text>}>
-      <Text size="sm" mb="xs">{t('onboarding.intro')}</Text>
-      <Stack gap={6}>
-        {open.map((item) => (
-          <Group key={item.key} justify="space-between" wrap="nowrap" gap="sm">
-            <Text size="sm">{label(item)}</Text>
-            <Button component={Link} to={item.to} size="compact-xs" variant="default" style={{ flexShrink: 0 }}>{t('onboarding.open')}</Button>
-          </Group>
-        ))}
-      </Stack>
+    <Panel
+      title={
+        <UnstyledButton onClick={() => setExpanded((e) => !e)} aria-expanded={expanded} style={{ font: 'inherit', color: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Chevron size={18} />
+          {t('onboarding.title')}
+        </UnstyledButton>
+      }
+      aside={<Text size="xs" c="dimmed">{t('onboarding.done', { done: data.length - open.length, total: data.length })}</Text>}
+    >
+      <Collapse expanded={expanded}>
+        <Text size="sm" mb="xs">{t('onboarding.intro')}</Text>
+        <Stack gap={6}>
+          {open.map((item) => (
+            <Group key={item.key} justify="space-between" wrap="nowrap" gap="sm">
+              <Text size="sm">{label(item)}</Text>
+              <Button component={Link} to={item.to} size="compact-xs" variant="default" style={{ flexShrink: 0 }}>{t('onboarding.open')}</Button>
+            </Group>
+          ))}
+        </Stack>
+      </Collapse>
     </Panel>
   );
 }

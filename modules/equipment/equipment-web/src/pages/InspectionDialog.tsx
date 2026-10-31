@@ -5,6 +5,7 @@ import type { Inspection, InspectionInput, InspectionResult, Item } from '@forga
 import { localDate, send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { Notice, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { keys, usePersons } from '../api';
+import { ProtocolInput, uploadInspectionProtocol } from '../parts';
 
 /** The day after an ISO date (earliest next due date). */
 const dayAfter = (date: string) => {
@@ -35,15 +36,20 @@ export function InspectionDialog({ item, inspectionKey, inspection, onClose }: {
     notes: inspection?.notes ?? '',
   }));
   const [reason, setReason] = useState('');
+  const [protocol, setProtocol] = useState<File | null>(null);
   const type = item.inspections.find((x) => x.key === form.inspectionKey);
   const [points, setPoints] = useState<Record<string, 'ok' | 'not-ok'>>(() => Object.fromEntries((inspection?.checklist ?? []).map((c) => [c.point, c.state === 'not-ok' ? 'not-ok' : 'ok'])));
   const failed = form.result === 'failed';
   const body = { ...form, nextDueOn: failed ? null : form.nextDueOn, checklist: (type?.checklist ?? []).map((point) => ({ point, state: points[point] ?? 'ok', value: '' })) };
   const save = useAction(
-    () => {
-      if (!inspection) return send('POST', `equipment/items/${item.id}/inspections`, body);
-      const { inspectionKey: _key, ...correction } = body;
-      return send('PUT', `equipment/inspections/${inspection.id}`, { ...correction, reason });
+    async () => {
+      if (inspection) {
+        const { inspectionKey: _key, ...correction } = body;
+        return send('PUT', `equipment/inspections/${inspection.id}`, { ...correction, reason });
+      }
+      const created = await send<Inspection>('POST', `equipment/items/${item.id}/inspections`, body);
+      await uploadInspectionProtocol(created.id, protocol);
+      return created;
     },
     { success: t(inspection ? 'inspection.corrected' : 'inspection.saved'), invalidate: [keys.all], onSuccess: onClose },
   );
@@ -86,6 +92,7 @@ export function InspectionDialog({ item, inspectionKey, inspection, onClose }: {
           {!failed && <DateInput label={t('inspection.nextDue')} description={t('inspection.nextDueHint')} value={form.nextDueOn} onChange={(v) => setForm({ ...form, nextDueOn: v })} valueFormat="DD.MM.YYYY" minDate={dayAfter(form.date)} clearable />}
         </SimpleGrid>
         <Textarea label={t('inspection.notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.currentTarget.value })} autosize minRows={2} />
+        {!inspection && <ProtocolInput value={protocol} onChange={setProtocol} />}
         {inspection && <TextInput label={t('inspection.reason')} description={t('inspection.correctHint')} value={reason} onChange={(e) => setReason(e.currentTarget.value)} required />}
       </Stack>
     </ResponsiveDialog>

@@ -13,6 +13,13 @@ test('administrator switches a module off and on; setup list on the start page',
   await expect(setup).toBeVisible();
   await expect(page.getByText(/^\d+ von \d+ erledigt$/)).toBeVisible();
   await expect(setup.getByText(/^Einstellungen prüfen: /).first()).toBeVisible();
+  const toggle = page.getByRole('button', { name: 'Einrichtung' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByText('Bevor alle mit f.orga arbeiten, fehlt noch:')).toBeHidden();
+  await toggle.click();
+  await expect(page.getByText('Bevor alle mit f.orga arbeiten, fehlt noch:')).toBeVisible();
   await setup.getByRole('link', { name: 'Einrichten' }).first().click();
   await expect(page).not.toHaveURL(/\/$/);
 

@@ -1,3 +1,4 @@
+import type { LocalizedText } from '@forga/core-contracts';
 import type { RecordKind, SessionCategory, SessionCompensation } from './session.js';
 
 /**
@@ -22,9 +23,28 @@ export interface SessionReference {
   status: 'planned' | 'held' | 'closed';
 }
 
+/** A session as the person may see it on a personal access link: title, time and attendance, no excuse note. */
+export interface PersonalSession {
+  startsAt: string;
+  title: string;
+  status: 'present' | 'excused' | 'absent';
+}
+
+/** One of the next sessions of the person's departments. */
+export interface PersonalUpcoming {
+  startsAt: string;
+  endsAt: string;
+  title: string;
+  typeName: LocalizedText;
+}
+
 export interface TrainingSessions {
   /** The given sessions; unknown IDs are omitted. */
   sessions(sessionIds: readonly string[]): Promise<SessionReference[]>;
+  /** Newest sessions the person is recorded on, at most 15. */
+  recentForPerson(personId: string): Promise<PersonalSession[]>;
+  /** The next sessions of these departments that have not ended, at most 10, soonest first. */
+  upcomingForDepartments(departmentIds: readonly string[]): Promise<PersonalUpcoming[]>;
 }
 
 export const TRAINING_EVENTS = {

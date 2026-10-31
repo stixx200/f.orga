@@ -179,8 +179,20 @@ export type PersonRespiratoryProtection = z.infer<typeof PersonRespiratoryProtec
  */
 export const RESPIRATORY_PROTECTION_FITNESS = 'respiratory-protection.Fitness';
 
+/**
+ * Fitness a person may see about themselves: the traffic light, the next deadline, evidence, and examinations
+ * without medical detail (no examiner, no restrictions, no note).
+ */
+export interface PersonalFitnessView {
+  color: FitnessColor;
+  nextDue: string | null;
+  evidence: { kind: string; date: string; validUntil: string | null; passed: boolean | null }[];
+  examinations: { date: string; validUntil: string | null; result: ExaminationResult | null }[];
+}
+
 export interface FitnessLookup {
   colors(personIds: readonly string[], date: string): Promise<Map<string, FitnessColor>>;
+  personalView(personId: string): Promise<PersonalFitnessView | null>;
 }
 
 export const RESPIRATORY_PROTECTION_EVENTS = { statusChanged: 'respiratory-protection.status.changed' } as const;

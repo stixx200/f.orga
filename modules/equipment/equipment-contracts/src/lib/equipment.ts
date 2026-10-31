@@ -189,6 +189,10 @@ export type InspectionInput = z.input<typeof InspectionInput>;
 export const BulkInspectionInput = InspectionInput.omit({ checklist: true, nextDueOn: true }).extend({ itemIds: z.array(z.uuid()).min(1) });
 export type BulkInspectionInput = z.input<typeof BulkInspectionInput>;
 
+/** Recorded inspections of a bulk booking; `ids` so a protocol can be attached to each. */
+export const BulkInspectionResult = z.object({ recorded: z.number().int(), ids: z.array(z.uuid()) });
+export type BulkInspectionResult = z.infer<typeof BulkInspectionResult>;
+
 export const Inspection = z.object({
   id: z.uuid(),
   itemId: z.uuid(),
