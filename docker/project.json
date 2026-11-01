@@ -2,19 +2,23 @@
   "name": "@forga/image",
   "$schema": "../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
+  "tags": ["scope:ops", "type:image"],
+  "release": {
+    "docker": {
+      "repositoryName": "stixx200/f.orga"
+    }
+  },
   "targets": {
-    "docker-build": {
-      "executor": "nx:run-commands",
+    "docker:build": {
       "cache": false,
-      "options": {
-        "command": "docker build -f docker/Dockerfile -t forga:local ."
-      },
+      "dependsOn": [],
       "configurations": {
         "ci": {
-          "command": "docker buildx build -f docker/Dockerfile -t forga:local --load --cache-from=type=gha --cache-to=type=gha,mode=max ."
+          "command": "docker buildx build -f docker/Dockerfile --tag docker --tag forga:local --load --cache-from=type=gha --cache-to=type=gha,mode=max .",
+          "cwd": ".",
+          "args": []
         }
       }
     }
-  },
-  "tags": ["scope:ops", "type:image"]
+  }
 }

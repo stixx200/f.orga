@@ -250,15 +250,27 @@ Indizes, die MikroORM nicht aus Eigenschaften ableiten kann (z. B. partielle Ind
 
 ## CI
 
-`.github/workflows/ci.yml` läuft bei jedem Push auf `main` und bei Pull Requests in einem Job (Nx Cloud Remote Cache und Workers wenn erreichbar, sonst derselbe Lauf auf dem Runner; `nx-cloud fix-ci`):
+`.github/workflows/ci.yml` läuft bei jedem Push auf `main` und bei Pull Requests in einem Job. Es versucht zuerst **Nx Cloud DTE** (`start-ci-run` + API-Check). Ist die Organisation erreichbar, verteilen Workers die Aufgaben (`.nx/workflows/distribution.yaml`) und danach läuft `nx-cloud fix-ci`. Schlägt Cloud fehl oder ist die Repository-Variable `FORGA_CI_FORCE_LOCAL=true`, setzt CI `NX_NO_CLOUD=true` und läuft auf dem **GitHub-Runner** (Service `postgres:17`, Playwright, PostgreSQL-17-Client; Integration und `e2e-ci` nacheinander wegen Port 3100).
 
-1. Playwright Chromium und PostgreSQL-17-Client auf dem GitHub-Runner plus Service-Container `postgres:17` (Fallback, wenn keine Workers laufen)
-2. Lint und Modulgrenzen (auf dem Runner)
-3. `nx affected` für Typprüfung, Unit-Tests, Build, Integrationstests und Atomizer-`e2e-ci` (Verteilung in `.nx/workflows/distribution.yaml`: JS-Workers für typecheck/test/build, Playwright-Workers mit PostgreSQL 17 für `integration` und `e2e-ci`; ohne Cloud alles auf dem Runner)
+Ablauf:
+
+1. Playwright Chromium und PostgreSQL-17-Client auf dem Runner plus Service-Container `postgres:17`
+2. Lint und Modulgrenzen
+3. `nx affected` für Typprüfung, Unit-Tests, Build, Integrationstests und Atomizer-`e2e-ci`
 4. Typprüfung der Quellen auf Workspace-Ebene (`tools/typecheck-sources.mjs`)
-5. Docker-Image über das Nx-Ziel `@forga/image:docker-build` auf dem Runner (`--no-agents`; Workers haben keinen Docker-Daemon). Veröffentlichen nach `main` bleibt in `.github/workflows/image.yml`.
+5. Docker-Image über das Nx-Ziel `@forga/image:docker:build` (Konfiguration `ci`) auf dem Runner (`--no-agents`; Workers haben keinen Docker-Daemon). Veröffentlichen nach `main` bleibt in `.github/workflows/image.yml`.
 
-Details zu den E2E-Shards stehen unter [E2E-Tests – CI](#ci). Lokal: `pnpm exec nx run @forga/image:docker-build`.
+Details zu den E2E-Shards stehen unter [E2E-Tests – CI](#ci). Lokal: `pnpm exec nx run @forga/image:"docker:build"`.
+
+## Release
+
+Versions-Tags und das Produktions-Image entstehen mit Nx Release (feste Semver-Version für den Workspace, Image nach `ghcr.io/stixx200/f.orga`). Private Workspace-Pakete werden nicht nach npm veröffentlicht.
+
+1. Bei GitHub Container Registry anmelden: `docker login ghcr.io` (Benutzername und Personal Access Token mit `write:packages`).
+2. Trockenlauf: `pnpm exec nx release --dry-run --first-release` (beim ersten Release) bzw. `pnpm exec nx release --dry-run`.
+3. Release ausführen: `pnpm exec nx release --first-release` bzw. `pnpm exec nx release` (fragt nach Bestätigung; mit `--yes` ohne Rückfrage).
+
+Das Image wird vorher gebaut (`preVersionCommand` → `@forga/image:docker:build`), mit `ghcr.io/stixx200/f.orga:X.Y.Z` getaggt und veröffentlicht. Git-Tag: `vX.Y.Z`. Fortlaufende Tags `:main` / `:<Commit>` kommen weiter aus `.github/workflows/image.yml`, siehe [Betrieb](betrieb.md).
 
 ## Neues Modul anlegen
 
