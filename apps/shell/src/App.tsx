@@ -90,7 +90,7 @@ function ListsRoute() {
   return <ListsPage modules={useModules()} />;
 }
 
-function RolesRoute({ session }: { session: Session }) {
+function RolesRoute() {
   return <RolesPage modules={useModules()} />;
 }
 
@@ -125,7 +125,7 @@ function Router({ active, session }: { active: ActiveModule[]; session: Session 
             { path: 'scan', element: <ScanPage /> },
             { path: 'import', element: <ImportPage /> },
             { path: 'admin/users', element: <Guard session={session} permission="core.users.manage"><UsersPage /></Guard> },
-            { path: 'admin/roles', element: <Guard session={session} permission="core.roles.manage"><RolesRoute session={session} /></Guard> },
+            { path: 'admin/roles', element: <Guard session={session} permission="core.roles.manage"><RolesRoute /></Guard> },
             { path: 'admin/modules', element: <ModulesRoute session={session} /> },
             { path: 'admin/tokens', element: <Guard session={session} permission="core.tokens.manage"><TokensPage /></Guard> },
             { path: 'admin/settings', element: <Guard session={session} permission="core.settings.manage"><SettingsRoute /></Guard> },
