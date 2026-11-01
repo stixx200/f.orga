@@ -37,8 +37,8 @@ beforeAll(async () => {
 afterAll(() => test?.app.close());
 
 describe('clothing store', () => {
-  it('adds the article template once; the catalog needs the brigade-wide right', async () => {
-    // The clothing officer of one department may not change the shared catalog.
+  it('adds the article template once; the catalog needs clothing.settings.manage brigade-wide', async () => {
+    // The clothing officer of one department does not get the brigade-scoped settings right.
     await post('/clothing/articles/template', {}, officer).expect(403);
     expect((await post('/clothing/articles/template', {}).expect(201)).body.added).toBeGreaterThan(5);
     expect((await post('/clothing/articles/template', {}).expect(201)).body.added).toBe(0);

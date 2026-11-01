@@ -62,7 +62,8 @@ export function useItemAccess() {
     /** Anywhere: bulk booking is offered (recording, marking due, or moving). */
     booksAnything: can(session, INSPECT) || can(session, BREATHING_INSPECT) || can(session, TRIGGER) || can(session, WRITE) || can(session, BREATHING_WRITE),
     recordsAnything: can(session, INSPECT) || can(session, BREATHING_INSPECT),
-    movesAnything: can(session, WRITE) || can(session, BREATHING_WRITE),
+    // Place moves in Sammelbuchungen: maintain, or mark-due (warehouse PC without full write).
+    movesAnything: can(session, WRITE) || can(session, BREATHING_WRITE) || can(session, TRIGGER),
   };
 }
 

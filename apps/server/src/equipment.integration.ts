@@ -550,4 +550,31 @@ describe('equipment', () => {
     await post('/equipment/items', { inventoryNumber: 'SP-1', name: 'Reserve', categoryKey: 'spare', departmentId: ids.musterstadt }).expect(201);
     expect((await del(`/equipment/categories/${parent.id}`).expect(400)).body.code).toBe('equipment.categoryInUse');
   });
+
+  it('lets mark-due move places in bulk without write, import, lists or defect reporting', async () => {
+    const roles = (await get('/core/roles')).body as { id: string; templateKey: string }[];
+    const dueRole = roles.find((r) => r.templateKey === 'equipment-due')!.id;
+    await post('/core/users', { username: 'faellig', displayName: 'Fällig', password: 'auch-sehr-geheim', roles: [{ roleId: dueRole, departmentId: null }] }).expect(201);
+    const due = await test.login({ username: 'faellig', password: 'auch-sehr-geheim' });
+    const hoseId = (
+      await post(
+        '/equipment/items',
+        { inventoryNumber: 'S-B-0099', name: 'B-Schlauch Lager', typeKey: 'pressure-hose-b', categoryKey: 'hoses', departmentId: ids.musterstadt, quantity: 1 },
+        officer,
+      ).expect(201)
+    ).body.id as string;
+
+    const hose = (await get(`/equipment/items/${hoseId}`, due).expect(200)).body;
+    await put(`/equipment/items/${hoseId}`, { ...hose, name: 'Umbenannt' }, due).expect(403);
+    await post(`/equipment/items/${hoseId}/defects`, { description: 'Riss am Schlauch' }, due).expect(403);
+    await get('/core/lists/equipment.inventory', due).expect(404);
+    expect((await get('/core/imports/profiles', due).expect(200)).body).toEqual([]);
+
+    expect(
+      (await post('/equipment/inspections/bulk', { itemIds: [hoseId], categoryKey: 'hoses', place: { location: 'Gesamtlager', loadingPlace: 'Regal B' } }, due).expect(200)).body,
+    ).toMatchObject({ moved: 1 });
+    expect((await get(`/equipment/items/${hoseId}`, due).expect(200)).body).toMatchObject({ location: 'Gesamtlager', loadingPlace: 'Regal B' });
+
+    await post(`/equipment/items/${hoseId}/trigger`, { inspectionKey: 'hose-washing' }, due).expect(200);
+  });
 });

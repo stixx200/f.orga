@@ -6,7 +6,7 @@ import { type AuthenticatedUser, berlinDate, type ListDefinition, SettingsServic
 import { EquipmentSettings, type Item } from '@forga/equipment-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { CategoryEntity, InspectionEntity } from '../equipment.entities.js';
-import { defectText, ItemsService, READ, RESULT_NAMES as RESULT } from '../items/items.service.js';
+import { defectText, ItemsService, WRITE, RESULT_NAMES as RESULT } from '../items/items.service.js';
 
 const col = (key: string, de: string, en: string, width?: number, align?: ListColumn['align']): ListColumn => ({ key, label: { de, en }, ...(width ? { width } : {}), ...(align ? { align } : {}) });
 const department = { key: 'departmentId', label: { de: 'Abteilung', en: 'Department' }, type: 'department' as const };
@@ -48,7 +48,7 @@ export class EquipmentLists {
     return {
       id: 'equipment.due',
       name: { de: 'Fällige Prüfungen', en: 'Inspections due' },
-      permission: READ,
+      permission: WRITE,
       parameters: [{ key: 'until', label: { de: 'Fällig bis', en: 'Due until' }, type: 'date' }, department],
       schema: Filter,
       orientation: 'landscape',
@@ -73,7 +73,7 @@ export class EquipmentLists {
     return {
       id: 'equipment.inventory',
       name: { de: 'Inventarliste', en: 'Inventory' },
-      permission: READ,
+      permission: WRITE,
       parameters: [department],
       schema: Filter,
       orientation: 'landscape',
@@ -92,7 +92,7 @@ export class EquipmentLists {
       id: 'equipment.loading',
       name: { de: 'Beladeliste', en: 'Loading list' },
       description: { de: 'Beladung je Fahrzeug nach Beladeplatz', en: 'Equipment per vehicle by loading place' },
-      permission: READ,
+      permission: WRITE,
       parameters: [department],
       schema: Filter,
       signatureColumn: true,
@@ -113,7 +113,7 @@ export class EquipmentLists {
     return {
       id: 'equipment.inspections',
       name: { de: 'Prüfhistorie', en: 'Inspection history' },
-      permission: READ,
+      permission: WRITE,
       personalData: 'names',
       parameters: [{ key: 'from', label: { de: 'Von', en: 'From' }, type: 'date' }, { key: 'to', label: { de: 'Bis', en: 'To' }, type: 'date' }, department],
       schema: Filter,
@@ -148,7 +148,7 @@ export class EquipmentLists {
       id: 'equipment.inspection-report',
       name: { de: 'Prüfprotokoll', en: 'Inspection report' },
       description: { de: 'Eine Prüfung oder alle Prüfungen eines Tages mit Checkliste, Messwerten und Unterschrift', en: 'One inspection or all inspections of a day with checklist, measurements and signature' },
-      permission: READ,
+      permission: WRITE,
       personalData: 'names',
       parameters: [{ key: 'date', label: { de: 'Tag', en: 'Day' }, type: 'date' }, department, {
           key: 'inspectionId',
@@ -213,7 +213,7 @@ export class EquipmentLists {
     return {
       id: 'equipment.defects',
       name: { de: 'Offene Mängel', en: 'Open defects' },
-      permission: READ,
+      permission: WRITE,
       personalData: 'names',
       parameters: [department],
       schema: Filter,
@@ -229,7 +229,7 @@ export class EquipmentLists {
     return {
       id: 'equipment.retired',
       name: { de: 'Ausgesonderte Geräte', en: 'Retired equipment' },
-      permission: READ,
+      permission: WRITE,
       parameters: [{ key: 'from', label: { de: 'Von', en: 'From' }, type: 'date' }, { key: 'to', label: { de: 'Bis', en: 'To' }, type: 'date' }, department],
       schema: Filter,
       columns: [col('date', 'Datum', 'Date'), col('number', 'Inventar-Nr.', 'Inventory no.'), col('name', 'Gerät', 'Item', 2), col('reason', 'Grund', 'Reason', 2), col('disposition', 'Verbleib', 'Disposition', 1.5)],
@@ -246,7 +246,7 @@ export class EquipmentLists {
     return {
       id: 'equipment.stock',
       name: { de: 'Bestand (Schläuche, Verbrauchsmaterial)', en: 'Stock (hoses, consumables)' },
-      permission: READ,
+      permission: WRITE,
       parameters: [department],
       schema: Filter,
       columns: [col('category', 'Kategorie', 'Category'), col('name', 'Art', 'Kind', 2), col('place', 'Standort', 'Location', 1.5), col('quantity', 'Menge', 'Qty', 0.7, 'right')],

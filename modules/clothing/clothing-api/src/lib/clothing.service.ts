@@ -37,6 +37,7 @@ import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity
 export const READ = 'clothing.read';
 export const ISSUE = 'clothing.issue';
 export const MANAGE = 'clothing.manage';
+export const SETTINGS = 'clothing.settings.manage';
 export const SELF = 'clothing.self';
 
 type Parsed<T extends { parse: (v: unknown) => unknown }> = ReturnType<T['parse']>;
@@ -142,7 +143,7 @@ export class ClothingService {
   }
 
   async createArticle(user: AuthenticatedUser, input: Parsed<typeof ArticleInput>): Promise<Article> {
-    this.requireBrigade(user, MANAGE);
+    this.requireBrigade(user, SETTINGS);
     const em = this.em.fork();
     if (await em.count(ArticleEntity, { key: input.key })) throw new ConflictException({ code: 'clothing.articleKeyTaken', key: input.key });
     const article = em.create(ArticleEntity, this.articleFields(input));
@@ -151,7 +152,7 @@ export class ClothingService {
   }
 
   async updateArticle(user: AuthenticatedUser, id: string, input: Parsed<typeof ArticleInput>): Promise<Article> {
-    this.requireBrigade(user, MANAGE);
+    this.requireBrigade(user, SETTINGS);
     const em = this.em.fork();
     const article = await em.findOne(ArticleEntity, id);
     if (!article) throw new NotFoundException();
@@ -165,7 +166,7 @@ export class ClothingService {
 
   /** Adds the articles of the template whose key is missing. */
   async applyTemplate(user: AuthenticatedUser): Promise<{ added: number }> {
-    this.requireBrigade(user, MANAGE);
+    this.requireBrigade(user, SETTINGS);
     const em = this.em.fork();
     const existing = new Set((await em.find(ArticleEntity, {})).map((a) => a.key));
     const missing = ARTICLE_TEMPLATE.filter((a) => !existing.has(a.key));

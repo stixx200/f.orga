@@ -546,7 +546,11 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
         await this.assertLocation(place.location);
         for (const item of items) {
           if (item.status === 'retired') throw new ConflictException({ code: 'equipment.retired' });
-          this.requireMay(user, 'write', item, breathing.has(item.categoryKey));
+          // Place moves in bulk booking: maintain (`write`) or mark due (`trigger`, warehouse PC).
+          const breathingItem = breathing.has(item.categoryKey);
+          if (!this.may(user, 'write', item, breathingItem) && !this.may(user, 'trigger', item, breathingItem)) {
+            throw new ForbiddenException({ code: 'auth.forbidden', permissions: [WRITE, BREATHING_WRITE, TRIGGER, INSPECT, BREATHING_INSPECT] });
+          }
           item.stationId = place.stationId;
           item.vehicleId = place.vehicleId;
           item.location = place.location;
