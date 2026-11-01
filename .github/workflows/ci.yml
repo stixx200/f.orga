@@ -29,7 +29,7 @@ jobs:
       FORGA_TOTP_FILE: dist/e2e/totp.json
       FORGA_TOTP_USED_FILE: dist/e2e/totp-used.json
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           filter: tree:0
@@ -38,13 +38,13 @@ jobs:
       # https://nx.dev/ci/features/split-e2e-tasks
       - run: npx nx-cloud@latest start-ci-run --distribute-on=".nx/workflows/distribution.yaml" --stop-agents-after="typecheck,test,build,integration,e2e-ci,docker-build"
       - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: nrwl/nx-set-shas@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: nrwl/nx-set-shas@v5
+      - uses: docker/setup-buildx-action@v4
       - name: Lint and module boundaries
         run: pnpm run lint
       - name: Typecheck, unit tests, build, integration and e2e-ci
@@ -56,7 +56,7 @@ jobs:
         run: pnpm exec nx run @forga/image:docker-build:ci --no-agents
       - name: E2E report and traces
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-report
           path: |
