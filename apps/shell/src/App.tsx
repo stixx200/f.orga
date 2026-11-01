@@ -1,9 +1,9 @@
-import { Alert } from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
-import { type ComponentType, type ReactNode, useEffect, useMemo } from 'react';
-import { createBrowserRouter, RouterProvider } from 'react-router';
-import type { Session } from '@forga/core-contracts';
-import { ApiError, can, currentLanguage, extensionsOf, setLanguage, useMaintenance, useSession, useSetupState, useTranslation } from '@forga/web-sdk';
+import { Alert, Loader } from '@mantine/core';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { type ComponentType, createContext, type ReactNode, Suspense, lazy, useContext, useEffect, useMemo } from 'react';
+import { createBrowserRouter, RouterProvider, useRoutes, type RouteObject } from 'react-router';
+import type { ActiveModule, Session } from '@forga/core-contracts';
+import { ApiError, can, currentLanguage, extensionsOf, setLanguage, useLocalized, useMaintenance, useSession, useSetupState, useTranslation } from '@forga/web-sdk';
 import { EmptyState } from '@forga/web-ui';
 import { LoginPage } from './auth/LoginPage';
 import { MaintenancePage } from './auth/MaintenancePage';
@@ -15,20 +15,34 @@ import { AppFrame } from './frame/AppFrame';
 import { SplashScreen } from './frame/SplashScreen';
 import { StageBand } from './frame/StageBand';
 import { moduleSettings } from './frame/Sidebar';
-import { KIOSK_PATHS, type LoadedModule, loadKiosk, loadModules } from './modules';
-import { AuditPage } from './pages/admin/AuditPage';
-import { ModulesPage } from './pages/admin/ModulesPage';
-import { RetentionPage } from './pages/admin/RetentionPage';
-import { RolesPage } from './pages/admin/RolesPage';
-import { SettingsPage } from './pages/admin/SettingsPage';
-import { TokensPage } from './pages/admin/TokensPage';
-import { UsersPage } from './pages/admin/UsersPage';
-import { ImportPage } from './pages/ImportPage';
-import { ListsPage } from './pages/ListsPage';
-import { MyAreaPage } from './pages/MyAreaPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { ScanPage } from './pages/ScanPage';
+import {
+  KIOSK_PATHS,
+  type LoadedModule,
+  fetchActiveModules,
+  loadKiosk,
+  loadModuleFrontend,
+  moduleFrontendQueryKey,
+} from './modules';
 import { StartPage } from './pages/StartPage';
+
+const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const MyAreaPage = lazy(() => import('./pages/MyAreaPage').then((m) => ({ default: m.MyAreaPage })));
+const ListsPage = lazy(() => import('./pages/ListsPage').then((m) => ({ default: m.ListsPage })));
+const ScanPage = lazy(() => import('./pages/ScanPage').then((m) => ({ default: m.ScanPage })));
+const ImportPage = lazy(() => import('./pages/ImportPage').then((m) => ({ default: m.ImportPage })));
+const UsersPage = lazy(() => import('./pages/admin/UsersPage').then((m) => ({ default: m.UsersPage })));
+const RolesPage = lazy(() => import('./pages/admin/RolesPage').then((m) => ({ default: m.RolesPage })));
+const ModulesPage = lazy(() => import('./pages/admin/ModulesPage').then((m) => ({ default: m.ModulesPage })));
+const TokensPage = lazy(() => import('./pages/admin/TokensPage').then((m) => ({ default: m.TokensPage })));
+const SettingsPage = lazy(() => import('./pages/admin/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const AuditPage = lazy(() => import('./pages/admin/AuditPage').then((m) => ({ default: m.AuditPage })));
+const RetentionPage = lazy(() => import('./pages/admin/RetentionPage').then((m) => ({ default: m.RetentionPage })));
+
+const ModulesContext = createContext<LoadedModule[]>([]);
+
+function useModules(): LoadedModule[] {
+  return useContext(ModulesContext);
+}
 
 function NotFound() {
   const { t } = useTranslation('shell');
@@ -41,44 +55,127 @@ function Guard({ session, permission, children }: { session: Session; permission
   return can(session, permission) ? children : <EmptyState title={t('errors.auth.forbidden')} />;
 }
 
-function Router({ modules, session }: { modules: LoadedModule[]; session: Session }) {
+const emptyRoutes: RouteObject[] = [];
+
+/** Loads a module remote on demand and mounts its routes under `/<module-id>/`. */
+function ModuleRoute({ info }: { info: ActiveModule }) {
+  const { t } = useTranslation('shell');
+  const localized = useLocalized();
+  const { data, error, isPending } = useQuery({
+    queryKey: moduleFrontendQueryKey(info.id),
+    queryFn: () => loadModuleFrontend(info),
+    staleTime: Infinity,
+  });
+  const element = useRoutes(data?.web?.routes ?? emptyRoutes);
+  if (error) return <Alert color="brand" title={t('serverUnavailable')}>{error.message}</Alert>;
+  if (isPending || !data) return <Loader m="xl" />;
+  if (data.error) return <Alert color="brand" title={t('moduleUnavailable', { name: localized(info.name) })}>{data.error}</Alert>;
+  if (!data.web) return <NotFound />;
+  return element;
+}
+
+function Frame({ session }: { session: Session }) {
+  return <AppFrame modules={useModules()} session={session} />;
+}
+
+function StartRoute({ session }: { session: Session }) {
+  return <StartPage modules={useModules()} session={session} />;
+}
+
+function ProfileRoute({ session }: { session: Session }) {
+  return <ProfilePage session={session} modules={useModules()} />;
+}
+
+function ListsRoute() {
+  return <ListsPage modules={useModules()} />;
+}
+
+function RolesRoute({ session }: { session: Session }) {
+  return <RolesPage modules={useModules()} />;
+}
+
+function ModulesRoute({ session }: { session: Session }) {
+  const modules = useModules();
+  if (can(session, 'core.modules.manage') || moduleSettings(modules, session).length) {
+    return <ModulesPage modules={modules} session={session} />;
+  }
+  return (
+    <Guard session={session} permission="core.modules.manage">
+      <ModulesPage modules={modules} session={session} />
+    </Guard>
+  );
+}
+
+function SettingsRoute() {
+  return <SettingsPage modules={useModules()} />;
+}
+
+function Router({ active, session }: { active: ActiveModule[]; session: Session }) {
   const router = useMemo(
     () =>
       createBrowserRouter([
         {
           path: '/',
-          element: <AppFrame modules={modules} session={session} />,
+          element: <Frame session={session} />,
           children: [
-            { index: true, element: <StartPage modules={modules} session={session} /> },
-            { path: 'profile', element: <ProfilePage session={session} modules={modules} /> },
+            { index: true, element: <StartRoute session={session} /> },
+            { path: 'profile', element: <ProfileRoute session={session} /> },
             { path: 'me', element: <MyAreaPage session={session} /> },
-            { path: 'lists', element: <ListsPage modules={modules} /> },
+            { path: 'lists', element: <ListsRoute /> },
             { path: 'scan', element: <ScanPage /> },
             { path: 'import', element: <ImportPage /> },
             { path: 'admin/users', element: <Guard session={session} permission="core.users.manage"><UsersPage /></Guard> },
-            { path: 'admin/roles', element: <Guard session={session} permission="core.roles.manage"><RolesPage modules={modules} /></Guard> },
-            {
-              path: 'admin/modules',
-              element: can(session, 'core.modules.manage') || moduleSettings(modules, session).length ? <ModulesPage modules={modules} session={session} /> : <Guard session={session} permission="core.modules.manage"><ModulesPage modules={modules} session={session} /></Guard>,
-            },
+            { path: 'admin/roles', element: <Guard session={session} permission="core.roles.manage"><RolesRoute session={session} /></Guard> },
+            { path: 'admin/modules', element: <ModulesRoute session={session} /> },
             { path: 'admin/tokens', element: <Guard session={session} permission="core.tokens.manage"><TokensPage /></Guard> },
-            { path: 'admin/settings', element: <Guard session={session} permission="core.settings.manage"><SettingsPage modules={modules} /></Guard> },
+            { path: 'admin/settings', element: <Guard session={session} permission="core.settings.manage"><SettingsRoute /></Guard> },
             { path: 'admin/audit', element: <Guard session={session} permission="core.audit.read"><AuditPage /></Guard> },
             { path: 'admin/retention', element: <Guard session={session} permission="core.retention.manage"><RetentionPage /></Guard> },
-            ...modules.flatMap(({ info, web }) => (web ? [{ path: `${info.id}/*`, children: web.routes }] : [])),
+            ...active
+              .filter((info) => info.frontend)
+              .map((info) => ({ path: `${info.id}/*`, element: <ModuleRoute info={info} /> })),
             { path: '*', element: <NotFound /> },
           ],
         },
       ]),
-    [modules, session],
+    // Router shape depends on the active module list and session; frontends arrive later via React Query.
+    [active, session],
   );
-  return <RouterProvider router={router} />;
+  return (
+    <Suspense fallback={<Loader m="xl" />}>
+      <RouterProvider router={router} />
+    </Suspense>
+  );
+}
+
+/** Loads every active module frontend in parallel; missing entries still expose navigation from the manifest. */
+function useLoadedModules(active: ActiveModule[]): LoadedModule[] {
+  const results = useQueries({
+    queries: active.map((info) => ({
+      queryKey: moduleFrontendQueryKey(info.id),
+      queryFn: () => loadModuleFrontend(info),
+      staleTime: Infinity,
+    })),
+  });
+  return active.map((info, index) => results[index]?.data ?? { info });
 }
 
 function LoggedIn({ session }: { session: Session }) {
   const { t } = useTranslation('shell');
-  // Own key: modules read `core/modules` as plain data, the shell keeps the loaded frontends (`LoadedModule`).
-  const { data: modules, error } = useQuery({ queryKey: ['shell', 'loaded-modules'], queryFn: loadModules, staleTime: Infinity });
+  const { data: active, error } = useQuery({
+    queryKey: ['core', 'modules'],
+    queryFn: fetchActiveModules,
+    staleTime: Infinity,
+  });
+  const modules = useLoadedModules(active ?? []);
+  // Privacy registers `core.session.gate`; open the shell once that remote is ready, without waiting for every module.
+  const privacy = active?.find((module) => module.id === 'privacy');
+  const privacyFrontend = useQuery({
+    queryKey: moduleFrontendQueryKey('privacy'),
+    queryFn: () => loadModuleFrontend(privacy!),
+    enabled: Boolean(privacy?.frontend),
+    staleTime: Infinity,
+  });
 
   // After login the language stored in the user's profile applies.
   useEffect(() => {
@@ -86,14 +183,19 @@ function LoggedIn({ session }: { session: Session }) {
   }, [session.user.language]);
 
   if (error) return <Alert color="brand" title={t('serverUnavailable')}>{error.message}</Alert>;
-  if (!modules) return <SplashScreen />;
-  // Modules may hold the work back before the app opens (extension point `core.session.gate`), e.g. the privacy notice
-  // at the first sign-in.
+  if (!active) return <Loader m="xl" />;
+  if (privacy?.frontend && !privacyFrontend.isSuccess) {
+    if (privacyFrontend.error) {
+      return <Alert color="brand" title={t('serverUnavailable')}>{privacyFrontend.error.message}</Alert>;
+    }
+    return <Loader m="xl" />;
+  }
+
   const app = (
-    <>
-      <Router modules={modules} session={session} />
+    <ModulesContext.Provider value={modules}>
+      <Router active={active} session={session} />
       <StepUpHost session={session} />
-    </>
+    </ModulesContext.Provider>
   );
   return extensionsOf('core.session.gate').reduceRight<ReactNode>((inner, gate) => {
     const Gate = gate.component as ComponentType<{ session: Session; children: ReactNode }>;

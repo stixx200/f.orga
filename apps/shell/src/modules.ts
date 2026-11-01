@@ -9,33 +9,38 @@ export interface LoadedModule {
   error?: string;
 }
 
-/** Fetches the active modules from the server and loads their frontends via Module Federation. */
-export async function loadModules(): Promise<LoadedModule[]> {
-  const active = await api<ActiveModule[]>('core/modules');
+/** React Query key for one module frontend loaded via Module Federation. */
+export const moduleFrontendQueryKey = (moduleId: string) => ['shell', 'module-frontend', moduleId] as const;
 
+/**
+ * Fetches the active modules and registers their remotes. Frontends are loaded separately so the shell can open
+ * after the privacy gate is ready while other remotes continue in the background.
+ */
+export async function fetchActiveModules(): Promise<ActiveModule[]> {
+  const active = await api<ActiveModule[]>('core/modules');
   registerRemotes(
     active.flatMap(({ frontend }) =>
       frontend ? [{ name: frontend.remote, entry: frontend.entry, type: 'module' as const }] : [],
     ),
   );
+  return active;
+}
 
-  return Promise.all(
-    active.map(async (info): Promise<LoadedModule> => {
-      if (!info.frontend) return { info };
-      const path = `${info.frontend.remote}/${info.frontend.exposed.replace(/^\.\//, '')}`;
-      try {
-        const loaded = await loadRemote<{ default: WebModule }>(path);
-        const web = loaded?.default;
-        if (web) {
-          addTranslations(info.id, web.translations);
-          registerExtensions(info.id, web.extensions);
-        }
-        return { info, web };
-      } catch (error) {
-        return { info, error: error instanceof Error ? error.message : String(error) };
-      }
-    }),
-  );
+/** Loads one module frontend (translations, extensions, routes) via Module Federation. */
+export async function loadModuleFrontend(info: ActiveModule): Promise<LoadedModule> {
+  if (!info.frontend) return { info };
+  const path = `${info.frontend.remote}/${info.frontend.exposed.replace(/^\.\//, '')}`;
+  try {
+    const loaded = await loadRemote<{ default: WebModule }>(path);
+    const web = loaded?.default;
+    if (web) {
+      addTranslations(info.id, web.translations);
+      registerExtensions(info.id, web.extensions);
+    }
+    return { info, web };
+  } catch (error) {
+    return { info, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 /** Pages without shell frame and login, served by a module (`frontend.kiosk` of its manifest). */
