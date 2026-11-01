@@ -46,10 +46,14 @@ export function e2eConfig(options: {
           webServer: {
             command: 'pnpm exec tsx --tsconfig tools/tsconfig.json tools/e2e-serve.mts',
             cwd: ROOT,
-            url: `${baseURL.replace(/\/$/, '')}/api/core/setup`,
-            // The URL answers once the server listens, before the demo data is seeded: wait for seed to finish.
-            // In CI e2e-serve always boots fresh (never "instance already running").
+            // Playwright treats `url` OR `wait` as enough: `/api/core/setup` answers before seed finishes and would
+            // start tests on Ersteinrichtung. Wait only for the ready line (seed done). Keep stdout piped so `wait` sees it.
+            // Locally, reuseExistingServer still probes the setup URL when an instance is already up.
+            ...(process.env['CI']
+              ? {}
+              : { url: `${baseURL.replace(/\/$/, '')}/api/core/setup` }),
             wait: { stdout: /e2e-serve: ready at/ },
+            stdout: 'pipe',
             reuseExistingServer: !process.env['CI'],
             timeout: 900_000,
           },
