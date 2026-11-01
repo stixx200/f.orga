@@ -11,14 +11,14 @@ concurrency:
 
 permissions:
   contents: read
-  actions: read
+  actions: write
 
 env:
   NX_DAEMON: false
 
 jobs:
   pruefen:
-    name: Lint, typecheck, tests, build, e2e
+    name: Lint, tests, build, e2e, image
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -34,8 +34,9 @@ jobs:
           fetch-depth: 0
           filter: tree:0
       # JS agents for typecheck/test/build; Playwright+Postgres agents for integration and e2e-ci Atomizer shards.
+      # Docker stays on this runner (Agents have no Docker daemon).
       # https://nx.dev/ci/features/split-e2e-tasks
-      - run: npx nx-cloud@latest start-ci-run --distribute-on=".nx/workflows/distribution.yaml" --stop-agents-after="typecheck,test,build,integration,e2e-ci"
+      - run: npx nx-cloud@latest start-ci-run --distribute-on=".nx/workflows/distribution.yaml" --stop-agents-after="typecheck,test,build,integration,e2e-ci,docker-build"
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
@@ -43,12 +44,16 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - uses: nrwl/nx-set-shas@v4
+      - uses: docker/setup-buildx-action@v3
       - name: Lint and module boundaries
         run: pnpm run lint
       - name: Typecheck, unit tests, build, integration and e2e-ci
         run: pnpm exec nx affected -t typecheck test build integration e2e-ci --parallel=3
       - name: Typecheck sources (workspace-level)
         run: node tools/typecheck-sources.mjs
+      - name: Docker image
+        # Local only: Dockerfile rebuilds the app; needs the runner's Docker, not Agents.
+        run: pnpm exec nx run @forga/image:docker-build:ci --no-agents
       - name: E2E report and traces
         if: failure()
         uses: actions/upload-artifact@v4
@@ -62,22 +67,3 @@ jobs:
           if-no-files-found: ignore
       - run: pnpm exec nx-cloud fix-ci
         if: always()
-
-  docker:
-    name: Docker image
-    runs-on: ubuntu-latest
-    needs: pruefen
-    permissions:
-      contents: read
-      actions: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: docker/Dockerfile
-          push: false
-          tags: forga:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max

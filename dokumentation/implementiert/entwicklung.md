@@ -250,14 +250,14 @@ Indizes, die MikroORM nicht aus Eigenschaften ableiten kann (z. B. partielle Ind
 
 ## CI
 
-`.github/workflows/ci.yml` läuft bei jedem Push auf `main` und bei Pull Requests über Nx Cloud (Remote Cache, Agents, `nx-cloud fix-ci`):
+`.github/workflows/ci.yml` läuft bei jedem Push auf `main` und bei Pull Requests in einem Job über Nx Cloud (Remote Cache, Agents, `nx-cloud fix-ci`):
 
 1. Lint und Modulgrenzen (auf dem GitHub-Runner)
 2. `nx affected` für Typprüfung, Unit-Tests, Build, Integrationstests und Atomizer-`e2e-ci` auf Agents (Verteilung in `.nx/workflows/distribution.yaml`: JS-Agents für typecheck/test/build, Playwright-Agents mit PostgreSQL 17 für `integration` und `e2e-ci`)
 3. Typprüfung der Quellen auf Workspace-Ebene (`tools/typecheck-sources.mjs`)
-4. Bau des Docker-Images (nach grünem Prüfen-Job)
+4. Docker-Image über das Nx-Ziel `@forga/image:docker-build` auf dem Runner (`--no-agents`; Agents haben keinen Docker-Daemon). Veröffentlichen nach `main` bleibt in `.github/workflows/image.yml`.
 
-Details zu den E2E-Shards stehen unter [E2E-Tests – CI](#ci).
+Details zu den E2E-Shards stehen unter [E2E-Tests – CI](#ci). Lokal: `pnpm exec nx run @forga/image:docker-build`.
 
 ## Neues Modul anlegen
 

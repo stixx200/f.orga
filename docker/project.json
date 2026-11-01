@@ -1,0 +1,20 @@
+{
+  "name": "@forga/image",
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "targets": {
+    "docker-build": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "docker build -f docker/Dockerfile -t forga:local ."
+      },
+      "configurations": {
+        "ci": {
+          "command": "docker buildx build -f docker/Dockerfile -t forga:local --load --cache-from=type=gha --cache-to=type=gha,mode=max ."
+        }
+      }
+    }
+  },
+  "tags": ["scope:ops", "type:image"]
+}
