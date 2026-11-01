@@ -2,7 +2,7 @@ import { Anchor, Button, Code, Group, Loader, PasswordInput, SimpleGrid, Stack, 
 import { useQueryClient } from '@tanstack/react-query';
 import { type ComponentType, type FormEvent, useEffect, useRef, useState } from 'react';
 import type { MfaEnrolment, RecoveryCodes, Session, StepUpResult } from '@forga/core-contracts';
-import { formatTime, registerStepUpHandler, send, SESSION_QUERY_KEY, useTranslation } from '@forga/web-sdk';
+import { clearStepUpCoalesce, formatTime, registerStepUpHandler, send, SESSION_QUERY_KEY, useTranslation } from '@forga/web-sdk';
 import { Notice, notifyError, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 
 type QrCodeSvg = ComponentType<{ value: string; size: number; marginSize: number; title: string; style?: { background: string } }>;
@@ -266,6 +266,8 @@ export function ElevationBadge({ session }: { session: Session }) {
   const end = async () => {
     try {
       await send('POST', 'core/step-up/end');
+      // Drop the post-success coalesce hold so the next „show sensitive data“ opens a new dialog.
+      clearStepUpCoalesce();
       await queryClient.invalidateQueries();
     } catch (error) {
       notifyError(error);
