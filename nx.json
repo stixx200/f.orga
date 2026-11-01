@@ -70,7 +70,12 @@
       "outputs": ["{projectRoot}/dist"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "options": {
+        "env": {
+          "NODE_OPTIONS": "--experimental-vm-modules"
+        }
+      }
     },
     "integration": {
       "cache": true,

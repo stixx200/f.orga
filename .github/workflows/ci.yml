@@ -15,6 +15,8 @@ permissions:
 
 env:
   NX_DAEMON: false
+  # Nest 12 ships ESM; Jest needs the VM modules API to require() those packages.
+  NODE_OPTIONS: --experimental-vm-modules
 
 jobs:
   pruefen:
@@ -29,7 +31,7 @@ jobs:
       FORGA_TOTP_FILE: dist/e2e/totp.json
       FORGA_TOTP_USED_FILE: dist/e2e/totp-used.json
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           filter: tree:0
@@ -38,7 +40,7 @@ jobs:
       # https://nx.dev/ci/features/split-e2e-tasks
       - run: npx nx-cloud@latest start-ci-run --distribute-on=".nx/workflows/distribution.yaml" --stop-agents-after="typecheck,test,build,integration,e2e-ci,docker-build"
       - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm

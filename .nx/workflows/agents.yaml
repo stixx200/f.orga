@@ -31,6 +31,9 @@ launch-templates:
   linux-medium-js:
     resource-class: 'docker_linux_amd64/medium'
     image: 'ubuntu22.04-node24.14-v1'
+    env:
+      # Nest 12 is ESM; Jest needs the VM modules API to require() those packages.
+      NODE_OPTIONS: '--experimental-vm-modules'
     init-steps: *common-js-init-steps
 
   linux-medium-playwright:
@@ -38,6 +41,8 @@ launch-templates:
     image: 'ubuntu22.04-node24.14-v1'
     no-output-timeout: '30m'
     env:
+      # Nest 12 is ESM; Jest needs the VM modules API to require() those packages.
+      NODE_OPTIONS: '--experimental-vm-modules'
       # So Playwright `reuseExistingServer` is false and e2e-serve force-boots a fresh DB per Atomizer shard.
       CI: 'true'
       TEST_DATABASE_URL: 'postgresql://forga:forga@127.0.0.1:5432/forga'
