@@ -65,7 +65,7 @@ export interface LoginOptions {
  * Opens a new browser context and logs the user in; returns the page on the start page. The administrator's password
  * is known; all other users have the seed password.
  *
- * Retries briefly on lockout / intermittent wrong-password (Agents reuse one e2e instance across Atomizer shards).
+ * Retries briefly on lockout or intermittent wrong-password responses.
  */
 export async function login(browser: Browser, username: string, options: LoginOptions | string = {}): Promise<Page> {
   const { password = username === ADMIN.username ? ADMIN.password : PASSWORD, stepUp: confirm = true, acknowledgePrivacyNotice = true } =

@@ -4,8 +4,8 @@
  * stays alive until killed. If the instance already answers, keeps the process alive so Playwright has a managed
  * `webServer` (or exits when `FORGA_E2E_SERVE_EXIT_IF_UP=1`).
  *
- * In CI the Node server outlives this process (Playwright stops `webServer` after each Atomizer shard) so later shards
- * on the same agent hit `reuseExistingServer` instead of reseeding.
+ * Set `FORGA_E2E_KEEP=1` to leave the Node server running after this process exits (local multi-project runs). CI Atomizer
+ * shards each boot a fresh database so shared login locks / demo mutations cannot poison the next shard.
  */
 import { type ChildProcess, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -33,7 +33,7 @@ const TOTP_USED_FILE = join(OUT, 'totp-used.json');
 const KEY_FILE = join(OUT, 'secret-key');
 const BACKUP_ROOT = join(OUT, 'backups');
 const READY_FILE = join(OUT, 'ready');
-const KEEP_SERVER = Boolean(process.env['CI']) || process.env['FORGA_E2E_KEEP'] === '1';
+const KEEP_SERVER = process.env['FORGA_E2E_KEEP'] === '1';
 
 async function alreadyUp(): Promise<boolean> {
   try {
@@ -157,7 +157,6 @@ async function main(): Promise<void> {
   };
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => {
-      // CI Atomizer: leave the detached server for the next shard's reuseExistingServer.
       if (!KEEP_SERVER) stop();
       process.exit(0);
     });

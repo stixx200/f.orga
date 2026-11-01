@@ -156,7 +156,7 @@ FORGA_E2E_URL=http://localhost:3100 FORGA_TOTP_FILE=dist/e2e/totp.json TZ=Europe
 
 ### CI
 
-In `.github/workflows/ci.yml` laufen die E2E-Tests als Atomizer-Ziele `e2e-ci` / `e2e-ci--**/**` (Plugin `@nx/playwright`, `ciTargetName`) auf Nx Cloud Agents mit der Launch-Vorlage `linux-medium-playwright` (Playwright Chromium, PostgreSQL 17, siehe `.nx/workflows/`). Jeder Agent startet bei Bedarf über Playwright `webServer` einmal `tools/e2e-serve.mts` (Bau aus dem Remote-Cache, Datenbank `forga_e2e`, Demodaten); weitere Shards auf demselben Agent nutzen `reuseExistingServer`. Schlägt der Lauf fehl, hängt der Orchestrator-Job HTML-Bericht, Traces und Server-Protokoll als Artefakt `e2e-report` an (14 Tage), soweit vorhanden. Lokal bleibt `pnpm run e2e:fresh` der Weg für eine frische Instanz ohne Agents.
+In `.github/workflows/ci.yml` laufen die E2E-Tests als Atomizer-Ziele `e2e-ci` / `e2e-ci--**/**` (Plugin `@nx/playwright`, `ciTargetName`) auf Nx Cloud Agents mit der Launch-Vorlage `linux-medium-playwright` (Playwright Chromium, PostgreSQL 17, siehe `.nx/workflows/`). Jeder Shard startet über Playwright `webServer` eine frische Instanz mit `tools/e2e-serve.mts` (Bau aus dem Remote-Cache, Datenbank `forga_e2e`, Demodaten); so bleiben Anmeldesperren und Mutationen der Demodaten zwischen Shards getrennt. Schlägt der Lauf fehl, hängt der Orchestrator-Job HTML-Bericht, Traces und Server-Protokoll als Artefakt `e2e-report` an (14 Tage), soweit vorhanden. Lokal bleibt `pnpm run e2e:fresh` der Weg für eine frische Instanz ohne Agents; mit `FORGA_E2E_KEEP=1` kann `e2e-serve` die Instanz für weitere lokale Läufe offen halten.
 
 ### Tests schreiben
 

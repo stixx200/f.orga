@@ -11,7 +11,8 @@ const boot =
 
 /**
  * Shared Playwright defaults for every e2e project. Projects set `testDir`, `outputDir` and the report folder.
- * Tests share one instance and its demo data per machine, so they run sequentially (`workers: 1`).
+ * Tests within a project share one instance (`workers: 1`). In CI each Atomizer shard boots a fresh e2e instance
+ * (no `reuseExistingServer`) so login locks and demo mutations do not leak across shards on the same agent.
  */
 export function e2eConfig(options: {
   testDir: string;
@@ -48,7 +49,7 @@ export function e2eConfig(options: {
             url: `${baseURL.replace(/\/$/, '')}/api/core/setup`,
             // The URL answers once the server listens, before the demo data is seeded: also wait for the ready message.
             wait: { stdout: /e2e-serve: (ready at|instance already running)/ },
-            reuseExistingServer: true,
+            reuseExistingServer: !process.env['CI'],
             timeout: 900_000,
           },
         }
