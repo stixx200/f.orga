@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { type APIResponse, type Browser, type BrowserContext, type Download, expect, type FileChooser, type Locator, type Page, test as base } from '@playwright/test';
 
 export { expect } from '@playwright/test';
@@ -121,8 +121,28 @@ export function rememberTotpSecret(username: string, secret: string): void {
   writeFileSync(TOTP_FILE, JSON.stringify({ ...secrets(), [username]: secret.replace(/\s/g, '') }, null, 2));
 }
 
-/** Last time step used per user: the server accepts each code only once, and the next one up to a step early. */
-const usedSteps = new Map<string, number>();
+/**
+ * Last time step used per user, shared across Playwright processes (each `nx e2e <project>` is its own process).
+ * The server accepts each code only once, and the next one up to a step early.
+ */
+const USED_FILE = process.env['FORGA_TOTP_USED_FILE'] ?? join(dirname(TOTP_FILE), 'totp-used.json');
+
+function usedSteps(): Record<string, number> {
+  try {
+    return JSON.parse(readFileSync(USED_FILE, 'utf8')) as Record<string, number>;
+  } catch {
+    return {};
+  }
+}
+
+function rememberUsedStep(username: string, step: number): void {
+  const used = usedSteps();
+  used[username] = Math.max(used[username] ?? -1, step);
+  mkdirSync(dirname(USED_FILE), { recursive: true });
+  const tmp = `${USED_FILE}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(used));
+  renameSync(tmp, USED_FILE);
+}
 
 /**
  * The next unused TOTP code of a demo user whose factor is set up (e.g. to type it into the step-up dialog).
@@ -132,10 +152,10 @@ export async function totpCode(username: string): Promise<string> {
   const secret = secrets()[username];
   if (!secret) throw new Error(`Second factor of ${username} unknown: missing in ${TOTP_FILE}.`);
   const current = Math.floor(Date.now() / PERIOD_MS);
-  const step = Math.max(current, (usedSteps.get(username) ?? -1) + 1);
+  const step = Math.max(current, (usedSteps()[username] ?? -1) + 1);
   // The server accepts one step ahead: wait until the step is at most one ahead of the clock.
   if (step > current + 1) await new Promise((r) => setTimeout(r, (step - 1) * PERIOD_MS - Date.now() + 100));
-  usedSteps.set(username, step);
+  rememberUsedStep(username, step);
   return hotp(secret, step);
 }
 
@@ -152,11 +172,14 @@ export async function stepUp(page: Page, username: string, password = username =
     await expectOk(page.request.post('/api/core/mfa/enrolment/confirm', { headers: CSRF, data: { code: await totpCode(username) } }));
     return;
   }
-  // A step used elsewhere (e.g. by the seed) is refused once; the next one is accepted.
-  for (let attempt = 0; ; attempt++) {
+  // Codes used in another e2e project (or by the seed) are refused; keep advancing until one is free.
+  for (let attempt = 0; attempt < 8; attempt++) {
     const response = await page.request.post('/api/core/step-up', { headers: CSRF, data: { code: await totpCode(username) } });
     if (response.ok()) return;
-    if (attempt > 0) throw new Error(`Step-up of ${username} failed: ${response.status()} ${await response.text()}`);
+    const body = await response.text();
+    if (!body.includes('auth.invalidCode') || attempt === 7) {
+      throw new Error(`Step-up of ${username} failed: ${response.status()} ${body}`);
+    }
   }
 }
 

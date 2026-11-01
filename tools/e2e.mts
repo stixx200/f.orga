@@ -34,6 +34,8 @@ const DATABASE_URL = process.env['FORGA_E2E_DATABASE_URL'] ?? 'postgresql://forg
 const PORT = Number(process.env['FORGA_E2E_PORT'] ?? 3100);
 const URL = `http://localhost:${PORT}`;
 const TOTP_FILE = join(OUT, 'totp.json');
+/** Used TOTP time steps, shared by every `nx e2e` process (`FORGA_TOTP_USED_FILE`). */
+const TOTP_USED_FILE = join(OUT, 'totp-used.json');
 /** `FORGA_SECRET_KEY` of the instance: the secrets of the second factor are encrypted with it. */
 const KEY_FILE = join(OUT, 'secret-key');
 /** `FORGA_BACKUP_ROOT` of the instance (emptied for a fresh run). */
@@ -119,9 +121,13 @@ async function main(): Promise<void> {
   if (reuse && !existsSync(KEY_FILE)) throw new Error('--reuse needs the data of an earlier run: start without it first.');
   if (!reuse) {
     rmSync(TOTP_FILE, { force: true });
+    rmSync(TOTP_USED_FILE, { force: true });
     rmSync(BACKUP_ROOT, { recursive: true, force: true });
     writeFileSync(KEY_FILE, randomBytes(32).toString('base64'), { mode: 0o600 });
     await recreateDatabase();
+  } else {
+    // Fresh e2e processes must not reuse codes from an earlier run against the same secrets.
+    rmSync(TOTP_USED_FILE, { force: true });
   }
 
   mkdirSync(BACKUP_ROOT, { recursive: true });
@@ -164,7 +170,7 @@ async function main(): Promise<void> {
   await waitForServer(server);
   console.log(`Server running at ${URL} after ${elapsed()} (log: ${join(OUT, 'server.log')}).`);
   // Seed and tests compute local dates in the time zone of the browser (Europe/Berlin), also on a CI runner in UTC.
-  const env = { FORGA_URL: URL, FORGA_E2E_URL: URL, FORGA_TOTP_FILE: TOTP_FILE, TZ: 'Europe/Berlin' };
+  const env = { FORGA_URL: URL, FORGA_E2E_URL: URL, FORGA_TOTP_FILE: TOTP_FILE, FORGA_TOTP_USED_FILE: TOTP_USED_FILE, TZ: 'Europe/Berlin' };
   if (!reuse) {
     await run('npm', ['run', 'seed'], { ...env, FORGA_SETUP_TOKEN: setupToken });
     console.log(`Demo data ready after ${elapsed()}.`);
@@ -172,7 +178,7 @@ async function main(): Promise<void> {
 
   if (serveOnly) {
     console.log(
-      `\nInstance ready. In another terminal:\n  FORGA_E2E_URL=${URL} FORGA_TOTP_FILE=${TOTP_FILE} TZ=Europe/Berlin pnpm run e2e\n  FORGA_E2E_URL=${URL} FORGA_TOTP_FILE=${TOTP_FILE} TZ=Europe/Berlin pnpm exec nx e2e shell-e2e -- --headed\nCtrl+C stops the server.`,
+      `\nInstance ready. In another terminal:\n  FORGA_E2E_URL=${URL} FORGA_TOTP_FILE=${TOTP_FILE} FORGA_TOTP_USED_FILE=${TOTP_USED_FILE} TZ=Europe/Berlin pnpm run e2e\n  FORGA_E2E_URL=${URL} FORGA_TOTP_FILE=${TOTP_FILE} FORGA_TOTP_USED_FILE=${TOTP_USED_FILE} TZ=Europe/Berlin pnpm exec nx e2e shell-e2e -- --headed\nCtrl+C stops the server.`,
     );
     await new Promise<void>((done) => server.on('exit', () => done()));
     return;
