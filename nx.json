@@ -75,6 +75,14 @@
     "integration": {
       "cache": true,
       "inputs": ["default", "^production", { "env": "TEST_DATABASE_URL" }]
+    },
+    "e2e-ci--**/**": {
+      "dependsOn": [
+        {
+          "projects": ["@forga/server", "shell", "tag:type:web"],
+          "target": "build"
+        }
+      ]
     }
   },
   "generators": {

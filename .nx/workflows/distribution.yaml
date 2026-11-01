@@ -1,0 +1,21 @@
+# Dynamic agent mix + assignment rules for DTE.
+# https://nx.dev/docs/reference/nx-cloud/assignment-rules
+distribute-on:
+  default: 3 linux-medium-js, 4 linux-medium-playwright
+
+assignment-rules:
+  - targets:
+      - e2e-ci*
+      - integration
+    run-on:
+      - agent: linux-medium-playwright
+        parallelism: 1
+  - targets:
+      - typecheck
+      - test
+      - build
+    run-on:
+      - agent: linux-medium-js
+        parallelism: 3
+      - agent: linux-medium-playwright
+        parallelism: 2

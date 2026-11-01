@@ -18,31 +18,24 @@ env:
 
 jobs:
   pruefen:
-    name: Lint, typecheck, tests, build
+    name: Lint, typecheck, tests, build, e2e
     runs-on: ubuntu-latest
-    services:
-      db:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: forga
-          POSTGRES_PASSWORD: forga
-          POSTGRES_DB: forga
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U forga"
-          --health-interval 5s
-          --health-retries 10
+    timeout-minutes: 90
     env:
-      TEST_DATABASE_URL: postgresql://forga:forga@localhost:5432/forga
+      # Agents bring Postgres + Playwright via `.nx/workflows`; these mirror the Playwright template for any local step.
+      TEST_DATABASE_URL: postgresql://forga:forga@127.0.0.1:5432/forga
+      FORGA_E2E_DATABASE_URL: postgresql://forga:forga@127.0.0.1:5432/forga_e2e
+      FORGA_E2E_URL: http://127.0.0.1:3100
+      FORGA_TOTP_FILE: dist/e2e/totp.json
+      FORGA_TOTP_USED_FILE: dist/e2e/totp-used.json
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           filter: tree:0
-      # Distribute typecheck/test/build across Nx Agents; integration stays on this runner (Postgres).
-      # https://nx.dev/ci/reference/nx-cloud-cli#npx-nxcloud-startcirun
-      - run: npx nx-cloud@latest start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="typecheck,test,build,integration"
+      # JS agents for typecheck/test/build; Playwright+Postgres agents for integration and e2e-ci Atomizer shards.
+      # https://nx.dev/ci/features/split-e2e-tasks
+      - run: npx nx-cloud@latest start-ci-run --distribute-on=".nx/workflows/distribution.yaml" --stop-agents-after="typecheck,test,build,integration,e2e-ci"
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
@@ -52,65 +45,11 @@ jobs:
       - uses: nrwl/nx-set-shas@v4
       - name: Lint and module boundaries
         run: pnpm run lint
-      - name: Typecheck, unit tests and build
-        run: pnpm exec nx affected -t typecheck test build --parallel=3
+      - name: Typecheck, unit tests, build, integration and e2e-ci
+        run: pnpm exec nx affected -t typecheck test build integration e2e-ci --parallel=3
       - name: Typecheck sources (workspace-level)
         run: node tools/typecheck-sources.mjs
-      - name: PostgreSQL 17 client (pg_dump, pg_restore, psql for the backup module)
-        run: |
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update -q
-          sudo apt-get install -y -q postgresql-client-17
-          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
-      - name: Integration tests (PostgreSQL)
-        # Local only: Agents have no Postgres service. Still listed in stop-agents-after so the CIPE stays open.
-        run: pnpm exec nx affected -t integration --parallel=3 --no-agents
-      - run: pnpm exec nx-cloud fix-ci
-        if: always()
-
-  e2e:
-    name: End-to-end tests (Playwright)
-    runs-on: ubuntu-latest
-    needs: pruefen
-    timeout-minutes: 45
-    services:
-      db:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: forga
-          POSTGRES_PASSWORD: forga
-          POSTGRES_DB: forga
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U forga"
-          --health-interval 5s
-          --health-retries 10
-    env:
-      FORGA_E2E_DATABASE_URL: postgresql://forga:forga@localhost:5432/forga_e2e
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: PostgreSQL 17 client (pg_dump, pg_restore, psql for the backup module)
-        run: |
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update -q
-          sudo apt-get install -y -q postgresql-client-17
-          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
-      - name: Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-      - name: Build, start a fresh instance, seed and run the tests
-        run: pnpm run e2e:fresh
-      - name: Report and traces
+      - name: E2E report and traces
         if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -120,6 +59,9 @@ jobs:
             dist/e2e-results
             dist/e2e/server.log
           retention-days: 14
+          if-no-files-found: ignore
+      - run: pnpm exec nx-cloud fix-ci
+        if: always()
 
   docker:
     name: Docker image
