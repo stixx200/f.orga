@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { type APIResponse, type Browser, type BrowserContext, type Download, expect, type FileChooser, type Locator, type Page, test as base } from '@playwright/test';
 
 export { expect } from '@playwright/test';
@@ -88,7 +88,9 @@ export async function login(browser: Browser, username: string, options: LoginOp
 // ----- Second factor (step-up) ----------------------------------------------------------------------------------------
 
 /** Secrets of the second factor of the demo users; `pnpm run seed` writes the administrator's, `login` the others. */
-const TOTP_FILE = process.env['FORGA_TOTP_FILE'] ?? 'tmp/seed-totp.json';
+const ROOT = resolve(__dirname, '../..');
+// Relative paths (e.g. `dist/e2e/totp.json` on Agents) are relative to the repository, not to the project running the test.
+const TOTP_FILE = resolve(ROOT, process.env['FORGA_TOTP_FILE'] ?? 'tmp/seed-totp.json');
 const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const PERIOD_MS = 30_000;
 const CSRF = { 'x-forga': '1' };
@@ -125,7 +127,7 @@ export function rememberTotpSecret(username: string, secret: string): void {
  * Last time step used per user, shared across Playwright processes (each `nx e2e <project>` is its own process).
  * The server accepts each code only once, and the next one up to a step early.
  */
-const USED_FILE = process.env['FORGA_TOTP_USED_FILE'] ?? join(dirname(TOTP_FILE), 'totp-used.json');
+const USED_FILE = process.env['FORGA_TOTP_USED_FILE'] ? resolve(ROOT, process.env['FORGA_TOTP_USED_FILE']) : join(dirname(TOTP_FILE), 'totp-used.json');
 
 function usedSteps(): Record<string, number> {
   try {

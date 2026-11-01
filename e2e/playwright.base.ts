@@ -1,7 +1,7 @@
 import { defineConfig, type PlaywrightTestConfig } from '@playwright/test';
 import { resolve } from 'node:path';
 
-const ROOT = resolve(import.meta.dirname, '..');
+const ROOT = resolve(__dirname, '..');
 const baseURL = process.env['FORGA_E2E_URL'] ?? 'http://localhost:4200';
 /** Boot a production-like instance when nothing answers at the e2e URL (Atomizer shards on Agents). */
 const boot =
