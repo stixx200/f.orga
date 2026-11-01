@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { type APIResponse, type Browser, type BrowserContext, type Download, expect, type FileChooser, type Locator, type Page, test as base } from '@playwright/test';
 
 export { expect } from '@playwright/test';
@@ -64,31 +64,53 @@ export interface LoginOptions {
 /**
  * Opens a new browser context and logs the user in; returns the page on the start page. The administrator's password
  * is known; all other users have the seed password.
+ *
+ * Retries briefly on lockout or intermittent wrong-password responses.
  */
 export async function login(browser: Browser, username: string, options: LoginOptions | string = {}): Promise<Page> {
   const { password = username === ADMIN.username ? ADMIN.password : PASSWORD, stepUp: confirm = true, acknowledgePrivacyNotice = true } =
     typeof options === 'string' ? { password: options } : options;
   const page = await newPage(browser);
-  await page.goto('/');
-  await page.getByLabel('Benutzername').fill(username);
-  await page.getByLabel('Passwort').fill(password);
-  await page.getByRole('button', { name: 'Anmelden' }).click();
   const greeting = page.getByRole('heading', { level: 1 }).filter({ hasText: /Guten (Morgen|Tag|Abend)/ });
   const notice = page.getByRole('heading', { name: 'Bevor Sie beginnen', level: 1 });
-  await expect(greeting.or(notice)).toBeVisible();
-  if (acknowledgePrivacyNotice && (await notice.isVisible())) {
-    await page.getByRole('checkbox', { name: /Datenschutzhinweis \(Fassung \d+\) zur Kenntnis genommen/ }).check();
-    await page.getByRole('button', { name: 'Weiter' }).click();
-    await expect(greeting).toBeVisible();
+  const locked = page.getByText('Zu viele Fehlversuche', { exact: false });
+  const wrong = page.getByText('Benutzername oder Passwort ist falsch.');
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await page.goto('/');
+    const userField = page.getByLabel('Benutzername');
+    const passField = page.getByLabel('Passwort');
+    await userField.fill(username);
+    await passField.fill(password);
+    await expect(userField).toHaveValue(username);
+    await expect(passField).toHaveValue(password);
+    await page.getByRole('button', { name: 'Anmelden' }).click();
+    await expect(greeting.or(notice).or(locked).or(wrong)).toBeVisible();
+    if (await locked.isVisible()) {
+      await page.waitForTimeout(65_000);
+      continue;
+    }
+    if (await wrong.isVisible()) {
+      await page.waitForTimeout(1_000);
+      continue;
+    }
+    if (acknowledgePrivacyNotice && (await notice.isVisible())) {
+      await page.getByRole('checkbox', { name: /Datenschutzhinweis \(Fassung \d+\) zur Kenntnis genommen/ }).check();
+      await page.getByRole('button', { name: 'Weiter' }).click();
+      await expect(greeting).toBeVisible();
+    }
+    if (confirm) await stepUp(page, username, password);
+    return page;
   }
-  if (confirm) await stepUp(page, username, password);
-  return page;
+  throw new Error(`login failed for ${username} after retries`);
 }
 
 // ----- Second factor (step-up) ----------------------------------------------------------------------------------------
 
 /** Secrets of the second factor of the demo users; `pnpm run seed` writes the administrator's, `login` the others. */
-const TOTP_FILE = process.env['FORGA_TOTP_FILE'] ?? 'tmp/seed-totp.json';
+const ROOT = resolve(__dirname, '../..');
+// Relative paths (e.g. `dist/e2e/totp.json` on Agents) are relative to the repository, not to the project running the test.
+const TOTP_FILE = resolve(ROOT, process.env['FORGA_TOTP_FILE'] ?? 'tmp/seed-totp.json');
 const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const PERIOD_MS = 30_000;
 const CSRF = { 'x-forga': '1' };
@@ -125,7 +147,7 @@ export function rememberTotpSecret(username: string, secret: string): void {
  * Last time step used per user, shared across Playwright processes (each `nx e2e <project>` is its own process).
  * The server accepts each code only once, and the next one up to a step early.
  */
-const USED_FILE = process.env['FORGA_TOTP_USED_FILE'] ?? join(dirname(TOTP_FILE), 'totp-used.json');
+const USED_FILE = process.env['FORGA_TOTP_USED_FILE'] ? resolve(ROOT, process.env['FORGA_TOTP_USED_FILE']) : join(dirname(TOTP_FILE), 'totp-used.json');
 
 function usedSteps(): Record<string, number> {
   try {

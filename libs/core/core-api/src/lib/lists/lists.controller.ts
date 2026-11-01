@@ -110,9 +110,11 @@ export class ListsController {
       ...(personIds ? { personIds } : {}),
     });
 
-    const name = `${data.title.replace(/[^\p{L}\p{N} _-]/gu, '').trim() || id}.${format}`;
+    // ASCII-only `filename` — Chromium/Playwright `suggestedFilename()` often becomes "download" when a UTF-8
+    // `filename*` (e.g. titles with umlauts) is also sent, even with a valid ASCII `filename` present.
+    const ascii = `${id}.${format}`.replace(/[^\w.-]+/g, '_');
     res.setHeader('Content-Type', CONTENT_TYPES[format as ListFormat]);
-    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+    res.setHeader('Content-Disposition', `attachment; filename="${ascii}"`);
     res.send(file);
   }
 

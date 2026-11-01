@@ -116,10 +116,12 @@ export class AuthService implements OnApplicationBootstrap {
    * for a minute only for the address they came from (`ip`, the client address behind a trusted proxy), so nobody
    * can lock others out of their account by guessing wrong passwords. The counters are in the database (`RateLimits`).
    * An unknown username costs as much time as a wrong password, so the answer does not tell which usernames exist.
+   * Set `FORGA_LOGIN_LOCK=off` (e2e-serve) to skip lockouts so flaky UI retries do not burn a minute per attempt.
    */
   async login(username: string, password: string, origin: SessionOrigin): Promise<{ token: string; user: User; persistent: boolean } | 'locked' | null> {
     const key = `${username.toLowerCase()}|${origin.ip ?? ''}`;
-    if (await this.rateLimits.blocked('login', key)) return 'locked';
+    const enforceLoginLimit = process.env['FORGA_LOGIN_LOCK'] !== 'off';
+    if (enforceLoginLimit && (await this.rateLimits.blocked('login', key))) return 'locked';
 
     const em = this.em.fork();
     const user = await em.findOne(
@@ -129,12 +131,12 @@ export class AuthService implements OnApplicationBootstrap {
     );
     const valid = await verifyPassword(password, user?.passwordHash ?? (await this.unknownUserHash()));
     if (!user?.passwordHash || !valid) {
-      await this.rateLimits.hit('login', key, LOGIN_RULE);
+      if (enforceLoginLimit) await this.rateLimits.hit('login', key, LOGIN_RULE);
       await this.audit.log('auth.login-failed', { username }, null);
       return null;
     }
 
-    await this.rateLimits.reset('login', key);
+    if (enforceLoginLimit) await this.rateLimits.reset('login', key);
     const { token, persistent } = await this.openSession(em, user, null, origin);
     await this.audit.log('auth.login', persistent ? { remember: true } : {}, user.id);
     return { token, user, persistent };

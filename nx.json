@@ -75,6 +75,30 @@
     "integration": {
       "cache": true,
       "inputs": ["default", "^production", { "env": "TEST_DATABASE_URL" }]
+    },
+    "e2e-ci--**/**": {
+      "dependsOn": [
+        "...",
+        {
+          "projects": ["@forga/server", "shell", "tag:type:web"],
+          "target": "build"
+        }
+      ],
+      "inputs": [
+        "...",
+        "{workspaceRoot}/e2e/**/*",
+        "{workspaceRoot}/tools/e2e-serve.mts",
+        "{workspaceRoot}/tools/tsconfig.json",
+        { "env": "FORGA_E2E_URL" },
+        { "env": "FORGA_E2E_DATABASE_URL" },
+        { "env": "FORGA_E2E_PORT" },
+        { "env": "FORGA_TOTP_FILE" },
+        { "env": "FORGA_TOTP_USED_FILE" },
+        { "env": "FORGA_PG_BIN" },
+        { "env": "FORGA_E2E_BOOT" },
+        { "env": "FORGA_E2E_KEEP" }
+      ],
+      "outputs": ["...", "{workspaceRoot}/dist/e2e", "{workspaceRoot}/dist/e2e-results/{projectName}", "{workspaceRoot}/dist/e2e-report/{projectName}"]
     }
   },
   "generators": {
