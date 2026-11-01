@@ -6,8 +6,8 @@
   - Gemeinsame Texte und Fehlercodes stehen im Namespace `common` (`libs/web/web-sdk/src/lib/common.i18n.ts`).
   - Texte vom Server (Manifest-Namen, Navigation, Berechtigungen) sind `LocalizedText` `{ de, en }`.
   - Der Server liefert Fehlercodes (`{ code }`), keine fertigen Meldungen.
-- **Dokumentation deutsch:** Sie beschreibt in `dokumentation/` immer den aktuellen Stand, ohne Änderungsverlauf.
-  - `anwender/` ist die Bedienungsanleitung, `technik/` die strukturelle Dokumentation (Architektur, Schnittstellen, Betrieb, Entwicklung).
+- **Dokumentation deutsch:** Sie beschreibt immer den aktuellen Stand, ohne Änderungsverlauf.
+  - Die Bedienungsanleitung steht im [GitHub-Wiki](https://github.com/stixx200/f.orga/wiki); `dokumentation/technik/` ist die strukturelle Dokumentation (Architektur, Schnittstellen, Betrieb, Entwicklung).
   - Offenes steht in GitHub Issues, nicht in einem `geplant/`-Ordner.
   - Fachbegriff ↔ Code-Begriff steht im Glossar in `dokumentation/technik/glossar.md`.
 - **Gestaltung:** Theme in `libs/web/web-ui`, Hinweise in `../Stil.md`.

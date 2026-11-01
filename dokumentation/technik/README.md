@@ -15,4 +15,4 @@ Strukturelle Dokumentation dessen, was im Code existiert und wie die Software ge
 | [glossar.md](glossar.md) | Fachbegriff ↔ Code |
 | [entscheidungen.md](entscheidungen.md) | Getroffene Architektur- und Produktentscheidungen |
 
-Anwenderführung steht unter [`../anwender/`](../anwender/README.md). Offene Restpunkte als [GitHub Issues](https://github.com/stixx200/f.orga/issues).
+Anwenderführung steht im [GitHub-Wiki](https://github.com/stixx200/f.orga/wiki). Offene Restpunkte als [GitHub Issues](https://github.com/stixx200/f.orga/issues).

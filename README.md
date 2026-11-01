@@ -14,7 +14,7 @@ pnpm run check                                                                  
 The documentation is written in German:
 
 - Overview: [`dokumentation/`](dokumentation/README.md)
-- User manual: [`dokumentation/anwender/`](dokumentation/anwender/README.md)
+- User manual: [GitHub Wiki](https://github.com/stixx200/f.orga/wiki)
 - Development: [`dokumentation/technik/entwicklung.md`](dokumentation/technik/entwicklung.md)
 - Operations: [`dokumentation/technik/betrieb.md`](dokumentation/technik/betrieb.md)
 - Glossary German ↔ code terms: [`dokumentation/technik/glossar.md`](dokumentation/technik/glossar.md)
