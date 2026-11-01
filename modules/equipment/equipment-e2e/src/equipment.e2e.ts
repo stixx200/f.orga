@@ -133,3 +133,80 @@ test('due inspections, bulk inspection with scan and protocol, scan on the item 
   await recorded.getByRole('button', { name: 'Anhänge' }).click();
   await expect(officer.getByRole('dialog').getByRole('link', { name: 'Sammelprotokoll.pdf' })).toBeVisible();
 });
+
+/**
+ * Bookable places come from the settings (Standort is a select, Beladeplatz stays free text); the item dialog offers
+ * vehicles of every department; Sammelbuchung can rebook the place to a configured name with a loading place.
+ */
+test('bookable locations, cross-department vehicle and bulk place move', async ({ browser }) => {
+  const officer = await login(browser, USERS.equipmentOfficer);
+  const stamp = Date.now();
+  const placeName = `E2E-Lager ${stamp}`;
+  const number = `E2E-L-${stamp}`;
+  const previous = await api<{ locations?: string[] } | null>(officer, 'GET', 'core/settings/equipment.settings');
+  const previousLocations = previous?.locations ?? [];
+
+  try {
+    await officer.goto('/equipment/settings');
+    await officer.getByRole('tab', { name: 'Fristen und Standorte' }).click();
+    const locations = officer.getByLabel('Buchbare Standorte');
+    await locations.click();
+    await locations.fill(placeName);
+    await locations.press('Enter');
+    await expect(officer.getByText(placeName, { exact: true })).toBeVisible();
+    await officer.getByRole('button', { name: 'Speichern' }).click();
+    await expect(officer.getByText('Gespeichert')).toBeVisible();
+
+    const departments = await api<{ id: string; name: string }[]>(officer, 'GET', 'masterdata/departments');
+    const departmentId = departments.find((d) => d.name === 'Abteilung Musterstadt')!.id;
+    await api(officer, 'POST', 'equipment/items', {
+      inventoryNumber: number,
+      name: 'E2E-Standortgerät',
+      typeKey: 'pressure-hose-b',
+      categoryKey: 'hoses',
+      departmentId,
+      barcode: number,
+    });
+
+    await officer.goto('/equipment/items');
+    await officer.getByRole('main').getByLabel('Suche').fill(number);
+    await officer.getByRole('row').filter({ hasText: number }).click();
+    await officer.getByRole('button', { name: 'Gerät bearbeiten' }).click();
+    const dialog = officer.getByRole('dialog');
+    await expect(dialog.getByRole('combobox', { name: 'Standort' })).toBeVisible();
+    await expect(dialog.getByRole('textbox', { name: 'Beladeplatz / Lagerort' })).toBeVisible();
+    await choose(dialog, 'Standort', placeName);
+    await dialog.getByLabel('Beladeplatz / Lagerort').fill('Regal E2E');
+    await dialog.getByRole('button', { name: 'Speichern' }).click();
+    await expect(officer.getByText('Gerät gespeichert')).toBeVisible();
+    await expect(officer.getByText(`${placeName} · Regal E2E`).first()).toBeVisible();
+
+    await officer.getByRole('button', { name: 'Gerät bearbeiten' }).click();
+    const edit = officer.getByRole('dialog');
+    await choose(edit, 'Fahrzeug', /TSF-W · Florian Musterstadt 2\/47 \(Ahornfeld\)/);
+    await edit.getByLabel('Beladeplatz / Lagerort').fill('Dach');
+    await edit.getByRole('button', { name: 'Speichern' }).click();
+    await expect(officer.getByText('Gerät gespeichert')).toBeVisible();
+    await expect(officer.getByText('Florian Musterstadt 2/47 · Dach').first()).toBeVisible();
+
+    await navigate(officer, 'Sammelbuchungen');
+    await choose(officer, 'Geräteart', /^Schläuche/);
+    await officer.getByRole('main').getByLabel('Suche').fill(number);
+    await expect(officer.getByRole('row').filter({ hasText: number })).toBeVisible();
+    await officer.getByRole('row').filter({ hasText: number }).getByRole('checkbox').check();
+    await officer.getByRole('switch', { name: 'Standort umbuchen' }).check();
+    await choose(officer, 'Standort', placeName);
+    await officer.getByLabel('Beladeplatz / Lagerort').fill('Box 7');
+    await officer.getByRole('button', { name: 'Buchen' }).click();
+    await expect(officer.getByText('Gebucht')).toBeVisible();
+
+    await officer.goto('/equipment/items');
+    await officer.getByRole('main').getByLabel('Suche').fill(number);
+    await officer.getByRole('row').filter({ hasText: number }).click();
+    await expect(officer.getByText(`${placeName} · Box 7`).first()).toBeVisible();
+  } finally {
+    await restore('equipment.settings locations', () =>
+      api(officer, 'PUT', 'core/settings/equipment.settings', { ...(previous ?? {}), locations: previousLocations }),
+    );
+  }
+});
