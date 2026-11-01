@@ -1,0 +1,13 @@
+{
+  "name": "duty-officer-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/duty-officer/duty-officer-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-duty-officer",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "duty-officer-web"
+  ]
+}

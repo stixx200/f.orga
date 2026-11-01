@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager, wrap } from '@mikro-orm/core';
 import { ANONYMIZED_NAME, Attachments, type ErasureArea, type ErasureAreaInput, type ErasureContext, HistoryEntry, type RetentionCandidate, type RetentionExportRecord, type RetentionQuery, RetentionRegistry, User } from '@forga/core-api';
-import { DefectEntity, EquipmentItemEntity, InspectionEntity, UsageEntity } from '../equipment.entities.js';
+import { DefectEntity, EquipmentItemEntity, InspectionEntity, RecentBulkCategoryEntity, UsageEntity } from '../equipment.entities.js';
 import { equipmentGroupKey } from '../items/item-group.js';
 
 const cutoffDay = (query: RetentionQuery) => query.cutoff.toISOString().slice(0, 10);
@@ -116,6 +116,8 @@ export class EquipmentRetention {
    */
   async anonymize(personIds: readonly string[]): Promise<void> {
     const em = this.em.fork();
+    const users = await em.find(User, { personId: { $in: [...personIds] } }, { fields: ['id'] });
+    if (users.length) await em.nativeDelete(RecentBulkCategoryEntity, { userId: { $in: users.map((u) => u.id) } });
     const defects = await this.reportedDefects(em, personIds);
     if (!defects.length) return;
     await em.nativeUpdate(DefectEntity, { id: { $in: defects } }, { reportedBy: ANONYMIZED_NAME });

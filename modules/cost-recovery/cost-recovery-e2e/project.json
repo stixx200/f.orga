@@ -1,0 +1,13 @@
+{
+  "name": "cost-recovery-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/cost-recovery/cost-recovery-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-cost-recovery",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "cost-recovery-web"
+  ]
+}

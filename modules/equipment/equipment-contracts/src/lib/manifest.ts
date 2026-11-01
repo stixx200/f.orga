@@ -9,7 +9,8 @@ export const EQUIPMENT_MANIFEST = {
   permissions: [
     { id: 'equipment.read', name: { de: 'Geräte lesen', en: 'Read equipment' }, scope: 'department' },
     { id: 'equipment.write', name: { de: 'Geräte pflegen', en: 'Maintain equipment' }, scope: 'department' },
-    { id: 'equipment.inspect', name: { de: 'Prüfungen erfassen', en: 'Record inspections' }, scope: 'department' },
+    { id: 'equipment.inspect', name: { de: 'Prüfungen buchen', en: 'Record inspections' }, scope: 'department' },
+    { id: 'equipment.trigger', name: { de: 'Prüfungen fällig setzen', en: 'Mark inspections due' }, scope: 'department' },
     { id: 'equipment.defects.report', name: { de: 'Mängel melden', en: 'Report defects' }, scope: 'department' },
     { id: 'equipment.defects.notify', name: { de: 'E-Mail bei neuen Mängeln', en: 'E-mail about new defects' }, scope: 'department' },
     // Only for items of breathing apparatus categories; deadlines and defect e-mails of these items go to these permissions.
@@ -22,7 +23,7 @@ export const EQUIPMENT_MANIFEST = {
     { label: { de: 'Geräte', en: 'Equipment' }, path: 'items', permission: 'equipment.read', icon: 'tool' },
     { label: { de: 'Fällige Prüfungen', en: 'Inspections due' }, path: 'inspections', permission: 'equipment.read', icon: 'calendar' },
     // Recording needs `equipment.inspect` or, for breathing apparatus, `equipment.breathing.inspect`; readers see no items.
-    { label: { de: 'Sammelprüfungen', en: 'Bulk inspections' }, path: 'bulk', permission: 'equipment.read', icon: 'check' },
+    { label: { de: 'Sammelbuchungen', en: 'Bulk booking' }, path: 'bulk', permission: 'equipment.read', icon: 'check' },
     { label: { de: 'Mängel', en: 'Defects' }, path: 'defects', permission: 'equipment.read', icon: 'alert' },
     { label: { de: 'Geräte', en: 'Equipment' }, path: 'settings', permission: 'equipment.settings.manage', icon: 'settings', section: 'settings' },
   ],
@@ -35,8 +36,22 @@ export const EQUIPMENT_MANIFEST = {
     // Explicit lists: `equipment.*` would include the breathing apparatus permissions, whose deadlines and e-mails belong to the breathing apparatus officer.
     {
       key: 'equipment-officer',
-      permissions: ['equipment.read', 'equipment.write', 'equipment.inspect', 'equipment.defects.report', 'equipment.defects.notify', 'equipment.settings.manage'],
-      permissionsAllDepartments: ['equipment.read', 'equipment.write', 'equipment.inspect', 'equipment.defects.report'],
+      permissions: ['equipment.read', 'equipment.write', 'equipment.inspect', 'equipment.trigger', 'equipment.defects.report', 'equipment.defects.notify', 'equipment.settings.manage'],
+      permissionsAllDepartments: ['equipment.read', 'equipment.write', 'equipment.inspect', 'equipment.trigger', 'equipment.defects.report'],
+    },
+    {
+      key: 'equipment-inspections',
+      name: { de: 'Prüfungen buchen', en: 'Record inspections' },
+      description: { de: 'Prüfungen erfassen, auch in der Sammelbuchung', en: 'Record inspections, including in bulk booking' },
+      permissions: ['equipment.read', 'equipment.inspect'],
+      permissionsAllDepartments: ['equipment.read', 'equipment.inspect'],
+    },
+    {
+      key: 'equipment-due',
+      name: { de: 'Prüfungen fällig setzen', en: 'Mark inspections due' },
+      description: { de: 'Prüfungen nach Gebrauch oder Wäsche fällig setzen, ohne sie zu buchen', en: 'Mark inspections due after use or washing, without recording them' },
+      permissions: ['equipment.read', 'equipment.trigger'],
+      permissionsAllDepartments: ['equipment.read', 'equipment.trigger'],
     },
     {
       key: 'breathing-apparatus-officer',

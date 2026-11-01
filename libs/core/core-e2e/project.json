@@ -1,0 +1,13 @@
+{
+  "name": "core-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/core/core-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:core",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "shell"
+  ]
+}

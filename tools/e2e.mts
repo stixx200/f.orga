@@ -9,17 +9,17 @@
  *    backups to `dist/e2e/backups` (`FORGA_BACKUP_ROOT`; PostgreSQL 17 tools from `FORGA_PG_BIN` or the `PATH`) and
  *    calendar imports from local addresses allowed (`FORGA_IMPORT_URL_ALLOW_PRIVATE`),
  * 4. fills it with `pnpm run seed`,
- * 5. runs `playwright test` (further arguments go to Playwright) and stops the server.
+ * 5. runs `nx run-many -t e2e` (or `nx e2e <project>`; further args go to Playwright) and stops the server.
  *
- *   pnpm run e2e:fresh                              all tests
- *   pnpm run e2e:fresh -- e2e/shell.e2e.ts --headed  one file, browser visible
- *   pnpm run e2e:fresh -- --serve                    only the instance, keeps running until Ctrl+C;
- *                                                   then `pnpm run e2e -- …` with the printed variables
- *   pnpm run e2e:fresh -- --serve --reuse            the instance again on the data of the last run (no new database,
+ *   pnpm run e2e:fresh                              all e2e projects (`nx run-many -t e2e`)
+ *   pnpm run e2e:fresh -- shell-e2e --headed        one Nx project (and further Playwright args)
+ *   pnpm run e2e:fresh -- --serve                   only the instance, keeps running until Ctrl+C;
+ *                                                   then `pnpm run e2e` / `nx e2e <project>` with the printed variables
+ *   pnpm run e2e:fresh -- --serve --reuse           the instance again on the data of the last run (no new database,
  *                                                   no seed)
  *
- * Everything the run writes goes to `dist/e2e` (server log, server key, secrets of the second factor), the report to
- * `dist/e2e-report`.
+ * Everything the run writes goes to `dist/e2e` (server log, server key, secrets of the second factor); HTML reports and
+ * traces go to `dist/e2e-report/<project>` and `dist/e2e-results/<project>`.
  */
 import { type ChildProcess, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -34,6 +34,8 @@ const DATABASE_URL = process.env['FORGA_E2E_DATABASE_URL'] ?? 'postgresql://forg
 const PORT = Number(process.env['FORGA_E2E_PORT'] ?? 3100);
 const URL = `http://localhost:${PORT}`;
 const TOTP_FILE = join(OUT, 'totp.json');
+/** Used TOTP time steps, shared by every `nx e2e` process (`FORGA_TOTP_USED_FILE`). */
+const TOTP_USED_FILE = join(OUT, 'totp-used.json');
 /** `FORGA_SECRET_KEY` of the instance: the secrets of the second factor are encrypted with it. */
 const KEY_FILE = join(OUT, 'secret-key');
 /** `FORGA_BACKUP_ROOT` of the instance (emptied for a fresh run). */
@@ -119,9 +121,13 @@ async function main(): Promise<void> {
   if (reuse && !existsSync(KEY_FILE)) throw new Error('--reuse needs the data of an earlier run: start without it first.');
   if (!reuse) {
     rmSync(TOTP_FILE, { force: true });
+    rmSync(TOTP_USED_FILE, { force: true });
     rmSync(BACKUP_ROOT, { recursive: true, force: true });
     writeFileSync(KEY_FILE, randomBytes(32).toString('base64'), { mode: 0o600 });
     await recreateDatabase();
+  } else {
+    // Fresh e2e processes must not reuse codes from an earlier run against the same secrets.
+    rmSync(TOTP_USED_FILE, { force: true });
   }
 
   mkdirSync(BACKUP_ROOT, { recursive: true });
@@ -164,19 +170,32 @@ async function main(): Promise<void> {
   await waitForServer(server);
   console.log(`Server running at ${URL} after ${elapsed()} (log: ${join(OUT, 'server.log')}).`);
   // Seed and tests compute local dates in the time zone of the browser (Europe/Berlin), also on a CI runner in UTC.
-  const env = { FORGA_URL: URL, FORGA_E2E_URL: URL, FORGA_TOTP_FILE: TOTP_FILE, TZ: 'Europe/Berlin' };
+  const env = { FORGA_URL: URL, FORGA_E2E_URL: URL, FORGA_TOTP_FILE: TOTP_FILE, FORGA_TOTP_USED_FILE: TOTP_USED_FILE, TZ: 'Europe/Berlin' };
   if (!reuse) {
     await run('npm', ['run', 'seed'], { ...env, FORGA_SETUP_TOKEN: setupToken });
     console.log(`Demo data ready after ${elapsed()}.`);
   }
 
   if (serveOnly) {
-    console.log(`\nInstance ready. In another terminal:\n  FORGA_E2E_URL=${URL} FORGA_TOTP_FILE=${TOTP_FILE} TZ=Europe/Berlin pnpm run e2e -- <files or options>\nCtrl+C stops the server.`);
+    console.log(
+      `\nInstance ready. In another terminal:\n  FORGA_E2E_URL=${URL} FORGA_TOTP_FILE=${TOTP_FILE} FORGA_TOTP_USED_FILE=${TOTP_USED_FILE} TZ=Europe/Berlin pnpm run e2e\n  FORGA_E2E_URL=${URL} FORGA_TOTP_FILE=${TOTP_FILE} FORGA_TOTP_USED_FILE=${TOTP_USED_FILE} TZ=Europe/Berlin pnpm exec nx e2e shell-e2e -- --headed\nCtrl+C stops the server.`,
+    );
     await new Promise<void>((done) => server.on('exit', () => done()));
     return;
   }
   try {
-    await run('npx', ['playwright', 'test', '-c', 'e2e/playwright.config.ts', ...playwrightArgs], env);
+    // Optional first args that name Nx e2e projects (e.g. `shell-e2e`); the rest go to Playwright via `--`.
+    const projectNames = playwrightArgs.filter((a) => !a.startsWith('-') && a.endsWith('-e2e'));
+    const passthrough = playwrightArgs.filter((a) => !projectNames.includes(a));
+    if (projectNames.length === 1 && passthrough.length === 0) {
+      await run('pnpm', ['exec', 'nx', 'e2e', projectNames[0]], env);
+    } else if (projectNames.length === 1) {
+      await run('pnpm', ['exec', 'nx', 'e2e', projectNames[0], '--', ...passthrough], env);
+    } else if (projectNames.length > 1) {
+      await run('pnpm', ['exec', 'nx', 'run-many', '-t', 'e2e', '--parallel=1', `-p=${projectNames.join(',')}`, ...(passthrough.length ? ['--', ...passthrough] : [])], env);
+    } else {
+      await run('pnpm', ['exec', 'nx', 'run-many', '-t', 'e2e', '--parallel=1', ...(passthrough.length ? ['--', ...passthrough] : [])], env);
+    }
   } finally {
     stop();
   }

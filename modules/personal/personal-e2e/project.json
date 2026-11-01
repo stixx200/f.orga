@@ -1,0 +1,13 @@
+{
+  "name": "personal-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/personal/personal-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-personal",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "personal-web"
+  ]
+}

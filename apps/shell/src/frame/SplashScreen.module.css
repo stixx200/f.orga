@@ -1,0 +1,100 @@
+.splash {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  width: 100%;
+  background: var(--mantine-color-body, #f8f6f4);
+}
+
+.mark {
+  position: relative;
+  width: 120px;
+  height: 140px;
+}
+
+/* Soft orbital glow around the flame square (top 64px of the full logo). */
+.glow {
+  position: absolute;
+  left: 50%;
+  top: 36px;
+  width: 88px;
+  height: 88px;
+  margin-left: -44px;
+  margin-top: -44px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(140, 29, 24, 0.55) 60deg,
+    transparent 120deg,
+    transparent 180deg,
+    rgba(140, 29, 24, 0.35) 240deg,
+    transparent 300deg
+  );
+  filter: blur(10px);
+  animation: orbit 2.4s linear infinite;
+  pointer-events: none;
+}
+
+.ring {
+  position: absolute;
+  left: 50%;
+  top: 36px;
+  width: 96px;
+  height: 96px;
+  margin-left: -48px;
+  margin-top: -48px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: rgba(140, 29, 24, 0.7);
+  border-right-color: rgba(140, 29, 24, 0.25);
+  animation: spin 1.6s linear infinite;
+  pointer-events: none;
+}
+
+.logo {
+  position: relative;
+  z-index: 1;
+  width: 120px;
+  height: 140px;
+  display: block;
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 2px rgba(140, 29, 24, 0.2));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(140, 29, 24, 0.45));
+    transform: scale(1.02);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow,
+  .ring,
+  .logo {
+    animation: none;
+  }
+
+  .glow,
+  .ring {
+    display: none;
+  }
+}

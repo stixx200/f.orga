@@ -213,6 +213,7 @@ export function IncidentPage() {
   const [editing, setEditing] = useState(false);
   const [primaryFor, setPrimaryFor] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Incident['reports'][number] | null>(null);
+  const [deletingIncident, setDeletingIncident] = useState(false);
   const [departmentId, setDepartmentId] = useState<string | null>(null);
   const canWrite = (department: string) => access.write({ departmentId: department });
 
@@ -234,6 +235,11 @@ export function IncidentPage() {
       },
     },
   );
+  const removeIncident = useAction(() => send('DELETE', `incidents/incidents/${id}`), {
+    success: t('incident.deleted'),
+    invalidate: [keys.incidents],
+    onSuccess: () => navigate('/incidents/incidents'),
+  });
   const removeReport = useAction((reportId: string) => send('DELETE', `incidents/reports/${reportId}`), {
     success: t('editor.deleted'),
     invalidate: [keys.incidents],
@@ -266,13 +272,21 @@ export function IncidentPage() {
     access.write(owner) &&
     !fromMpFeuer &&
     (releaser ? !incident.reports.some((r) => r.status.startsWith('released')) : incident.reports.every((r) => r.status === 'draft' && !r.locked));
+  const canDeleteIncident = can(session, DELETE_REPORT) && incident.reports.every((r) => r.status === 'draft' && !r.locked && !ledByMpFeuer(settings, r));
 
   return (
     <Stack gap="lg">
       <PageHeader
         breadcrumbs={[{ label: t('module') }, { label: t('incidents.title'), to: '/incidents/incidents' }, { label: incident.dispatchNumber }]}
         title={keywordLabel(incident)}
-        actions={editable && <Button variant="default" onClick={() => setEditing(true)}>{t('incident.edit')}</Button>}
+        actions={
+          (editable || canDeleteIncident) && (
+            <Group>
+              {editable && <Button variant="default" onClick={() => setEditing(true)}>{t('incident.edit')}</Button>}
+              {canDeleteIncident && <Button variant="default" onClick={() => setDeletingIncident(true)}>{t('incident.delete')}</Button>}
+            </Group>
+          )
+        }
       />
       <Panel>
         <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }}>
@@ -301,6 +315,16 @@ export function IncidentPage() {
             onDelete={can(session, DELETE_REPORT) && summary.departmentId && summary.status === 'draft' && !summary.locked && !ledByMpFeuer(settings, summary) ? () => setDeleting(summary) : undefined}
           />
         ))}
+        {missing.length > 0 && (
+          <Panel title={t('incident.addReport')}>
+            <Group align="end">
+              <Select label={t('fields.department')} data={missing.map((d) => ({ value: d.id, label: d.name }))} value={departmentId} onChange={setDepartmentId} />
+              <Button variant="outline" disabled={!departmentId} loading={addReport.isPending} onClick={() => departmentId && addReport.mutate(departmentId)}>
+                {t('incident.addReportButton')}
+              </Button>
+            </Group>
+          </Panel>
+        )}
       </SimpleGrid>
       {/* Re-mounted with each saved version, so the form starts from the stored values. */}
       <StatisticsPanel key={`statistics-${incident.version}`} incident={incident} />
@@ -314,16 +338,6 @@ export function IncidentPage() {
             <Section key={module} incidentId={incident.id} chargeable={incident.chargeable} disabled={!can(session, COSTS)} />
           ))}
       </SimpleGrid>
-      {missing.length > 0 && (
-        <Panel title={t('incident.addReport')}>
-          <Group align="end">
-            <Select label={t('fields.department')} data={missing.map((d) => ({ value: d.id, label: d.name }))} value={departmentId} onChange={setDepartmentId} />
-            <Button variant="outline" disabled={!departmentId} loading={addReport.isPending} onClick={() => departmentId && addReport.mutate(departmentId)}>
-              {t('incident.addReportButton')}
-            </Button>
-          </Group>
-        </Panel>
-      )}
       {editing && <EditIncidentDialog incident={incident} onClose={() => setEditing(false)} />}
       <ConfirmDialog
         opened={releasingAll}
@@ -353,6 +367,15 @@ export function IncidentPage() {
         confirmLabel={t('editor.delete')}
         loading={removeReport.isPending}
         onConfirm={() => deleting && removeReport.mutate(deleting.id)}
+      />
+      <ConfirmDialog
+        opened={deletingIncident}
+        onClose={() => setDeletingIncident(false)}
+        title={t('incident.deleteTitle')}
+        description={t('incident.deleteText', { number: incident.dispatchNumber })}
+        confirmLabel={t('incident.delete')}
+        loading={removeIncident.isPending}
+        onConfirm={() => removeIncident.mutate(undefined)}
       />
     </Stack>
   );

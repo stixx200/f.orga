@@ -1,4 +1,4 @@
-import { Alert, Loader } from '@mantine/core';
+import { Alert } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { type ComponentType, type ReactNode, useEffect, useMemo } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router';
@@ -12,6 +12,7 @@ import { ResetPasswordPage } from './auth/ResetPasswordPage';
 import { SetupPage } from './auth/SetupPage';
 import { StepUpHost } from './auth/StepUp';
 import { AppFrame } from './frame/AppFrame';
+import { SplashScreen } from './frame/SplashScreen';
 import { StageBand } from './frame/StageBand';
 import { moduleSettings } from './frame/Sidebar';
 import { KIOSK_PATHS, type LoadedModule, loadKiosk, loadModules } from './modules';
@@ -85,7 +86,7 @@ function LoggedIn({ session }: { session: Session }) {
   }, [session.user.language]);
 
   if (error) return <Alert color="brand" title={t('serverUnavailable')}>{error.message}</Alert>;
-  if (!modules) return <Loader m="xl" />;
+  if (!modules) return <SplashScreen />;
   // Modules may hold the work back before the app opens (extension point `core.session.gate`), e.g. the privacy notice
   // at the first sign-in.
   const app = (
@@ -106,7 +107,7 @@ function KioskPage({ path }: { path: string }) {
   const { data, error } = useQuery({ queryKey: ['core', 'kiosk', path], queryFn: () => loadKiosk(path), retry: false, staleTime: Infinity });
   if (error instanceof ApiError && error.status === 404) return <EmptyState title={t(error.code === 'modules.inactive' ? 'kioskInactive' : 'notFound')} />;
   if (error) return <Alert color="brand" title={t('serverUnavailable')} m="xl">{error.message}</Alert>;
-  if (!data) return <Loader m="xl" />;
+  if (!data) return <SplashScreen />;
   const Kiosk = data.component;
   return <Kiosk />;
 }
@@ -139,7 +140,7 @@ function Main() {
   if (setup.error || session.error) {
     return <Alert color="brand" title={t('serverUnavailable')} m="xl">{(setup.error ?? session.error)?.message}</Alert>;
   }
-  if (!setup.data || session.data === undefined) return <Loader m="xl" />;
+  if (!setup.data || session.data === undefined) return <SplashScreen />;
   if (setup.data.required) return <SetupPage />;
   if (!session.data) return <LoginPage brigadeName={setup.data.brigadeName} oidc={setup.data.oidc} rememberAllowed={setup.data.rememberAllowed} />;
   return <LoggedIn session={session.data} />;

@@ -2,12 +2,12 @@ import { ActionIcon, Button, FileButton, FileInput, Group, Image, Input, Segment
 import { useMediaQuery } from '@mantine/hooks';
 import { IconNfc } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
-import { type CSSProperties, type KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { Attachment } from '@forga/core-contracts';
 import type { Defect, InspectionResult, ItemStatus } from '@forga/equipment-contracts';
 import { api, apiUrl, formatDate, send, upload, useLocalized, useTranslation } from '@forga/web-sdk';
 import { attachmentsKey, Attachments, CodeInput, nfcSupported, readNfc, ResponsiveDialog, StatusBadge, type Tone, useAction } from '@forga/web-ui';
-import { useDueSoon } from './api';
+import { useDueSoon, useEquipmentSettings } from './api';
 
 const TONES: Record<ItemStatus, Tone> = { ready: 'done', 'in-inspection': 'primary', defective: 'error', 'in-repair': 'warning', retired: 'neutral' };
 
@@ -25,6 +25,69 @@ export function DueDate({ dueOn, notRecorded = false }: { dueOn: string | null; 
   if (!dueOn) return <Text size="sm" c="dimmed">{notRecorded ? t('due.notRecorded') : '–'}</Text>;
   const color = dueOn <= today ? 'red.8' : dueOn <= soon ? 'orange.8' : undefined;
   return <Text size="sm" c={color} fw={color ? 700 : undefined}>{dueOn <= today ? t('due.overdue', { date: formatDate(dueOn, i18n.language) }) : formatDate(dueOn, i18n.language)}</Text>;
+}
+
+/**
+ * Station or a configured bookable place (`equipment.settings.locations`). No free text —
+ * only values from the dropdown (Mantine Select, never Autocomplete).
+ * Choosing a station clears the named place; choosing a named place clears the station.
+ * An unknown current `location` (legacy) stays selectable until the user picks something else.
+ */
+export function LocationField({
+  stationId,
+  location,
+  stations,
+  onChange,
+  clearable = true,
+}: {
+  stationId: string | null;
+  location: string;
+  stations: { id: string; label: string }[];
+  onChange: (next: { stationId: string | null; location: string }) => void;
+  clearable?: boolean;
+}) {
+  const { t } = useTranslation('equipment');
+  const { data: settings } = useEquipmentSettings();
+  const configured = settings?.locations;
+  const data = useMemo(() => {
+    const names = new Set(configured ?? []);
+    if (location && !names.has(location)) names.add(location);
+    const places = [...names].toSorted((a, b) => a.localeCompare(b)).map((name) => ({ value: `l:${name}`, label: name }));
+    const stationItems = stations.map((s) => ({ value: `s:${s.id}`, label: s.label }));
+    // Mantine Select groups are `{ group, items }`, not a `group` field on each option.
+    return [
+      ...(places.length ? [{ group: t('fields.locationGroup'), items: places }] : []),
+      ...(stationItems.length ? [{ group: t('fields.stationGroup'), items: stationItems }] : []),
+    ];
+  }, [configured, location, stations, t]);
+  const options = data.flatMap((g) => g.items);
+  const value = stationId ? `s:${stationId}` : location ? `l:${location}` : null;
+  return (
+    <Select
+      label={t('fields.location')}
+      description={t('fields.locationHint')}
+      data={data}
+      value={value && options.some((d) => d.value === value) ? value : null}
+      onChange={(next) => {
+        if (!next) {
+          onChange({ stationId: null, location: '' });
+          return;
+        }
+        // Ignore anything that is not an option value (search text must never become the place).
+        if (!options.some((d) => d.value === next)) return;
+        if (next.startsWith('s:')) {
+          onChange({ stationId: next.slice(2), location: '' });
+          return;
+        }
+        if (next.startsWith('l:')) {
+          onChange({ stationId: null, location: next.slice(2) });
+        }
+      }}
+      searchable
+      clearable={clearable}
+      nothingFoundMessage={t('fields.locationEmpty')}
+    />
+  );
 }
 
 /** Result of an inspection: a labelled select on a phone, a segmented control on a wider screen. */

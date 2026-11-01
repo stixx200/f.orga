@@ -965,6 +965,30 @@ describe('review round 2', () => {
     expect((await del(`/incidents/reports/${reportId}`).expect(403)).body.code).toBe('incidents.reportReleased');
   });
 
+  it('deletes a whole incident, including one that only has an EvD report', async () => {
+    const onlyEvd = (
+      await post('/incidents/incidents', {
+        dispatchNumber: '2026-900021',
+        alarmKeyword: 'B1',
+        alarmedAt: day('12:00'),
+        location: { street: 'Lindenweg', city: 'Musterstadt', object: '' },
+        departmentIds: [],
+        units: ['duty-officer'],
+      }).expect(201)
+    ).body;
+    expect(onlyEvd.reports).toEqual([expect.objectContaining({ unit: 'duty-officer', status: 'draft' })]);
+    await del(`/incidents/reports/${onlyEvd.reports[0].id}`).expect(409);
+    await del(`/incidents/incidents/${onlyEvd.id}`).expect(204);
+    await get(`/incidents/incidents/${onlyEvd.id}`).expect(404);
+    await get(`/duty-officer/incidents/${onlyEvd.id}`).expect(404);
+
+    const incident = await draft('2026-900022', [ids.musterstadt]);
+    const reportId = (incident.reports as { id: string; departmentId: string }[]).find((r) => r.departmentId === ids.musterstadt)!.id;
+    await save(reportId, ready()).expect(200);
+    expect((await del(`/incidents/incidents/${incident.id}`).expect(409)).body.code).toBe('incidents.incidentNotDeletable');
+    await get(`/incidents/incidents/${incident.id}`).expect(200);
+  });
+
   it('logs releases with the report number and tells the receivers about deleted reports', async () => {
     const incident = await augIncident('2026-950007', 17, [ids.musterstadt, ids.ahornfeld]);
     const [musterstadt, ahornfeld] = incident.reports as { id: string; number: string }[];

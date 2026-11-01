@@ -55,6 +55,20 @@
   vertical-align: bottom;
 }
 
+.headerControl {
+  vertical-align: middle;
+}
+
+/* White box on the red header: empty, ticked, or a dark square when the selection is partial. */
+.headerCheck input {
+  background-color: #fff !important;
+  border-color: #fff !important;
+}
+
+.headerCheck svg {
+  color: #222 !important;
+}
+
 .table td {
   padding: 12px;
   vertical-align: top;
@@ -97,6 +111,21 @@
 @media (max-width: 48em) {
   .stack thead {
     display: none;
+  }
+  /* The select-all box stays reachable when the other headings become card labels. */
+  .stack thead:has(.headerControl) {
+    display: table-header-group;
+  }
+  .stack thead:has(.headerControl) tr {
+    display: table-row;
+    border: 0;
+    padding: 0;
+  }
+  .stack thead:has(.headerControl) th:not(.headerControl) {
+    display: none;
+  }
+  .stack thead:has(.headerControl) th.headerControl {
+    display: table-cell;
   }
   .stack tr {
     display: block;

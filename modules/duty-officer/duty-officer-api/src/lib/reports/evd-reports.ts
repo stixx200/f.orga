@@ -12,6 +12,7 @@ import {
 import {
   INCIDENT_UNITS,
   type IncidentCreatedEvent,
+  type IncidentDeletedEvent,
   INCIDENTS_EVENTS,
   INCIDENTS_UNIT_REPORTS,
   type IncidentUnitReports,
@@ -60,6 +61,7 @@ export class EvdReports implements OnModuleInit, DeadlineProvider {
       vehicleRequired: false,
     });
     this.events.subscribe<IncidentCreatedEvent>(INCIDENTS_EVENTS.incidentCreated, (e) => this.onIncidentCreated(e));
+    this.events.subscribe<IncidentDeletedEvent>(INCIDENTS_EVENTS.incidentDeleted, (e) => this.onIncidentDeleted(e));
   }
 
   /** Active module with the setting "EvD-Bericht für jeden Einsatz anlegen". */
@@ -81,6 +83,13 @@ export class EvdReports implements OnModuleInit, DeadlineProvider {
     if (!requested && (await em.count(IncidentExemptionEntity, { incidentId: e.incidentId }))) return;
     await em.upsert(ExpectedReportEntity, { incidentId: e.incidentId, createdAt: new Date() });
     await this.create(e.incidentId, new Date(e.alarmedAt), e.requestedByPersonId ?? null);
+  }
+
+  /** The incident is gone: drop the expectation and any exemption, so no task points at it. */
+  async onIncidentDeleted(e: IncidentDeletedEvent): Promise<void> {
+    const em = this.em.fork();
+    await em.nativeDelete(ExpectedReportEntity, { incidentId: e.incidentId });
+    await em.nativeDelete(IncidentExemptionEntity, { incidentId: e.incidentId });
   }
 
   /**

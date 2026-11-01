@@ -161,3 +161,16 @@ export const UsageSchema = defineEntity({
 });
 export class UsageEntity extends UsageSchema.class {}
 UsageSchema.setClass(UsageEntity);
+
+/** Categories this user last booked on the bulk-inspection page, newest first, at most five. */
+export const RecentBulkCategorySchema = defineEntity({
+  name: 'RecentBulkCategoryEntity',
+  schema: 'equipment',
+  tableName: 'recent_bulk_category',
+  properties: {
+    userId: p.string().primary(),
+    categoryKeys: p.json<string[]>().defaultRaw("'[]'::jsonb"),
+  },
+});
+export class RecentBulkCategoryEntity extends RecentBulkCategorySchema.class {}
+RecentBulkCategorySchema.setClass(RecentBulkCategoryEntity);

@@ -1,0 +1,13 @@
+{
+  "name": "backup-e2e",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "modules/backup/backup-e2e/src",
+  "projectType": "application",
+  "tags": [
+    "scope:module-backup",
+    "type:e2e"
+  ],
+  "implicitDependencies": [
+    "backup-web"
+  ]
+}

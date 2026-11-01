@@ -4,7 +4,7 @@ import { type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlinePr
 import { type LocalizedText, normalizeRfid, type SearchHit } from '@forga/core-contracts';
 import { EquipmentSettings } from '@forga/equipment-contracts';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
-import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, UsageEntity } from '../equipment.entities.js';
+import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, RecentBulkCategoryEntity, UsageEntity } from '../equipment.entities.js';
 import { BREATHING_INSPECT, BREATHING_WRITE, INSPECT, ItemsService, READ, REPORT_DEFECTS, WRITE } from '../items/items.service.js';
 
 /** The item of a defect or an inspection in the data access request. */
@@ -153,9 +153,11 @@ export class EquipmentData implements DeadlineProvider {
     const userIds = (await em.find(User, { personId })).map((u) => u.id);
     const defects = userIds.length ? await em.find(DefectEntity, { reportedByUserId: { $in: userIds } }, { populate: ['item'], orderBy: { reportedAt: 'asc' } }) : [];
     const inspections = await em.find(InspectionEntity, { inspectorPersonId: personId }, { populate: ['item'], orderBy: { date: 'asc' } });
+    const recent = userIds.length ? await em.find(RecentBulkCategoryEntity, { userId: { $in: userIds } }) : [];
     return {
       reportedDefects: defects.map((d) => ({ ...wrap(d).toObject(), item: itemReference(d.item) })),
       inspections: inspections.map((i) => ({ ...wrap(i).toObject(), item: itemReference(i.item) })),
+      recentBulkCategories: recent.flatMap((row) => row.categoryKeys),
     };
   }
 

@@ -54,7 +54,11 @@ describe('training sessions', () => {
       until: '2026-12-31',
     }).expect(201);
     expect(series.body).toHaveLength(4);
-    expect((await get('/training/sessions?from=2026-11-01&to=2026-12-31', leader)).body).toHaveLength(0);
+    // Leader is GF Musterstadt: Ahornfeld series must stay invisible (a relative Musterstadt session may fall in the same window).
+    const visible = ((await get('/training/sessions?from=2026-11-01&to=2026-12-31', leader)).body as { departmentIds: string[] }[]).filter((s) =>
+      s.departmentIds.includes(ids.ahornfeld),
+    );
+    expect(visible).toHaveLength(0);
   });
 
   it('copies the sessions of a period 52 weeks later, once', async () => {

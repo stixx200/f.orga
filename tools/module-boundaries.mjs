@@ -14,6 +14,8 @@ const ALLOWED_TYPES = {
   'type:web': ['type:web', 'type:contracts'],
   'type:server': ['type:api', 'type:contracts'],
   'type:shell': ['type:web', 'type:contracts'],
+  // Playwright projects only share helpers via relative imports under `e2e/support`, not Nx graph edges.
+  'type:e2e': [],
 };
 
 function tag(tags, prefix) {
@@ -48,6 +50,8 @@ try {
       errors.push(`${name}: tags scope:* and type:* are missing`);
       continue;
     }
+    // Playwright projects only declare `implicitDependencies` for `nx affected`; they do not import module code.
+    if (type === 'type:e2e') continue;
     for (const { target } of graph.dependencies[name] ?? []) {
       const targetNode = graph.nodes[target];
       if (!targetNode) continue; // npm package

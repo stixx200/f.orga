@@ -4,7 +4,14 @@ export const INCIDENTS_EVENTS = {
   reportUnlocked: 'incidents.report.unlocked',
   /** A new incident was created (in the UI, through the API or by an import). */
   incidentCreated: 'incidents.incident.created',
+  /** The incident and every report were deleted. */
+  incidentDeleted: 'incidents.incident.deleted',
 } as const;
+
+export interface IncidentDeletedEvent {
+  incidentId: string;
+  dispatchNumber: string;
+}
 
 export interface IncidentCreatedEvent {
   incidentId: string;

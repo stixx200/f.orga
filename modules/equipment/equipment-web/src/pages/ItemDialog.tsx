@@ -1,4 +1,4 @@
-import { Autocomplete, Button, Group, NumberInput, Select, SimpleGrid, Stack, Table, Text, Textarea, TextInput } from '@mantine/core';
+import { Button, Group, NumberInput, Select, SimpleGrid, Stack, Table, Text, Textarea, TextInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -7,6 +7,7 @@ import { vehicleLabel } from '@forga/masterdata-contracts';
 import { can, localDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { CodeInput, ResponsiveDialog, treeOptions, useAction } from '@forga/web-ui';
 import { BREATHING_WRITE, keys, useCategories, useDepartments, useStations, useTypes, useVehicles, WRITE } from '../api';
+import { LocationField } from '../parts';
 
 type Form = Required<Omit<ItemInput, 'inspections' | 'version' | 'initialInspections'>>;
 
@@ -99,7 +100,7 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
       }
     >
       <Stack gap="sm">
-        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+        <SimpleGrid cols={{ base: 1, sm: 2 }} style={{ alignItems: 'end' }}>
           <Select
             label={t('fields.type')}
             data={allowedTypes.map((x) => ({ value: x.key, label: localized(x.name) }))}
@@ -123,17 +124,19 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
           <NumberInput label={t('fields.price')} value={form.price ?? ''} onChange={(v) => set('price', v === '' ? null : Number(v))} min={0} decimalScale={2} suffix=" €" />
           <DateInput label={t('fields.expiresOn')} value={form.expiresOn} onChange={(v) => set('expiresOn', v)} valueFormat="DD.MM.YYYY" clearable />
           <Select label={t('fields.department')} data={writable.map((d) => ({ value: d.id, label: d.name }))} value={departmentId || null} onChange={(v) => set('departmentId', v ?? '')} required />
-          <Select label={t('fields.vehicle')} data={vehicles.filter((v) => !departmentId || v.departmentId === departmentId).map((v) => ({ value: v.id, label: vehicleLabel(v, departments.find((d) => d.id === v.departmentId)?.shortName) }))} value={form.vehicleId} onChange={(v) => setForm((f) => ({ ...f, vehicleId: v, stationId: v ? null : f.stationId }))} clearable />
-          <Autocomplete
-            label={t('fields.location')}
-            description={t('fields.locationHint')}
-            data={stationOptions.map((s) => s.label)}
-            value={form.stationId ? (stationOptions.find((s) => s.id === form.stationId)?.label ?? form.location) : form.location}
-            onChange={(value) => {
-              const station = stationOptions.find((s) => s.label === value);
-              setForm((f) => ({ ...f, stationId: station?.id ?? null, location: station ? '' : value, vehicleId: station ? null : f.vehicleId }));
-            }}
-            limit={Infinity}
+          <LocationField
+            stationId={form.stationId}
+            location={form.location}
+            stations={stationOptions}
+            onChange={({ stationId, location }) => setForm((f) => ({ ...f, stationId, location, vehicleId: stationId ? null : f.vehicleId }))}
+          />
+          <Select
+            label={t('fields.vehicle')}
+            data={vehicles.map((v) => ({ value: v.id, label: vehicleLabel(v, departments.find((d) => d.id === v.departmentId)?.shortName) }))}
+            searchable
+            value={form.vehicleId}
+            onChange={(v) => setForm((f) => ({ ...f, vehicleId: v, stationId: v ? null : f.stationId, location: v ? '' : f.location }))}
+            clearable
           />
           <TextInput label={t('fields.loadingPlace')} value={form.loadingPlace} onChange={(e) => set('loadingPlace', e.currentTarget.value)} />
           {stock && <NumberInput label={t('fields.quantity')} value={form.quantity} onChange={(v) => set('quantity', Number(v) || 0)} min={0} />}
