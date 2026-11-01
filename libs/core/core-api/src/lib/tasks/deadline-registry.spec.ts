@@ -1,7 +1,8 @@
 import type { Grant } from '@forga/core-contracts';
+import { vi } from 'vitest';
 
 // The module states need the ORM; the tests pass their own.
-jest.mock('../module/modules.js', () => ({ ModuleStateService: Object }));
+vi.mock('../module/modules.js', () => ({ ModuleStateService: Object }));
 
 import { AuthenticatedUser } from '../security/authenticated-user.js';
 import type { ModuleStateService } from '../module/modules.js';

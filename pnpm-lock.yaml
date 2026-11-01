@@ -234,9 +234,6 @@ importers:
       '@nestjs/testing':
         specifier: ^12.3.2
         version: 12.3.2(@nestjs/common@12.3.2(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.3.2)(@nestjs/platform-express@12.3.2)
-      '@nx/jest':
-        specifier: 24.0.3
-        version: 24.0.3(42f16ed9b7bc69af58a1a31c3cfbd868)
       '@nx/js':
         specifier: 24.0.3
         version: 24.0.3(@babel/traverse@7.29.12)(@swc-node/register@1.12.1(@swc/core@1.16.21(@swc/helpers@0.5.23))(@swc/types@0.1.28)(@typescript/typescript6@6.0.2))(@swc/core@1.16.21(@swc/helpers@0.5.23))(nx@24.0.3(@swc-node/register@1.12.1(@swc/core@1.16.21(@swc/helpers@0.5.23))(@swc/types@0.1.28)(@typescript/typescript6@6.0.2))(@swc/core@1.16.21(@swc/helpers@0.5.23)))
@@ -256,6 +253,9 @@ importers:
         specifier: ^24.0.0
         version: 24.0.3(b95d4443f091531e67d4dc891cf84527)
       '@nx/vite':
+        specifier: 24.0.3
+        version: 24.0.3(53a299dd77db15b136345337a047babb)
+      '@nx/vitest':
         specifier: 24.0.3
         version: 24.0.3(53a299dd77db15b136345337a047babb)
       '@nx/web':
@@ -288,15 +288,9 @@ importers:
       '@swc/helpers':
         specifier: 0.5.23
         version: 0.5.23
-      '@swc/jest':
-        specifier: ~0.2.38
-        version: 0.2.39(@swc/core@1.16.21(@swc/helpers@0.5.23))
       '@types/cookie-parser':
         specifier: ^1.4.10
         version: 1.4.10(@types/express@5.0.6)
-      '@types/jest':
-        specifier: ~30.0.0
-        version: 30.0.0
       '@types/node':
         specifier: ^24.0.0
         version: 24.19.2
@@ -321,15 +315,6 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.0.2
         version: 6.1.2(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(less@4.8.1)(sass-embedded@1.107.1)(sass@1.107.1)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0))
-      jest:
-        specifier: ~30.5.2
-        version: 30.5.2(@types/node@24.19.2)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.16.21(@swc/helpers@0.5.23))(@types/node@24.19.2)(@typescript/typescript6@6.0.2))
-      jest-environment-node:
-        specifier: ~30.5.2
-        version: 30.5.2
-      jest-util:
-        specifier: ~30.5.1
-        version: 30.5.1
       nx:
         specifier: 24.0.3
         version: 24.0.3(@swc-node/register@1.12.1(@swc/core@1.16.21(@swc/helpers@0.5.23))(@swc/types@0.1.28)(@typescript/typescript6@6.0.2))(@swc/core@1.16.21(@swc/helpers@0.5.23))
@@ -345,9 +330,6 @@ importers:
       supertest:
         specifier: ^7.3.1
         version: 7.3.1
-      ts-jest:
-        specifier: ^29.4.7
-        version: 29.4.15(@babel/core@7.29.7)(@jest/transform@30.5.2)(@jest/types@30.5.1)(@typescript/typescript6@6.0.2)(babel-jest@30.5.2(@babel/core@7.29.7))(esbuild@0.28.2)(jest-util@30.5.1)(jest@30.5.2(@types/node@24.19.2)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.16.21(@swc/helpers@0.5.23))(@types/node@24.19.2)(@typescript/typescript6@6.0.2)))
       ts-node:
         specifier: 10.9.2
         version: 10.9.2(@swc/core@1.16.21(@swc/helpers@0.5.23))(@types/node@24.19.2)(@typescript/typescript6@6.0.2)
@@ -3638,10 +3620,6 @@ packages:
       node-notifier:
         optional: true
 
-  '@jest/create-cache-key-function@30.5.1':
-    resolution: {integrity: sha512-5qkif//qhlbt54255O/M2JtUZNlnefOzE12bi7FlApOIYO4pqrZcAwhNCfP4jOGFubez8uoLgY9czWFjYY57ow==}
-    engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
-
   '@jest/diff-sequences@30.0.1':
     resolution: {integrity: sha512-n5H8QLDJ47QqbCNn5SuFjCRDrOLEZ0h8vAHCK5RL9Ls7Xa8AQLa/YxAc9UjFqoEDM48muwtBGjtMY5cr0PLDCw==}
     engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
@@ -5247,12 +5225,6 @@ packages:
   '@swc/helpers@0.5.23':
     resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
 
-  '@swc/jest@0.2.39':
-    resolution: {integrity: sha512-eyokjOwYd0Q8RnMHri+8/FS1HIrIUKK/sRrFp8c1dThUOfNeCWbLmBP1P5VsKdvmkd25JaH+OKYwEYiAYg9YAA==}
-    engines: {npm: '>= 7.0.0'}
-    peerDependencies:
-      '@swc/core': '*'
-
   '@swc/types@0.1.28':
     resolution: {integrity: sha512-V6Mnml8v09QALx6K0elJ7o9K/MkVDtW3t6L+7Ou/JcWtb3xwId2AH4FeOceySd2JaO87IMw4+6vSZxLm34LPbw==}
 
@@ -5368,9 +5340,6 @@ packages:
 
   '@types/istanbul-reports@3.0.4':
     resolution: {integrity: sha512-pk2B1NWalF9toCRu6gjBzR69syFjP4Od8WRAX+0mmf9lAjCRicLOWc+ZrxZHx/0XRjotgkF9t6iaMJ+aXcOdZQ==}
-
-  '@types/jest@30.0.0':
-    resolution: {integrity: sha512-XTYugzhuwqWjws0CVz8QpM36+T+Dz5mTEBKhNs/esGLnCIlGdRy+Dq78NRjd7ls7r8BC8ZRMOrKlkO1hU0JOwA==}
 
   '@types/jsesc@2.5.1':
     resolution: {integrity: sha512-9VN+6yxLOPLOav+7PwjZbxiID2bVaeq0ED4qSQmdQTdjnXJSaCVKTR58t15oqH1H5t8Ng2ZX1SabJVoN9Q34bw==}
@@ -11515,7 +11484,8 @@ snapshots:
       '@babel/helper-validator-identifier': 8.0.6
     optional: true
 
-  '@bcoe/v8-coverage@0.2.3': {}
+  '@bcoe/v8-coverage@0.2.3':
+    optional: true
 
   '@borewit/text-codec@0.2.2': {}
 
@@ -11833,6 +11803,7 @@ snapshots:
       - esbuild-register
       - supports-color
       - ts-node
+    optional: true
 
   '@jest/core@30.5.2(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.16.21(@swc/helpers@0.5.23))(@types/node@26.6.6)(typescript@6.0.3))':
     dependencies:
@@ -11870,10 +11841,6 @@ snapshots:
       - supports-color
       - ts-node
     optional: true
-
-  '@jest/create-cache-key-function@30.5.1':
-    dependencies:
-      '@jest/types': 30.5.1
 
   '@jest/diff-sequences@30.0.1': {}
 
@@ -11949,6 +11916,7 @@ snapshots:
       v8-to-istanbul: 9.3.0
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@jest/schemas@30.5.0':
     dependencies:
@@ -13906,13 +13874,6 @@ snapshots:
     dependencies:
       tslib: 2.9.1
 
-  '@swc/jest@0.2.39(@swc/core@1.16.21(@swc/helpers@0.5.23))':
-    dependencies:
-      '@jest/create-cache-key-function': 30.5.1
-      '@swc/core': 1.16.21(@swc/helpers@0.5.23)
-      '@swc/counter': 0.1.3
-      jsonc-parser: 3.3.1
-
   '@swc/types@0.1.28':
     dependencies:
       '@swc/counter': 0.1.3
@@ -14051,11 +14012,6 @@ snapshots:
   '@types/istanbul-reports@3.0.4':
     dependencies:
       '@types/istanbul-lib-report': 3.0.3
-
-  '@types/jest@30.0.0':
-    dependencies:
-      expect: 30.5.2
-      pretty-format: 30.5.1
 
   '@types/jsesc@2.5.1':
     optional: true
@@ -14837,6 +14793,7 @@ snapshots:
   bs-logger@0.2.6:
     dependencies:
       fast-json-stable-stringify: 2.1.0
+    optional: true
 
   bser@2.1.2:
     dependencies:
@@ -15667,6 +15624,7 @@ snapshots:
       onetime: 5.1.2
       signal-exit: 3.0.7
       strip-final-newline: 2.0.0
+    optional: true
 
   exit-x@0.2.2: {}
 
@@ -15978,7 +15936,8 @@ snapshots:
       dunder-proto: 1.0.1
       es-object-atoms: 1.1.2
 
-  get-stream@6.0.1: {}
+  get-stream@6.0.1:
+    optional: true
 
   get-symbol-description@1.1.0:
     dependencies:
@@ -16039,6 +15998,7 @@ snapshots:
       wordwrap: 1.0.0
     optionalDependencies:
       uglify-js: 3.19.3
+    optional: true
 
   harmony-reflect@1.6.2: {}
 
@@ -16070,7 +16030,8 @@ snapshots:
     dependencies:
       whatwg-encoding: 2.0.0
 
-  html-escaper@2.0.2: {}
+  html-escaper@2.0.2:
+    optional: true
 
   html-parse-stringify@4.0.1: {}
 
@@ -16136,7 +16097,8 @@ snapshots:
 
   httpxy@0.5.6: {}
 
-  human-signals@2.1.0: {}
+  human-signals@2.1.0:
+    optional: true
 
   hyperdyperid@1.2.0: {}
 
@@ -16194,6 +16156,7 @@ snapshots:
     dependencies:
       pkg-dir: 4.2.0
       resolve-cwd: 3.0.0
+    optional: true
 
   import-meta-resolve@4.2.0:
     optional: true
@@ -16335,7 +16298,8 @@ snapshots:
     dependencies:
       call-bound: 1.0.4
 
-  is-stream@2.0.1: {}
+  is-stream@2.0.1:
+    optional: true
 
   is-string@1.1.1:
     dependencies:
@@ -16410,6 +16374,7 @@ snapshots:
       istanbul-lib-coverage: 3.2.2
       make-dir: 4.0.0
       supports-color: 7.2.0
+    optional: true
 
   istanbul-lib-source-maps@5.0.6:
     dependencies:
@@ -16418,11 +16383,13 @@ snapshots:
       istanbul-lib-coverage: 3.2.2
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   istanbul-reports@3.2.0:
     dependencies:
       html-escaper: 2.0.2
       istanbul-lib-report: 3.0.1
+    optional: true
 
   iterare@1.2.1: {}
 
@@ -16437,6 +16404,7 @@ snapshots:
       execa: 5.1.1
       jest-util: 30.5.1
       p-limit: 3.1.0
+    optional: true
 
   jest-circus@30.5.2(babel-plugin-macros@3.1.0):
     dependencies:
@@ -16482,6 +16450,7 @@ snapshots:
       - esbuild-register
       - supports-color
       - ts-node
+    optional: true
 
   jest-cli@30.5.2(@types/node@26.6.6)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.16.21(@swc/helpers@0.5.23))(@types/node@26.6.6)(typescript@6.0.3)):
     dependencies:
@@ -16685,6 +16654,7 @@ snapshots:
       jest-snapshot: 30.5.2
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   jest-resolve@30.5.1:
     dependencies:
@@ -16832,6 +16802,7 @@ snapshots:
       - esbuild-register
       - supports-color
       - ts-node
+    optional: true
 
   jest@30.5.2(@types/node@26.6.6)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.16.21(@swc/helpers@0.5.23))(@types/node@26.6.6)(typescript@6.0.3)):
     dependencies:
@@ -17125,6 +17096,7 @@ snapshots:
   make-dir@4.0.0:
     dependencies:
       semver: 7.8.5
+    optional: true
 
   make-dir@5.1.0:
     optional: true
@@ -17912,6 +17884,7 @@ snapshots:
   pkg-dir@4.2.0:
     dependencies:
       find-up: 4.1.0
+    optional: true
 
   pkg-dir@7.0.0:
     dependencies:
@@ -18441,6 +18414,7 @@ snapshots:
   resolve-cwd@3.0.0:
     dependencies:
       resolve-from: 5.0.0
+    optional: true
 
   resolve-from@4.0.0: {}
 
@@ -19026,7 +19000,8 @@ snapshots:
 
   strip-bom@4.0.0: {}
 
-  strip-final-newline@2.0.0: {}
+  strip-final-newline@2.0.0:
+    optional: true
 
   strip-json-comments@3.1.1: {}
 
@@ -19229,6 +19204,7 @@ snapshots:
       babel-jest: 30.5.2(@babel/core@7.29.7)
       esbuild: 0.28.2
       jest-util: 30.5.1
+    optional: true
 
   ts-jest@29.4.15(@babel/core@7.29.7)(@jest/transform@30.5.2)(@jest/types@30.5.1)(babel-jest@30.5.2(@babel/core@7.29.7))(esbuild@0.28.2)(jest-util@30.5.1)(jest@30.5.2(@types/node@26.6.6)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.16.21(@swc/helpers@0.5.23))(@types/node@26.6.6)(typescript@6.0.3)))(typescript@6.0.3):
     dependencies:
@@ -19367,7 +19343,8 @@ snapshots:
 
   type-fest@0.21.3: {}
 
-  type-fest@4.41.0: {}
+  type-fest@4.41.0:
+    optional: true
 
   type-fest@5.10.0:
     dependencies:
@@ -19628,6 +19605,7 @@ snapshots:
       '@jridgewell/trace-mapping': 0.3.31
       '@types/istanbul-lib-coverage': 2.0.6
       convert-source-map: 2.0.0
+    optional: true
 
   varint@6.0.0: {}
 
@@ -19940,7 +19918,8 @@ snapshots:
 
   word-wrap@1.2.5: {}
 
-  wordwrap@1.0.0: {}
+  wordwrap@1.0.0:
+    optional: true
 
   wrap-ansi@7.0.0:
     dependencies:
@@ -20005,6 +19984,7 @@ snapshots:
       string-width: 4.2.3
       y18n: 5.0.8
       yargs-parser: 21.1.1
+    optional: true
 
   yn@3.1.1: {}
 

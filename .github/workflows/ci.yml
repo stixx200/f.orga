@@ -15,8 +15,6 @@ permissions:
 
 env:
   NX_DAEMON: false
-  # Nest 12 ships ESM; Jest needs the VM modules API to require() those packages.
-  NODE_OPTIONS: --experimental-vm-modules
 
 jobs:
   pruefen:

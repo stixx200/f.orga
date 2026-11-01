@@ -78,7 +78,7 @@ Ein fester Zufallsstartwert je Schritt erzeugt bei jedem Lauf dieselben Daten. E
 
 | Art | Werkzeug | Dateien |
 | --- | --- | --- |
-| Unit-Tests | Jest | `*.spec.ts` |
+| Unit-Tests | Vitest | `*.spec.ts` |
 | Integrationstests | Vitest mit `unplugin-swc` (Decorator-Metadaten für NestJS) und `supertest` | `apps/server/src/*.integration.ts` |
 | E2E-Tests | Playwright gegen eine laufende Instanz, siehe [E2E-Tests](#e2e-tests) | Nx-Projekte `*-e2e` (`modules/<id>/<id>-e2e`, `libs/core/core-e2e`, `apps/shell-e2e`, `e2e/forga-e2e`) |
 
@@ -263,10 +263,10 @@ Details zu den E2E-Shards stehen unter [E2E-Tests – CI](#ci). Lokal: `pnpm exe
 
 Beispiel-ID `<m>`: englisch, Kleinbuchstaben, Bindestriche erlaubt.
 
-1. **Contracts:** `pnpm exec nx g @nx/js:library modules/<m>/<m>-contracts --bundler=tsc --linter=none --unitTestRunner=jest`.
+1. **Contracts:** `pnpm exec nx g @nx/js:library modules/<m>/<m>-contracts --bundler=tsc --linter=none --unitTestRunner=none`, danach `vitest.config.mts` und `tsconfig.spec.json` nach dem Muster der vorhandenen Module anlegen.
  - Das Manifest heißt `<M>_MANIFEST`.
  - Name, Berechtigungen und Navigation brauchen `{ de, en }`.
-2. **Backend:** `pnpm exec nx g @nx/nest:library modules/<m>/<m>-api --buildable --linter=none --unitTestRunner=jest`.
+2. **Backend:** `pnpm exec nx g @nx/nest:library modules/<m>/<m>-api --buildable --linter=none --unitTestRunner=none`, danach ebenfalls Vitest wie bei den bestehenden API-Paketen.
  - In `package.json` `"type": "module"` setzen.
  - `src/migrations/index.ts` mit `<M>_MIGRATIONS` anlegen.
  - Das Modul mit `defineModule` exportieren und in `apps/server/src/app/installed-modules.ts` eintragen.

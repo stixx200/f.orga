@@ -6,7 +6,9 @@
     "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
     "emitDeclarationOnly": false,
     "forceConsistentCasingInFileNames": true,
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "target": "es2023",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
@@ -15,7 +17,9 @@
     "strictBindCallApply": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.ts"],
+  "include": [
+    "src/**/*.ts"
+  ],
   "references": [
     {
       "path": "../info-terminal-contracts/tsconfig.lib.json"
@@ -37,9 +41,9 @@
     }
   ],
   "exclude": [
-    "jest.config.ts",
-    "jest.config.cts",
     "src/**/*.spec.ts",
-    "src/**/*.test.ts"
+    "src/**/*.test.ts",
+    "vitest.config.mts",
+    "vitest.config.ts"
   ]
 }

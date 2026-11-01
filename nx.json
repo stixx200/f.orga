@@ -6,7 +6,8 @@
       "default",
       "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
       "!{projectRoot}/tsconfig.spec.json",
-      "!{projectRoot}/jest.config.[jt]s",
+      "!{projectRoot}/vitest.config.{js,ts,mjs,mts,cjs,cts}",
+      "!{projectRoot}/vite.config.{js,ts,mjs,mts,cjs,cts}",
       "!{projectRoot}/src/test-setup.[jt]s",
       "!{projectRoot}/test-setup.[jt]s"
     ],
@@ -50,9 +51,19 @@
       }
     },
     {
-      "plugin": "@nx/jest/plugin",
+      "plugin": "@nx/vite/plugin",
       "options": {
-        "targetName": "test"
+        "buildTargetName": "build",
+        "serveTargetName": "serve",
+        "devTargetName": "dev",
+        "previewTargetName": "preview",
+        "serveStaticTargetName": "serve-static"
+      }
+    },
+    {
+      "plugin": "@nx/vitest",
+      "options": {
+        "testTargetName": "test"
       }
     },
     {
@@ -70,12 +81,7 @@
       "outputs": ["{projectRoot}/dist"]
     },
     "test": {
-      "dependsOn": ["^build"],
-      "options": {
-        "env": {
-          "NODE_OPTIONS": "--experimental-vm-modules"
-        }
-      }
+      "dependsOn": ["^build"]
     },
     "integration": {
       "cache": true,

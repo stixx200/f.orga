@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { AuthenticatedUser } from '../security/authenticated-user.js';
 import { AuditReferenceRegistry, type AuditReferenceResolver } from './audit-references.js';
 
@@ -9,11 +10,11 @@ const L1 = '01a18304-b483-76b0-aeb6-5d355279ca38';
 
 function setup() {
   const registry = new AuditReferenceRegistry();
-  const persons = jest.fn<ReturnType<AuditReferenceResolver>, Parameters<AuditReferenceResolver>>(async (ids) =>
+  const persons = vi.fn<AuditReferenceResolver>(async (ids) =>
     new Map(ids.filter((id) => id !== GONE).map((id) => [id, { label: id === P1 ? 'Muster, Max' : 'Beispiel, Eva', to: `/masterdata/persons/${id}` }])),
   );
-  const lists = jest.fn<ReturnType<AuditReferenceResolver>, Parameters<AuditReferenceResolver>>(async (ids) => new Map(ids.map((id) => [id, { label: { de: 'Liste', en: 'List' } }])));
-  const promotionLists = jest.fn<ReturnType<AuditReferenceResolver>, Parameters<AuditReferenceResolver>>(async (ids) => new Map(ids.map((id) => [id, { label: 'Beförderungen 2026' }])));
+  const lists = vi.fn<AuditReferenceResolver>(async (ids) => new Map(ids.map((id) => [id, { label: { de: 'Liste', en: 'List' } }])));
+  const promotionLists = vi.fn<AuditReferenceResolver>(async (ids) => new Map(ids.map((id) => [id, { label: 'Beförderungen 2026' }])));
   registry.register('masterdata.person', { keys: ['personId', 'previousPersonId'], resolve: persons });
   registry.register('core.list', { keys: ['listId'], actions: ['lists.'], uuid: false, resolve: lists });
   registry.register('promotions.list', { keys: ['listId'], actions: ['promotions.'], resolve: promotionLists });
