@@ -21,30 +21,68 @@ jobs:
     name: Lint, tests, build, e2e, image
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    # Local fallback when Nx Cloud workers are off; workers still use their own Postgres from the launch template.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: forga
+          POSTGRES_PASSWORD: forga
+          POSTGRES_DB: forga
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forga -d forga"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
-      # Agents bring Postgres + Playwright via `.nx/workflows`; these mirror the Playwright template for any local step.
+      # Prefer Nx Cloud workers (`.nx/workflows`); same URLs/tools on this runner when DTE is unavailable.
+      CI: true
+      TZ: Europe/Berlin
       TEST_DATABASE_URL: postgresql://forga:forga@127.0.0.1:5432/forga
       FORGA_E2E_DATABASE_URL: postgresql://forga:forga@127.0.0.1:5432/forga_e2e
       FORGA_E2E_URL: http://127.0.0.1:3100
+      FORGA_E2E_PORT: '3100'
       FORGA_TOTP_FILE: dist/e2e/totp.json
       FORGA_TOTP_USED_FILE: dist/e2e/totp-used.json
+      FORGA_PG_BIN: /usr/lib/postgresql/17/bin
+      PGPASSWORD: forga
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           filter: tree:0
-      # JS agents for typecheck/test/build; Playwright+Postgres agents for integration and e2e-ci Atomizer shards.
-      # Docker stays on this runner (Agents have no Docker daemon).
+      # JS workers for typecheck/test/build; Playwright+Postgres workers for integration and e2e-ci Atomizer shards.
+      # Docker stays on this runner (workers have no Docker daemon).
       # https://nx.dev/ci/features/split-e2e-tasks
       - run: npx nx-cloud@latest start-ci-run --distribute-on=".nx/workflows/distribution.yaml" --stop-agents-after="typecheck,test,build,integration,e2e-ci,docker-build"
+        continue-on-error: true
       - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: nrwl/nx-set-shas@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: nrwl/nx-set-shas@v5
+      - uses: docker/setup-buildx-action@v4
+      # Local fallback when Nx Cloud DTE is off or unreachable (same stack as linux-medium-playwright).
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Install PostgreSQL 17 client tools
+        run: |
+          set -euo pipefail
+          . /etc/os-release
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -q
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          until pg_isready -h 127.0.0.1 -U forga -d forga; do sleep 1; done
+          if ! psql -h 127.0.0.1 -U forga -d forga -tc "SELECT 1 FROM pg_database WHERE datname = 'forga_e2e'" | grep -q 1; then
+            psql -h 127.0.0.1 -U forga -d forga -v ON_ERROR_STOP=1 -c "CREATE DATABASE forga_e2e OWNER forga"
+          fi
       - name: Lint and module boundaries
         run: pnpm run lint
       - name: Typecheck, unit tests, build, integration and e2e-ci
@@ -56,7 +94,7 @@ jobs:
         run: pnpm exec nx run @forga/image:docker-build:ci --no-agents
       - name: E2E report and traces
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-report
           path: |

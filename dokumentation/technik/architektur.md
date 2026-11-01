@@ -11,7 +11,7 @@ Das [Gesamtbild](gesamtbild.md) zeigt in Diagrammen, welche Teile jedes Modul mi
 | Verträge | Zod 4 in den `*-contracts`-Paketen |
 | Ausgaben und E-Mail | pdfmake (PDF), exceljs (Excel lesen und schreiben), nodemailer (SMTP) |
 | Frontend | React 19, Vite 8, `@module-federation/vite`, Mantine 9, TanStack Query 5, React Router 8, i18next |
-| Tests | Jest (Unit-Tests der Bibliotheken), Vitest mit `unplugin-swc` und `supertest` (Integrationstests gegen PostgreSQL) |
+| Tests | Vitest mit `unplugin-swc` (Unit-Tests der Bibliotheken und Integrationstests gegen PostgreSQL mit `supertest`) |
 | Lint | oxlint, Modulgrenzen über `tools/module-boundaries.mjs` |
 | CI | GitHub Actions (`.github/workflows/ci.yml`) |
 

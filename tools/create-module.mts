@@ -54,7 +54,7 @@ const library = (name: string, dependencies: Record<string, string>, type: strin
 
 // ----- contracts -----
 const contracts = `${root}/${id}-contracts`;
-for (const file of ['tsconfig.json', 'tsconfig.lib.json', 'tsconfig.spec.json', 'jest.config.cts', '.spec.swcrc']) {
+for (const file of ['tsconfig.json', 'tsconfig.lib.json', 'tsconfig.spec.json', 'vitest.config.mts']) {
   copy(`modules/incidents/incidents-contracts/${file}`, `${contracts}/${file}`);
 }
 write(`${contracts}/package.json`, library(`@forga/${id}-contracts`, { tslib: '^2.3.0', '@forga/core-contracts': '*', zod: '^4.6.7' }, 'contracts'));
@@ -79,7 +79,7 @@ export const ${constant}_MANIFEST = {
 
 // ----- backend -----
 const api = `${root}/${id}-api`;
-for (const file of ['tsconfig.json', 'tsconfig.lib.json', 'tsconfig.spec.json', 'jest.config.cts', '.spec.swcrc']) {
+for (const file of ['tsconfig.json', 'tsconfig.lib.json', 'tsconfig.spec.json', 'vitest.config.mts']) {
   copy(`modules/incidents/incidents-api/${file}`, `${api}/${file}`);
 }
 write(

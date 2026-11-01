@@ -6,7 +6,8 @@
       "default",
       "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
       "!{projectRoot}/tsconfig.spec.json",
-      "!{projectRoot}/jest.config.[jt]s",
+      "!{projectRoot}/vitest.config.{js,ts,mjs,mts,cjs,cts}",
+      "!{projectRoot}/vite.config.{js,ts,mjs,mts,cjs,cts}",
       "!{projectRoot}/src/test-setup.[jt]s",
       "!{projectRoot}/test-setup.[jt]s"
     ],
@@ -50,9 +51,19 @@
       }
     },
     {
-      "plugin": "@nx/jest/plugin",
+      "plugin": "@nx/vite/plugin",
       "options": {
-        "targetName": "test"
+        "buildTargetName": "build",
+        "serveTargetName": "serve",
+        "devTargetName": "dev",
+        "previewTargetName": "preview",
+        "serveStaticTargetName": "serve-static"
+      }
+    },
+    {
+      "plugin": "@nx/vitest",
+      "options": {
+        "testTargetName": "test"
       }
     },
     {
@@ -98,7 +109,12 @@
         { "env": "FORGA_E2E_BOOT" },
         { "env": "FORGA_E2E_KEEP" }
       ],
-      "outputs": ["...", "{workspaceRoot}/dist/e2e", "{workspaceRoot}/dist/e2e-results/{projectName}", "{workspaceRoot}/dist/e2e-report/{projectName}"]
+      "outputs": [
+        "...",
+        "{workspaceRoot}/dist/e2e",
+        "{workspaceRoot}/dist/e2e-results/{projectName}",
+        "{workspaceRoot}/dist/e2e-report/{projectName}"
+      ]
     }
   },
   "generators": {

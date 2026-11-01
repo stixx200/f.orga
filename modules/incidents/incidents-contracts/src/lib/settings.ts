@@ -128,7 +128,7 @@ export const IncidentSettings = z.object({
 export type IncidentSettings = z.infer<typeof IncidentSettings>;
 
 /**
- * What the import of incident personnel makes of a function text that is no function, e.g. "Arbeitszeit Stadt Erbach": no
+ * What the import of incident personnel makes of a function text that is no function, e.g. "Arbeitszeit Stadt Musterstadt": no
  * function, but the assignment was during working hours (`during-working-hours`), with loss of earnings
  * (`loss-of-earnings`), or nothing (`ignore`).
  */

@@ -6,18 +6,22 @@
     "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
     "emitDeclarationOnly": false,
     "forceConsistentCasingInFileNames": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/**/*.ts"],
+  "include": [
+    "src/**/*.ts"
+  ],
   "references": [
     {
       "path": "../../../libs/core/core-contracts/tsconfig.lib.json"
     }
   ],
   "exclude": [
-    "jest.config.ts",
-    "jest.config.cts",
     "src/**/*.spec.ts",
-    "src/**/*.test.ts"
+    "src/**/*.test.ts",
+    "vitest.config.mts",
+    "vitest.config.ts"
   ]
 }

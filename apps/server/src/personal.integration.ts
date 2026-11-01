@@ -24,8 +24,8 @@ beforeAll(async () => {
     lastName: 'Keller',
     status: 'active',
     street: 'Hauptstraße 1',
-    postalCode: '64711',
-    city: 'Erbach',
+    postalCode: '12345',
+    city: 'Musterstadt',
     phoneMobile: '0170 1',
     email: 'jonas@example.org',
     bank: { iban: 'DE89370400440532013000', accountHolder: 'Jonas Keller' },
@@ -59,7 +59,7 @@ describe('personal access', () => {
     const opened = await test.http.post('/api/personal/kiosk/session').set(UI).send({ key: keyOf(url) }).expect(200);
     const cookie = String(opened.headers['set-cookie']).split(';')[0];
     const file = await test.http.get('/api/personal/kiosk/file').set('Cookie', cookie).expect(200);
-    expect(file.body).toMatchObject({ firstName: 'Jonas', lastName: 'Keller', street: 'Hauptstraße 1', city: 'Erbach' });
+    expect(file.body).toMatchObject({ firstName: 'Jonas', lastName: 'Keller', street: 'Hauptstraße 1', city: 'Musterstadt' });
     expect(JSON.stringify(file.body)).not.toContain('DE89370400440532013000');
     expect(JSON.stringify(file.body)).not.toContain('nur Filtergerät');
     expect(file.body.respiratory.evidence.map((row: { kind: string }) => row.kind)).toEqual(['briefing']);

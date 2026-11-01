@@ -21,7 +21,7 @@
     "@forga/core-contracts": "workspace:*",
     "@forga/masterdata-contracts": "workspace:*",
     "@forga/clothing-contracts": "workspace:*",
-    "@nestjs/common": "^11.0.0",
+    "@nestjs/common": "^12.3.2",
     "@mikro-orm/core": "^7.2.5",
     "@mikro-orm/migrations": "^7.2.5",
     "uuid": "^14.0.3",

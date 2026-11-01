@@ -19,7 +19,7 @@
     "tslib": "^2.3.0",
     "@forga/core-api": "workspace:*",
     "@forga/incidents-contracts": "workspace:*",
-    "@nestjs/common": "^11.0.0",
+    "@nestjs/common": "^12.3.2",
     "@mikro-orm/migrations": "^7.2.5",
     "@forga/core-contracts": "workspace:*",
     "@forga/masterdata-contracts": "workspace:*",
