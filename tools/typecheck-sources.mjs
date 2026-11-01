@@ -1,6 +1,7 @@
 // Type-checks every project from its sources with `tsc --noEmit`, in parallel.
-// `tsc --build` (the Nx typecheck targets) treats a project as up to date when only an upstream project changed,
-// so errors caused by changed contracts can slip through; this check does not rely on build state.
+// `tsc --build` via Nx treats a project as up to date when only an upstream project changed,
+// so errors caused by changed contracts can slip through; this check rebuilds declaration
+// outputs itself (not via the Nx cache) and then type-checks every config with `--noEmit`.
 import { execFile } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,6 +15,16 @@ const configs = projects.flatMap((dir) => ['tsconfig.app.json', 'tsconfig.lib.js
 for (const dir of projects) if (!configs.some((c) => c.startsWith(`${dir}/`)) && existsSync(join(dir, 'tsconfig.json'))) configs.push(join(dir, 'tsconfig.json'));
 // The Playwright end-to-end tests.
 configs.push('e2e/tsconfig.json');
+
+// Composite project references need `.d.ts` outputs. `nx affected` may skip every build on a
+// docs-only change, so emit them here from source before `--noEmit` (TS6305 otherwise).
+const buildConfigs = configs.filter((c) => /tsconfig\.(lib|app)\.json$/.test(c));
+try {
+  await run('npx', ['tsc', '-b', ...buildConfigs], { maxBuffer: 16 * 1024 * 1024 });
+} catch (error) {
+  console.error(error.stdout || error.message);
+  process.exit(1);
+}
 
 const failures = [];
 const queue = [...configs];
