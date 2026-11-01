@@ -111,8 +111,10 @@ export class ListsController {
     });
 
     const name = `${data.title.replace(/[^\p{L}\p{N} _-]/gu, '').trim() || id}.${format}`;
+    // ASCII `filename` keeps Playwright/`suggestedFilename` reliable; `filename*` carries the real UTF-8 name.
+    const ascii = `${id}.${format}`.replace(/[^\w.-]+/g, '_');
     res.setHeader('Content-Type', CONTENT_TYPES[format as ListFormat]);
-    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+    res.setHeader('Content-Disposition', `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`);
     res.send(file);
   }
 

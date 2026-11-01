@@ -64,25 +64,45 @@ export interface LoginOptions {
 /**
  * Opens a new browser context and logs the user in; returns the page on the start page. The administrator's password
  * is known; all other users have the seed password.
+ *
+ * Retries briefly on lockout / intermittent wrong-password (Agents reuse one e2e instance across Atomizer shards).
  */
 export async function login(browser: Browser, username: string, options: LoginOptions | string = {}): Promise<Page> {
   const { password = username === ADMIN.username ? ADMIN.password : PASSWORD, stepUp: confirm = true, acknowledgePrivacyNotice = true } =
     typeof options === 'string' ? { password: options } : options;
   const page = await newPage(browser);
-  await page.goto('/');
-  await page.getByLabel('Benutzername').fill(username);
-  await page.getByLabel('Passwort').fill(password);
-  await page.getByRole('button', { name: 'Anmelden' }).click();
   const greeting = page.getByRole('heading', { level: 1 }).filter({ hasText: /Guten (Morgen|Tag|Abend)/ });
   const notice = page.getByRole('heading', { name: 'Bevor Sie beginnen', level: 1 });
-  await expect(greeting.or(notice)).toBeVisible();
-  if (acknowledgePrivacyNotice && (await notice.isVisible())) {
-    await page.getByRole('checkbox', { name: /Datenschutzhinweis \(Fassung \d+\) zur Kenntnis genommen/ }).check();
-    await page.getByRole('button', { name: 'Weiter' }).click();
-    await expect(greeting).toBeVisible();
+  const locked = page.getByText('Zu viele Fehlversuche', { exact: false });
+  const wrong = page.getByText('Benutzername oder Passwort ist falsch.');
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await page.goto('/');
+    const userField = page.getByLabel('Benutzername');
+    const passField = page.getByLabel('Passwort');
+    await userField.fill(username);
+    await passField.fill(password);
+    await expect(userField).toHaveValue(username);
+    await expect(passField).toHaveValue(password);
+    await page.getByRole('button', { name: 'Anmelden' }).click();
+    await expect(greeting.or(notice).or(locked).or(wrong)).toBeVisible();
+    if (await locked.isVisible()) {
+      await page.waitForTimeout(65_000);
+      continue;
+    }
+    if (await wrong.isVisible()) {
+      await page.waitForTimeout(1_000);
+      continue;
+    }
+    if (acknowledgePrivacyNotice && (await notice.isVisible())) {
+      await page.getByRole('checkbox', { name: /Datenschutzhinweis \(Fassung \d+\) zur Kenntnis genommen/ }).check();
+      await page.getByRole('button', { name: 'Weiter' }).click();
+      await expect(greeting).toBeVisible();
+    }
+    if (confirm) await stepUp(page, username, password);
+    return page;
   }
-  if (confirm) await stepUp(page, username, password);
-  return page;
+  throw new Error(`login failed for ${username} after retries`);
 }
 
 // ----- Second factor (step-up) ----------------------------------------------------------------------------------------

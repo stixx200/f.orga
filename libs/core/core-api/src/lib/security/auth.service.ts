@@ -13,6 +13,7 @@ import { PermissionRegistry } from './permission-registry.js';
 import { RateLimits } from './rate-limits.js';
 import { ApiToken, type Role, Session, User, UserMfa } from './security.entities.js';
 import { shortAddress, shortUserAgent } from './session-devices.js';
+import { forgaStage } from '../stage.js';
 
 export const SESSION_COOKIE = 'forga_session';
 /** Keeps the administrator's own session while an impersonation session is active. */
@@ -119,7 +120,9 @@ export class AuthService implements OnApplicationBootstrap {
    */
   async login(username: string, password: string, origin: SessionOrigin): Promise<{ token: string; user: User; persistent: boolean } | 'locked' | null> {
     const key = `${username.toLowerCase()}|${origin.ip ?? ''}`;
-    if (await this.rateLimits.blocked('login', key)) return 'locked';
+    // Development (local + e2e): Atomizer shards reuse one instance; lockouts from failed attempts must not poison later shards.
+    const enforceLoginLimit = forgaStage() !== 'development';
+    if (enforceLoginLimit && (await this.rateLimits.blocked('login', key))) return 'locked';
 
     const em = this.em.fork();
     const user = await em.findOne(
@@ -129,12 +132,12 @@ export class AuthService implements OnApplicationBootstrap {
     );
     const valid = await verifyPassword(password, user?.passwordHash ?? (await this.unknownUserHash()));
     if (!user?.passwordHash || !valid) {
-      await this.rateLimits.hit('login', key, LOGIN_RULE);
+      if (enforceLoginLimit) await this.rateLimits.hit('login', key, LOGIN_RULE);
       await this.audit.log('auth.login-failed', { username }, null);
       return null;
     }
 
-    await this.rateLimits.reset('login', key);
+    if (enforceLoginLimit) await this.rateLimits.reset('login', key);
     const { token, persistent } = await this.openSession(em, user, null, origin);
     await this.audit.log('auth.login', persistent ? { remember: true } : {}, user.id);
     return { token, user, persistent };
