@@ -10,10 +10,10 @@ Getroffene Architektur- und Produktentscheidungen. Offene Entscheidungen werden 
 | [E4](#e4-entschädigung-in-release-1) | Entschädigung in Release 1 | entschieden |
 | [E5](#e5-atemschutz-regel) | Atemschutz-Regel | entschieden |
 | [E6](#e6-modul-nachladen) | Modul-Nachladen | entschieden |
-| E7 | Hosting | [offen · #81](https://github.com/stixx200/f.orga/issues/81) |
+| [E7](#e7-hosting) | Hosting | entschieden |
 | [E8](#e8-jahresstatistik) | Jahresstatistik | entschieden |
 | [E9](#e9-beförderung-und-probezeit) | Beförderung und Probezeit | entschieden |
-| E10 | Personal-Doppelung | [offen · #82](https://github.com/stixx200/f.orga/issues/82) |
+| [E10](#e10-personal-doppelung) | Personal-Doppelung | entschieden |
 | [E11](#e11-sprache) | Sprache | entschieden |
 | [E12](#e12-rettungsdienst-und-krankentransport-nicht-erfassen) | Rettungsdienst und Krankentransport nicht erfassen | entschieden |
 | [E13](#e13-einsatzleiter-pauschale-über-dienstplan) | Einsatzleiter-Pauschale über Dienstplan | entschieden |
@@ -77,6 +77,15 @@ Getroffene Architektur- und Produktentscheidungen. Offene Entscheidungen werden 
 - **Konsequenz**: Der Modulvertrag wird von Anfang an so gebaut, dass externe Pakete ihn ohne Änderung nutzen können. Die eingebauten Module sind der Prüfstein dafür.
 - **Status**: entschieden; eingebaute Module und signierte Plugin-Pakete sind umgesetzt (siehe [Architektur → Plugins](./architektur.md#plugins))
 
+## E7 Hosting
+
+- **Frage**: Wo läuft f.orga im Regelbetrieb?
+- **Entscheidung**: **Self-Hosting** per Docker Compose auf einem Server oder NAS der Gemeinde bzw. bei einem deutschen Hoster. HTTPS über den optionalen Caddy-Container mit Let's Encrypt, alternativ hinter einem vorhandenen Reverse Proxy der Gemeinde.
+- **Konsequenz**:
+  - Keine Kosten für SaaS; die Daten bleiben bei der Gemeinde.
+  - Sicherung und Updates verantwortet der Betreiber.
+  - Betriebsdoku und Varianten: [Betrieb](./betrieb.md#hosting).
+- **Status**: entschieden
 
 ## E8 Jahresstatistik
 
@@ -96,6 +105,19 @@ Getroffene Architektur- und Produktentscheidungen. Offene Entscheidungen werden 
  - **Probezeit**: 12 Monate als Einstellung. Aufnahme auf Probe, Verkürzung, Verlängerung und endgültige Aufnahme sind Schritte in den [Stammdaten](architektur.md#modul-stammdaten-masterdata). Entscheidendes Gremium ist der Feuerwehrausschuss.
 - **Status**: entschieden
 
+## E10 Personal-Doppelung
+
+- **Frage**: Was gilt, wenn dieselbe Person zur gleichen Zeit in zwei Berichten steht?
+- **Entscheidung**:
+
+  | Fall | Verhalten |
+  | --- | --- |
+  | Im **selben Einsatz**, sich überschneidende Zeiträume | **Fehler** – Bericht kann nicht fertig gemeldet werden |
+  | Über **verschiedene Einsätze** hinweg | **Warnung** (doppelte Entschädigung möglich), mit Begründung bestätigbar (z. B. Folgeeinsatz) |
+  | Aneinandergrenzende Zeiträume | keine Überschneidung |
+
+- **Konsequenz**: Entspricht der Duplikatprüfung der bisherigen Abrechnung. Die Prüfung läuft beim Speichern und Fertigmelden (nicht erst bei der Abrechnung). Umgesetzt als Prüfregeln `personnel-overlap-incident` (Fehler) und `personnel-overlap-other` (Warnung) im Modul `incidents`; die Oberfläche verlangt für Warnungen eine Begründung.
+- **Status**: entschieden
 
 ## E11 Sprache
 

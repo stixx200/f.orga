@@ -1,5 +1,19 @@
 # Betrieb
 
+## Hosting
+
+f.orga läuft im Regelbetrieb **selbst gehostet** ([Entscheidung E7](./entscheidungen.md#e7-hosting)):
+
+| Variante | Wann |
+| --- | --- |
+| Server oder NAS der Gemeinde, Docker Compose | Normalfall; Daten und Betrieb bleiben vor Ort |
+| Deutscher Hoster (VPS o. Ä.), ebenfalls Compose | Wenn die Gemeinde keinen eigenen Server betreibt |
+| HTTPS mit dem Compose-Profil `https` (Caddy + Let's Encrypt) | Öffentlicher Hostname, Ports 80/443 erreichbar |
+| HTTPS mit eigenem Zertifikat oder Profil `https-internal` | Zertifikat der Gemeinde-IT bzw. nur internes Netz |
+| Vorhandener Reverse Proxy (nginx o. Ä.) vor dem Container `forga` | TLS und Terminierung bereits vorhanden; `FORGA_TRUST_PROXY` setzen |
+
+Sicherung (`pg_dump` / Modul Datensicherung), Updates (neues Image, Neustart) und HTTPS-Details stehen in den folgenden Abschnitten.
+
 ## Bestandteile
 
 | Container | Inhalt |
