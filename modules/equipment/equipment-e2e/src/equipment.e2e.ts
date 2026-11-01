@@ -206,7 +206,7 @@ test('bookable locations, cross-department vehicle and bulk place move', async (
     await expect(officer.getByText(`${placeName} · Box 7`).first()).toBeVisible();
   } finally {
     await restore('equipment.settings locations', () =>
-      api(officer, 'PUT', 'core/settings/equipment.settings', { ...(previous ?? {}), locations: previousLocations }),
+      api(officer, 'PUT', 'core/settings/equipment.settings', previous ? { ...previous, locations: previousLocations } : { locations: previousLocations }),
     );
   }
 });
