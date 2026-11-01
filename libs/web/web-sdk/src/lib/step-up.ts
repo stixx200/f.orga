@@ -17,7 +17,8 @@ interface StepUpState {
 // On `globalThis` like the i18n instance: a module frontend may evaluate its own copy of this package.
 const shared = globalThis as typeof globalThis & { forgaStepUp?: StepUpState };
 const state = (shared.forgaStepUp ??= { handler: null, pending: null, generation: 0 });
-if (!('generation' in state)) state.generation = 0;
+// Older HMR copies may lack `generation`; keep a numeric counter either way.
+state.generation ??= 0;
 
 /** Called by the shell with the function that shows the step-up dialog. */
 export function registerStepUpHandler(handler: StepUpHandler | null): void {
