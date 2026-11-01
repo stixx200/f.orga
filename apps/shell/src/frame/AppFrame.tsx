@@ -1,7 +1,8 @@
-import { Alert, AppShell, Avatar, Burger, Button, Group, Menu, Stack, Text, UnstyledButton } from '@mantine/core';
+import { Alert, AppShell, Avatar, Burger, Button, Group, Loader, Menu, Stack, Text, UnstyledButton } from '@mantine/core';
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import { IconLogout, IconUser } from '@tabler/icons-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Suspense } from 'react';
 import { Link, Outlet } from 'react-router';
 import type { BrigadeSettings, Session } from '@forga/core-contracts';
 import { api, formatTime, send, useLocalized, useTranslation } from '@forga/web-sdk';
@@ -165,7 +166,9 @@ export function AppFrame({ modules, session }: { modules: LoadedModule[]; sessio
               {m.error}
             </Alert>
           ))}
-        <Outlet />
+        <Suspense fallback={<Loader m="xl" />}>
+          <Outlet />
+        </Suspense>
         <Footer modules={modules} />
       </AppShell.Main>
     </AppShell>

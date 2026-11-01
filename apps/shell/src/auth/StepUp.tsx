@@ -1,10 +1,27 @@
-import { Anchor, Button, Code, Group, PasswordInput, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Anchor, Button, Code, Group, Loader, PasswordInput, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
-import { QRCodeSVG } from 'qrcode.react';
-import { type FormEvent, useEffect, useState } from 'react';
+import { type ComponentType, type FormEvent, useEffect, useState } from 'react';
 import type { MfaEnrolment, RecoveryCodes, Session, StepUpResult } from '@forga/core-contracts';
 import { formatTime, registerStepUpHandler, send, SESSION_QUERY_KEY, useTranslation } from '@forga/web-sdk';
 import { Notice, notifyError, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+
+type QrCodeSvg = ComponentType<{ value: string; size: number; marginSize: number; title: string; style?: { background: string } }>;
+
+/** Loads `qrcode.react` only when an enrolment QR is shown, keeping it out of the initial shell bundle. */
+function EnrolmentQr({ value, title }: { value: string; title: string }) {
+  const [Qr, setQr] = useState<QrCodeSvg | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void import('qrcode.react').then((mod) => {
+      if (!cancelled) setQr(() => mod.QRCodeSVG);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (!Qr) return <Loader size="sm" />;
+  return <Qr value={value} size={176} marginSize={2} title={title} style={{ background: '#fff' }} />;
+}
 
 /** The secret in groups of four characters, for typing it into the app by hand. */
 const grouped = (secret: string) => secret.replace(/(.{4})/g, '$1 ').trim();
@@ -66,7 +83,7 @@ export function MfaEnrolmentSteps({ session, columns = 1, onDone }: { session: S
         {enrolment ? (
           <Stack gap="sm">
             <Text size="sm" c="dimmed">{t('mfa.scan')}</Text>
-            <QRCodeSVG value={enrolment.uri} size={176} marginSize={2} title={t('mfa.qr')} style={{ background: '#fff' }} />
+            <EnrolmentQr value={enrolment.uri} title={t('mfa.qr')} />
             <Text size="sm" c="dimmed">{t('mfa.manual')} <Code translate="no">{grouped(enrolment.secret)}</Code></Text>
           </Stack>
         ) : (

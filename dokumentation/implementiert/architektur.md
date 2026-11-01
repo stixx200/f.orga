@@ -1519,10 +1519,12 @@ Die Verwaltung des Datenschutzes nach DSGVO: Betroffenenanfragen mit Frist, Eins
 
 - Die Shell prüft beim Start `GET /api/core/setup` und `GET /api/core/session` und zeigt je nach Ergebnis die Ersteinrichtung, die Anmeldung oder die Anwendung. Solange Setup, Session oder die Modul-Frontends noch laden, zeigt sie den Splash-Screen (`SplashScreen`) mit dem vollständigen f.orga-Logo (`public/logo-full.svg`) und einem umlaufenden Marken-Glow statt eines Spinners; bei `prefers-reduced-motion` nur das Logo.
 - Nach der Anmeldung lädt sie die Module (`apps/shell/src/modules.ts`):
-  1. `GET /api/core/modules` abrufen.
-  2. Die Frontends mit `registerRemotes` registrieren.
-  3. Je Modul `<remote>/Module` laden.
-  4. Die Übersetzungen registrieren.
+  1. `GET /api/core/modules` abrufen und die Frontends mit `registerRemotes` registrieren.
+  2. Modul-Frontends parallel per Module Federation laden (`<remote>/Module`); Navigation und Rahmen nutzen sofort die Manifest-Daten.
+  3. Sobald das Datenschutz-Frontend bereit ist (Extension Point `core.session.gate`), öffnet die Shell; übrige Remotes und Dashboard-Kacheln folgen nach.
+  4. Beim Betreten von `/<modul-id>/…` wartet die Route auf das betreffende Remote, falls es noch lädt.
+  5. Übersetzungen und Extensions werden beim Laden des jeweiligen Frontends registriert.
+- Shell-Seiten außerhalb der Startseite (Verwaltung, Scan, Import, Profil, …) sind per `React.lazy` code-gesplittet; `qrcode.react` lädt erst bei der MFA-Einrichtung.
 - Die Routen eines Moduls hängen unter `/<modul-id>/`. Die Navigation entsteht aus dem Manifest und zeigt nur Einträge, für die der Benutzer die Berechtigung hat.
 - Ist ein Modul-Bundle nicht ladbar, zeigt der Rahmen über jeder Seite einen Hinweis. Der Rest bleibt bedienbar.
 - Geteilte Singletons (`tools/federation.mts`): `react`, `react-dom`, `react-router`, `@mantine/core`, `@mantine/hooks`, `@mantine/notifications`, `@mantine/dates`, `@tanstack/react-query`, `i18next`, `react-i18next`, `@forga/web-sdk`, `@forga/web-ui`.
