@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import type { BulkNominationResult, BulkNominationUpdateResult, CourseNeed, CourseNomination, CoursePlanning, CourseResultsOutcome, CourseRun } from '@forga/masterdata-contracts';
 import { api, formatDate, send, translateCode, useLocalized, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { ConfirmDialog, DataTable, EmptyState, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction, useRevealOnSelect } from '@forga/web-ui';
 import { today, useCatalogNames, useDepartments } from '../api';
 import { useCourses } from '../persons/CoursesTab';
 
@@ -528,6 +528,7 @@ export function CoursePlanningPage() {
   const { data: nominations = [] } = useQuery({ queryKey: NOMINATIONS, queryFn: () => api<CourseNomination[]>('masterdata/course-nominations') });
   const [level, setLevel] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const detail = useRevealOnSelect(selected);
   const active = courses.filter((c) => c.active && (!level || c.level === level));
   const count = (course: string, statuses: string[]) => nominations.filter((n) => n.course === course && statuses.includes(n.status)).length;
   const current = selected ?? active[0]?.key ?? null;
@@ -566,7 +567,7 @@ export function CoursePlanningPage() {
                   />
                 </Stack>
               </Grid.Col>
-              <Grid.Col span={{ base: 12, lg: 8 }}>{current && <Planning key={current} course={current} />}</Grid.Col>
+              <Grid.Col span={{ base: 12, lg: 8 }} ref={detail}>{current && <Planning key={current} course={current} />}</Grid.Col>
             </Grid>
           </Tabs.Panel>
           <Tabs.Panel value="needs"><Needs /></Tabs.Panel>

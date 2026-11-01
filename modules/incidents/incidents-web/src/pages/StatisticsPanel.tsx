@@ -72,7 +72,7 @@ export function StatisticsPanel({ incident }: { incident: Incident }) {
         <Text size="xs" c="dimmed">{t(editable ? 'statistics.hint' : 'statistics.readOnly')}</Text>
         {!incident.statisticsCounted && <Notice kind="info">{t('statistics.notCounted')}</Notice>}
         {!incident.statistics && !draft && suggestion && (
-          <Notice kind="info" action={editable && <Button size="xs" variant="outline" onClick={accept}>{t('statistics.accept')}</Button>}>
+          <Notice kind="info" action={editable && <Button variant="outline" onClick={accept}>{t('statistics.accept')}</Button>}>
             {t('statistics.suggestion', {
               mainType: suggestion.mainType ? t(`statistics.mainTypes.${suggestion.mainType}`) : '–',
               place: t(suggestion.ownMunicipality ? 'statistics.own' : 'statistics.overland'),

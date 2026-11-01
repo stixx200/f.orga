@@ -111,11 +111,11 @@ function PersonFile({ person }: { person: Person }) {
       {person.processingRestricted && <Notice kind="warning">{t('person.restricted')}</Notice>}
       {person.stepUpAvailable && <Notice kind="info" action={<StepUpButton>{t('person.showSensitive')}</StepUpButton>}>{t('person.stepUpHidden')}</Notice>}
       <Panel>
-        <Group wrap="nowrap" align="center">
-          <Avatar size={64} color="brand" radius="xl">{initials(person)}</Avatar>
-          <Stack gap={6}>
-            <Text c="dimmed">{subtitle}</Text>
-            <Group gap={4}>
+        <Group wrap="wrap" align="flex-start" gap="md">
+          <Avatar size={64} color="brand" radius="xl" style={{ flexShrink: 0 }}>{initials(person)}</Avatar>
+          <Stack gap={6} style={{ flex: '1 1 12rem', minWidth: 0 }}>
+            <Text c="dimmed" style={{ overflowWrap: 'anywhere' }}>{subtitle}</Text>
+            <Group gap={4} wrap="wrap">
               <StatusBadge tone={STATUS_TONES[person.status]}>{t(`status.${person.status}`)}</StatusBadge>
               {person.processingRestricted && <StatusBadge tone="error">{t('person.restrictedBadge')}</StatusBadge>}
               {person.qualifications.map((q) => <StatusBadge key={q.id}>{qualificationName(q.qualification, i18n.language)}</StatusBadge>)}
@@ -125,7 +125,7 @@ function PersonFile({ person }: { person: Person }) {
         </Group>
       </Panel>
       <Tabs value={tab} onChange={setTab} keepMounted={false}>
-        <Tabs.List mb="lg">
+        <Tabs.List mb="lg" style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
           <Tabs.Tab value="master">{t('person.tabs.master')}</Tabs.Tab>
           <Tabs.Tab value="brigade">{t('person.tabs.brigade')}</Tabs.Tab>
           <Tabs.Tab value="courses">{t('person.tabs.courses')}</Tabs.Tab>

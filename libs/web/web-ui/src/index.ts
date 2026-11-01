@@ -18,3 +18,4 @@ export * from './lib/components/UnmatchedValues';
 export * from './lib/components/RememberedMappings';
 export * from './lib/components/StepUpButton';
 export * from './lib/components/LanguageSwitch';
+export * from './lib/components/useRevealOnSelect';

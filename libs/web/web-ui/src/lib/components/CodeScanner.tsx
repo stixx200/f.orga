@@ -1,4 +1,4 @@
-import { ActionIcon, Modal, TextInput, type TextInputProps, Tooltip } from '@mantine/core';
+import { ActionIcon, Button, Modal, Stack, Text, TextInput, type TextInputProps, Tooltip } from '@mantine/core';
 import { IconCamera, IconNfc } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '@forga/web-sdk';
@@ -17,9 +17,14 @@ const barcodeDetector = () => (window as unknown as { BarcodeDetector?: Detector
 /** Labels of f.orga (QR) and the usual barcodes on equipment and clothing. */
 export const CODE_FORMATS = ['qr_code', 'code_128', 'code_39', 'code_93', 'ean_13', 'ean_8', 'upc_a', 'data_matrix', 'itf'];
 
-/** The camera can scan wherever the browser grants access to it (secure context); the decoder is built in or loaded. */
-export function cameraScanSupported(): boolean {
+/** Live camera stream: needs a secure context (HTTPS or localhost); missing on plain HTTP in the LAN. */
+export function liveCameraSupported(): boolean {
   return typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia);
+}
+
+/** Camera UI is offered whenever we can open a live stream or take a photo to decode. */
+export function cameraScanSupported(): boolean {
+  return typeof window !== 'undefined';
 }
 
 /** Decodes the video with the ZXing fallback; returns a function that stops it. */
@@ -32,6 +37,19 @@ async function zxingDecode(video: HTMLVideoElement, onValue: (value: string) => 
     if (result) onValue(result.getText());
   });
   return () => controls.stop();
+}
+
+async function zxingFromImage(file: File): Promise<string | null> {
+  const { BrowserMultiFormatReader } = await import('@zxing/browser');
+  const url = URL.createObjectURL(file);
+  try {
+    const result = await new BrowserMultiFormatReader().decodeFromImageUrl(url);
+    return result.getText();
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 /** Feedback when a code was read: a short vibration (where supported) and a beep. */
@@ -78,21 +96,69 @@ export async function readNfc(signal: AbortSignal): Promise<string> {
   return new Promise((resolve) => reader.addEventListener('reading', (event) => resolve(event.serialNumber), { signal }));
 }
 
+/** Photo capture + ZXing decode: works without HTTPS (unlike getUserMedia). */
+function CaptureDecode({ onCode }: { onCode: (code: string) => void }) {
+  const { t } = useTranslation('common');
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setFailed(false);
+    try {
+      const value = await zxingFromImage(file);
+      if (value) {
+        signalScan(true);
+        onCode(value);
+      } else {
+        signalScan(false);
+        setFailed(true);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Stack gap="sm">
+      {!liveCameraSupported() && <Text size="sm" c="dimmed">{t('codes.captureHint')}</Text>}
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(e) => {
+          const file = e.currentTarget.files?.[0];
+          e.currentTarget.value = '';
+          void pick(file);
+        }}
+      />
+      <Button loading={busy} leftSection={<IconCamera size={18} />} onClick={() => input.current?.click()}>
+        {t('codes.capture')}
+      </Button>
+      {failed && <Notice kind="warning">{t('codes.noCamera')}</Notice>}
+    </Stack>
+  );
+}
+
 /**
  * Camera image that reports each code seen. The same code stays in front of the camera for a while: it is reported
- * once until another one is seen.
+ * once until another one is seen. Without a live stream (HTTP in the LAN), a photo is decoded instead.
  */
 export function CodeCamera({ onCode, height = 320 }: { onCode: (code: string) => void; height?: number }) {
   const { t } = useTranslation('common');
   const video = useRef<HTMLVideoElement>(null);
-  const [state, setState] = useState<'starting' | 'on' | 'unavailable'>(() => (cameraScanSupported() ? 'starting' : 'unavailable'));
+  const [state, setState] = useState<'starting' | 'on' | 'unavailable'>(() => (liveCameraSupported() ? 'starting' : 'unavailable'));
   const report = useRef(onCode);
   useEffect(() => {
     report.current = onCode;
   });
 
   useEffect(() => {
-    if (!cameraScanSupported()) return;
+    if (!liveCameraSupported()) return;
     const Barcode = barcodeDetector();
     let stream: MediaStream | null = null;
     let timer: number | undefined;
@@ -144,7 +210,8 @@ export function CodeCamera({ onCode, height = 320 }: { onCode: (code: string) =>
     };
   }, []);
 
-  if (state === 'unavailable') return <Notice kind="info">{t('codes.noCamera')}</Notice>;
+  if (state === 'unavailable') return <CaptureDecode onCode={onCode} />;
+  if (state === 'starting') return <Text size="sm" c="dimmed">{t('codes.camera')}…</Text>;
   return <video ref={video} muted playsInline style={{ width: '100%', maxHeight: height, background: '#000', borderRadius: 4 }} />;
 }
 

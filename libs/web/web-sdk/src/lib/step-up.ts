@@ -24,10 +24,18 @@ export function registerStepUpHandler(handler: StepUpHandler | null): void {
 /**
  * Asks for the second factor (one dialog for all requests waiting at the same time). Resolves `true` once the session
  * is confirmed. Without a registered handler (e.g. outside the shell) `false`.
+ *
+ * After a successful confirmation the coalescing promise stays open briefly so late `403` responses from requests that
+ * were already in flight share the same result instead of opening a second dialog.
  */
 export function requestStepUp(request: { enrolled: boolean } = { enrolled: true }): Promise<boolean> {
   if (!state.handler) return Promise.resolve(false);
-  state.pending ??= state.handler(request).finally(() => {
+  if (state.pending) return state.pending;
+  state.pending = (async () => {
+    const ok = await state.handler!(request);
+    if (ok) await new Promise<void>((resolve) => window.setTimeout(resolve, 1200));
+    return ok;
+  })().finally(() => {
     state.pending = null;
   });
   return state.pending;

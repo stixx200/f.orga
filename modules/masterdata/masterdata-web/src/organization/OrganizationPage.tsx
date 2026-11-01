@@ -5,7 +5,7 @@ import { type ReactNode, useState } from 'react';
 import type { BrigadeSettings } from '@forga/core-contracts';
 import type { Department, DepartmentGroup, MembershipInput, Station, Vehicle } from '@forga/masterdata-contracts';
 import { api, can, extensionsOf, send, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, EmptyState, KpiTile, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
+import { ConfirmDialog, DataTable, EmptyState, KpiTile, PageHeader, Panel, StatusBadge, useAction, useRevealOnSelect } from '@forga/web-ui';
 import { keys, loadPerson, MANAGE, PERSONS_WRITE, personName, READ, useDepartments, useGroups, usePersons, useStations, useVehicles } from '../api';
 import { DeleteDepartment, DepartmentDialog, GroupDialog, StationDialog, VehicleDialog } from './dialogs';
 
@@ -290,6 +290,7 @@ export function OrganizationPage() {
   const { data: persons = [] } = usePersons();
   const { data: brigade } = useQuery({ queryKey: ['core', 'settings', 'brigade'], queryFn: () => api<BrigadeSettings | null>('core/settings/brigade') });
   const [selected, setSelected] = useState<string | null>(null);
+  const detail = useRevealOnSelect(selected);
   const [editing, setEditing] = useState<Editing>(null);
   const counts = new Map<string, number>();
   for (const p of persons) for (const id of p.departmentIds) counts.set(id, (counts.get(id) ?? 0) + 1);
@@ -312,7 +313,7 @@ export function OrganizationPage() {
               <Tree departments={departments} parentId={null} selected={current?.id ?? null} onSelect={setSelected} counts={counts} />
             </Panel>
           </Grid.Col>
-          <Grid.Col span={{ base: 12, md: 8 }}>{current && <Detail key={current.id} department={current} edit={setEditing} />}</Grid.Col>
+          <Grid.Col span={{ base: 12, md: 8 }} ref={detail}>{current && <Detail key={current.id} department={current} edit={setEditing} />}</Grid.Col>
         </Grid>
       )}
       {editing?.kind === 'department' && (

@@ -56,10 +56,36 @@ textarea.mantine-Input-input:disabled,
   margin-bottom: 4px;
 }
 
-/* Touch targets on phones. */
+/* Touch targets on phones (WCAG 2.5.5 / Apple HIG: at least 44×44 px). */
 @media (max-width: 48em) {
-  .mantine-Button-root {
+  .mantine-Button-root,
+  .mantine-ActionIcon-root,
+  .mantine-Chip-label,
+  .mantine-NavLink-root,
+  .mantine-Tabs-tab {
     min-height: 44px;
+  }
+  .mantine-Button-root {
+    min-width: 44px;
+    padding-inline: 14px;
+  }
+  .mantine-ActionIcon-root {
+    min-width: 44px;
+    width: 44px;
+  }
+  .mantine-Button-root[data-size='compact-xs'],
+  .mantine-Button-root[data-size='xs'],
+  .mantine-Button-root[data-compact] {
+    font-size: var(--mantine-font-size-sm);
+    height: auto;
+    min-height: 44px;
+    padding-block: 8px;
+  }
+  /* Many tabs on a person file: scroll horizontally instead of wrapping into a tall stack. */
+  .mantine-Tabs-list {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 

@@ -1,6 +1,6 @@
 import { Anchor, Button, Code, Group, Loader, PasswordInput, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
-import { type ComponentType, type FormEvent, useEffect, useState } from 'react';
+import { type ComponentType, type FormEvent, useEffect, useRef, useState } from 'react';
 import type { MfaEnrolment, RecoveryCodes, Session, StepUpResult } from '@forga/core-contracts';
 import { formatTime, registerStepUpHandler, send, SESSION_QUERY_KEY, useTranslation } from '@forga/web-sdk';
 import { Notice, notifyError, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
@@ -209,25 +209,37 @@ function StepUpDialog({ session, onDone }: { session: Session; onDone: (confirme
  */
 export function StepUpHost({ session }: { session: Session }) {
   const queryClient = useQueryClient();
-  const [pending, setPending] = useState<((confirmed: boolean) => void) | null>(null);
+  const [open, setOpen] = useState(false);
+  const resolvers = useRef<Array<(confirmed: boolean) => void>>([]);
 
   useEffect(() => {
-    registerStepUpHandler(() => new Promise<boolean>((resolve) => setPending(() => resolve)));
+    registerStepUpHandler(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolvers.current.push(resolve);
+          setOpen(true);
+        }),
+    );
     return () => registerStepUpHandler(null);
   }, []);
 
-  if (!pending) return null;
+  if (!open) return null;
   return (
     <StepUpDialog
       session={session}
       onDone={(confirmed) => {
-        setPending(null);
-        if (confirmed) {
-          void queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
-          // Everything shown so far lacks the sensitive parts: load it again.
-          void queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] !== SESSION_QUERY_KEY[0] || query.queryKey[1] !== SESSION_QUERY_KEY[1] });
-        }
-        pending(confirmed);
+        const finish = resolvers.current;
+        resolvers.current = [];
+        setOpen(false);
+        void (async () => {
+          // Wait for the elevated session before resolving waiting API calls, so retries do not open a second dialog.
+          if (confirmed) await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
+          finish.forEach((resolve) => resolve(confirmed));
+          if (confirmed) {
+            // Everything shown so far lacks the sensitive parts: load it again.
+            void queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] !== SESSION_QUERY_KEY[0] || query.queryKey[1] !== SESSION_QUERY_KEY[1] });
+          }
+        })();
       }}
     />
   );

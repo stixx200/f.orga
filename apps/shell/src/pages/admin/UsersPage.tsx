@@ -3,7 +3,7 @@ import { IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import type { BulkUserInvitationResult, LocalizedText, Role, User, UserInput } from '@forga/core-contracts';
 import { can, currentLanguage, formatDate, formatDateTime, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, matchesSearch, notifySuccess, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
+import { ConfirmDialog, DataTable, matchesSearch, notifySuccess, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction, useRevealOnSelect } from '@forga/web-ui';
 import { type DepartmentOption, personLabel, USERS_KEY, useDepartments, usePersons, useRoles, useUsers } from './data';
 
 type Draft = Required<Omit<UserInput, 'password'>> & { password: string };
@@ -223,6 +223,7 @@ export function UsersPage() {
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const [status, setStatus] = useState<string>('active');
   const [selected, setSelected] = useState<string | null>(null);
+  const detail = useRevealOnSelect(selected);
   const [inviting, setInviting] = useState<'one' | 'many' | null>(null);
 
   const rows = useMemo(() => {
@@ -302,7 +303,7 @@ export function UsersPage() {
           </Stack>
         </Grid.Col>
         {selected && (
-          <Grid.Col span={{ base: 12, lg: 5 }}>
+          <Grid.Col span={{ base: 12, lg: 5 }} ref={detail}>
             <UserEditor key={selected} user={current} onDone={setSelected} />
           </Grid.Col>
         )}
