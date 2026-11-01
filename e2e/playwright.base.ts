@@ -46,6 +46,8 @@ export function e2eConfig(options: {
             command: 'pnpm exec tsx --tsconfig tools/tsconfig.json tools/e2e-serve.mts',
             cwd: ROOT,
             url: `${baseURL.replace(/\/$/, '')}/api/core/setup`,
+            // The URL answers once the server listens, before the demo data is seeded: also wait for the ready message.
+            wait: { stdout: /e2e-serve: (ready at|instance already running)/ },
             reuseExistingServer: true,
             timeout: 900_000,
           },
