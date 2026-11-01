@@ -72,8 +72,39 @@
         "targetName": "e2e",
         "ciTargetName": "e2e-ci"
       }
+    },
+    {
+      "plugin": "@nx/docker",
+      "options": {
+        "buildTarget": {
+          "name": "docker:build",
+          "cwd": ".",
+          "args": ["-f docker/Dockerfile", "--tag forga:local"]
+        },
+        "runTarget": {
+          "name": "docker:run"
+        }
+      }
     }
   ],
+  "release": {
+    "projectsRelationship": "fixed",
+    "projects": ["*", "!*-e2e"],
+    "releaseTag": {
+      "pattern": "v{version}"
+    },
+    "changelog": {
+      "workspaceChangelog": true,
+      "projectChangelogs": false
+    },
+    "docker": {
+      "registryUrl": "ghcr.io",
+      "versionSchemes": {
+        "production": "{versionActionsVersion}"
+      },
+      "preVersionCommand": "pnpm exec nx run @forga/image:\"docker:build\""
+    }
+  },
   "analytics": false,
   "targetDefaults": {
     "build": {

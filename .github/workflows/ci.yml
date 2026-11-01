@@ -20,8 +20,8 @@ jobs:
   pruefen:
     name: Lint, tests, build, e2e, image
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    # Local fallback when Nx Cloud workers are off; workers still use their own Postgres from the launch template.
+    timeout-minutes: 120
+    # Always present so local mode (and DTE fall-back onto this job) have Postgres.
     services:
       postgres:
         image: postgres:17
@@ -53,11 +53,48 @@ jobs:
         with:
           fetch-depth: 0
           filter: tree:0
-      # JS workers for typecheck/test/build; Playwright+Postgres workers for integration and e2e-ci Atomizer shards.
-      # Docker stays on this runner (workers have no Docker daemon).
-      # https://nx.dev/ci/features/split-e2e-tasks
-      - run: npx nx-cloud@latest start-ci-run --distribute-on=".nx/workflows/distribution.yaml" --stop-agents-after="typecheck,test,build,integration,e2e-ci,docker-build"
+
+      # Prefer Nx Cloud DTE when the org is usable; otherwise run on this runner with NX_NO_CLOUD.
+      # Repository variable FORGA_CI_FORCE_LOCAL=true skips Cloud (for debugging).
+      - name: Start Nx Cloud DTE
+        id: cloud
+        if: ${{ vars.FORGA_CI_FORCE_LOCAL != 'true' }}
         continue-on-error: true
+        run: |
+          set -euo pipefail
+          npx nx-cloud@latest start-ci-run \
+            --distribute-on=".nx/workflows/distribution.yaml" \
+            --stop-agents-after="typecheck,test,build,integration,e2e-ci,docker:build" \
+            2>&1 | tee /tmp/nx-cloud-start.log
+          if grep -Eiq 'Workspace Disabled|Unable to connect to Nx Cloud|exceeding the FREE plan|organization has been disabled' /tmp/nx-cloud-start.log; then
+            echo "Nx Cloud start reported an unavailable workspace"
+            exit 1
+          fi
+          # start-ci-run can exit 0 while the org is already disabled; probe the API.
+          if ! npx nx-cloud@latest api cipes --pages 1 2>&1 | tee /tmp/nx-cloud-api.log; then
+            echo "Nx Cloud API probe failed"
+            exit 1
+          fi
+          if grep -Eiq 'Workspace Disabled|Unable to connect to Nx Cloud|exceeding the FREE plan|organization has been disabled|"status":\s*40[13]' /tmp/nx-cloud-api.log; then
+            echo "Nx Cloud API probe reported an unavailable workspace"
+            exit 1
+          fi
+
+      - name: Use GitHub runner (no Nx Cloud DTE)
+        if: ${{ vars.FORGA_CI_FORCE_LOCAL == 'true' || steps.cloud.outcome != 'success' }}
+        run: |
+          echo "FORGA_CI_MODE=local" >> "$GITHUB_ENV"
+          echo "NX_NO_CLOUD=true" >> "$GITHUB_ENV"
+          npx nx-cloud@latest complete-ci-run 2>/dev/null || true
+          npx nx-cloud@latest stop-all-agents 2>/dev/null || true
+          echo "Running CI on the GitHub runner (Postgres service + Playwright on this job)."
+
+      - name: Nx Cloud DTE enabled
+        if: ${{ vars.FORGA_CI_FORCE_LOCAL != 'true' && steps.cloud.outcome == 'success' }}
+        run: |
+          echo "FORGA_CI_MODE=cloud" >> "$GITHUB_ENV"
+          echo "Nx Cloud DTE is active; integration/e2e run on Playwright agents."
+
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -66,7 +103,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - uses: nrwl/nx-set-shas@v5
       - uses: docker/setup-buildx-action@v4
-      # Local fallback when Nx Cloud DTE is off or unreachable (same stack as linux-medium-playwright).
+
+      # Local stack matches linux-medium-playwright (also used if Cloud tasks fall back onto this job).
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
       - name: Install PostgreSQL 17 client tools
@@ -83,15 +121,28 @@ jobs:
           if ! psql -h 127.0.0.1 -U forga -d forga -tc "SELECT 1 FROM pg_database WHERE datname = 'forga_e2e'" | grep -q 1; then
             psql -h 127.0.0.1 -U forga -d forga -v ON_ERROR_STOP=1 -c "CREATE DATABASE forga_e2e OWNER forga"
           fi
+
       - name: Lint and module boundaries
         run: pnpm run lint
+
       - name: Typecheck, unit tests, build, integration and e2e-ci
-        run: pnpm exec nx affected -t typecheck test build integration e2e-ci --parallel=3
+        run: |
+          set -euo pipefail
+          if [ "${FORGA_CI_MODE:-cloud}" = "local" ]; then
+            # One e2e shard at a time: shared port 3100 and forga_e2e on this runner.
+            pnpm exec nx affected -t typecheck test build --parallel=3
+            pnpm exec nx affected -t integration e2e-ci --parallel=1
+          else
+            pnpm exec nx affected -t typecheck test build integration e2e-ci --parallel=3
+          fi
+
       - name: Typecheck sources (workspace-level)
         run: node tools/typecheck-sources.mjs
+
       - name: Docker image
         # Local only: Dockerfile rebuilds the app; needs the runner's Docker, not Agents.
-        run: pnpm exec nx run @forga/image:docker-build:ci --no-agents
+        run: pnpm exec nx run @forga/image:"docker:build":ci --no-agents
+
       - name: E2E report and traces
         if: failure()
         uses: actions/upload-artifact@v7
@@ -103,5 +154,7 @@ jobs:
             dist/e2e/server.log
           retention-days: 14
           if-no-files-found: ignore
-      - run: pnpm exec nx-cloud fix-ci
-        if: always()
+
+      - name: Nx Cloud fix-ci
+        if: ${{ always() && env.FORGA_CI_MODE == 'cloud' }}
+        run: pnpm exec nx-cloud fix-ci
