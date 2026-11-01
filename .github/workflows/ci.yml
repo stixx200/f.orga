@@ -56,7 +56,7 @@ jobs:
         run: pnpm exec nx run @forga/image:docker-build:ci --no-agents
       - name: E2E report and traces
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-report
           path: |
