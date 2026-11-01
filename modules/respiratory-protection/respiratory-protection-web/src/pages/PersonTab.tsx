@@ -37,10 +37,10 @@ export function PersonTab({ personId }: { personId?: unknown }) {
       <Panel
         title={t('person.title')}
         aside={
-          <Group gap="sm">
+          <Group gap="sm" wrap="wrap" justify="flex-end">
             <FitnessBadge color={status.color} />
             {status.color !== 'grey' && (
-              <Button component="a" href={apiUrl('core/lists/respiratory-protection.record/export/pdf', { personId: id, lang: i18n.language })} target="_blank" size="xs" variant="default">
+              <Button component="a" href={apiUrl('core/lists/respiratory-protection.record/export/pdf', { personId: id, lang: i18n.language })} target="_blank" variant="default" style={{ maxWidth: '100%', height: 'auto', whiteSpace: 'normal' }}>
                 {t('person.recordPdf')}
               </Button>
             )}

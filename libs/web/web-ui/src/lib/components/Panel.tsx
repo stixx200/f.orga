@@ -7,9 +7,9 @@ export function Panel({ title, aside, children, ...props }: { title?: ReactNode;
   return (
     <Paper {...props}>
       {(title || aside) && (
-        <Group justify="space-between" mb="md" wrap="nowrap" align="center">
+        <Group justify="space-between" mb="md" wrap="wrap" align="center" gap="sm">
           {title && <h2 className={classes.panelTitle}>{title}</h2>}
-          {aside}
+          {aside && <div className={classes.panelAside}>{aside}</div>}
         </Group>
       )}
       {children}

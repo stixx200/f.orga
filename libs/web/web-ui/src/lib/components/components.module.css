@@ -17,6 +17,15 @@
   color: var(--forga-service);
   font-size: 18px;
   margin: 0;
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.panelAside {
+  flex: 0 1 auto;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .tableWrap {

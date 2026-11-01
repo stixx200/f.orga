@@ -67,7 +67,14 @@ textarea.mantine-Input-input:disabled,
   }
   .mantine-Button-root {
     min-width: 44px;
+    max-width: 100%;
     padding-inline: 14px;
+    height: auto;
+  }
+  .mantine-Button-label {
+    white-space: normal;
+    text-align: center;
+    overflow-wrap: anywhere;
   }
   .mantine-ActionIcon-root {
     min-width: 44px;
