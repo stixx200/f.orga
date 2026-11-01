@@ -122,8 +122,8 @@ test('due inspections, bulk inspection with scan and protocol, scan on the item 
   await expect(officer.getByText('1 Gerät ausgewählt')).toHaveCount(2);
   await choose(officer, 'Prüfart', /Druckprüfung nach Wäsche/);
   await chooseFiles(officer, 'Prüfprotokoll', { name: 'Sammelprotokoll.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%E2E-bulk\n') });
-  await officer.getByRole('button', { name: 'Prüfungen buchen' }).click();
-  await expect(officer.getByText('Prüfungen gespeichert')).toBeVisible();
+  await officer.getByRole('button', { name: 'Buchen' }).click();
+  await expect(officer.getByText('Gebucht')).toBeVisible();
   await officer.goto(`/equipment/items`);
   await officer.getByRole('main').getByLabel('Suche').fill(number);
   await officer.getByRole('row').filter({ hasText: number }).click();
@@ -149,8 +149,7 @@ test('bookable locations, cross-department vehicle and bulk place move', async (
   try {
     await officer.goto('/equipment/settings');
     await officer.getByRole('tab', { name: 'Fristen und Standorte' }).click();
-    const locations = officer.getByLabel('Buchbare Standorte');
-    await locations.click();
+    const locations = officer.getByRole('combobox', { name: 'Buchbare Standorte' });
     await locations.fill(placeName);
     await locations.press('Enter');
     await expect(officer.getByText(placeName, { exact: true })).toBeVisible();
