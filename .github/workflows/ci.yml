@@ -22,21 +22,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      # Agents bring Postgres + Playwright via `.nx/workflows`; these mirror the Playwright template for any local step.
+      # Prefer Nx Cloud workers (`.nx/workflows`); same URLs/tools on this runner when DTE is unavailable.
+      CI: true
+      TZ: Europe/Berlin
       TEST_DATABASE_URL: postgresql://forga:forga@127.0.0.1:5432/forga
       FORGA_E2E_DATABASE_URL: postgresql://forga:forga@127.0.0.1:5432/forga_e2e
       FORGA_E2E_URL: http://127.0.0.1:3100
+      FORGA_E2E_PORT: '3100'
       FORGA_TOTP_FILE: dist/e2e/totp.json
       FORGA_TOTP_USED_FILE: dist/e2e/totp-used.json
+      FORGA_PG_BIN: /usr/lib/postgresql/17/bin
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           filter: tree:0
-      # JS agents for typecheck/test/build; Playwright+Postgres agents for integration and e2e-ci Atomizer shards.
-      # Docker stays on this runner (Agents have no Docker daemon).
+      # JS workers for typecheck/test/build; Playwright+Postgres workers for integration and e2e-ci Atomizer shards.
+      # Docker stays on this runner (workers have no Docker daemon).
       # https://nx.dev/ci/features/split-e2e-tasks
       - run: npx nx-cloud@latest start-ci-run --distribute-on=".nx/workflows/distribution.yaml" --stop-agents-after="typecheck,test,build,integration,e2e-ci,docker-build"
+        continue-on-error: true
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -45,6 +50,38 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - uses: nrwl/nx-set-shas@v5
       - uses: docker/setup-buildx-action@v4
+      # Local fallback when Nx Cloud DTE is off or unreachable (same stack as linux-medium-playwright).
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Install and start PostgreSQL 17
+        run: |
+          set -euo pipefail
+          . /etc/os-release
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -q
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q postgresql-17 postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          sudo pg_ctlcluster 17 main start || sudo service postgresql start
+          echo "host all forga 127.0.0.1/32 scram-sha-256" | sudo tee -a /etc/postgresql/17/main/pg_hba.conf
+          sudo pg_ctlcluster 17 main reload || sudo service postgresql reload
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'forga') THEN
+              CREATE ROLE forga LOGIN PASSWORD 'forga' SUPERUSER;
+            ELSE
+              ALTER ROLE forga WITH LOGIN PASSWORD 'forga' SUPERUSER;
+            END IF;
+          END $$;
+          SQL
+          if ! sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'forga'" | grep -q 1; then
+            sudo -u postgres createdb -O forga forga
+          fi
+          if ! sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'forga_e2e'" | grep -q 1; then
+            sudo -u postgres createdb -O forga forga_e2e
+          fi
+          pg_isready -h 127.0.0.1
       - name: Lint and module boundaries
         run: pnpm run lint
       - name: Typecheck, unit tests, build, integration and e2e-ci

@@ -156,7 +156,7 @@ FORGA_E2E_URL=http://localhost:3100 FORGA_TOTP_FILE=dist/e2e/totp.json TZ=Europe
 
 ### CI
 
-In `.github/workflows/ci.yml` laufen die E2E-Tests als Atomizer-Ziele `e2e-ci` / `e2e-ci--**/**` (Plugin `@nx/playwright`, `ciTargetName`) auf Nx Cloud Agents mit der Launch-Vorlage `linux-medium-playwright` (Playwright Chromium, PostgreSQL 17, siehe `.nx/workflows/`). Jeder Shard startet über Playwright `webServer` eine frische Instanz mit `tools/e2e-serve.mts` (Bau aus dem Remote-Cache, Datenbank `forga_e2e`, Demodaten; in CI wird ein Restprozess auf dem E2E-Port beendet und die Datenbank neu angelegt). Die E2E-Instanz setzt `FORGA_LOGIN_LOCK=off`, damit Anmeldesperren Integrationstests vorbehalten bleiben und UI-Retries die Shards nicht ausbremsen. Schlägt der Lauf fehl, hängt der Orchestrator-Job HTML-Bericht, Traces und Server-Protokoll als Artefakt `e2e-report` an (14 Tage), soweit vorhanden. Lokal bleibt `pnpm run e2e:fresh` der Weg für eine frische Instanz ohne Agents; mit `FORGA_E2E_KEEP=1` kann `e2e-serve` die Instanz für weitere lokale Läufe offen halten.
+In `.github/workflows/ci.yml` laufen die E2E-Tests als Atomizer-Ziele `e2e-ci` / `e2e-ci--**/**` (Plugin `@nx/playwright`, `ciTargetName`) bevorzugt auf Nx Cloud Workers mit der Launch-Vorlage `linux-medium-playwright` (Playwright Chromium, PostgreSQL 17, siehe `.nx/workflows/`). Der GitHub-Runner installiert dieselbe Kombination selbst, falls die verteilte Ausführung ausfällt oder abgeschaltet ist. Jeder Shard startet über Playwright `webServer` eine frische Instanz mit `tools/e2e-serve.mts` (Bau aus dem Remote-Cache, Datenbank `forga_e2e`, Demodaten; in CI wird ein Restprozess auf dem E2E-Port beendet und die Datenbank neu angelegt). Die E2E-Instanz setzt `FORGA_LOGIN_LOCK=off`, damit Anmeldesperren Integrationstests vorbehalten bleiben und UI-Retries die Shards nicht ausbremsen. Schlägt der Lauf fehl, hängt der Orchestrator-Job HTML-Bericht, Traces und Server-Protokoll als Artefakt `e2e-report` an (14 Tage), soweit vorhanden. Lokal bleibt `pnpm run e2e:fresh` der Weg für eine frische Instanz ohne Workers; mit `FORGA_E2E_KEEP=1` kann `e2e-serve` die Instanz für weitere lokale Läufe offen halten.
 
 ### Tests schreiben
 
@@ -250,12 +250,13 @@ Indizes, die MikroORM nicht aus Eigenschaften ableiten kann (z. B. partielle Ind
 
 ## CI
 
-`.github/workflows/ci.yml` läuft bei jedem Push auf `main` und bei Pull Requests in einem Job über Nx Cloud (Remote Cache, Agents, `nx-cloud fix-ci`):
+`.github/workflows/ci.yml` läuft bei jedem Push auf `main` und bei Pull Requests in einem Job (Nx Cloud Remote Cache und Workers wenn erreichbar, sonst derselbe Lauf auf dem Runner; `nx-cloud fix-ci`):
 
-1. Lint und Modulgrenzen (auf dem GitHub-Runner)
-2. `nx affected` für Typprüfung, Unit-Tests, Build, Integrationstests und Atomizer-`e2e-ci` auf Agents (Verteilung in `.nx/workflows/distribution.yaml`: JS-Agents für typecheck/test/build, Playwright-Agents mit PostgreSQL 17 für `integration` und `e2e-ci`)
-3. Typprüfung der Quellen auf Workspace-Ebene (`tools/typecheck-sources.mjs`)
-4. Docker-Image über das Nx-Ziel `@forga/image:docker-build` auf dem Runner (`--no-agents`; Agents haben keinen Docker-Daemon). Veröffentlichen nach `main` bleibt in `.github/workflows/image.yml`.
+1. Playwright Chromium und PostgreSQL 17 auf dem GitHub-Runner (Fallback, wenn keine Workers laufen)
+2. Lint und Modulgrenzen (auf dem Runner)
+3. `nx affected` für Typprüfung, Unit-Tests, Build, Integrationstests und Atomizer-`e2e-ci` (Verteilung in `.nx/workflows/distribution.yaml`: JS-Workers für typecheck/test/build, Playwright-Workers mit PostgreSQL 17 für `integration` und `e2e-ci`; ohne Cloud alles auf dem Runner)
+4. Typprüfung der Quellen auf Workspace-Ebene (`tools/typecheck-sources.mjs`)
+5. Docker-Image über das Nx-Ziel `@forga/image:docker-build` auf dem Runner (`--no-agents`; Workers haben keinen Docker-Daemon). Veröffentlichen nach `main` bleibt in `.github/workflows/image.yml`.
 
 Details zu den E2E-Shards stehen unter [E2E-Tests – CI](#ci). Lokal: `pnpm exec nx run @forga/image:docker-build`.
 
