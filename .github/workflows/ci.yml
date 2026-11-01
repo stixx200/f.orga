@@ -21,6 +21,21 @@ jobs:
     name: Lint, tests, build, e2e, image
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    # Local fallback when Nx Cloud workers are off; workers still use their own Postgres from the launch template.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: forga
+          POSTGRES_PASSWORD: forga
+          POSTGRES_DB: forga
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forga -d forga"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       # Prefer Nx Cloud workers (`.nx/workflows`); same URLs/tools on this runner when DTE is unavailable.
       CI: true
@@ -32,6 +47,7 @@ jobs:
       FORGA_TOTP_FILE: dist/e2e/totp.json
       FORGA_TOTP_USED_FILE: dist/e2e/totp-used.json
       FORGA_PG_BIN: /usr/lib/postgresql/17/bin
+      PGPASSWORD: forga
     steps:
       - uses: actions/checkout@v7
         with:
@@ -53,7 +69,7 @@ jobs:
       # Local fallback when Nx Cloud DTE is off or unreachable (same stack as linux-medium-playwright).
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
-      - name: Install and start PostgreSQL 17
+      - name: Install PostgreSQL 17 client tools
         run: |
           set -euo pipefail
           . /etc/os-release
@@ -61,27 +77,12 @@ jobs:
           sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update -q
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q postgresql-17 postgresql-client-17
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q postgresql-client-17
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
-          sudo pg_ctlcluster 17 main start || sudo service postgresql start
-          echo "host all forga 127.0.0.1/32 scram-sha-256" | sudo tee -a /etc/postgresql/17/main/pg_hba.conf
-          sudo pg_ctlcluster 17 main reload || sudo service postgresql reload
-          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
-          DO $$ BEGIN
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'forga') THEN
-              CREATE ROLE forga LOGIN PASSWORD 'forga' SUPERUSER;
-            ELSE
-              ALTER ROLE forga WITH LOGIN PASSWORD 'forga' SUPERUSER;
-            END IF;
-          END $$;
-          SQL
-          if ! sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'forga'" | grep -q 1; then
-            sudo -u postgres createdb -O forga forga
+          until pg_isready -h 127.0.0.1 -U forga -d forga; do sleep 1; done
+          if ! psql -h 127.0.0.1 -U forga -d forga -tc "SELECT 1 FROM pg_database WHERE datname = 'forga_e2e'" | grep -q 1; then
+            psql -h 127.0.0.1 -U forga -d forga -v ON_ERROR_STOP=1 -c "CREATE DATABASE forga_e2e OWNER forga"
           fi
-          if ! sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'forga_e2e'" | grep -q 1; then
-            sudo -u postgres createdb -O forga forga_e2e
-          fi
-          pg_isready -h 127.0.0.1
       - name: Lint and module boundaries
         run: pnpm run lint
       - name: Typecheck, unit tests, build, integration and e2e-ci

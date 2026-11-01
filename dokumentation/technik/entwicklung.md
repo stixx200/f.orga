@@ -252,7 +252,7 @@ Indizes, die MikroORM nicht aus Eigenschaften ableiten kann (z. B. partielle Ind
 
 `.github/workflows/ci.yml` läuft bei jedem Push auf `main` und bei Pull Requests in einem Job (Nx Cloud Remote Cache und Workers wenn erreichbar, sonst derselbe Lauf auf dem Runner; `nx-cloud fix-ci`):
 
-1. Playwright Chromium und PostgreSQL 17 auf dem GitHub-Runner (Fallback, wenn keine Workers laufen)
+1. Playwright Chromium und PostgreSQL-17-Client auf dem GitHub-Runner plus Service-Container `postgres:17` (Fallback, wenn keine Workers laufen)
 2. Lint und Modulgrenzen (auf dem Runner)
 3. `nx affected` für Typprüfung, Unit-Tests, Build, Integrationstests und Atomizer-`e2e-ci` (Verteilung in `.nx/workflows/distribution.yaml`: JS-Workers für typecheck/test/build, Playwright-Workers mit PostgreSQL 17 für `integration` und `e2e-ci`; ohne Cloud alles auf dem Runner)
 4. Typprüfung der Quellen auf Workspace-Ebene (`tools/typecheck-sources.mjs`)
