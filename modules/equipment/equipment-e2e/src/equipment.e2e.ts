@@ -1,4 +1,4 @@
-import { api, choose, chooseFiles, expect, login, navigate, test, USERS } from '../../../../e2e/support';
+import { api, choose, chooseFiles, expect, login, navigate, restore, test, USERS } from '../../../../e2e/support';
 
 /**
  * The equipment officer inspects a breathing apparatus, a group leader reports a defect via the item page
