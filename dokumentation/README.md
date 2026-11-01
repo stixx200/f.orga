@@ -8,12 +8,12 @@ Die Dokumentation beschreibt immer den aktuellen Stand, ohne Änderungsverlauf. 
 
 | Ordner | Inhalt |
 | --- | --- |
-| [`anwender/`](anwender/README.md) | Bedienungsanleitung für Nutzerinnen und Nutzer |
+| [GitHub-Wiki](https://github.com/stixx200/f.orga/wiki) | Bedienungsanleitung für Nutzerinnen und Nutzer |
 | [`technik/`](technik/README.md) | Architektur, Schnittstellen, Betrieb, Entwicklung, Datenschutz |
 
 ## Schnellzugriff
 
-- [Bedienungsanleitung](anwender/README.md)
+- [Bedienungsanleitung (Wiki)](https://github.com/stixx200/f.orga/wiki)
 - [Entwicklungsumgebung](technik/entwicklung.md)
 - [Betrieb](technik/betrieb.md)
 - [Glossar Fachbegriff ↔ Code](technik/glossar.md)
