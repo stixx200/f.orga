@@ -8,7 +8,7 @@ COPY modules modules
 COPY tools tools
 # Playwright configs under *-e2e import the shared base; Nx loads them while building the graph.
 COPY e2e e2e
-COPY nx.json tsconfig.base.json tsconfig.json jest.preset.js jest.config.ts ./
+COPY nx.json tsconfig.base.json tsconfig.json ./
 RUN corepack enable && pnpm install --frozen-lockfile
 ENV NX_DAEMON=false NX_NO_CLOUD=true
 RUN pnpm exec nx run-many -t build -p shell masterdata-web incidents-web training-web respiratory-protection-web compensation-web equipment-web cost-recovery-web promotions-web clothing-web duty-officer-web info-terminal-web mp-feuer-web backup-web privacy-web personal-web \

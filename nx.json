@@ -109,7 +109,12 @@
         { "env": "FORGA_E2E_BOOT" },
         { "env": "FORGA_E2E_KEEP" }
       ],
-      "outputs": ["...", "{workspaceRoot}/dist/e2e", "{workspaceRoot}/dist/e2e-results/{projectName}", "{workspaceRoot}/dist/e2e-report/{projectName}"]
+      "outputs": [
+        "...",
+        "{workspaceRoot}/dist/e2e",
+        "{workspaceRoot}/dist/e2e-results/{projectName}",
+        "{workspaceRoot}/dist/e2e-report/{projectName}"
+      ]
     }
   },
   "generators": {
