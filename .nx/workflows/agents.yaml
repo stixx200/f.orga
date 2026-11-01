@@ -38,6 +38,8 @@ launch-templates:
     image: 'ubuntu22.04-node24.14-v1'
     no-output-timeout: '30m'
     env:
+      # So Playwright `reuseExistingServer` is false and e2e-serve force-boots a fresh DB per Atomizer shard.
+      CI: 'true'
       TEST_DATABASE_URL: 'postgresql://forga:forga@127.0.0.1:5432/forga'
       FORGA_E2E_DATABASE_URL: 'postgresql://forga:forga@127.0.0.1:5432/forga_e2e'
       FORGA_E2E_URL: 'http://127.0.0.1:3100'

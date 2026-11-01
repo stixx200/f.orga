@@ -1,11 +1,12 @@
 /**
  * Boots (or reuses) a production-like e2e instance for Playwright `webServer` / Nx Agent shards:
  * build outputs must already exist (Nx `dependsOn` / remote cache); recreates the DB, starts the server, seeds, then
- * stays alive until killed. If the instance already answers, keeps the process alive so Playwright has a managed
+ * stays alive until killed. Locally, if the instance already answers, keeps the process alive so Playwright has a managed
  * `webServer` (or exits when `FORGA_E2E_SERVE_EXIT_IF_UP=1`).
  *
- * Set `FORGA_E2E_KEEP=1` to leave the Node server running after this process exits (local multi-project runs). CI Atomizer
- * shards each boot a fresh database so shared login locks / demo mutations cannot poison the next shard.
+ * Set `FORGA_E2E_KEEP=1` to leave the Node server running after this process exits (local multi-project runs). In CI
+ * (`CI` set) every Atomizer shard kills whatever still answers on the e2e port, recreates the database and seeds, so
+ * login locks and demo mutations cannot poison the next shard.
  */
 import { type ChildProcess, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -34,6 +35,7 @@ const KEY_FILE = join(OUT, 'secret-key');
 const BACKUP_ROOT = join(OUT, 'backups');
 const READY_FILE = join(OUT, 'ready');
 const KEEP_SERVER = process.env['FORGA_E2E_KEEP'] === '1';
+const FORCE_FRESH = Boolean(process.env['CI']) || process.env['FORGA_E2E_FORCE_FRESH'] === '1';
 
 async function alreadyUp(): Promise<boolean> {
   try {
@@ -41,6 +43,22 @@ async function alreadyUp(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Stops whatever still answers on the e2e port (leftover from a previous Atomizer shard). */
+async function stopExisting(): Promise<void> {
+  if (!(await alreadyUp())) return;
+  console.log(`e2e-serve: stopping leftover instance at ${URL}`);
+  await new Promise<void>((done) => {
+    const killer = spawn('bash', ['-lc', `fuser -k ${PORT}/tcp 2>/dev/null || true`], { stdio: 'ignore' });
+    killer.on('exit', () => done());
+    killer.on('error', () => done());
+  });
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline && (await alreadyUp())) {
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  if (await alreadyUp()) throw new Error(`e2e-serve: could not free port ${PORT} (${URL} still answers)`);
 }
 
 async function recreateDatabase(): Promise<void> {
@@ -102,7 +120,8 @@ function run(command: string, commandArgs: string[], env: NodeJS.ProcessEnv = {}
 }
 
 async function main(): Promise<void> {
-  if (await alreadyUp()) {
+  if (FORCE_FRESH) await stopExisting();
+  else if (await alreadyUp()) {
     console.log(`e2e-serve: instance already running at ${URL}`);
     if (process.env['FORGA_E2E_SERVE_EXIT_IF_UP'] === '1') return;
     await new Promise(() => undefined);
@@ -130,6 +149,8 @@ async function main(): Promise<void> {
     DATABASE_URL,
     FORGA_WEB_DIR: web,
     FORGA_STAGE: process.env['FORGA_E2E_STAGE'] ?? 'development',
+    // Skip login lockouts in e2e so UI retries cannot burn a minute (integration tests keep locks on).
+    FORGA_LOGIN_LOCK: 'off',
     FORGA_SECRET_KEY: readFileSync(KEY_FILE, 'utf8'),
     FORGA_SETUP_TOKEN: setupToken,
     FORGA_PUBLIC_URL: URL,

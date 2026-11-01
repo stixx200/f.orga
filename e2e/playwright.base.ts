@@ -47,8 +47,9 @@ export function e2eConfig(options: {
             command: 'pnpm exec tsx --tsconfig tools/tsconfig.json tools/e2e-serve.mts',
             cwd: ROOT,
             url: `${baseURL.replace(/\/$/, '')}/api/core/setup`,
-            // The URL answers once the server listens, before the demo data is seeded: also wait for the ready message.
-            wait: { stdout: /e2e-serve: (ready at|instance already running)/ },
+            // The URL answers once the server listens, before the demo data is seeded: wait for seed to finish.
+            // In CI e2e-serve always boots fresh (never "instance already running").
+            wait: { stdout: /e2e-serve: ready at/ },
             reuseExistingServer: !process.env['CI'],
             timeout: 900_000,
           },
