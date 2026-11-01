@@ -10,7 +10,6 @@
     "emitDecoratorMetadata": true
   },
   "include": [
-    "vitest.config.mts",
     "src/**/*.test.ts",
     "src/**/*.spec.ts",
     "src/**/*.d.ts"
