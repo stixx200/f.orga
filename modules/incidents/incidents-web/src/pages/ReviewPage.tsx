@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import type { Incident, ReleaseManyResult, Report, ReportStatus } from '@forga/incidents-contracts';
 import { api, formatDateTime, formatMoney, send, useTranslation } from '@forga/web-sdk';
-import { ActionBar, ConfirmDialog, DataTable, EmptyState, Notice, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
+import { ActionBar, ConfirmDialog, DataTable, EmptyState, Notice, PageHeader, Panel, StatusBadge, useAction, useRevealOnSelect } from '@forga/web-ui';
 import { keys, useIncidents, useNames, useReportAccess, useSettings } from '../api';
 import { DepartmentBadge, keywordLabel, notifyReleaseResult, ReportStatusBadge } from '../parts';
 import { mergeFindings, useFindingText } from '../report/findings';
@@ -54,6 +54,7 @@ export function ReviewPage() {
   const [params] = useSearchParams();
   const [status, setStatus] = useState<ReportStatus>(() => (releaser && params.get('status') === 'released-compensation' ? 'released-compensation' : 'review'));
   const [selected, setSelected] = useState<string | null>(null);
+  const detail = useRevealOnSelect(selected);
   const { data: incidents = [], isLoading } = useIncidents({ status });
   const summaries = incidents.flatMap((incident) =>
     incident.reports.filter((r) => r.status === status && access.review(r)).map((summary) => ({ incident, summary })),
@@ -158,7 +159,7 @@ export function ReviewPage() {
               ]}
             />
           </Grid.Col>
-          <Grid.Col span={{ base: 12, lg: 5 }}>
+          <Grid.Col span={{ base: 12, lg: 5 }} ref={detail}>
             {current && <Detail key={current.summary.id} row={current} onDone={() => setSelected(null)} />}
           </Grid.Col>
         </Grid>

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { LocalizedText, Permission, Role } from '@forga/core-contracts';
 import { api, can, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, Notice, PageHeader, Panel, StatusBadge, useAction } from '@forga/web-ui';
+import { ConfirmDialog, Notice, PageHeader, Panel, StatusBadge, useAction, useRevealOnSelect } from '@forga/web-ui';
 import type { LoadedModule } from '../../modules';
 import { ROLES_KEY, useRoles, useUsers } from './data';
 
@@ -187,6 +187,7 @@ export function RolesPage({ modules }: { modules: LoadedModule[] }) {
   const { data: permissions = [] } = useQuery({ queryKey: ['core', 'permissions'], queryFn: () => api<Permission[]>('core/permissions') });
   const { data: templates = [] } = useQuery({ queryKey: ['core', 'roles', 'templates'], queryFn: () => api<{ key: string }[]>('core/roles/templates') });
   const [selected, setSelected] = useState<string | null>(null);
+  const detail = useRevealOnSelect(selected);
   const createTemplates = useAction(() => send<{ created: string[] }>('POST', 'core/roles/templates'), {
     invalidate: [ROLES_KEY],
     success: t('roles.templatesCreated'),
@@ -225,7 +226,7 @@ export function RolesPage({ modules }: { modules: LoadedModule[] }) {
             <Text size="xs" c="dimmed" mt="sm">{t('roles.areaHint')}</Text>
           </Panel>
         </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 8 }} order={{ base: 2, md: 1 }}>
+        <Grid.Col span={{ base: 12, md: 8 }} order={{ base: 2, md: 1 }} ref={detail}>
           {selected ? (
             <RoleEditor key={selected} role={current} permissions={permissions} modules={modules} onDone={setSelected} />
           ) : (

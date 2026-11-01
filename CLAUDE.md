@@ -7,10 +7,10 @@
   - Texte vom Server (Manifest-Namen, Navigation, Berechtigungen) sind `LocalizedText` `{ de, en }`.
   - Der Server liefert Fehlercodes (`{ code }`), keine fertigen Meldungen.
 - **Dokumentation deutsch:** Sie beschreibt in `dokumentation/` immer den aktuellen Stand, ohne Änderungsverlauf.
-  - `implementiert/` enthält nur, was im Code existiert, `geplant/` nur Offenes.
-  - Wird etwas umgesetzt, wird die Beschreibung von `geplant/` nach `implementiert/` verschoben, nicht kopiert.
-  - Fachbegriff ↔ Code-Begriff steht im Glossar in `dokumentation/geplant/fachmodell.md`.
-- **Mockups vor Frontends:** Vor der Umsetzung eines Frontends müssen die Mockups der App in `dokumentation/geplant/mockups/` freigegeben sein. Gestaltung nach `../Stil.md` (Theme in `libs/web/web-ui`).
+  - `anwender/` ist die Bedienungsanleitung, `technik/` die strukturelle Dokumentation (Architektur, Schnittstellen, Betrieb, Entwicklung).
+  - Offenes steht in GitHub Issues, nicht in einem `geplant/`-Ordner.
+  - Fachbegriff ↔ Code-Begriff steht im Glossar in `dokumentation/technik/glossar.md`.
+- **Gestaltung:** Theme in `libs/web/web-ui`, Hinweise in `../Stil.md`.
 - **Modul-IDs:** `core`, `masterdata`, `incidents`, `training`, `respiratory-protection`, `compensation`, `equipment`, `cost-recovery`, `promotions`, `clothing`, `duty-officer`, `info-terminal`, `mp-feuer`, `backup`, `privacy`, `personal`.
   - Die ID ist Präfix der Berechtigungen und der API-Pfade (`/api/<id>/…`).
   - Das Datenbankschema heißt wie die ID, mit `_` statt `-`.

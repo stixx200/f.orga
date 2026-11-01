@@ -24,7 +24,7 @@ import {
   SizeProfileInput,
   type StockRow,
 } from '@forga/clothing-contracts';
-import { ClothingService, ISSUE, MANAGE, READ, SELF } from './clothing.service.js';
+import { ClothingService, ISSUE, MANAGE, READ, SELF, SETTINGS } from './clothing.service.js';
 
 type Parsed<T extends { parse: (v: unknown) => unknown }> = ReturnType<T['parse']>;
 
@@ -38,20 +38,20 @@ export class ClothingController {
   }
 
   @Post('articles')
-  @RequirePermissions(MANAGE)
+  @RequirePermissions(SETTINGS)
   createArticle(@Body(new ZodPipe(ArticleInput)) input: Parsed<typeof ArticleInput>, @CurrentUser() user: AuthenticatedUser): Promise<Article> {
     return this.clothing.createArticle(user, input);
   }
 
   @Put('articles/:id')
-  @RequirePermissions(MANAGE)
+  @RequirePermissions(SETTINGS)
   updateArticle(@Param('id') id: string, @Body(new ZodPipe(ArticleInput)) input: Parsed<typeof ArticleInput>, @CurrentUser() user: AuthenticatedUser): Promise<Article> {
     return this.clothing.updateArticle(user, id, input);
   }
 
   /** Adds the missing articles of the template (jacket, trousers, boots, gloves …). */
   @Post('articles/template')
-  @RequirePermissions(MANAGE)
+  @RequirePermissions(SETTINGS)
   applyTemplate(@CurrentUser() user: AuthenticatedUser): Promise<{ added: number }> {
     return this.clothing.applyTemplate(user);
   }

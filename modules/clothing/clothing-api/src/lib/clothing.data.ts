@@ -6,7 +6,7 @@ import { addBerlinDays, type AuthenticatedUser, berlinDate, type DeadlineInput, 
 import { ClothingSettings } from '@forga/clothing-contracts';
 import { PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { ArticleEntity, CareEntity, ClothingInspectionEntity, ClothingItemEntity, ConsumableReceiptEntity, IssueEntity, SizeProfileEntity } from './clothing.entities.js';
-import { ClothingService, ISSUE, READ, SELF } from './clothing.service.js';
+import { ClothingService, ISSUE, MANAGE, READ, SELF } from './clothing.service.js';
 
 const col = (key: string, de: string, en: string, width?: number): ListColumn => ({ key, label: { de, en }, ...(width ? { width } : {}) });
 const department = { key: 'departmentId', label: { de: 'Abteilung', en: 'Department' }, type: 'department' as const };
@@ -262,7 +262,7 @@ export class ClothingData implements DeadlineProvider {
     return {
       id: 'clothing.issued',
       name: { de: 'Ausgegebene Schutzausrüstung', en: 'Issued protective equipment' },
-      permission: READ,
+      permission: MANAGE,
       personalData: 'names',
       parameters: [department],
       schema: Filter,
@@ -289,7 +289,7 @@ export class ClothingData implements DeadlineProvider {
     return {
       id: 'clothing.due',
       name: { de: 'Fällige Wäsche und Prüfungen', en: 'Washing and inspections due' },
-      permission: ISSUE,
+      permission: MANAGE,
       personalData: 'names',
       parameters: [{ key: 'until', label: { de: 'Fällig bis', en: 'Due until' }, type: 'date' }, department],
       schema: Filter,

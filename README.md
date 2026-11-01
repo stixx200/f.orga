@@ -14,7 +14,7 @@ pnpm run check                                                                  
 The documentation is written in German:
 
 - Overview: [`dokumentation/`](dokumentation/README.md)
-- Development: [`dokumentation/implementiert/entwicklung.md`](dokumentation/implementiert/entwicklung.md)
-- Operations: [`dokumentation/implementiert/betrieb.md`](dokumentation/implementiert/betrieb.md)
-- Roadmap: [`dokumentation/geplant/roadmap.md`](dokumentation/geplant/roadmap.md)
-- Glossary German ↔ code terms: [`dokumentation/geplant/fachmodell.md`](dokumentation/geplant/fachmodell.md#glossar-fachbegriff--code)
+- User manual: [`dokumentation/anwender/`](dokumentation/anwender/README.md)
+- Development: [`dokumentation/technik/entwicklung.md`](dokumentation/technik/entwicklung.md)
+- Operations: [`dokumentation/technik/betrieb.md`](dokumentation/technik/betrieb.md)
+- Glossary German ↔ code terms: [`dokumentation/technik/glossar.md`](dokumentation/technik/glossar.md)

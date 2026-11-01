@@ -12,7 +12,6 @@ export function StepUpButton({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   return (
     <Button
-      size="xs"
       variant="outline"
       onClick={async () => {
         if (await requestStepUp({ enrolled: session?.mfa.enrolled ?? true })) await queryClient.invalidateQueries();

@@ -6,7 +6,7 @@ import { Fragment, useState } from 'react';
 import { useDebouncedValue } from '@mantine/hooks';
 import { LIST_PURPOSE_OTHER, type ListCell, type ListData, type ListInfo, type ListOption, type ListParameter } from '@forga/core-contracts';
 import { api, apiUrl, formatDate, isElevated, openAfterStepUp, useSession, withQuery, useLocalized, useTranslation } from '@forga/web-sdk';
-import { DataTable, EmptyState, Notice, PageHeader, Panel } from '@forga/web-ui';
+import { DataTable, EmptyState, Notice, PageHeader, Panel, useRevealOnSelect } from '@forga/web-ui';
 import type { LoadedModule } from '../modules';
 import { useDepartments } from './admin/data';
 
@@ -215,6 +215,7 @@ export function ListsPage({ modules }: { modules: LoadedModule[] }) {
   const localized = useLocalized();
   const { data: lists = [], isLoading } = useQuery({ queryKey: ['core', 'lists'], queryFn: () => api<ListInfo[]>('core/lists') });
   const [selected, setSelected] = useState<string | null>(null);
+  const detail = useRevealOnSelect(selected);
   const list = lists.find((l) => l.id === selected);
   const groups = [...new Set(lists.map((l) => l.module))];
   const moduleName = (id: string) => {
@@ -242,7 +243,7 @@ export function ListsPage({ modules }: { modules: LoadedModule[] }) {
               ))}
             </Panel>
           </Grid.Col>
-          <Grid.Col span={{ base: 12, md: 8 }}>
+          <Grid.Col span={{ base: 12, md: 8 }} ref={detail}>
             {list ? <ListView key={list.id} list={list} /> : <EmptyState title={t('lists.choose')} />}
           </Grid.Col>
         </Grid>

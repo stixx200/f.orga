@@ -11,8 +11,9 @@ export const CLOTHING_MANIFEST = {
   permissions: [
     { id: 'clothing.read', name: { de: 'Schutzausrüstung einsehen', en: 'View protective equipment' }, scope: 'department' },
     { id: 'clothing.issue', name: { de: 'Ausgeben, zurücknehmen, Wäsche und Prüfungen erfassen', en: 'Issue, take back, record washing and inspections' }, scope: 'department' },
-    { id: 'clothing.manage', name: { de: 'Bestand und Artikel verwalten', en: 'Manage stock and articles' }, scope: 'department' },
+    { id: 'clothing.manage', name: { de: 'Bestand verwalten (Stücke erfassen, aussondern)', en: 'Manage stock (record pieces, retire)' }, scope: 'department' },
     { id: 'clothing.self', name: { de: 'Eigene Schutzausrüstung sehen', en: 'See own protective equipment' }, scope: 'department' },
+    // Article catalog and laundry reminder: brigade-wide; not covered by a department assignment of `clothing.*`.
     { id: 'clothing.settings.manage', name: { de: 'Einstellungen der Kleiderkammer', en: 'Clothing store settings' }, scope: 'brigade' },
   ],
   navigation: [
@@ -21,7 +22,7 @@ export const CLOTHING_MANIFEST = {
     { label: { de: 'Wäsche', en: 'Washing' }, path: 'care', permission: 'clothing.issue', icon: 'wash' },
     { label: { de: 'Prüfung', en: 'Inspection' }, path: 'inspections', permission: 'clothing.issue', icon: 'check' },
     { label: { de: 'Bestand', en: 'Stock' }, path: 'stock', permission: 'clothing.read', icon: 'list' },
-    { label: { de: 'Kleiderkammer', en: 'Clothing store' }, path: 'articles', permission: 'clothing.manage', icon: 'settings', section: 'settings' },
+    { label: { de: 'Kleiderkammer', en: 'Clothing store' }, path: 'articles', permission: 'clothing.settings.manage', icon: 'settings', section: 'settings' },
   ],
   roles: [
     ...SELF_ROLES.map((key) => ({ key, permissions: ['clothing.self'] })),
@@ -29,6 +30,7 @@ export const CLOTHING_MANIFEST = {
       key: 'clothing-officer',
       name: { de: 'Kleiderwart', en: 'Clothing officer' },
       description: { de: 'Schutzausrüstung ausgeben, zurücknehmen, Wäsche und Prüfungen', en: 'Issue and take back protective equipment, washing and inspections' },
+      // `clothing.settings.manage` is brigade-scoped: only a brigade-wide assignment of this role opens the article catalog.
       permissions: ['clothing.*', 'masterdata.persons.read'],
     },
     { key: 'commander', permissions: ['clothing.read'], permissionsAllDepartments: ['clothing.read'] },

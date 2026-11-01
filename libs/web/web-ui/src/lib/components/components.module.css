@@ -17,6 +17,15 @@
   color: var(--forga-service);
   font-size: 18px;
   margin: 0;
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.panelAside {
+  flex: 0 1 auto;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .tableWrap {
@@ -161,7 +170,9 @@
   font-size: 12px;
   font-weight: 700;
   border: 1px solid transparent;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 .tone-neutral { background: #f0eeed; color: #444; border-color: #ddd5d3; }
@@ -175,9 +186,18 @@
   display: flex;
   gap: 12px;
   align-items: flex-start;
+  flex-wrap: wrap;
   padding: 12px 16px;
   border-radius: 4px;
   border-left: 4px solid;
+}
+
+@media (max-width: 48em) {
+  .notice > :last-child:not(:nth-child(2)) {
+    flex: 1 1 100%;
+    display: flex;
+    justify-content: flex-end;
+  }
 }
 
 .notice-error { background: var(--forga-warning); border-color: var(--forga-service); }

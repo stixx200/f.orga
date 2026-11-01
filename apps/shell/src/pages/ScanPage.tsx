@@ -110,13 +110,22 @@ export function ScanPage() {
           </form>
           <Group gap="xs">
             {cameraScanSupported() && (
-              <Button variant={camera ? 'filled' : 'default'} leftSection={<IconCamera size={18} />} onClick={() => setCamera((c) => !c)}>{common('codes.camera')}</Button>
+              <Button variant={camera ? 'filled' : 'default'} leftSection={<IconCamera size={18} />} onClick={() => setCamera((c) => !c)}>
+                {camera ? common('actions.cancel') : common('codes.camera')}
+              </Button>
             )}
             {nfcSupported() && (
               <Button variant={nfc ? 'filled' : 'default'} leftSection={<IconNfc size={18} />} onClick={readChip}>{nfc ? common('codes.nfcWaiting') : common('codes.nfc')}</Button>
             )}
           </Group>
-          {camera && <CodeCamera onCode={(code) => void latest.current(code)} />}
+          {camera && (
+            <CodeCamera
+              onCode={(code) => {
+                setCamera(false);
+                void latest.current(code);
+              }}
+            />
+          )}
           <Text size="xs" c="dimmed">{t('scan.hint')}</Text>
         </Stack>
       </Panel>
