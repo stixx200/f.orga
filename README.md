@@ -15,6 +15,6 @@ The documentation is written in German:
 
 - Overview: [`dokumentation/`](dokumentation/README.md)
 - User manual: [GitHub Wiki](https://github.com/stixx200/f.orga/wiki)
-- Development: [`dokumentation/technik/entwicklung.md`](dokumentation/technik/entwicklung.md)
-- Operations: [`dokumentation/technik/betrieb.md`](dokumentation/technik/betrieb.md)
+- Development: [`dokumentation/technik/entwicklung.md`](dokumentation/technik/entwicklung.md) (incl. [release](dokumentation/technik/entwicklung.md#release))
+- Operations: [`dokumentation/technik/betrieb.md`](dokumentation/technik/betrieb.md) (image tags `:main` / `:X.Y.Z`)
 - Glossary German ↔ code terms: [`dokumentation/technik/glossar.md`](dokumentation/technik/glossar.md)

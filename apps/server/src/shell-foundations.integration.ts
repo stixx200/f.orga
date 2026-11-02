@@ -1,6 +1,6 @@
 import { EntityManager } from '@mikro-orm/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DigestService, MailService, PasswordResetService, User } from '@forga/core-api';
+import { AuditEntry, DigestService, MailService, PasswordResetService, User } from '@forga/core-api';
 import { setUp, startTestApp, type TestApp, UI } from './testing/test-app';
 
 let test: TestApp;
@@ -171,6 +171,8 @@ describe('deadlines and digest', () => {
   it('sends the scheduled digest only once on the configured weekday', async () => {
     await test.http.put('/api/core/profile').set('Cookie', admin).set(UI).send({ language: 'en', receiveDigest: true }).expect(200);
     const digest = test.app.get(DigestService);
+    // POST /digest in the previous test records the digest and its e-mails for Berlin "today"; when that is this Monday, clear them so the schedule can run.
+    await test.app.get(EntityManager).fork().nativeDelete(AuditEntry, { action: { $in: ['reminders.digest-sent', 'reminders.digest-mail'] } });
     const monday = new Date('2026-11-02T08:00:00+01:00');
     expect(await digest.sendIfScheduled(new Date('2026-11-03T08:00:00+01:00'))).toBeNull();
     expect(await digest.sendIfScheduled(new Date('2026-11-02T06:00:00+01:00'))).toBeNull();

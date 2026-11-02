@@ -1,4 +1,4 @@
-import { choose, expect, login, row, section, test } from '../../../../e2e/support';
+import { api, choose, expect, login, row, section, test } from '../../../../e2e/support';
 
 /**
  * Scenario "write an incident report" with the two roles of the demo data:
@@ -26,12 +26,21 @@ test('group leader writes a report, commander reviews and releases it', async ({
   await expect(gf.getByRole('heading', { name: 'Bericht Abteilung Musterstadt' })).toBeVisible();
   await expect(gf.getByText('Hauptbericht').first()).toBeVisible();
 
+  // The new incident has an EvD report with the duty officer of this week's roster in it; a person may be in only one
+  // report of an incident, so the duty officer is not chosen below.
+  const { incidentId } = await api<{ incidentId: string }>(gf, 'GET', `incidents/reports/${new URL(reportUrl).pathname.split('/').at(-1)}`);
+  const incident = await api<{ reports: { unit: string | null; authorPersonId: string | null }[] }>(gf, 'GET', `incidents/incidents/${incidentId}`);
+  const unitAuthors = new Set(incident.reports.flatMap((r) => (r.unit && r.authorPersonId ? [r.authorPersonId] : [])));
+  const persons = await api<{ id: string; firstName: string; lastName: string }[]>(gf, 'GET', 'masterdata/persons');
+  const inOtherReports = persons.filter((p) => unitAuthors.has(p.id)).map((p) => `${p.lastName}, ${p.firstName}`);
+
   // Personnel: a vehicle with three persons.
   await section(gf, 'Personal & Fahrzeuge');
   await choose(gf, 'Fahrzeug oder Bereitschaft', /^HLF 20/);
   // Several persons at once: the list hides the chosen ones, so the first option is always a new person.
   await gf.getByRole('combobox', { name: 'Personen', exact: true }).click();
-  for (let i = 0; i < 3; i++) await gf.getByRole('option').first().click();
+  const options = inOtherReports.reduce((o, name) => o.filter({ hasNotText: name }), gf.getByRole('option'));
+  for (let i = 0; i < 3; i++) await options.first().click();
   await gf.keyboard.press('Escape');
   await gf.getByRole('button', { name: '3 Personen hinzufügen' }).click();
   await expect(gf.getByText('3 von 9 Plätzen')).toBeVisible();
