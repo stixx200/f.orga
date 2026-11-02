@@ -125,13 +125,14 @@ jobs:
       - name: Lint and module boundaries
         run: pnpm run lint
 
-      - name: Typecheck, unit tests, build, integration and e2e-ci
+      - name: Typecheck, unit tests, build, integration and e2e
         run: |
           set -euo pipefail
           if [ "${FORGA_CI_MODE:-cloud}" = "local" ]; then
-            # One e2e shard at a time: shared port 3100 and forga_e2e on this runner.
+            # Atomized e2e-ci requires Nx Cloud; use e2e on this runner (one project at a time: shared port 3100).
+            # https://nx.dev/ci/features/split-e2e-tasks#nx-cloud-is-required-to-run-atomized-tasks
             pnpm exec nx affected -t typecheck test build --parallel=3
-            pnpm exec nx affected -t integration e2e-ci --parallel=1
+            pnpm exec nx affected -t integration e2e --parallel=1
           else
             pnpm exec nx affected -t typecheck test build integration e2e-ci --parallel=3
           fi

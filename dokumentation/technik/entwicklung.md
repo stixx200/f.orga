@@ -250,7 +250,7 @@ Indizes, die MikroORM nicht aus Eigenschaften ableiten kann (z. B. partielle Ind
 
 ## CI
 
-`.github/workflows/ci.yml` läuft bei jedem Push auf `main` und bei Pull Requests in einem Job. Es versucht zuerst **Nx Cloud DTE** (`start-ci-run` + API-Check). Ist die Organisation erreichbar, verteilen Workers die Aufgaben (`.nx/workflows/distribution.yaml`) und danach läuft `nx-cloud fix-ci`. Schlägt Cloud fehl oder ist die Repository-Variable `FORGA_CI_FORCE_LOCAL=true`, setzt CI `NX_NO_CLOUD=true` und läuft auf dem **GitHub-Runner** (Service `postgres:17`, Playwright, PostgreSQL-17-Client; Integration und `e2e-ci` nacheinander wegen Port 3100).
+`.github/workflows/ci.yml` läuft bei jedem Push auf `main` und bei Pull Requests in einem Job. Es versucht zuerst **Nx Cloud DTE** (`start-ci-run` + API-Check). Ist die Organisation erreichbar, verteilen Workers die Aufgaben (`.nx/workflows/distribution.yaml`) und danach läuft `nx-cloud fix-ci`. Schlägt Cloud fehl oder ist die Repository-Variable `FORGA_CI_FORCE_LOCAL=true`, setzt CI `NX_NO_CLOUD=true` und läuft auf dem **GitHub-Runner** (Service `postgres:17`, Playwright, PostgreSQL-17-Client; Integration und `e2e` nacheinander wegen Port 3100 — Atomizer-`e2e-ci` braucht Nx Cloud).
 
 Ablauf:
 
