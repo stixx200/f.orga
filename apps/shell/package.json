@@ -9,7 +9,7 @@
     "preview": "vite preview --port 4200 --strictPort"
   },
   "dependencies": {
-    "@module-federation/runtime": "^2.4.0",
+    "@module-federation/runtime": "^2.9.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "@forga/web-sdk": "workspace:*",
@@ -29,7 +29,7 @@
   },
   "devDependencies": {
     "@module-federation/vite": "^1.15.5",
-    "@nx/vite": "24.0.2",
+    "@nx/vite": "24.0.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.2",
