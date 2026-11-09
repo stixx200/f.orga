@@ -23,7 +23,10 @@ async function bootstrap() {
   if (executed.length) Logger.log(`${executed.length} migration(s) executed`);
 
   const port = process.env.PORT || 3000;
-  await app.listen(port);
+  // Without FORGA_HOST the server listens on all interfaces (0.0.0.0 and ::).
+  const host = process.env.FORGA_HOST || undefined;
+  if (host) await app.listen(port, host);
+  else await app.listen(port);
   // Set when Nx waits for this server to be ready
   if (process.env.NX_READY_SIGNAL_SOCKET) {
     try {
@@ -36,7 +39,7 @@ async function bootstrap() {
       // @nx/js isn't installed
     }
   }
-  Logger.log(`f.orga is running at http://localhost:${port}/api`);
+  Logger.log(`f.orga is running at http://${host ?? 'localhost'}:${port}/api`);
 }
 
 bootstrap();

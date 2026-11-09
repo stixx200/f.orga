@@ -47,6 +47,7 @@ docker compose -f docker/compose.yml up -d --build
 | `FORGA_DB_APP_PASSWORD` | Passwort der Datenbankrolle `forga_app`, mit der sich die Anwendung verbindet (kein Superuser, siehe [Datenbankrolle der Anwendung](#datenbankrolle-der-anwendung)), Pflicht; bei den Stufen `FORGA_DB_APP_PASSWORD_REAL`, `_TEST` | – |
 | `FORGA_PORT` | Port auf dem Host | `8080` |
 | `FORGA_STAGE` | Art des Systems: `production` (Echtdaten), `test` (nur Demodaten: Band „Testsystem – nur Demodaten“ auf jeder Seite, Datenübernahme aus MP-Feuer und Import von Personen gesperrt, Wiederherstellung einer Sicherung des Echtsystems nur mit Begründung und Löschen nach 7 Tagen) oder `development`. Ein anderer Wert verhindert den Start. Siehe [Datenschutz](datenschutz.md#echt--test--und-entwicklungssystem-l6). | `production` (Image, Compose), ohne Angabe `development` |
+| `FORGA_HOST` | Adresse, an die der Server bindet: eine Schnittstelle (z. B. `10.0.0.5`) oder `0.0.0.0` für alle. Ohne Angabe alle Schnittstellen. Nur ohne Docker; im Container bestimmt `FORGA_PORT` (`127.0.0.1:8080`), an welche Adresse des Hosts der Port gebunden ist. | alle |
 | `FORGA_SECURE_COOKIES` | Cookies auch ohne `https://`-Adresse nur über HTTPS senden. Automatisch, sobald die Adresse von f.orga mit `https://` beginnt oder die Anfrage über HTTPS kam. | `false` |
 | `FORGA_MAIL_TRANSPORT` | `memory`: E-Mails nur im Speicher sammeln statt per SMTP zu senden (Tests, Vorführung) | SMTP |
 | `FORGA_DIGEST_SCHEDULER` | `off`: wöchentliche Sammel-E-Mail nicht automatisch senden | an |
