@@ -1,6 +1,6 @@
 {
   "name": "@forga/web-sdk",
-  "version": "0.0.1",
+  "version": "1.0.0-beta.0",
   "private": true,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
