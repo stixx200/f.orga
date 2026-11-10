@@ -1,4 +1,4 @@
-import { Button, Checkbox, Select, SimpleGrid, Stack, Text, Textarea } from '@mantine/core';
+import { Button, Checkbox, Group, Select, SimpleGrid, Stack, Text, Textarea } from '@mantine/core';
 import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -56,6 +56,11 @@ export function OpenReportsPage() {
     success: t('open.assigned'),
     invalidate: [keys.incidents],
   });
+  // One click for a report without open findings: submitted without a confirmation (the server refuses open ones).
+  const submitReady = useAction((reportId: string) => send<Report>('POST', `incidents/reports/${reportId}/submit`, { acknowledgements: [] }), {
+    success: t('open.submitted'),
+    invalidate: [keys.incidents],
+  });
   const remind = useAction(() => send<RemindResult>('POST', 'incidents/open-reports/remind', { personIds: chosen, message }), {
     onSuccess: (result) => {
       setReminding(false);
@@ -89,7 +94,13 @@ export function OpenReportsPage() {
             const open = [...blocking(mergeFindings(r.report.findings)), ...openWarnings(mergeFindings(r.report.findings))];
             const returned = r.report.returnComment ? `${t('open.returned')}: ${r.report.returnComment}` : '';
             const author = cannotWrite(r) ? t('report.authorCannotWrite') : '';
-            return open.length || returned || author ? <Text size="xs">{[author, returned, ...open.slice(0, 3).map((f) => findingText(f))].filter(Boolean).join(' · ')}</Text> : <StatusBadge tone="done">{t('open.ready')}</StatusBadge>;
+            if (open.length || returned || author) return <Text size="xs">{[author, returned, ...open.slice(0, 3).map((f) => findingText(f))].filter(Boolean).join(' · ')}</Text>;
+            return (
+              <Group gap="xs" wrap="nowrap">
+                <StatusBadge tone="done">{t('open.ready')}</StatusBadge>
+                {access.write(r.summary) && !r.summary.locked && <Button size="xs" loading={submitReady.isPending} onClick={() => submitReady.mutate(r.summary.id)}>{t('open.submitReady')}</Button>}
+              </Group>
+            );
           },
         },
         {
