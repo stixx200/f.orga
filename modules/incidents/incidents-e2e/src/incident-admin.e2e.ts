@@ -25,6 +25,8 @@ test('commander works with the evaluations and settings of the incident reports'
   await dialog.getByLabel('Bemerkung').fill('E2E-Dienst');
   await dialog.getByRole('button', { name: 'Speichern' }).click();
   await expect(page.getByText('Dienst gespeichert.')).toBeVisible();
+  // The roster shows one year at a time: 56 days ahead may fall into the next year.
+  await choose(page, 'Jahr', isoDate(56).slice(0, 4));
   const duty = row(page, germanDate(56));
   await expect(duty).toBeVisible();
   await duty.getByRole('button', { name: 'Löschen' }).click();
