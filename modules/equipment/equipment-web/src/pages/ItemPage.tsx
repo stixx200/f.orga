@@ -291,6 +291,8 @@ export function ItemPage() {
   const may = (permission: string) => can(session, permission, item.departmentId);
   const canWrite = access.canWrite(item);
   const canInspect = access.canInspect(item);
+  // The server accepts a defect from members with "report defects" or with write access (`ItemsService.reportDefect`).
+  const canReport = canWrite || may('equipment.defects.report');
   const retired = item.status === 'retired';
   const link = `${base}/equipment/items/${item.id}`;
   const fields: [string, string][] = [
@@ -320,7 +322,7 @@ export function ItemPage() {
         actions={
           !retired && (
             <Group gap="sm">
-              <Button variant="default" onClick={() => setDialog('defect')}>{t('defect.report')}</Button>
+              {canReport && <Button variant="default" onClick={() => setDialog('defect')}>{t('defect.report')}</Button>}
               {canInspect && item.inspections.length > 0 && <Button onClick={() => setDialog('inspect')}>{t('inspection.inspect')}</Button>}
               {canWrite && <Button variant="default" onClick={() => setDialog('edit')}>{t('item.edit')}</Button>}
               {canWrite && (
@@ -390,7 +392,7 @@ export function ItemPage() {
       )}
       {dialog === 'edit' && <ItemDialog item={item} onClose={() => setDialog(null)} />}
       {dialog === 'inspect' && <InspectionDialog item={item} onClose={() => setDialog(null)} />}
-      {dialog === 'defect' && <DefectDialog item={item} onClose={() => setDialog(null)} />}
+      {dialog === 'defect' && canReport && <DefectDialog item={item} onClose={() => setDialog(null)} />}
       {dialog === 'retire' && <RetireDialog item={item} onClose={() => setDialog(null)} />}
     </Stack>
   );
