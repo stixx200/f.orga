@@ -4,6 +4,11 @@
 #                 ports 80/443), "/certs/forga.crt /certs/forga.key" = own certificate of the municipality (folder
 #                 FORGA_CERT_DIR), "internal" = own certificate authority of Caddy (profile https-internal).
 # No access log: Caddy writes none unless configured (IP addresses of the users are personal data).
+# Clients that connect by IP address send no server name; default_sni serves them the certificate of FORGA_DOMAIN.
+{
+	default_sni {$FORGA_DOMAIN}
+}
+
 {$FORGA_DOMAIN} {
 	tls {$FORGA_TLS}
 	encode zstd gzip
