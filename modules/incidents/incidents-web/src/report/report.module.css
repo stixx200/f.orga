@@ -78,6 +78,11 @@
   border-top-color: var(--forga-field-border);
 }
 
+.vehicle[data-drop] {
+  outline: 2px dashed var(--forga-service);
+  outline-offset: -2px;
+}
+
 .vehicleHead {
   padding: 10px 12px;
   background: var(--forga-alternate);
@@ -93,6 +98,14 @@
 
 .personRow[data-problem] {
   background: var(--forga-warning);
+}
+
+.personRow[draggable='true'] {
+  cursor: grab;
+}
+
+.personRow[data-dragging] {
+  opacity: 0.4;
 }
 
 .person {

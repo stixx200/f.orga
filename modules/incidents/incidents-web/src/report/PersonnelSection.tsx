@@ -58,6 +58,9 @@ export function PersonnelSection({ content, report, update, disabled, findings }
   const [loadingCrew, setLoadingCrew] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [editingVehicle, setEditingVehicle] = useState<string | null>(null);
+  // Drag and drop of a person between vehicles and standby: the index of the dragged entry and the group under it.
+  const [dragging, setDragging] = useState<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   // A brigade-wide unit (e.g. the duty officer) uses the vehicles and stations of every department.
   const ownVehicles = vehicles.filter((v) => !report.departmentId || v.departmentId === report.departmentId);
@@ -128,6 +131,18 @@ export function PersonnelSection({ content, report, update, disabled, findings }
     } finally {
       setLoadingCrew(false);
     }
+  };
+  /** Moves a person to a vehicle or standby. Standby has no breathing apparatus, like the terminal booking. */
+  const moveTo = (index: number, group: { vehicleId: string | null; key: string }) => {
+    const stationId = group.key.startsWith('s:') ? group.key.slice(2) : null;
+    update((c) => ({
+      ...c,
+      personnel: c.personnel.map((p, i) => {
+        if (i !== index) return p;
+        const moved = { ...p, vehicleId: stationId ? null : group.vehicleId, standbyStationId: stationId };
+        return stationId ? { ...moved, breathingApparatus: false, breathingMinutes: null, chemicalSuit: false, breathingDevice: null } : moved;
+      }),
+    }));
   };
   const compensationOf = (index: number) => {
     const entry = content.personnel[index];
@@ -207,7 +222,26 @@ export function PersonnelSection({ content, report, update, disabled, findings }
           const members = content.personnel.map((p, index) => ({ p, index })).filter(({ p }) => targetOf(p) === group.key);
           const own = group.vehicleId ? vehicleEntry(group.vehicleId) : null;
           return (
-            <Paper key={group.key} className={classes.vehicle} data-standby={group.standby || undefined}>
+            <Paper
+              key={group.key}
+              className={classes.vehicle}
+              data-standby={group.standby || undefined}
+              data-drop={dropTarget === group.key || undefined}
+              onDragOver={(event) => {
+                // Only the groups a person can be moved to: vehicles and standby, not the entries without place.
+                if (disabled || dragging === null || !group.key || targetOf(content.personnel[dragging]) === group.key) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                setDropTarget(group.key);
+              }}
+              onDragLeave={() => setDropTarget((current) => (current === group.key ? null : current))}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (dragging !== null && group.key) moveTo(dragging, group);
+                setDragging(null);
+                setDropTarget(null);
+              }}
+            >
               <Group justify="space-between" align="start" className={classes.vehicleHead}>
                 <div>
                   <Text fw={700}>{group.title}</Text>
@@ -237,7 +271,23 @@ export function PersonnelSection({ content, report, update, disabled, findings }
                 const problems = findings.filter((f) => f.subject === (p.personId ?? `guest:${p.guestName}`));
                 const compensation = compensationOf(index);
                 return (
-                  <div key={`${p.personId ?? p.guestName}-${index}`} className={classes.personRow} data-problem={problems.some((f) => f.level === 'error') || undefined}>
+                  <div
+                    key={`${p.personId ?? p.guestName}-${index}`}
+                    className={classes.personRow}
+                    data-problem={problems.some((f) => f.level === 'error') || undefined}
+                    data-dragging={dragging === index || undefined}
+                    draggable={!disabled}
+                    title={disabled ? undefined : t('personnel.dragHint')}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'move';
+                      event.dataTransfer.setData('text/plain', String(index));
+                      setDragging(index);
+                    }}
+                    onDragEnd={() => {
+                      setDragging(null);
+                      setDropTarget(null);
+                    }}
+                  >
                     <UnstyledButton className={classes.person} onClick={() => setEditing(index)}>
                     <span className={classes.fn}>{functionAbbreviation(p.function)}</span>
                     <span className={classes.name}>
