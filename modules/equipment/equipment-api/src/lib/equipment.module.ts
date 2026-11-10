@@ -5,10 +5,10 @@ import { EQUIPMENT_MANIFEST, EQUIPMENT_SETTINGS, EQUIPMENT_USAGE } from '@forga/
 import { CATALOG_REFERENCES, type CatalogReferences, ORGANIZATION_REFERENCES, type OrganizationReferences } from '@forga/masterdata-contracts';
 import { EQUIPMENT_MIGRATIONS } from '../migrations/index.js';
 import { registerAuditReferences } from './audit/audit.references.js';
-import { CatalogController } from './catalog/catalog.controller.js';
+import { CatalogController, INSPECTION_TYPE_ATTACHMENTS } from './catalog/catalog.controller.js';
 import { EquipmentData } from './data/equipment.data.js';
 import { EquipmentRetention } from './data/equipment.retention.js';
-import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, RecentBulkCategoryEntity, UsageEntity } from './equipment.entities.js';
+import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, InspectionTypeEntity, RecentBulkCategoryEntity, UsageEntity } from './equipment.entities.js';
 import { InventoryImport } from './imports/inventory.import.js';
 import { EquipmentLookups } from './imports/lookups.js';
 import { ItemsController } from './items/items.controller.js';
@@ -123,6 +123,13 @@ export class EquipmentModule implements OnModuleInit {
     this.attachments.register('equipment.item', { ...shared, max: 1, imagesOnly: true });
     this.attachments.register('equipment.item-document', shared);
     this.historyAccess.registerPermission('equipment.equipment_type', 'equipment.settings.manage');
+    this.historyAccess.registerPermission('equipment.inspection_type', 'equipment.settings.manage');
+    // Document of an inspection type of the catalog (test routine, PDF): read like the inspections, written in the settings.
+    this.attachments.register(INSPECTION_TYPE_ATTACHMENTS, {
+      read: async (user) => Boolean(user.grant(READ)),
+      write: async (user) => user.can('equipment.settings.manage'),
+      max: 1,
+    });
     // Departments, stations and vehicles with equipment cannot be deleted.
     this.references.register('equipment', (kind, id) => {
       const where = kind === 'department' ? { departmentId: id } : kind === 'station' ? { stationId: id } : { $or: [{ vehicleId: id }, { forVehicleId: id }] };
@@ -134,8 +141,8 @@ export class EquipmentModule implements OnModuleInit {
 export const equipmentModule = defineModule({
   manifest: EQUIPMENT_MANIFEST,
   nestModule: EquipmentModule,
-  entities: [CategoryEntity, EquipmentTypeEntity, EquipmentItemEntity, InspectionEntity, DefectEntity, UsageEntity, RecentBulkCategoryEntity],
-  historized: [CategoryEntity, EquipmentTypeEntity, EquipmentItemEntity, { entity: InspectionEntity, parent: 'item' }, { entity: DefectEntity, parent: 'item' }],
+  entities: [CategoryEntity, InspectionTypeEntity, EquipmentTypeEntity, EquipmentItemEntity, InspectionEntity, DefectEntity, UsageEntity, RecentBulkCategoryEntity],
+  historized: [CategoryEntity, InspectionTypeEntity, EquipmentTypeEntity, EquipmentItemEntity, { entity: InspectionEntity, parent: 'item' }, { entity: DefectEntity, parent: 'item' }],
   migrations: EQUIPMENT_MIGRATIONS,
   settings: EQUIPMENT_SETTINGS,
 });

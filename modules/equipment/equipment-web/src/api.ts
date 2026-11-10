@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { BrigadeSettings } from '@forga/core-contracts';
-import { type Category, type Defect, EquipmentSettings, type EquipmentType, type Inspection, type Item, type ItemIncident, type ItemSummary } from '@forga/equipment-contracts';
+import { type Category, type Defect, EquipmentSettings, type EquipmentType, type InspectionCatalogEntry, type Inspection, type Item, type ItemIncident, type ItemSummary } from '@forga/equipment-contracts';
 import type { Department, PersonSummary, Station, Vehicle } from '@forga/masterdata-contracts';
 import { api, can, localDate, useLocalized, useSession, withQuery } from '@forga/web-sdk';
 import { treeLabel } from '@forga/web-ui';
@@ -37,6 +37,8 @@ export const useDefects = (filter: { open?: string; itemId?: string }) => useQue
 export const useCategories = () => useQuery({ queryKey: [...keys.all, 'categories'], queryFn: () => api<Category[]>('equipment/categories'), staleTime: LONG });
 export const useRecentCategories = () => useQuery({ queryKey: [...keys.all, 'bulk-recent'], queryFn: () => api<{ categoryKeys: string[] }>('equipment/inspections/bulk/recent') });
 export const useTypes = () => useQuery({ queryKey: [...keys.all, 'types'], queryFn: () => api<EquipmentType[]>('equipment/types'), staleTime: LONG });
+/** Shared catalog of inspection types ("Prüfarten"); the settings and the documents of an inspection type (by its ID). */
+export const useInspectionCatalog = () => useQuery({ queryKey: [...keys.all, 'inspection-types'], queryFn: () => api<InspectionCatalogEntry[]>('equipment/inspection-types'), staleTime: LONG });
 export const useDepartments = () => useQuery({ queryKey: ['masterdata', 'departments'], queryFn: () => api<Department[]>('masterdata/departments'), staleTime: LONG });
 export const useStations = () => useQuery({ queryKey: ['masterdata', 'stations'], queryFn: () => api<Station[]>('masterdata/stations'), staleTime: LONG });
 export const useVehicles = () => useQuery({ queryKey: ['masterdata', 'vehicles'], queryFn: () => api<Vehicle[]>('masterdata/vehicles'), staleTime: LONG });

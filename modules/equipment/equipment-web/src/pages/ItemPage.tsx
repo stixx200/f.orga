@@ -7,6 +7,7 @@ import type { Defect, Inspection, Item, ItemIncident, ItemSummary } from '@forga
 import { apiUrl, can, formatDate, formatMoney, localDate, send, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { Attachments, DataTable, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, useAction } from '@forga/web-ui';
 import { keys, READ, useCategoryName, useDefects, useDepartments, useInspections, useItem, useItemAccess, useItemIncidents, useLabelBase, usePersons, usePlace } from '../api';
+import { RecordedFormText, RoutineDocumentButton } from '../forms';
 import { AttachmentsDialog, DefectPhotoInput, DueDate, ItemPhoto, ItemStatusBadge, uploadDefectPhoto, useDefectText } from '../parts';
 import { InspectionDialog } from './InspectionDialog';
 import { ItemDialog } from './ItemDialog';
@@ -167,7 +168,8 @@ function InspectionsTab({ item, canInspect }: { item: Item; canInspect: boolean 
               render: (i) => (
                 <>
                   {[i.measurements, i.notes].filter(Boolean).join(' · ')}
-                  {i.changeReason && <Text size="xs" c="dimmed">{t(i.cancelled ? 'inspection.cancelReason' : 'inspection.correctionReason', { reason: i.changeReason })}</Text>}
+                  <RecordedFormText form={i.form} />
+                  {i.changeReason &&<Text size="xs" c="dimmed">{t(i.cancelled ? 'inspection.cancelReason' : 'inspection.correctionReason', { reason: i.changeReason })}</Text>}
                 </>
               ),
             },
@@ -178,6 +180,7 @@ function InspectionsTab({ item, canInspect }: { item: Item; canInspect: boolean 
               align: 'right',
               render: (i) => (
                 <Group gap={4} justify="flex-end">
+                  <RoutineDocumentButton inspectionKey={i.inspectionKey} />
                   <Button size="compact-xs" variant="subtle" onClick={() => setFiles(i)}>{t('attachmentsButton')}</Button>
                   <Button size="compact-xs" variant="subtle" component="a" href={apiUrl('core/lists/equipment.inspection-report/export/pdf', { inspectionId: i.id, lang: i18n.language })} target="_blank">{t('protocol.single')}</Button>
                   {canInspect && !i.cancelled && (

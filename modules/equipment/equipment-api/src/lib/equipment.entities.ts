@@ -2,7 +2,7 @@ import { defineEntity, p } from '@mikro-orm/core';
 import { v7 as uuidv7 } from 'uuid';
 import { berlinDate } from '@forga/core-api';
 import type { LocalizedText } from '@forga/core-contracts';
-import type { DefectStatus, InspectionResult, InspectionType, ItemStatus, Tracking } from '@forga/equipment-contracts';
+import type { DefectStatus, InspectionForm, InspectionResult, InspectionType, ItemStatus, RecordedForm, Tracking } from '@forga/equipment-contracts';
 
 const berlinToday = () => berlinDate();
 
@@ -24,6 +24,26 @@ export const CategorySchema = defineEntity({
 export class CategoryEntity extends CategorySchema.class {}
 CategorySchema.setClass(CategoryEntity);
 
+/** Inspection type of the shared catalog ("Prüfarten"); equipment types and items reference it by `key`. */
+export const InspectionTypeSchema = defineEntity({
+  name: 'InspectionTypeEntity',
+  schema: 'equipment',
+  tableName: 'inspection_type',
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv7()),
+    key: p.string().unique(),
+    name: p.json<LocalizedText>(),
+    intervalMonths: p.integer().nullable(),
+    trigger: p.string().$type<InspectionType['trigger']>().default('periodic'),
+    inspector: p.string().$type<InspectionType['inspector']>().default('competent-person'),
+    checklist: p.json<string[]>().defaultRaw("'[]'::jsonb"),
+    form: p.json<InspectionForm>().defaultRaw(`'{"kind":"none"}'::jsonb`),
+    version: p.integer().version(),
+  },
+});
+export class InspectionTypeEntity extends InspectionTypeSchema.class {}
+InspectionTypeSchema.setClass(InspectionTypeEntity);
+
 export const EquipmentTypeSchema = defineEntity({
   name: 'EquipmentTypeEntity',
   schema: 'equipment',
@@ -35,7 +55,8 @@ export const EquipmentTypeSchema = defineEntity({
     categoryKey: p.string(),
     manufacturer: p.string().default(''),
     model: p.string().default(''),
-    inspections: p.json<InspectionType[]>().defaultRaw("'[]'::jsonb"),
+    /** Keys of the inspection types of the catalog, in order. */
+    inspectionKeys: p.json<string[]>().defaultRaw("'[]'::jsonb"),
     properties: p.json<string[]>().defaultRaw("'[]'::jsonb"),
     version: p.integer().version(),
   },
@@ -70,8 +91,8 @@ export const ItemSchema = defineEntity({
     location: p.string().default(''),
     quantity: p.integer().default(1),
     expiresOn: p.string().length(10).nullable(),
-    /** `null` = inspections of the type. */
-    inspections: p.json<InspectionType[]>().nullable(),
+    /** Own inspection keys (catalog); `null` = inspections of the type. */
+    inspectionKeys: p.json<string[]>().nullable(),
     /** Inspection key → own interval in months. */
     intervalOverrides: p.json<Record<string, number>>().defaultRaw("'{}'::jsonb"),
     status: p.string().$type<ItemStatus>().default('ready'),
@@ -113,6 +134,8 @@ export const InspectionSchema = defineEntity({
     changeReason: p.text().default(''),
     /** Date of the trigger ("after use", "after washing" …) this inspection settled; restored when it is cancelled. */
     clearedTrigger: p.string().length(10).nullable(),
+    /** Fillable values (with the field definitions as recorded) or the approval; `null` without a form. */
+    form: p.json<RecordedForm>().nullable(),
   },
 });
 export class InspectionEntity extends InspectionSchema.class {}

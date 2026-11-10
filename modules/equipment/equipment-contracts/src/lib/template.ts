@@ -1,10 +1,17 @@
 import type { CategoryInput, EquipmentTypeInput, InspectionType } from './equipment.js';
 
+/** Inspection types of the template by key: one catalog entry per key, shared by the equipment types that use it. */
+const catalog = new Map<string, InspectionType>();
+
 const c = (key: string, de: string, en: string, extra: Partial<CategoryInput> = {}): CategoryInput => ({ key, name: { de, en }, ...extra });
-const i = (key: string, de: string, en: string, intervalMonths: number | null, inspector: InspectionType['inspector'] = 'competent-person', trigger: InspectionType['trigger'] = 'periodic', checklist: string[] = []): InspectionType => ({
-  key, name: { de, en }, intervalMonths, inspector, trigger, checklist,
+const i = (key: string, de: string, en: string, intervalMonths: number | null, inspector: InspectionType['inspector'] = 'competent-person', trigger: InspectionType['trigger'] = 'periodic', checklist: string[] = []): InspectionType => {
+  const type: InspectionType = { key, name: { de, en }, intervalMonths, trigger, inspector, checklist, form: { kind: 'none' } };
+  if (!catalog.has(key)) catalog.set(key, type);
+  return type;
+};
+const t = (key: string, de: string, en: string, categoryKey: string, inspections: InspectionType[], properties: string[] = []): EquipmentTypeInput => ({
+  key, name: { de, en }, categoryKey, inspectionKeys: inspections.map((x) => x.key), properties,
 });
-const t = (key: string, de: string, en: string, categoryKey: string, inspections: InspectionType[], properties: string[] = []): EquipmentTypeInput => ({ key, name: { de, en }, categoryKey, inspections, properties });
 
 const VISUAL = ['Sichtprüfung äußerer Zustand', 'Funktion', 'Kennzeichnung lesbar'];
 
@@ -46,6 +53,9 @@ export const DGUV_TYPES: EquipmentTypeInput[] = [
   t('fuel-can', 'Kraftstoffkanister PE', 'Fuel can PE', 'consumables', [i('can-check', 'Sichtprüfung', 'Visual check', 6)]),
   t('oil-binder', 'Ölbindemittel (Sack)', 'Oil binder (bag)', 'consumables', []),
 ];
+
+/** Inspection types of the template (catalog entries), one per key. Created with the template, referenced by the types. */
+export const DGUV_INSPECTIONS: InspectionType[] = [...catalog.values()];
 
 /**
  * Vehicle types of the master data catalog (template BW) by weight class, for taking over the vehicles: up to 3.5 t

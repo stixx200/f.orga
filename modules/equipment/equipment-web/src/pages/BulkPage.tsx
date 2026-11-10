@@ -68,6 +68,8 @@ export function BulkPage() {
   const [targetLocation, setTargetLocation] = useState('');
   const [targetLoading, setTargetLoading] = useState('');
   const [protocol, setProtocol] = useState<File | null>(null);
+  // Approval form of the kind: confirmed for all selected items at once. Fillable forms are recorded per item.
+  const [approved, setApproved] = useState(false);
 
   // Every item of the kind the user may book (inspect, mark due or move), not only the due ones.
   const candidates = useMemo(() => {
@@ -97,6 +99,9 @@ export function BulkPage() {
   const kindType = kinds.find((k) => k.key === kind);
   const afterTrigger = Boolean(kindType && kindType.trigger !== 'periodic');
   const dueMode = afterTrigger && (setDue || !access.recordsAnything);
+  // A fillable form is recorded on the item; bulk booking only confirms an approval form.
+  const fillableHere = Boolean(kindType && kindType.form.kind === 'fillable' && !dueMode);
+  const approvalHere = Boolean(kindType && kindType.form.kind === 'approval' && !dueMode);
   const stationOptions = stations
     .map((s) => {
       const shortName = departments.find((d) => d.id === s.departmentId)?.shortName;
@@ -109,7 +114,7 @@ export function BulkPage() {
       const recorded = await send<BulkInspectionResult>('POST', 'equipment/inspections/bulk', {
         itemIds: selected,
         categoryKey,
-        inspection: kind && !dueMode ? { inspectionKey: kind, date, result, inspectorCompany: company, inspectorPersonId: inspector } : undefined,
+        inspection: kind && !dueMode ? { inspectionKey: kind, date, result, inspectorCompany: company, inspectorPersonId: inspector, approved } : undefined,
         triggerKey: kind && dueMode ? kind : undefined,
         place: placeOn ? { stationId: targetStation, vehicleId: targetVehicle, location: targetLocation, loadingPlace: targetLoading } : undefined,
       });
@@ -183,6 +188,7 @@ export function BulkPage() {
                 onChange={(v) => {
                   setKind(v);
                   setSetDue(false);
+                  setApproved(false);
                 }}
                 clearable
                 w={260}
@@ -215,6 +221,17 @@ export function BulkPage() {
               )}
             </Group>
             {access.recordsAnything && !dueMode && <ProtocolInput value={protocol} onChange={setProtocol} />}
+            {fillableHere && <Text size="sm" c="dimmed">{t('bulk.fillableHint')}</Text>}
+            {approvalHere && kindType?.form.kind === 'approval' && (
+              <Stack gap={6}>
+                <Text size="sm" style={{ whiteSpace: 'pre-line' }}>{localized(kindType.form.text)}</Text>
+                <Group>
+                  <Button variant={approved ? 'light' : 'default'} color={approved ? 'teal' : undefined} aria-pressed={approved} onClick={() => setApproved(!approved)}>
+                    {approved ? t('form.approved') : t('form.approve')}
+                  </Button>
+                </Group>
+              </Stack>
+            )}
           </Stack>
         </Panel>
       )}
@@ -289,7 +306,7 @@ export function BulkPage() {
       />
       {categoryKey && (
         <ActionBar info={t('bulk.selected', { count: selected.length })}>
-          <Button loading={save.isPending} disabled={!selected.length || (!placeOn && !kind) || (Boolean(kind) && !dueMode && !date)} onClick={() => save.mutate(undefined)}>{t('bulk.save')}</Button>
+          <Button loading={save.isPending} disabled={!selected.length || (!placeOn && !kind) || (Boolean(kind) && !dueMode && !date) || fillableHere || (approvalHere && !approved)} onClick={() => save.mutate(undefined)}>{t('bulk.save')}</Button>
         </ActionBar>
       )}
     </Stack>

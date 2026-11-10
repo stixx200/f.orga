@@ -4,7 +4,7 @@ import { type AuthenticatedUser, berlinDate, type DeadlineInput, type DeadlinePr
 import { type LocalizedText, normalizeRfid, type SearchHit } from '@forga/core-contracts';
 import { EquipmentSettings } from '@forga/equipment-contracts';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
-import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, RecentBulkCategoryEntity, UsageEntity } from '../equipment.entities.js';
+import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, InspectionTypeEntity, RecentBulkCategoryEntity, UsageEntity } from '../equipment.entities.js';
 import { BREATHING_INSPECT, BREATHING_WRITE, INSPECT, ItemsService, READ, REPORT_DEFECTS, WRITE } from '../items/items.service.js';
 
 /** The item of a defect or an inspection in the data access request. */
@@ -139,6 +139,7 @@ export class EquipmentData implements DeadlineProvider {
     const plain = async <T extends object>(entity: new () => T) => (await em.find(entity, {})).map((e) => wrap(e).toObject());
     return {
       categories: await plain(CategoryEntity),
+      inspectionTypes: await plain(InspectionTypeEntity),
       types: await plain(EquipmentTypeEntity),
       items: await plain(EquipmentItemEntity),
       inspections: await plain(InspectionEntity),
@@ -172,9 +173,10 @@ export class EquipmentData implements DeadlineProvider {
     const inspections = await em.find(InspectionEntity, { inspectorPersonId: personId }, { populate: ['item'], orderBy: { date: 'desc' } });
     if (!defects.length && !inspections.length) return [];
     const types = new Map((await em.find(EquipmentTypeEntity, {})).map((t) => [t.key, t]));
+    const catalog = new Map((await em.find(InspectionTypeEntity, {})).map((t) => [t.key, t]));
     const inspectionName = (i: InspectionEntity) => {
-      const list = i.item.inspections ?? (i.item.typeKey ? types.get(i.item.typeKey)?.inspections : undefined) ?? [];
-      const found = list.find((t) => t.key === i.inspectionKey);
+      const keys = i.item.inspectionKeys ?? (i.item.typeKey ? types.get(i.item.typeKey)?.inspectionKeys : undefined) ?? [];
+      const found = keys.includes(i.inspectionKey) ? catalog.get(i.inspectionKey) : undefined;
       return found ? ctx.text(found.name) : ctx.t('Prüfung', 'Inspection');
     };
     const results: Record<string, string> = { passed: ctx.t('bestanden', 'passed'), 'passed-with-defects': ctx.t('bestanden mit Mängeln', 'passed with defects'), failed: ctx.t('nicht bestanden', 'failed') };
