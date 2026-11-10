@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { Incident, ReportStatus } from '@forga/incidents-contracts';
 import { can, formatDateTime, useSession, useTranslation } from '@forga/web-sdk';
-import { DataTable, matchesSearch, PageHeader } from '@forga/web-ui';
+import { DataTable, matchesSearch, Notice, PageHeader } from '@forga/web-ui';
 import { type IncidentFilter, READ, RELEASE, useDepartments, useIncidents, useNames, WRITE } from '../api';
 import { CreateIncidentDialog } from './CreateIncidentDialog';
 import { DepartmentBadge, incidentStatus, keywordLabel, locationLabel, ReportStatusBadge } from '../parts';
@@ -38,6 +38,9 @@ export function IncidentsPage() {
     withoutStatistics: view === 'withoutStatistics',
   };
   const { data: incidents = [], isLoading } = useIncidents(filter);
+  // Only for the annual statistics: the incidents of the year whose statistics details are still missing.
+  const statisticsRole = can(session, 'incidents.statistics');
+  const { data: missingStatistics = [] } = useIncidents({ from: `${year}-01-01`, to: `${year}-12-31`, withoutStatistics: true }, statisticsRole);
   const writable = can(session, WRITE) || can(session, 'incidents.reports.release');
 
   const rows = useMemo(() => {
@@ -60,6 +63,7 @@ export function IncidentsPage() {
         title={t('incidents.title')}
         actions={writable && <Button onClick={() => setCreating(true)}>{t('incidents.create')}</Button>}
       />
+      {missingStatistics.length > 0 && <Notice kind="warning" action={<Button size="xs" variant="outline" onClick={() => setView('withoutStatistics')}>{t('incidents.views.withoutStatistics')}</Button>}>{t('incidents.statisticsMissing')}</Notice>}
       <Chip.Group value={view} onChange={(value) => setView(value as View)}>
         <Group gap="xs">
           {VIEWS.map((v) => (

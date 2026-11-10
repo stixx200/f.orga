@@ -199,11 +199,6 @@ function Editor({ report, userId }: { report: Report; userId: string }) {
           {t('editor.readOnlyDraft')}
         </Notice>
       )}
-      {report.findings.some((f) => f.rule === 'statistics-missing') && (
-        <Notice kind="warning" action={<Button component={Link} to={`/incidents/incidents/${report.incidentId}`} size="xs" variant="outline">{t('check.toIncident')}</Button>}>
-          {t('editor.statisticsOnIncident')}
-        </Notice>
-      )}
       {newBookings > 0 && (
         <Notice kind="info" action={<Button size="xs" variant="default" onClick={dismissBookings}>{t('editor.newBookingsSeen')}</Button>}>
           {t('editor.newBookings', { count: newBookings })}

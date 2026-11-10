@@ -20,6 +20,7 @@ const texts: Translations = {
     },
     incidents: {
       title: 'Einsätze',
+      statisticsMissing: 'Die Statistikmerkmale des Einsatzes fehlen noch. Sie gelten für den ganzen Einsatz und stehen auf der Seite des Einsatzes.',
       create: '+ Einsatz anlegen',
       views: { all: 'Alle', mine: 'Nur meine', draft: 'Offen', review: 'Zur Prüfung', released: 'Freigegeben', withoutStatistics: 'Ohne Statistik' },
       search: 'Suche',
@@ -111,7 +112,6 @@ const texts: Translations = {
       attachmentsHint: 'Nur Fotos, die für den Bericht nötig sind; möglichst keine Gesichter, Kennzeichen oder Verletzten.',
       pdf: 'PDF',
       more: 'Weitere Aktionen',
-      statisticsOnIncident: 'Die Statistikmerkmale des Einsatzes fehlen noch. Sie gelten für den ganzen Einsatz und stehen auf der Seite des Einsatzes.',
       conflict: 'Konflikt – nicht gespeichert',
       conflictTitle: 'Bericht wurde inzwischen geändert',
       conflictText: 'Jemand anderes hat den Bericht gespeichert, während Sie ihn bearbeitet haben. Ihre Änderungen sind noch nicht gespeichert. Wählen Sie, welcher Stand gelten soll.',
@@ -651,6 +651,7 @@ const texts: Translations = {
     },
     incidents: {
       title: 'Incidents',
+      statisticsMissing: 'The statistics details of the incident are still missing. They apply to the whole incident and are on the page of the incident.',
       create: '+ Create incident',
       views: { all: 'All', mine: 'Mine only', draft: 'Open', review: 'For review', released: 'Released', withoutStatistics: 'Without statistics' },
       search: 'Search',
@@ -742,7 +743,6 @@ const texts: Translations = {
       attachmentsHint: 'Only photos needed for the report; if possible no faces, number plates or injured persons.',
       pdf: 'PDF',
       more: 'More actions',
-      statisticsOnIncident: 'The statistics of the incident are still missing. They apply to the whole incident and are on the page of the incident.',
       conflict: 'Conflict – not saved',
       conflictTitle: 'The report was changed in the meantime',
       conflictText: 'Somebody else saved the report while you were editing it. Your changes are not saved yet. Choose which state applies.',
