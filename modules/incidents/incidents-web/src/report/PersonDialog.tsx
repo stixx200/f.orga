@@ -82,22 +82,23 @@ export function PersonDialog({ name, entry, targets, standbyStations, compensati
       }
     >
       <Stack gap="sm">
+        {/* Vehicle and standby one above the other: side by side the select is too narrow to show its value. */}
+        <Stack gap="xs">
+          <Select
+            label={t('person.place')}
+            data={targets}
+            value={targetOf(draft)}
+            onChange={(value) => setDraft((d) => ({ ...d, ...placeOf(value ?? '') }))}
+            placeholder={t('person.noPlace')}
+            clearable
+            searchable
+            disabled={disabled}
+          />
+          {!disabled && !draft.standbyStationId && (
+            <StandbyAction variant="button" stations={standbyStations} onChoose={(id) => setDraft((d) => ({ ...d, vehicleId: null, standbyStationId: id }))} />
+          )}
+        </Stack>
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          <Group gap="xs" align="end" wrap="nowrap">
-            <Select
-              label={t('person.place')}
-              data={targets}
-              value={targetOf(draft)}
-              onChange={(value) => setDraft((d) => ({ ...d, ...placeOf(value ?? '') }))}
-              placeholder={t('person.noPlace')}
-              clearable
-              disabled={disabled}
-              flex={1}
-            />
-            {!disabled && !draft.standbyStationId && (
-              <StandbyAction variant="button" stations={standbyStations} onChoose={(id) => setDraft((d) => ({ ...d, vehicleId: null, standbyStationId: id }))} />
-            )}
-          </Group>
           <Select
             label={t('person.function')}
             data={functions.filter((f) => f.active).map((f) => ({ value: f.key, label: localized(f.name) }))}
