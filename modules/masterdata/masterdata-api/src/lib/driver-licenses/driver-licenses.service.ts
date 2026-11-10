@@ -20,7 +20,7 @@ import {
   selfCheckEnabled,
 } from '@forga/masterdata-contracts';
 import type { z } from 'zod';
-import { DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, Person } from '../masterdata.entities.js';
+import { DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, Person, PersonDeviceToken } from '../masterdata.entities.js';
 import { departmentsOf, PersonsService, primaryDepartment, READ, validQualifications } from '../persons/persons.service.js';
 import { today } from '../shared/access.js';
 import { type LicenseStatus, licenseStatus } from './license-status.js';
@@ -397,6 +397,9 @@ export class DriverLicensesService {
     if (!codeHash) throw new HttpException({ code: 'masterdata.noSecretKey' }, HttpStatus.SERVICE_UNAVAILABLE);
     const active = await em.findOne(DriverLicenseToken, { codeHash, revokedAt: null });
     if (active && active.person.id !== person.id) throw new ConflictException({ code: 'masterdata.tokenTaken' });
+    // A device of another person with the same ID would make the scan ambiguous.
+    const device = await em.findOne(PersonDeviceToken, { codeHash, revokedAt: null });
+    if (device && device.person.id !== person.id) throw new ConflictException({ code: 'masterdata.tokenTaken' });
     return { codeHash, taken: Boolean(active) };
   }
 

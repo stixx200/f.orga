@@ -5,7 +5,7 @@ import type { CourseResult, DriverLicenseCheckMethod, Employment, Gender, Nomina
 import { CatalogEntry } from '../catalog/catalog.js';
 import { CourseAttendance, CourseNomination } from '../courses/course.entities.js';
 import { DepartmentGroup } from '../organization/group.entities.js';
-import { Department, DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, Person } from '../masterdata.entities.js';
+import { Department, DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, Person, PersonDeviceToken } from '../masterdata.entities.js';
 
 type Texts<K extends string> = Record<K, [string, string]>;
 
@@ -188,6 +188,7 @@ export class MasterdataDescription {
           'masterdata.driver_license_check': ctx.t('Führerscheinkontrolle', 'Driving licence check'),
           'masterdata.driver_license_request': ctx.t('Aufforderung zur Vorlage des Führerscheins', 'Request to present the driving licence'),
           'masterdata.driver_license_token': ctx.t('Transponder für den Führerschein', 'Driving licence sticker'),
+          'masterdata.person_device_token': ctx.t('Gerät für den Infoterminal', 'Device for the info terminal'),
         },
       },
     ];
@@ -269,6 +270,29 @@ export class MasterdataDescription {
         activity: 'masterdata.driver-licenses',
         categories: [ctx.t('Führerscheinklassen und Kontrollen', 'Driving licence classes and checks')],
         blocks: licenseBlocks,
+      });
+    }
+    // ----- Devices for the info terminal (NFC sticker or barcode of the person) -----
+    const devices = await em.find(PersonDeviceToken, { person: personId }, { orderBy: { registeredAt: 'desc' } });
+    if (devices.length) {
+      sections.push({
+        key: 'masterdata.person-devices',
+        title: ctx.t('Geräte für den Infoterminal', 'Devices for the info terminal'),
+        activity: 'masterdata.persons',
+        categories: [ctx.t('Gerätecodes der Person', 'Device codes of the person')],
+        blocks: [
+          {
+            kind: 'table',
+            title: ctx.t('Transponder und Barcodes der Person', 'Stickers and barcodes of the person'),
+            columns: [ctx.t('Art', 'Kind'), ctx.t('Kennung endet auf', 'ID ending in'), ctx.t('Registriert am', 'Registered on'), ctx.t('Gesperrt', 'Revoked')],
+            rows: devices.map((t) => [
+              t.kind === 'nfc' ? ctx.t('NFC-Transponder', 'NFC sticker') : ctx.t('Barcode', 'barcode'),
+              t.suffix,
+              ctx.date(t.registeredAt),
+              t.revokedAt ? `${ctx.date(t.revokedAt)}${t.revokeReason ? `: ${t.revokeReason}` : ''}` : ctx.t('nein', 'no'),
+            ]),
+          },
+        ],
       });
     }
     return sections;

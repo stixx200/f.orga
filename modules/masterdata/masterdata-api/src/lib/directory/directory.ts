@@ -22,6 +22,8 @@ import { CatalogEntry, toCatalogDto } from '../catalog/catalog.js';
 import { toDepartmentDto, toStationDto, toVehicleDto } from '../organization/organization.controller.js';
 import { CourseNomination } from '../courses/course.entities.js';
 import { Department, OfficeAssignment, Person, RankAssignment, Station, Vehicle } from '../masterdata.entities.js';
+import { DriverLicensesService } from '../driver-licenses/driver-licenses.service.js';
+import { PersonDevicesService } from '../person-devices/person-devices.service.js';
 import { currentQualifications, currentRank, PersonsService } from '../persons/persons.service.js';
 import { today } from '../shared/access.js';
 
@@ -37,6 +39,8 @@ export class PersonDirectoryService implements PersonDirectory {
     private readonly em: EntityManager,
     private readonly persons: PersonsService,
     private readonly restrictions: ProcessingRestrictions,
+    private readonly devices: PersonDevicesService,
+    private readonly licenses: DriverLicensesService,
   ) {}
 
   async search(query: string, options: { departmentIds?: string[]; limit?: number } = {}): Promise<PersonSummary[]> {
@@ -154,6 +158,13 @@ export class PersonDirectoryService implements PersonDirectory {
   async findByPersonnelNumber(personnelNumber: string): Promise<PersonSummary | null> {
     const person = await this.em.fork().findOne(Person, { personnelNumber }, { populate: POPULATE });
     return person ? this.persons.summary(person) : null;
+  }
+
+  async findByCode(code: string): Promise<PersonSummary | null> {
+    const em = this.em.fork();
+    const person = (await this.devices.activePerson(em, code)) ?? (await this.licenses.activeToken(em, code))?.person ?? null;
+    if (!person || person.status === 'left' || person.anonymizedAt || (await this.restrictions.isRestricted(person.id))) return null;
+    return (await this.summaries([person.id]))[0] ?? null;
   }
 
   async personalFile(personId: string): Promise<PersonalFile | null> {

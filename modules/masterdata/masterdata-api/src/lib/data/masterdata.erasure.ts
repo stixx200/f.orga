@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import type { ErasureArea, ErasureAreaInput, ErasureContext, PersonDataHandler } from '@forga/core-api';
 import { CourseAttendance, CourseNomination } from '../courses/course.entities.js';
-import { DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, Membership, Person, RankAssignment } from '../masterdata.entities.js';
+import { DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, Membership, Person, PersonDeviceToken, RankAssignment } from '../masterdata.entities.js';
 import { MasterdataData } from './masterdata.data.js';
 
 const iso = (date: Date | string | null | undefined) => (date ? (typeof date === 'string' ? date : date.toISOString()).slice(0, 10) : null);
@@ -50,12 +50,13 @@ export class MasterdataErasure implements PersonDataHandler {
       });
     }
     if (!person.fileAnonymizedAt) {
-      const [courses, nominations, checks, requests, tokens] = await Promise.all([
+      const [courses, nominations, checks, requests, tokens, devices] = await Promise.all([
         em.count(CourseAttendance, { person }),
         em.count(CourseNomination, { person }),
         em.count(DriverLicenseCheck, { person }),
         em.count(DriverLicenseRequest, { person }),
         em.count(DriverLicenseToken, { person }),
+        em.count(PersonDeviceToken, { person }),
       ]);
       const license = person.driverLicense?.classes?.length || checks || requests || tokens ? 1 : 0;
       const parts = [
@@ -66,7 +67,7 @@ export class MasterdataErasure implements PersonDataHandler {
         count(person.restPeriods.length, ['Ruhezeit', 'Ruhezeiten'], ['rest period', 'rest periods']),
         license ? { de: `Führerschein (${checks} ${checks === 1 ? 'Kontrolle' : 'Kontrollen'})`, en: `Driving licence (${checks} ${checks === 1 ? 'check' : 'checks'})` } : null,
       ];
-      const total = person.qualifications.length + courses + nominations + person.honors.length + person.offices.length + person.restPeriods.length + checks + requests + tokens + license;
+      const total = person.qualifications.length + courses + nominations + person.honors.length + person.offices.length + person.restPeriods.length + checks + requests + tokens + devices + license;
       if (total) {
         const hold = ctx.retain('masterdata.person-file', leftOn);
         areas.push({ key: 'masterdata.person-file', title: { de: 'Personalakte', en: 'Personnel file' }, data: join(parts), count: total, outcome: hold ? 'keep' : 'delete', keepUntil: hold?.until ?? null, reason: hold?.reason ?? null });

@@ -6,7 +6,7 @@ import { EMPTY_DRIVER_LICENSE } from '@forga/masterdata-contracts';
 import { CatalogEntry } from '../catalog/catalog.js';
 import { Course, CourseAttendance, CourseNomination, CourseRun } from '../courses/course.entities.js';
 import { DepartmentGroup } from '../organization/group.entities.js';
-import { Department, DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod, Station, Vehicle } from '../masterdata.entities.js';
+import { Department, DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, HonorAward, Membership, OfficeAssignment, Person, PersonDeviceToken, PersonQualification, RankAssignment, RestPeriod, Station, Vehicle } from '../masterdata.entities.js';
 import { departmentsOf, PersonsService } from '../persons/persons.service.js';
 
 /** First and last name of anonymised persons: "N." (nomen nescio) reads the same in every language. */
@@ -75,6 +75,7 @@ export class MasterdataData {
       driverLicenseChecks: await plain(em, DriverLicenseCheck),
       driverLicenseRequests: await plain(em, DriverLicenseRequest),
       driverLicenseTokens: await plain(em, DriverLicenseToken),
+      personDeviceTokens: await plain(em, PersonDeviceToken),
       groups: await plain(em, DepartmentGroup),
       courses: await plain(em, Course),
       courseRuns: await plain(em, CourseRun),
@@ -98,6 +99,7 @@ export class MasterdataData {
       driverLicenseChecks: await plain(em, DriverLicenseCheck, { person: personId }),
       driverLicenseRequests: await plain(em, DriverLicenseRequest, { person: personId }),
       driverLicenseTokens: await plain(em, DriverLicenseToken, { person: personId }),
+      personDeviceTokens: await plain(em, PersonDeviceToken, { person: personId }),
       groups: (await em.find(DepartmentGroup, {})).filter((g) => g.leader?.id === personId || g.memberIds.includes(personId)).map((g) => wrap(g).toObject()),
       courseAttendances: await plain(em, CourseAttendance, { person: personId }),
       courseNominations: await plain(em, CourseNomination, { person: personId }),
@@ -167,6 +169,7 @@ export class MasterdataData {
     await em.nativeDelete(DriverLicenseCheck, { person });
     await em.nativeDelete(DriverLicenseRequest, { person });
     await em.nativeDelete(DriverLicenseToken, { person });
+    await em.nativeDelete(PersonDeviceToken, { person });
   }
 
   /**
