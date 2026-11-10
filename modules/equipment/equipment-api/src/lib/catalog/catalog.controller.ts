@@ -93,6 +93,18 @@ export class CatalogController {
     return toType(type);
   }
 
+  /** Deletes an equipment type with its inspection types; items of the type block it (`equipment.typeInUse`). */
+  @Delete('types/:id')
+  @HttpCode(204)
+  @RequirePermissions(SETTINGS)
+  async removeType(@Param('id') id: string): Promise<void> {
+    const em = this.em.fork();
+    const type = await em.findOne(EquipmentTypeEntity, id);
+    if (!type) throw new NotFoundException();
+    if (await em.count(EquipmentItemEntity, { typeKey: type.key })) throw new BadRequestException({ code: 'equipment.typeInUse' });
+    await em.remove(type).flush();
+  }
+
   /** Adds missing categories and types of the DGUV Grundsatz 305-002 template; hoses as single items or as stock. */
   @Post('templates/dguv')
   @RequirePermissions(SETTINGS)

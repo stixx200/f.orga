@@ -111,11 +111,25 @@ function CategoryDialog({ category, parentKey = null, onClose }: { category?: Ca
 
 const emptyInspection = (): InspectionType => ({ key: `check-${Date.now().toString(36)}`, name: { de: '', en: '' }, intervalMonths: 12, trigger: 'periodic', inspector: 'competent-person', checklist: [] });
 
+/** Copies of inspection types for another type; a key the type already uses gets a number suffix. */
+function copyInspections(source: InspectionType[], existing: { key: string }[]): InspectionType[] {
+  const used = new Set(existing.map((x) => x.key));
+  return source.map((x) => {
+    let key = x.key;
+    for (let n = 2; used.has(key); n++) key = `${x.key}-${n}`;
+    used.add(key);
+    return { ...x, key, checklist: [...x.checklist] };
+  });
+}
+
 function TypeDialog({ type, onClose }: { type?: EquipmentType; onClose: () => void }) {
   const { t } = useTranslation('equipment');
   const { t: common } = useTranslation('common');
   const localized = useLocalized();
   const { data: categories = [] } = useCategories();
+  const { data: types = [] } = useTypes();
+  const [copyFrom, setCopyFrom] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [form, setForm] = useState<Required<EquipmentTypeInput>>(() => ({
     key: type?.key ?? '', name: type?.name ?? { de: '', en: '' }, categoryKey: type?.categoryKey ?? '', manufacturer: type?.manufacturer ?? '', model: type?.model ?? '', inspections: type?.inspections ?? [], properties: type?.properties ?? [],
   }));
@@ -124,8 +138,11 @@ function TypeDialog({ type, onClose }: { type?: EquipmentType; onClose: () => vo
     const body = { ...form, name: { de: form.name.de, en: form.name.en || form.name.de }, inspections: form.inspections.map((x) => ({ ...x, name: { de: x.name.de, en: x.name.en || x.name.de } })) };
     return type ? send('PUT', `equipment/types/${type.id}`, body) : send('POST', 'equipment/types', body);
   }, { success: t('settings.saved'), invalidate: [keys.all], onSuccess: onClose });
+  const remove = useAction(() => send('DELETE', `equipment/types/${type!.id}`), { success: t('settings.typeDeleted'), invalidate: [keys.all], onSuccess: onClose });
+  const source = types.find((x) => x.id === copyFrom);
   return (
-    <ResponsiveDialog opened onClose={onClose} title={type ? t('settings.editType') : t('settings.newType')} size="xl" actions={<Group justify="flex-end"><Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button><Button loading={save.isPending} disabled={!form.key || !form.name.de || !form.categoryKey || form.inspections.some((x) => !x.name.de)} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button></Group>}>
+    <>
+    <ResponsiveDialog opened onClose={onClose} title={type ? t('settings.editType') : t('settings.newType')} size="xl" actions={<Group justify="space-between">{type ? <Button variant="subtle" onClick={() => setConfirmDelete(true)}>{common('actions.delete')} …</Button> : <span />}<Group><Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button><Button loading={save.isPending} disabled={!form.key || !form.name.de || !form.categoryKey || form.inspections.some((x) => !x.name.de)} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button></Group></Group>}>
       <Stack gap="sm">
         <SimpleGrid cols={{ base: 1, sm: 3 }}>
           <TextInput label={t('settings.key')} value={form.key} onChange={(e) => setForm({ ...form, key: e.currentTarget.value })} disabled={Boolean(type)} required />
@@ -151,9 +168,34 @@ function TypeDialog({ type, onClose }: { type?: EquipmentType; onClose: () => vo
             ))}
           </Table.Tbody>
         </Table>
+        <Group align="end" wrap="nowrap">
+          <Select
+            style={{ flex: 1 }}
+            label={t('settings.copyInspections')}
+            data={types.filter((x) => x.id !== type?.id && x.inspections.length > 0).map((x) => ({ value: x.id, label: localized(x.name) }))}
+            value={copyFrom}
+            onChange={setCopyFrom}
+            placeholder={t('settings.copyInspectionsFrom')}
+            clearable
+            searchable
+          />
+          <Button variant="default" disabled={!source} onClick={() => { setForm({ ...form, inspections: [...form.inspections, ...copyInspections(source!.inspections, form.inspections)] }); setCopyFrom(null); }}>{t('settings.copyInspectionsAction')}</Button>
+        </Group>
         <Group><Button size="xs" variant="default" onClick={() => setForm({ ...form, inspections: [...form.inspections, emptyInspection()] })}>{t('settings.addInspection')}</Button></Group>
       </Stack>
     </ResponsiveDialog>
+    {type && (
+      <ConfirmDialog
+        opened={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title={t('settings.deleteTypeTitle', { name: localized(type.name) })}
+        description={t('settings.deleteTypeText')}
+        confirmLabel={common('actions.delete')}
+        loading={remove.isPending}
+        onConfirm={() => remove.mutate(undefined)}
+      />
+    )}
+    </>
   );
 }
 

@@ -551,6 +551,17 @@ describe('equipment', () => {
     expect((await del(`/equipment/categories/${parent.id}`).expect(400)).body.code).toBe('equipment.categoryInUse');
   });
 
+  it('deletes an equipment type unless items belong to it', async () => {
+    const type = (await post('/equipment/types', { key: 'drop-type', name: { de: 'Weg', en: 'Gone' }, categoryKey: 'loose', inspections: [{ key: 'annual', name: { de: 'Jährlich', en: 'Annual' }, intervalMonths: 12 }] }).expect(201)).body as { id: string };
+    await post('/equipment/items', { inventoryNumber: 'DT-1', name: 'Mit Typ', typeKey: 'drop-type', categoryKey: 'loose', departmentId: ids.musterstadt }).expect(201);
+    expect((await del(`/equipment/types/${type.id}`).expect(400)).body.code).toBe('equipment.typeInUse');
+
+    const spare = (await post('/equipment/types', { key: 'drop-spare', name: { de: 'Ersatz', en: 'Spare' }, categoryKey: 'loose' }).expect(201)).body as { id: string };
+    await del(`/equipment/types/${spare.id}`).expect(204);
+    const typeKeys = ((await get('/equipment/types').expect(200)).body as { key: string }[]).map((t) => t.key);
+    expect(typeKeys).not.toContain('drop-spare');
+  });
+
   it('lets mark-due move places in bulk without write, import, lists or defect reporting', async () => {
     const roles = (await get('/core/roles')).body as { id: string; templateKey: string }[];
     const dueRole = roles.find((r) => r.templateKey === 'equipment-due')!.id;
