@@ -25,6 +25,8 @@ import { CHECK, DriverLicensesService } from './driver-licenses/driver-licenses.
 import { DriverLicenseDeadlines } from './driver-licenses/license-deadlines.js';
 import { DriverLicenseLists } from './driver-licenses/license-lists.js';
 import { LicenseSelfCheckService } from './driver-licenses/self-check.js';
+import { PersonDevicesController } from './person-devices/person-devices.controller.js';
+import { PersonDevicesService } from './person-devices/person-devices.service.js';
 import { OrganizationService, PersonDirectoryService } from './directory/directory.js';
 import { CareerImport } from './imports/career.import.js';
 import { MasterdataLookups } from './imports/lookups.js';
@@ -33,7 +35,7 @@ import { MasterdataLists } from './lists/masterdata.lists.js';
 import { DepartmentGroup } from './organization/group.entities.js';
 import { GroupsController } from './organization/groups.controller.js';
 import { OrganizationController } from './organization/organization.controller.js';
-import { Department, DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, HonorAward, Membership, OfficeAssignment, Person, PersonQualification, RankAssignment, RestPeriod, Station, Vehicle } from './masterdata.entities.js';
+import { Department, DriverLicenseCheck, DriverLicenseRequest, DriverLicenseToken, HonorAward, Membership, OfficeAssignment, Person, PersonDeviceToken, PersonQualification, RankAssignment, RestPeriod, Station, Vehicle } from './masterdata.entities.js';
 import { MasterdataData } from './data/masterdata.data.js';
 import { MasterdataDescription } from './data/masterdata.description.js';
 import { MasterdataRetention } from './data/masterdata.retention.js';
@@ -54,7 +56,7 @@ import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/person
  */
 @Global()
 @Module({
-  controllers: [CatalogController, OrganizationController, GroupsController, PersonsController, CoursesController, SelfController, DriverLicensesController, PersonFieldsController],
+  controllers: [CatalogController, OrganizationController, GroupsController, PersonsController, CoursesController, SelfController, DriverLicensesController, PersonDevicesController, PersonFieldsController],
   providers: [
     CatalogService,
     PersonFields,
@@ -79,6 +81,7 @@ import { departmentsOf, PersonsService, READ, SENSITIVE } from './persons/person
     { provide: PERSON_HOLDINGS, useExisting: PersonHoldingsRegistry },
     DriverLicensesService,
     DriverLicenseDeadlines,
+    PersonDevicesService,
     DriverLicenseLists,
     LicenseSelfCheckService,
     { provide: MASTERDATA_LICENSE_SELF_CHECK, useExisting: LicenseSelfCheckService },
@@ -219,6 +222,7 @@ export const masterdataModule = defineModule({
     DriverLicenseCheck,
     DriverLicenseRequest,
     DriverLicenseToken,
+    PersonDeviceToken,
     Course,
     CourseRun,
     CourseAttendance,
@@ -240,6 +244,7 @@ export const masterdataModule = defineModule({
     { entity: DriverLicenseCheck, parent: 'person' },
     { entity: DriverLicenseRequest, parent: 'person' },
     { entity: DriverLicenseToken, parent: 'person' },
+    { entity: PersonDeviceToken, parent: 'person' },
     Course,
     { entity: CourseRun, parent: 'course' },
     { entity: CourseAttendance, parent: 'person' },

@@ -1,6 +1,6 @@
 import type { EntityManager } from '@mikro-orm/core';
 import type { AuditReferenceRegistry } from '@forga/core-api';
-import { Department, DriverLicenseToken, Person, Station, Vehicle } from '../masterdata.entities.js';
+import { Department, DriverLicenseToken, Person, PersonDeviceToken, Station, Vehicle } from '../masterdata.entities.js';
 
 const ORGANIZATION = 'masterdata.organization.manage';
 
@@ -59,6 +59,15 @@ export function registerAuditReferences(registry: AuditReferenceRegistry, em: En
     actions: ['masterdata.license-token-registered', 'masterdata.license-token-revoked'],
     resolve: async (ids) => {
       const tokens = await em.fork().find(DriverLicenseToken, { id: { $in: [...ids] } }, { fields: ['id', 'suffix', 'kind'] });
+      return new Map(tokens.map((t) => [t.id, { label: `…${t.suffix}` }]));
+    },
+  });
+  // Devices of persons for the info terminal: the end of the ID, never the ID itself.
+  registry.register('masterdata.person-token', {
+    keys: ['tokenId', 'replaced'],
+    actions: ['masterdata.person-token-registered', 'masterdata.person-token-revoked'],
+    resolve: async (ids) => {
+      const tokens = await em.fork().find(PersonDeviceToken, { id: { $in: [...ids] } }, { fields: ['id', 'suffix', 'kind'] });
       return new Map(tokens.map((t) => [t.id, { label: `…${t.suffix}` }]));
     },
   });

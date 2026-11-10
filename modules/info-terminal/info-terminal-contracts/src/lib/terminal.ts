@@ -232,6 +232,13 @@ export const KioskIncidentInput = z.object({
 export type KioskIncidentInput = z.input<typeof KioskIncidentInput>;
 
 /**
+ * A scanned device code (person's own NFC sticker or barcode, or the sticker on the driving licence) while a report is
+ * open: the terminal opens the booking dialog of the person it identifies (`POST …/kiosk/identify`).
+ */
+export const KioskIdentifyInput = z.object({ code: z.string().trim().min(4).max(200) });
+export type KioskIdentifyInput = z.input<typeof KioskIdentifyInput>;
+
+/**
  * Self-check of a driving licence: the scanned sticker ID, and `confirm` once the person confirmed the
  * self-declaration. Without `confirm` the terminal only shows name, classes and whether a self-check is possible.
  */

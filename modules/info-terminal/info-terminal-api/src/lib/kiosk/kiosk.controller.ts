@@ -6,6 +6,7 @@ import { TerminalBookingInput } from '@forga/incidents-contracts';
 import {
   KioskDriverLicenseInput,
   type KioskDriverLicense,
+  KioskIdentifyInput,
   KioskIncidentInput,
   type KioskEntry,
   type KioskMatch,
@@ -73,6 +74,14 @@ export class KioskController {
   @UseGuards(TerminalGuard)
   search(@CurrentTerminal() terminal: TerminalEntity, @Query('departmentId') departmentId?: string, @Query('q') q = ''): Promise<KioskPerson[]> {
     return this.kiosk.search(terminal, departmentId, q);
+  }
+
+  /** The person of a scanned barcode or NFC sticker (own device or driving licence); opens the booking dialog. */
+  @Post('identify')
+  @HttpCode(200)
+  @UseGuards(TerminalGuard)
+  identify(@CurrentTerminal() terminal: TerminalEntity, @Query('departmentId') departmentId: string | undefined, @Body(new ZodPipe(KioskIdentifyInput)) input: KioskIdentifyInput): Promise<KioskPerson> {
+    return this.kiosk.identify(terminal, departmentId, input.code);
   }
 
   @Get('reports/:reportId')

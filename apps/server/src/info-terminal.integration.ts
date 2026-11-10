@@ -483,3 +483,58 @@ describe('new link, revocation and module state', () => {
     await kiosk.get('/terminal', cookies.musterstadt).expect(200);
   });
 });
+
+/** Registers a device (NFC sticker or barcode) of a person. */
+const device = (personId: string, code: string, kind = 'nfc') => post(`/masterdata/persons/${personId}/device-tokens`, { kind, code });
+/** A new active person of the department; returns the person's ID. */
+const newPerson = async (firstName: string, departmentId: string) =>
+  (await post('/masterdata/persons', { firstName, lastName: 'Scan', status: 'active', memberships: [{ departmentId, from: '2020-01-01', primary: true }] }).expect(201)).body.id as string;
+
+/** The kiosk identifies the person of a scanned code (default: the Musterstadt terminal). */
+const identify = (code: string, departmentId = ids.musterstadt, cookie = cookies.musterstadt) => kiosk.post(`/identify?departmentId=${departmentId}`, { code }, cookie);
+
+describe('identifying a person by a scanned code while a report is open', () => {
+
+  it('identifies a person by the device and a person by the sticker on the licence (IDs normalised, same shape as search)', async () => {
+    await device(ids.tim, '04:B3:2C:8D:4E').expect(201);
+    await post(`/masterdata/persons/${ids.jonas}/driver-license/tokens`, { kind: 'barcode', code: 'FS-0200-JONAS' }).expect(201);
+    expect((await identify('04b32c8d4e')).body).toEqual({ id: ids.tim, firstName: 'Tim', lastName: 'Terminal', departments: ['Musterstadt'] });
+    expect((await identify('FS-0200-JONAS')).body).toEqual({ id: ids.jonas, firstName: 'Jonas', lastName: 'Terminal', departments: ['Musterstadt'] });
+  });
+
+  it('refuses unknown codes (404) and the same answer for a revoked device', async () => {
+    expect((await identify('UNBEKANNT-42').expect(404)).body.code).toBe('info-terminal.codeNotRegistered');
+    const list = (await get(`/masterdata/persons/${ids.tim}/device-tokens`).expect(200)).body as { id: string; revokedAt: string | null }[];
+    await post(`/masterdata/persons/${ids.tim}/device-tokens/${list.find((d) => !d.revokedAt)!.id}/revoke`, { reason: 'verloren' }).expect(200);
+    expect((await identify('04b32c8d4e').expect(404)).body.code).toBe('info-terminal.codeNotRegistered');
+    await device(ids.tim, '04:B3:2C:8D:4E').expect(201);
+    await identify('04b32c8d4e').expect(200);
+  });
+
+  it('refuses restricted and left persons and identifies persons of other departments', async () => {
+    const leaver = await newPerson('Lars', ids.musterstadt);
+    await device(leaver, 'LARS-CARD-07', 'barcode').expect(201);
+    await post(`/masterdata/persons/${leaver}/leave`, { leftOn: '2026-01-31', exitReason: 'own-request' }).expect(201);
+    expect((await identify('LARS-CARD-07').expect(404)).body.code).toBe('info-terminal.codeNotRegistered');
+    const restricted = await newPerson('Rita', ids.musterstadt);
+    await device(restricted, 'RITA-CARD-08', 'barcode').expect(201);
+    await put(`/privacy/persons/${restricted}/restriction`, { reason: 'retention' }).expect(200);
+    expect((await identify('RITA-CARD-08').expect(404)).body.code).toBe('info-terminal.codeNotRegistered');
+    // Like the search, a code identifies any person of the brigade, also one of another department.
+    await device(ids.lena, 'LENA-CARD-09', 'barcode').expect(201);
+    expect((await identify('LENA-CARD-09').expect(200)).body).toMatchObject({ id: ids.lena, departments: ['Ahornfeld'] });
+  });
+
+  it('books the identified person into the open report like a booking from the name tiles', async () => {
+    const { reportId } = await incident('2026-IDENT-1', -15);
+    const who = (await identify('FS-0200-JONAS').expect(200)).body as { id: string; firstName: string; lastName: string };
+    const booked = await kiosk.put(`/reports/${reportId}/entries/${who.id}`, booking(who.id, { function: 'machinist', breathingApparatus: true }), cookies.musterstadt).expect(200);
+    expect(booked.body).toMatchObject({ personId: ids.jonas, firstName: 'Jonas', vehicleId: ids.lf, function: 'machinist', breathingApparatus: true });
+    // The booking rules apply as before: a booking needs a vehicle or standby.
+    const other = await newPerson('Olaf', ids.musterstadt);
+    await device(other, 'OLAF-CARD-10', 'barcode').expect(201);
+    const found = (await identify('OLAF-CARD-10').expect(200)).body as { id: string };
+    await kiosk.put(`/reports/${reportId}/entries/${found.id}`, booking(found.id, { vehicleId: null, standby: false }), cookies.musterstadt).expect(400);
+    await kiosk.put(`/reports/${reportId}/entries/${found.id}`, booking(found.id, { vehicleId: null, standby: true }), cookies.musterstadt).expect(200);
+  });
+});

@@ -248,6 +248,25 @@ export class KioskService {
       .map((p) => ({ id: p.id, firstName: p.firstName, lastName: p.lastName, departments: p.departmentIds.flatMap((d) => (short.has(d) ? [short.get(d)!] : [])) }));
   }
 
+  /**
+   * The person of a scanned device code (see `KioskIdentifyInput`), for the booking dialog. Any person of the brigade
+   * who has not left and whose processing is not restricted, as the search finds them; unknown or revoked codes give
+   * `404 info-terminal.codeNotRegistered`.
+   */
+  async identify(terminal: TerminalEntity, departmentId: string | undefined, code: string): Promise<KioskPerson> {
+    await this.department(terminal, departmentId);
+    if (!(await this.rateLimits.hit('info-terminal.identify', terminal.id, SEARCHES))) throw tooMany();
+    const person = await this.directory.findByCode(code);
+    if (!person) throw new NotFoundException({ code: 'info-terminal.codeNotRegistered' });
+    const short = new Map((await this.organization.departments()).map((d) => [d.id, d.shortName]));
+    return {
+      id: person.id,
+      firstName: person.firstName,
+      lastName: person.lastName,
+      departments: person.departmentIds.flatMap((d) => (short.has(d) ? [short.get(d)!] : [])),
+    };
+  }
+
   private async names(personIds: readonly string[]): Promise<Map<string, { firstName: string; lastName: string }>> {
     return new Map((await this.directory.snapshots([...new Set(personIds)])).map((p) => [p.id, { firstName: p.firstName, lastName: p.lastName }]));
   }

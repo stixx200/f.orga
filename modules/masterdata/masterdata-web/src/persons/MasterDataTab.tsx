@@ -5,6 +5,7 @@ import { isValidIban, type Person } from '@forga/masterdata-contracts';
 import { useTranslation } from '@forga/web-sdk';
 import { Notice, Panel, StatusBadge } from '@forga/web-ui';
 import { today, useDisabledFields } from '../api';
+import { DeviceCodesPanel } from './DeviceCodesPanel';
 import type { PersonForm } from './PersonPage';
 
 /** Field error for an IBAN with wrong check digits; empty is allowed. */
@@ -123,6 +124,7 @@ export function MasterDataTab({ person, form, setForm, disabled }: { person: Per
           </>
         )}
       </Panel>}
+      <DeviceCodesPanel person={person} disabled={disabled} />
     </SimpleGrid>
   );
 }

@@ -10,6 +10,7 @@ import type {
   Employer,
   Employment,
   Gender,
+  PersonDeviceTokenKind,
   PersonStatus,
   RestPeriodReason,
   SpecialTask,
@@ -322,3 +323,27 @@ export const DriverLicenseTokenSchema = defineEntity({
 });
 export class DriverLicenseToken extends DriverLicenseTokenSchema.class {}
 DriverLicenseTokenSchema.setClass(DriverLicenseToken);
+
+/**
+ * Device of a person for the info terminal (NFC sticker or barcode), without a driving licence. Same protection as the
+ * licence stickers: only an HMAC of the ID (`codeHash`, hidden), the last characters for the UI. One active device per person.
+ */
+export const PersonDeviceTokenSchema = defineEntity({
+  name: 'PersonDeviceToken',
+  schema: 'masterdata',
+  tableName: 'person_device_token',
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv7()),
+    person: () => p.manyToOne(Person).deleteRule('cascade'),
+    kind: p.string().$type<PersonDeviceTokenKind>(),
+    codeHash: p.string().index().hidden(),
+    suffix: p.string(),
+    registeredAt: p.datetime(),
+    registeredBy: p.string(),
+    revokedAt: p.datetime().nullable(),
+    revokedBy: p.string().nullable(),
+    revokeReason: p.text().nullable(),
+  },
+});
+export class PersonDeviceToken extends PersonDeviceTokenSchema.class {}
+PersonDeviceTokenSchema.setClass(PersonDeviceToken);

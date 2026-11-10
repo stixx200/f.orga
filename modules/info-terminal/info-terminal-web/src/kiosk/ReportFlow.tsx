@@ -5,7 +5,7 @@ import { useLocalized, useTranslation } from '@forga/web-sdk';
 import { clockTime, kioskApi, timeOn } from './api';
 import { useKiosk } from './context';
 import classes from './kiosk.module.css';
-import { cx, Dialog, ErrorNotice, Icon, NameChooser, Notice, type TileStatus, useCountdown } from './parts';
+import { cx, Dialog, ErrorNotice, Icon, NameChooser, Notice, type TileStatus, useCountdown, useKeyboardScan } from './parts';
 
 interface Person {
   id: string;
@@ -320,11 +320,12 @@ export function ReportFlow({ reportId }: { reportId: string }) {
   const report = useQuery({ queryKey: ['kiosk', 'report', department.id, reportId], queryFn: () => kioskApi.report(department.id, reportId), refetchInterval: 30_000 });
   const [step, setStep] = useState<Step>({ kind: 'persons' });
   const [done, setDone] = useState<KioskEntry | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const localized = useLocalized();
   const data = report.data;
-  if (!data) return <ErrorNotice error={report.error} />;
 
   const status = (personId: string): TileStatus => {
+    if (!data) return { kind: 'free' };
     const entry = data.entries.find((e) => e.personId === personId);
     if (entry) {
       const vehicle = entry.standby ? t('kiosk.persons.standby') : labels.vehicle(data.vehicles.find((v) => v.id === entry.vehicleId)?.label ?? '');
@@ -337,10 +338,29 @@ export function ReportFlow({ reportId }: { reportId: string }) {
     return { kind: 'free' };
   };
 
+  const identify = useMutation({ mutationFn: (code: string) => kioskApi.identify(department.id, code) });
+  // A scanned barcode or transponder (own device or driving licence) opens the booking dialog of its person.
+  useKeyboardScan(
+    (code) => {
+      setNotice(null);
+      identify.mutate(code, {
+        onSuccess: (person) => {
+          const s = status(person.id);
+          if (s.kind === 'blocked') return setNotice(s.reason);
+          setStep(s.kind === 'booked' && !s.editable ? { kind: 'list' } : { kind: 'form', person });
+        },
+      });
+    },
+    Boolean(data?.bookable) && step.kind === 'persons' && !identify.isPending,
+  );
+  if (!data) return <ErrorNotice error={report.error} />;
+
   return (
     <>
       <ErrorNotice error={report.error} />
       {!data.bookable && <Notice kind="warning">{t('kiosk.persons.finished')}</Notice>}
+      {notice && <Notice kind="warning">{notice}</Notice>}
+      <ErrorNotice error={identify.error} />
       {step.kind === 'persons' && (
         <>
           <div className={classes.title}>
@@ -350,6 +370,7 @@ export function ReportFlow({ reportId }: { reportId: string }) {
             </div>
             <button type="button" className={classes.button} onClick={() => setStep({ kind: 'list' })}>{t('kiosk.persons.bookedList', { count: data.entries.length })}</button>
           </div>
+          {data.bookable && <p className={classes.meta}>{t('kiosk.persons.scanHint')}</p>}
           {data.bookable && (
             <NameChooser
               guestsHint

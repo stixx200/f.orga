@@ -11,6 +11,7 @@ export * from './lib/directory.js';
 export * from './lib/person.js';
 export * from './lib/person-fields.js';
 export * from './lib/driver-license.js';
+export * from './lib/person-device-token.js';
 export * from './lib/templates/bw-courses.js';
 export * from './lib/iban.js';
 export * from './lib/group.js';

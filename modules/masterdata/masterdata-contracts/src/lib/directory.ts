@@ -45,6 +45,12 @@ export interface PersonDirectory {
   /** Snapshots of the persons on the date (default: today); unknown IDs are omitted. */
   snapshots(ids: readonly string[], date?: string): Promise<PersonSnapshot[]>;
   findByPersonnelNumber(personnelNumber: string): Promise<PersonSummary | null>;
+  /**
+   * The person of an active device code: a device of the person or the NFC/barcode sticker of the driving licence.
+   * `null` for unknown and revoked codes, and for persons who have left, were anonymised or whose processing is
+   * restricted (the same persons `search` leaves out). The caller checks its own scope (e.g. the departments).
+   */
+  findByCode(code: string): Promise<PersonSummary | null>;
   /** Summaries (with e-mail and phone) of the given persons, e.g. to notify them; unknown IDs are omitted. */
   summaries(ids: readonly string[]): Promise<PersonSummary[]>;
   /**
