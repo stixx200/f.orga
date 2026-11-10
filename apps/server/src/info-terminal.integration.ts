@@ -181,24 +181,17 @@ describe('info terminal lifecycle', () => {
     await kiosk.get(`/overview?departmentId=${ids.ahornfeld}`, cookies.ahornfeld).expect(200);
   });
 
-  it('shows name tiles of the active members and searches the persons of its departments who have not left (L22)', async () => {
+  it('shows name tiles of the active members and searches all persons who have not left', async () => {
     const members = (await kiosk.get(`/members?departmentId=${ids.musterstadt}`, cookies.musterstadt).expect(200)).body as { id: string; firstName: string }[];
     expect(members.map((m) => m.firstName)).toEqual(['Jonas', 'Max', 'Tim']);
     expect(Object.keys(members[0]).toSorted()).toEqual(['departments', 'firstName', 'id', 'lastName']);
     const youth = (await kiosk.get(`/members?departmentId=${ids.youth}`, cookies.musterstadt).expect(200)).body as { id: string }[];
     expect(youth.map((m) => m.id)).toEqual([ids.mia]);
     expect((await kiosk.get(`/persons?departmentId=${ids.musterstadt}&q=Te`, cookies.musterstadt).expect(200)).body).toEqual([]);
-    // By default only persons of the terminal's departments and the departments below them.
-    const own = (await kiosk.get(`/persons?departmentId=${ids.musterstadt}&q=Terminal`, cookies.musterstadt).expect(200)).body as { id: string; departments: string[] }[];
-    expect(own.map((p) => p.id)).toEqual(expect.arrayContaining([ids.paul, ids.mia]));
-    expect(own.map((p) => p.id)).not.toContain(ids.lena);
-    // With the setting all persons of the brigade.
-    const settings = (await get('/core/settings/info-terminal.general').expect(200)).body;
-    await put('/core/settings/info-terminal.general', { ...settings, searchAllPersons: true }).expect(200);
+    // The search finds all persons of the brigade, also those of departments the terminal does not show.
     const found = (await kiosk.get(`/persons?departmentId=${ids.musterstadt}&q=Terminal`, cookies.musterstadt).expect(200)).body as { id: string; departments: string[] }[];
     expect(found.map((p) => p.id)).toEqual(expect.arrayContaining([ids.paul, ids.lena, ids.mia]));
     expect(found.find((p) => p.id === ids.lena)?.departments).toEqual(['Ahornfeld']);
-    await put('/core/settings/info-terminal.general', { ...settings, searchAllPersons: false }).expect(200);
   });
 });
 

@@ -231,37 +231,21 @@ export class KioskService {
   }
 
   /**
-   * Search over the persons who have not left (from 3 letters, at most 10): name and short names of the departments. By
-   * default only persons of the terminal's departments and the departments below them (L22); with the setting
-   * `searchAllPersons` all persons of the brigade. Persons whose processing is restricted never appear.
+   * Search over all persons of the brigade who have not left (from 3 letters, at most 10): name and short names of the
+   * departments. The tiles show the departments of the terminal; the search finds everyone. Persons whose processing is
+   * restricted never appear.
    */
   async search(terminal: TerminalEntity, departmentId: string | undefined, query: string): Promise<KioskPerson[]> {
     await this.department(terminal, departmentId);
     if (!(await this.rateLimits.hit('info-terminal.search', terminal.id, SEARCHES))) throw tooMany();
     if (query.trim().length < 3) return [];
-    const [settings, departments] = await Promise.all([this.moduleSettings(), this.organization.departments()]);
-    const scope = settings.searchAllPersons ? undefined : this.searchDepartments(terminal, departments);
-    const found = await this.directory.search(query.trim(), { limit: 10, ...(scope ? { departmentIds: scope } : {}) });
+    const departments = await this.organization.departments();
+    const found = await this.directory.search(query.trim(), { limit: 10 });
     const short = new Map(departments.map((d) => [d.id, d.shortName]));
     return found
       .filter((p) => p.status !== 'left')
       .slice(0, 10)
       .map((p) => ({ id: p.id, firstName: p.firstName, lastName: p.lastName, departments: p.departmentIds.flatMap((d) => (short.has(d) ? [short.get(d)!] : [])) }));
-  }
-
-  /** The terminal's departments with all departments below them (youth, veterans …). */
-  private searchDepartments(terminal: TerminalEntity, departments: readonly Department[]): string[] {
-    const result = new Set(terminal.departmentIds);
-    for (let added = true; added; ) {
-      added = false;
-      for (const d of departments) {
-        if (d.parentId && result.has(d.parentId) && !result.has(d.id)) {
-          result.add(d.id);
-          added = true;
-        }
-      }
-    }
-    return [...result];
   }
 
   private async names(personIds: readonly string[]): Promise<Map<string, { firstName: string; lastName: string }>> {
