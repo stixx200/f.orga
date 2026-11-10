@@ -187,6 +187,9 @@ Schemas aus `@forga/masterdata-contracts`. „Abteilungsbezogen“ heißt: Das R
 | `POST` | `/masterdata/persons/:id/driver-license/requests/:requestId/withdraw` | Anforderung zurücknehmen (`{ reason }`). Fehler: `masterdata.requestClosed` (`409`) |
 | `POST` | `/masterdata/persons/:id/driver-license/tokens` | Transponder registrieren (`DriverLicenseTokenInput`: `kind` `nfc`/`barcode`, `code`), sperrt den bisherigen. Fehler: `masterdata.tokenTaken` (`409`), `masterdata.noSecretKey` (`503`); Audit `masterdata.license-token-registered` |
 | `POST` | `/masterdata/persons/:id/driver-license/tokens/:tokenId/revoke` | Transponder sperren (`{ reason }`); Audit `masterdata.license-token-revoked` |
+| `GET` | `/masterdata/persons/:id/device-tokens` | Geräte der Person für den Infoterminal (NFC-Transponder oder Barcode), mit Endung der Kennung; Recht `masterdata.persons.read` |
+| `POST` | `/masterdata/persons/:id/device-tokens` | Gerät registrieren (`PersonDeviceTokenInput`: `kind` `nfc`/`barcode`, `code`), ersetzt das bisherige aktive Gerät. Gleiche Kennung bei einer anderen Person (auch als Führerscheinaufkleber): `masterdata.tokenTaken` (`409`); Recht `masterdata.persons.write`; Audit `masterdata.person-token-registered` |
+| `POST` | `/masterdata/persons/:id/device-tokens/:tokenId/revoke` | Gerät sperren (`{ reason }`); Recht `masterdata.persons.write`; Audit `masterdata.person-token-revoked` |
 | `GET` | `/masterdata/driver-licenses` | Personen der Zielgruppe mit Stand (`DriverLicenseOverview`) |
 | `GET` | `/masterdata/me/driver-license` | eigener Führerschein (`MyDriverLicense`, Recht `masterdata.self`) |
 
@@ -343,6 +346,7 @@ Alle Rechte gelten für die Gesamtwehr.
 | `GET` | `/info-terminal/kiosk/overview?departmentId` | Einsätze und Dienste im Zeitfenster, bald öffnende Dienste, nächster Dienst (`KioskOverview`) |
 | `GET` | `/info-terminal/kiosk/members?departmentId` | Namenskacheln |
 | `GET` | `/info-terminal/kiosk/persons?departmentId&q` | Namenssuche (ab 3 Zeichen, höchstens 10; Personen der Abteilungen des Terminals und darunter, mit `searchAllPersons` alle) |
+| `POST` | `/info-terminal/kiosk/identify?departmentId` | Person zu einem gescannten Code (Gerät der Person oder Transponder am Führerschein; `KioskIdentifyInput`: `code`), Antwort wie die Namenssuche. Gleicher Umfang wie die Suche; unbekannte, gesperrte, ausgeschiedene und eingeschränkte Personen: `404 info-terminal.codeNotRegistered`. Begrenzt wie die Suche (30 pro Minute je Terminal) |
 | `GET` | `/info-terminal/kiosk/reports/:reportId?departmentId` | Bericht für das Terminal (`KioskReport`: Eintragungen, Personen anderer Berichte, Fahrzeuge, Funktionen). Fehler: `info-terminal.notOperational` (`403`), `info-terminal.reportNotFound` (`404`) |
 | `PUT` | `/info-terminal/kiosk/reports/:reportId/entries/:personId` | Eintragen oder ändern (`TerminalBookingInput` und `departmentId`). Fehler: `incidents.notDraft`, `incidents.reportLocked`, `incidents.reportReleased` (`403`), `incidents.unknownPerson`, `incidents.unknownVehicle`, `info-terminal.unknownFunction`, `info-terminal.endBeforeStart` (`400`), `info-terminal.personInOtherReport`, `info-terminal.entryLocked`, `incidents.ledByMpFeuer` (`409`, Bericht von MP-Feuer geführt) |
 | `DELETE` | `/info-terminal/kiosk/reports/:reportId/entries/:personId?departmentId` | Eintragung vom Terminal austragen (`204`). Fehler: `info-terminal.entryNotFound`, `info-terminal.entryLocked` |

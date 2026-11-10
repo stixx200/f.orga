@@ -44,6 +44,7 @@ export const kioskApi = {
   overview: (departmentId: string) => api<KioskOverview>(withQuery(`${BASE}/overview`, { departmentId })),
   members: (departmentId: string) => api<KioskPerson[]>(withQuery(`${BASE}/members`, { departmentId })),
   search: (departmentId: string, q: string) => api<KioskPerson[]>(withQuery(`${BASE}/persons`, { departmentId, q })),
+  identify: (departmentId: string, code: string) => send<KioskPerson>('POST', withQuery(`${BASE}/identify`, { departmentId }), { code }),
   report: (departmentId: string, reportId: string) => api<KioskReport>(withQuery(`${BASE}/reports/${reportId}`, { departmentId })),
   book: (reportId: string, body: BookingBody) => send<KioskEntry>('PUT', `${BASE}/reports/${reportId}/entries/${body.personId}`, body),
   cancel: (departmentId: string, reportId: string, personId: string) =>

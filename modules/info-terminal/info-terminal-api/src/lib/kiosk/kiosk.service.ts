@@ -249,6 +249,27 @@ export class KioskService {
       .map((p) => ({ id: p.id, firstName: p.firstName, lastName: p.lastName, departments: p.departmentIds.flatMap((d) => (short.has(d) ? [short.get(d)!] : [])) }));
   }
 
+  /**
+   * The person of a scanned device code (see `KioskIdentifyInput`), for the booking dialog. Only persons the search
+   * finds (same scope: the terminal's departments unless `searchAllPersons`); unknown, revoked, left and restricted
+   * persons, and persons out of scope, all give `404 info-terminal.codeNotRegistered`.
+   */
+  async identify(terminal: TerminalEntity, departmentId: string | undefined, code: string): Promise<KioskPerson> {
+    await this.department(terminal, departmentId);
+    if (!(await this.rateLimits.hit('info-terminal.identify', terminal.id, SEARCHES))) throw tooMany();
+    const [settings, departments] = await Promise.all([this.moduleSettings(), this.organization.departments()]);
+    const person = await this.directory.findByCode(code);
+    const scope = settings.searchAllPersons ? undefined : this.searchDepartments(terminal, departments);
+    if (!person || (scope && !person.departmentIds.some((d) => scope.includes(d)))) throw new NotFoundException({ code: 'info-terminal.codeNotRegistered' });
+    const short = new Map(departments.map((d) => [d.id, d.shortName]));
+    return {
+      id: person.id,
+      firstName: person.firstName,
+      lastName: person.lastName,
+      departments: person.departmentIds.flatMap((d) => (short.has(d) ? [short.get(d)!] : [])),
+    };
+  }
+
   /** The terminal's departments with all departments below them (youth, veterans …). */
   private searchDepartments(terminal: TerminalEntity, departments: readonly Department[]): string[] {
     const result = new Set(terminal.departmentIds);
