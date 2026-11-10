@@ -73,6 +73,9 @@ Der Code ist englisch, die Dokumentation deutsch. Diese Tabelle ordnet die Begri
 | Atemschutz | `RespiratoryProtection` |
 | Eignungsuntersuchung | medical fitness examination |
 | Prüfung (eines Geräts) | `Inspection` |
+| Prüfart (Katalog „Prüfarten“, gemeinsam für alle Gerätetypen) | `InspectionType`, `InspectionTypeEntity` (`inspection_type`) |
+| Formular einer Prüfart (keines, Dokument, ausfüllbar, Bestätigung) | `InspectionForm` |
+| Erfasste Formularwerte bzw. Bestätigung einer Prüfung | `RecordedForm`, `Inspection.form` |
 
 ## Dienste
 
