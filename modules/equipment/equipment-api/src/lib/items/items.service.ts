@@ -39,7 +39,8 @@ import {
 import { INCIDENTS_EVENTS, INCIDENTS_LOOKUP, type IncidentsLookup, type ReportReleasedEvent } from '@forga/incidents-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { type SessionClosedEvent, TRAINING_EVENTS, TRAINING_SESSIONS, type TrainingSessions } from '@forga/training-contracts';
-import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, RecentBulkCategoryEntity, UsageEntity } from '../equipment.entities.js';
+import { CategoryEntity, DefectEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, InspectionTypeEntity, RecentBulkCategoryEntity, UsageEntity } from '../equipment.entities.js';
+import { correctForm, recordForm } from './inspection-form.js';
 
 export const READ = 'equipment.read';
 export const WRITE = 'equipment.write';
@@ -93,7 +94,11 @@ const INSPECTOR_QUALIFICATION: Partial<Record<InspectionType['inspector'], (brea
 const toInspectionDto = (i: InspectionEntity): Inspection => ({
   id: i.id, itemId: i.item.id, inspectionKey: i.inspectionKey, date: i.date, inspectorPersonId: i.inspectorPersonId ?? null, inspectorCompany: i.inspectorCompany, result: i.result,
   checklist: i.checklist, measurements: i.measurements, nextDueOn: i.nextDueOn ?? null, notes: i.notes, recordedBy: i.recordedBy, qualificationWarning: i.qualificationWarning,
-  cancelled: i.cancelled, changeReason: i.changeReason,
+  cancelled: i.cancelled, changeReason: i.changeReason, form: i.form ?? null,
+});
+
+const toInspectionType = (t: InspectionTypeEntity): InspectionType => ({
+  key: t.key, name: t.name, intervalMonths: t.intervalMonths ?? null, trigger: t.trigger, inspector: t.inspector, checklist: t.checklist, form: t.form,
 });
 
 export const toDefectDto = (d: DefectEntity): Defect => ({
@@ -216,8 +221,23 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
 
   /** Effective inspection types: own ones, otherwise those of the equipment type; with the interval overrides of the item. */
   private async inspectionsOf(em: EntityManager, items: EquipmentItemEntity[]): Promise<Map<string, InspectionType[]>> {
-    const types = new Map((await em.find(EquipmentTypeEntity, { key: { $in: [...new Set(items.flatMap((i) => (i.typeKey ? [i.typeKey] : [])))] } })).map((t) => [t.key, t.inspections]));
-    return new Map(items.map((i) => [i.id, withIntervals(i.inspections ?? (i.typeKey ? (types.get(i.typeKey) ?? []) : []), i.intervalOverrides ?? {})]));
+    const typeKeys = [...new Set(items.flatMap((i) => (i.typeKey ? [i.typeKey] : [])))];
+    const types = new Map((await em.find(EquipmentTypeEntity, { key: { $in: typeKeys } })).map((t) => [t.key, t.inspectionKeys]));
+    const keys = items.flatMap((i) => i.inspectionKeys ?? (i.typeKey ? (types.get(i.typeKey) ?? []) : []));
+    const catalog = await this.catalogOf(em, keys);
+    return new Map(
+      items.map((i) => {
+        const own = i.inspectionKeys ?? (i.typeKey ? (types.get(i.typeKey) ?? []) : []);
+        return [i.id, withIntervals(own.flatMap((key) => catalog.get(key) ?? []), i.intervalOverrides ?? {})];
+      }),
+    );
+  }
+
+  /** Inspection types of the catalog by key (unknown keys are left out). */
+  async catalogOf(em: EntityManager, keys: string[]): Promise<Map<string, InspectionType>> {
+    if (!keys.length) return new Map();
+    const entries = await em.find(InspectionTypeEntity, { key: { $in: [...new Set(keys)] } });
+    return new Map(entries.map((t) => [t.key, toInspectionType(t)]));
   }
 
   async toDtos(items: EquipmentItemEntity[], today = berlinDate()): Promise<Item[]> {
@@ -243,7 +263,7 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
       return {
         id: item.id, inventoryNumber: item.inventoryNumber, name: item.name, typeKey: item.typeKey ?? null, categoryKey: item.categoryKey, serialNumber: item.serialNumber, barcode: item.barcode ?? null, rfid: item.rfid ?? null, manufacturer: item.manufacturer,
         yearBuilt: item.yearBuilt ?? null, purchasedOn: item.purchasedOn ?? null, price: item.price === null || item.price === undefined ? null : Number(item.price), properties: item.properties, departmentId: item.departmentId, vehicleId: item.vehicleId ?? null,
-        stationId: item.stationId ?? null, loadingPlace: item.loadingPlace, location: item.location, quantity: item.quantity, expiresOn: item.expiresOn ?? null, inspections: inspections.get(item.id) ?? [], ownInspections: item.inspections !== null && item.inspections !== undefined,
+        stationId: item.stationId ?? null, loadingPlace: item.loadingPlace, location: item.location, quantity: item.quantity, expiresOn: item.expiresOn ?? null, inspections: inspections.get(item.id) ?? [], inspectionKeys: item.inspectionKeys ?? null, ownInspections: item.inspectionKeys !== null && item.inspectionKeys !== undefined,
         intervalOverrides: item.intervalOverrides ?? {}, status: item.status, blocked: isBlocked(dues, locking.has(item.categoryKey), today), labelPrintedAt: item.labelPrintedAt ? item.labelPrintedAt.toISOString() : null,
         retirement: item.retirement ?? null, forVehicleId: item.forVehicleId ?? null, dues, nextDue: due[0] ?? null,
         openDefects: defects.filter((d) => d.item.id === item.id).length, notes: item.notes, version: item.version,
@@ -283,8 +303,12 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     if (input.typeKey && !type) throw new BadRequestException({ code: 'equipment.unknownType', key: input.typeKey });
     if (input.purchasedOn && input.purchasedOn > berlinDate()) throw new BadRequestException({ code: 'equipment.purchaseInFuture', date: input.purchasedOn });
     if (input.purchasedOn && input.purchasedOn < EARLIEST) throw new BadRequestException({ code: 'equipment.dateTooEarly', date: input.purchasedOn });
-    // Overrides and initial inspections only for inspection types of the item.
-    const keys = new Set((input.inspections ?? type?.inspections ?? []).map((t) => t.key));
+    // Own inspection types must be in the catalog; overrides and initial inspections only for inspection types of the item.
+    const ownKeys = input.inspectionKeys ?? type?.inspectionKeys ?? [];
+    for (const key of input.inspectionKeys ?? []) {
+      if (!(await em.count(InspectionTypeEntity, { key }))) throw new BadRequestException({ code: 'equipment.unknownInspection', key });
+    }
+    const keys = new Set(ownKeys);
     for (const key of [...Object.keys(input.intervalOverrides), ...input.initialInspections.map((i) => i.inspectionKey)]) {
       if (!keys.has(key)) throw new BadRequestException({ code: 'equipment.unknownInspection', key });
     }
@@ -440,14 +464,16 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
       const { [input.inspectionKey]: _done, ...rest } = item.triggered;
       item.triggered = rest;
     }
+    const { formValues, approved, ...fields } = input;
     const inspection = em.create(InspectionEntity, {
-      ...input,
+      ...fields,
       id: uuidv7(),
       item,
       nextDueOn: this.nextDue(type, input),
       recordedBy: user.displayName,
       qualificationWarning: await this.qualificationWarning(type, input.inspectorPersonId, input.date, breathing),
       clearedTrigger: settles ? trigger : null,
+      form: recordForm(type.form, { formValues, approved }, user.displayName, new Date().toISOString()),
     });
     if (input.result !== 'passed') this.reportFinding(em, user, item, inspection, type, after);
     if (input.result === 'failed') this.setStatus(item, 'defective', after);
@@ -530,6 +556,10 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
       const ids: string[] = [];
       if (parsed) {
         const checked = items.map((item) => ({ item, type: this.inspectable(user, item, parsed, types.get(item.id) ?? [], breathing.has(item.categoryKey)) }));
+        // Fillable forms are filled per item: recorded on the item page, not in bulk booking.
+        for (const { type } of checked) {
+          if (type.form.kind === 'fillable') throw new BadRequestException({ code: 'equipment.formNeedsItem', key: type.key });
+        }
         for (const { item, type } of checked) ids.push((await this.record(em, user, item, parsed, type, types.get(item.id) ?? [], breathing.has(item.categoryKey), after)).id);
       }
       if (triggerKey) {
@@ -578,7 +608,7 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     this.requireMay(user, 'inspect', inspection.item, breathing);
     if (inspection.cancelled) throw new ConflictException({ code: 'equipment.inspectionCancelled' });
     const types = (await this.inspectionsOf(em, [inspection.item])).get(inspection.item.id) ?? [];
-    const type = types.find((t) => t.key === inspection.inspectionKey) ?? { key: inspection.inspectionKey, name: { de: inspection.inspectionKey, en: inspection.inspectionKey }, intervalMonths: null, trigger: 'periodic', inspector: 'user', checklist: [] };
+    const type = types.find((t) => t.key === inspection.inspectionKey) ?? { key: inspection.inspectionKey, name: { de: inspection.inspectionKey, en: inspection.inspectionKey }, intervalMonths: null, trigger: 'periodic', inspector: 'user', checklist: [], form: { kind: 'none' } };
     return { inspection, type, types, breathing };
   }
 
@@ -611,12 +641,14 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
       const { item } = inspection;
       this.checkDates(input.date, input.result === 'failed' ? null : input.nextDueOn, item.purchasedOn);
       const previous = inspection.result;
-      const { reason, ...fields } = input;
+      const { reason, formValues, approved: _approved, ...fields } = input;
       Object.assign(inspection, {
         ...fields,
         nextDueOn: this.nextDue(type, input),
         qualificationWarning: await this.qualificationWarning(type, input.inspectorPersonId, input.date, breathing),
         changeReason: reason,
+        // The approval stays as recorded; fillable values are corrected with the field definitions as recorded.
+        form: correctForm(inspection.form ?? null, formValues),
       });
       if (input.result === 'passed') await this.withdrawFindings(em, inspection, reason);
       else if (previous === 'passed') this.reportFinding(em, user, item, inspection, type, after);

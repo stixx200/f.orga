@@ -9,7 +9,7 @@ import { CodeInput, ResponsiveDialog, treeOptions, useAction } from '@forga/web-
 import { BREATHING_WRITE, keys, useCategories, useDepartments, useStations, useTypes, useVehicles, WRITE } from '../api';
 import { LocationField } from '../parts';
 
-type Form = Required<Omit<ItemInput, 'inspections' | 'version' | 'initialInspections'>>;
+type Form = Required<Omit<ItemInput, 'inspectionKeys' | 'version' | 'initialInspections'>>;
 
 const fromItem = (item?: Item): Form => ({
   inventoryNumber: item?.inventoryNumber ?? '',
@@ -80,7 +80,7 @@ export function ItemDialog({ item, onClose }: { item?: Item; onClose: () => void
         intervalOverrides: overrides,
         departmentId,
         ...(item ? { version: item.version } : { initialInspections }),
-        ...(item?.ownInspections ? { inspections: item.inspections } : {}),
+        ...(item?.ownInspections ? { inspectionKeys: item.inspectionKeys } : {}),
       };
       return item ? send<Item>('PUT', `equipment/items/${item.id}`, body) : send<Item>('POST', 'equipment/items', body);
     },

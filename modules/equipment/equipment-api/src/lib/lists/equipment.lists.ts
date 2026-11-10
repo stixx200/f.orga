@@ -3,13 +3,29 @@ import { EntityManager } from '@mikro-orm/core';
 import { z } from 'zod';
 import type { ListColumn } from '@forga/core-contracts';
 import { type AuthenticatedUser, berlinDate, type ListDefinition, SettingsService, wordsWhere } from '@forga/core-api';
-import { EquipmentSettings, type Item } from '@forga/equipment-contracts';
+import { EquipmentSettings, type Item, type RecordedForm } from '@forga/equipment-contracts';
 import { ORGANIZATION, type Organization, PERSON_DIRECTORY, type PersonDirectory } from '@forga/masterdata-contracts';
 import { CategoryEntity, InspectionEntity } from '../equipment.entities.js';
 import { defectText, ItemsService, WRITE, RESULT_NAMES as RESULT } from '../items/items.service.js';
 
 const col = (key: string, de: string, en: string, width?: number, align?: ListColumn['align']): ListColumn => ({ key, label: { de, en }, ...(width ? { width } : {}), ...(align ? { align } : {}) });
 const department = { key: 'departmentId', label: { de: 'Abteilung', en: 'Department' }, type: 'department' as const };
+
+/** Recorded form of an inspection as text: "Field: value unit; …", or the approval with the approving person and day. */
+function formText(form: RecordedForm | null, language: 'de' | 'en'): string {
+  if (!form) return '';
+  if (form.kind === 'approval') {
+    return language === 'de' ? `Bestätigt von ${form.approvedBy} am ${form.approvedAt.slice(0, 10)}` : `Approved by ${form.approvedBy} on ${form.approvedAt.slice(0, 10)}`;
+  }
+  return form.fields
+    .map((field) => {
+      const label = field.label[language] || field.label.de;
+      if (field.type === 'checkbox') return `${label}: ${field.value ? (language === 'de' ? 'ja' : 'yes') : language === 'de' ? 'nein' : 'no'}`;
+      if (field.value === null || field.value === '') return `${label}: –`;
+      return `${label}: ${field.value}${field.unit ? ` ${field.unit}` : ''}`;
+    })
+    .join('; ');
+}
 const Filter = z.object({ departmentId: z.uuid().optional(), categoryKey: z.string().optional(), until: z.iso.date().optional(), from: z.iso.date().optional(), to: z.iso.date().optional(), vehicleId: z.uuid().optional() });
 type Filter = z.infer<typeof Filter>;
 const STATUS = { ready: { de: 'einsatzbereit', en: 'ready' }, 'in-inspection': { de: 'in Prüfung', en: 'in inspection' }, defective: { de: 'defekt', en: 'defective' }, 'in-repair': { de: 'in Reparatur', en: 'in repair' }, retired: { de: 'ausgesondert', en: 'retired' } } as const;
@@ -176,6 +192,7 @@ export class EquipmentLists {
         col('inspection', 'Prüfung', 'Inspection', 1.3),
         col('result', 'Ergebnis', 'Result'),
         col('checklist', 'Checkliste', 'Checklist', 3),
+        col('form', 'Formular / Bestätigung', 'Form / approval', 2),
         col('measurements', 'Messwerte / Bemerkung', 'Measurements / notes', 2),
         col('by', 'Prüfer', 'Inspector', 1.3),
         col('next', 'Nächste', 'Next'),
@@ -200,6 +217,7 @@ export class EquipmentLists {
             inspection: name(r.item.id, r.inspectionKey),
             result: RESULT[r.result][language],
             checklist: r.checklist.map(point).join('; '),
+            form: formText(r.form ?? null, language),
             measurements: [r.measurements, r.notes].filter(Boolean).join(' · '),
             by: r.inspectorCompany || (r.inspectorPersonId ? (inspectors.get(r.inspectorPersonId) ?? '') : '') || r.recordedBy,
             next: r.nextDueOn ?? null,

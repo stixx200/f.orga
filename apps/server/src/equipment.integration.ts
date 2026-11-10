@@ -52,9 +52,16 @@ describe('equipment', () => {
   it('offers the DGUV 305-002 template', async () => {
     const template = (await post('/equipment/templates/dguv', {}).expect(201)).body;
     expect(template.types).toBeGreaterThan(20);
-    expect((await post('/equipment/templates/dguv', {}).expect(201)).body).toEqual({ categories: 0, types: 0 });
+    expect((await post('/equipment/templates/dguv', {}).expect(201)).body).toEqual({ categories: 0, inspections: 0, types: 0 });
     const scba = ((await get('/equipment/types').expect(200)).body as { key: string; inspections: { key: string; intervalMonths: number | null }[] }[]).find((t) => t.key === 'scba')!;
     expect(scba.inspections.map((i) => [i.key, i.intervalMonths])).toEqual([['scba-check', 6], ['scba-overhaul', 72], ['scba-after-use', null]]);
+    // The template creates catalog entries once per key; the types reference them.
+    const catalog = (await get('/equipment/inspection-types').expect(200)).body as { key: string; inUse: number }[];
+    expect(catalog.filter((x) => x.key === 'annual')).toHaveLength(1);
+    expect(catalog.map((x) => x.key)).toEqual(expect.arrayContaining(['scba-check', 'hose-washing', 'rescue-load']));
+    expect(((await get('/equipment/types').expect(200)).body as { key: string; inspectionKeys: string[] }[]).find((t) => t.key === 'hydraulic-rescue')).toMatchObject({ inspectionKeys: ['annual', 'rescue-load'] });
+    // Suction hose, hydraulic rescue tool, lifting bag, chainsaw and portable pump.
+    expect(catalog.find((x) => x.key === 'annual')?.inUse).toBe(5);
     expect(((await get('/equipment/categories')).body as { key: string }[]).some((c) => c.key === 'vehicles')).toBe(false);
     // Hoses are single items by default.
     expect(((await get('/equipment/categories')).body as { key: string; tracking: string }[]).find((c) => c.key === 'hoses')?.tracking).toBe('item');
@@ -552,7 +559,8 @@ describe('equipment', () => {
   });
 
   it('deletes an equipment type unless items belong to it', async () => {
-    const type = (await post('/equipment/types', { key: 'drop-type', name: { de: 'Weg', en: 'Gone' }, categoryKey: 'loose', inspections: [{ key: 'annual', name: { de: 'Jährlich', en: 'Annual' }, intervalMonths: 12 }] }).expect(201)).body as { id: string };
+    await post('/equipment/inspection-types', { key: 'drop-annual', name: { de: 'Jährlich', en: 'Annual' }, intervalMonths: 12 }).expect(201);
+    const type = (await post('/equipment/types', { key: 'drop-type', name: { de: 'Weg', en: 'Gone' }, categoryKey: 'loose', inspectionKeys: ['drop-annual'] }).expect(201)).body as { id: string };
     await post('/equipment/items', { inventoryNumber: 'DT-1', name: 'Mit Typ', typeKey: 'drop-type', categoryKey: 'loose', departmentId: ids.musterstadt }).expect(201);
     expect((await del(`/equipment/types/${type.id}`).expect(400)).body.code).toBe('equipment.typeInUse');
 
@@ -587,5 +595,80 @@ describe('equipment', () => {
     expect((await get(`/equipment/items/${hoseId}`, due).expect(200)).body).toMatchObject({ location: 'Gesamtlager', loadingPlace: 'Regal B' });
 
     await post(`/equipment/items/${hoseId}/trigger`, { inspectionKey: 'hose-washing' }, due).expect(200);
+  });
+
+  it('keeps the inspection types in one catalog that equipment types reference', async () => {
+    // Only with the settings permission; the catalog key is the identity and is unique.
+    await post('/equipment/inspection-types', { key: 'ladder-extension', name: { de: 'Auszug', en: 'Extension' } }, reporter).expect(403);
+    const fields = [
+      { id: 'length-mm', label: { de: 'Länge', en: 'Length' }, type: 'number', unit: 'mm', required: true },
+      { id: 'hooks', label: { de: 'Haken geprüft', en: 'Hooks checked' }, type: 'checkbox' },
+      { id: 'condition', label: { de: 'Zustand', en: 'Condition' }, type: 'choice', choices: ['in Ordnung', 'Mangel'], required: true },
+      { id: 'remark', label: { de: 'Bemerkung', en: 'Remark' }, type: 'text' },
+    ];
+    const extension = (await post('/equipment/inspection-types', { key: 'ladder-extension', name: { de: 'Auszug', en: 'Extension' }, intervalMonths: 12, checklist: [], form: { kind: 'fillable', fields } }).expect(201)).body;
+    expect(extension).toMatchObject({ key: 'ladder-extension', inUse: 0, form: { kind: 'fillable' } });
+    expect((await post('/equipment/inspection-types', { key: 'ladder-extension', name: { de: 'Doppelt', en: 'Twice' } }).expect(400)).body.code).toBe('equipment.keyTaken');
+    // A choice field needs options; a form has unique field IDs.
+    await post('/equipment/inspection-types', { key: 'bad-choice', name: { de: 'Falsch', en: 'Wrong' }, form: { kind: 'fillable', fields: [{ id: 'a', label: { de: 'A', en: 'A' }, type: 'choice', choices: [] }] } }).expect(400);
+    await post('/equipment/inspection-types', { key: 'bad-ids', name: { de: 'Falsch', en: 'Wrong' }, form: { kind: 'fillable', fields: [{ id: 'a', label: { de: 'A', en: 'A' } }, { id: 'a', label: { de: 'B', en: 'B' } }] } }).expect(400);
+    await post('/equipment/inspection-types', { key: 'approval-check', name: { de: 'Bestätigung', en: 'Approval' }, intervalMonths: 12, form: { kind: 'approval', text: { de: 'Prüfung nach Vorgabe.', en: 'Test by the instructions.' } } }).expect(201);
+
+    // Equipment types take catalog entries only.
+    expect((await post('/equipment/types', { key: 'form-type', name: { de: 'Formulargerät', en: 'Form item' }, categoryKey: 'ladders', inspectionKeys: ['ladder-extension', 'gibt-es-nicht'] }).expect(400)).body.code).toBe('equipment.unknownInspection');
+    const formType = (await post('/equipment/types', { key: 'form-type', name: { de: 'Formulargerät', en: 'Form item' }, categoryKey: 'ladders', inspectionKeys: ['ladder-extension', 'approval-check'] }).expect(201)).body;
+    expect(formType.inspections.map((i: { key: string }) => i.key)).toEqual(['ladder-extension', 'approval-check']);
+    await post('/equipment/types', { key: 'form-type-2', name: { de: 'Zweites', en: 'Second' }, categoryKey: 'ladders', inspectionKeys: ['ladder-extension'] }).expect(201);
+    expect((await get('/equipment/inspection-types').expect(200)).body.find((x: { key: string }) => x.key === 'ladder-extension')).toMatchObject({ inUse: 2 });
+
+    // Referenced entries are refused; an unused one goes, an updated one keeps its key.
+    expect((await del(`/equipment/inspection-types/${extension.id}`).expect(400)).body.code).toBe('equipment.inspectionInUse');
+    const renamed = (await put(`/equipment/inspection-types/${extension.id}`, { key: 'ignored-key', name: { de: 'Auszug neu', en: 'Extension new' }, intervalMonths: 12, checklist: [], form: { kind: 'fillable', fields } }, admin).expect(200)).body;
+    expect(renamed).toMatchObject({ key: 'ladder-extension', name: { de: 'Auszug neu', en: 'Extension new' } });
+    const spare = (await post('/equipment/inspection-types', { key: 'spare-check', name: { de: 'Reserve', en: 'Spare' } }).expect(201)).body;
+    await del(`/equipment/inspection-types/${spare.id}`).expect(204);
+    expect(((await get('/equipment/inspection-types').expect(200)).body as { key: string }[]).map((x) => x.key)).not.toContain('spare-check');
+  });
+
+  it('records fillable values and approvals with the inspection and keeps them when the form changes', async () => {
+    ids.formItem = (await post('/equipment/items', { inventoryNumber: 'F-0001', name: 'Auszugsleiter', typeKey: 'form-type', categoryKey: 'ladders', departmentId: ids.musterstadt }, officer).expect(201)).body.id;
+    const path = `/equipment/items/${ids.formItem}/inspections`;
+    expect((await post(path, { inspectionKey: 'ladder-extension', date: today, result: 'passed' }, officer).expect(400)).body.code).toBe('equipment.formFieldRequired');
+    expect((await post(path, { inspectionKey: 'ladder-extension', date: today, result: 'passed', formValues: [{ id: 'length-mm', value: 2800 }, { id: 'condition', value: 'kaputt' }] }, officer).expect(400)).body.code).toBe('equipment.formFieldInvalid');
+    expect((await post(path, { inspectionKey: 'ladder-extension', date: today, result: 'passed', formValues: [{ id: 'length-mm', value: 2800 }, { id: 'condition', value: 'in Ordnung' }, { id: 'unbekannt', value: 1 }] }, officer).expect(400)).body.code).toBe('equipment.formFieldUnknown');
+    const values = [{ id: 'length-mm', value: 2800 }, { id: 'hooks', value: true }, { id: 'condition', value: 'in Ordnung' }, { id: 'remark', value: 'sauber' }];
+    const recorded = (await post(path, { inspectionKey: 'ladder-extension', date: today, result: 'passed', formValues: values }, officer).expect(201)).body;
+    expect(recorded.form.fields.map((f: { id: string; value: unknown }) => [f.id, f.value])).toEqual(values.map((v) => [v.id, v.value]));
+    expect(recorded.form.fields[0]).toMatchObject({ label: { de: 'Länge', en: 'Length' }, unit: 'mm', type: 'number' });
+    expect((await get(path, officer).expect(200)).body.find((i: { id: string }) => i.id === recorded.id)).toMatchObject({ form: { kind: 'fillable' } });
+
+    // The approval needs the confirmation; the approving person and the time are stored.
+    expect((await post(path, { inspectionKey: 'approval-check', date: today, result: 'passed' }, officer).expect(400)).body.code).toBe('equipment.approvalRequired');
+    const approved = (await post(path, { inspectionKey: 'approval-check', date: today, result: 'passed', approved: true }, officer).expect(201)).body;
+    expect(approved.form).toMatchObject({ kind: 'approval', approvedBy: 'Gerätewart', text: { de: 'Prüfung nach Vorgabe.', en: 'Test by the instructions.' } });
+    expect(Number.isNaN(Date.parse(approved.form.approvedAt))).toBe(false);
+
+    // Bulk booking: fillable forms are recorded per item; an approval is confirmed for the selected items.
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.formItem], categoryKey: 'ladders', inspection: { inspectionKey: 'ladder-extension', date: today, result: 'passed' } }, officer).expect(400)).body.code).toBe('equipment.formNeedsItem');
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.formItem], categoryKey: 'ladders', inspection: { inspectionKey: 'approval-check', date: today, result: 'passed' } }, officer).expect(400)).body.code).toBe('equipment.approvalRequired');
+    expect((await post('/equipment/inspections/bulk', { itemIds: [ids.formItem], categoryKey: 'ladders', inspection: { inspectionKey: 'approval-check', date: today, result: 'passed', approved: true } }, officer).expect(200)).body).toMatchObject({ recorded: 1 });
+
+    // A changed catalog form does not rewrite the recordings: they keep the fields as recorded.
+    await put(`/equipment/inspection-types/${(await get('/equipment/inspection-types').expect(200)).body.find((x: { key: string }) => x.key === 'ladder-extension').id}`, { key: 'ladder-extension', name: { de: 'Auszug', en: 'Extension' }, checklist: [], form: { kind: 'fillable', fields: [{ id: 'length-mm', label: { de: 'Länge', en: 'Length' }, type: 'number', unit: 'mm' }] } }, admin).expect(200);
+    const after = (await get(path, officer).expect(200)).body.find((i: { id: string }) => i.id === recorded.id);
+    expect(after.form.fields).toHaveLength(4);
+  });
+
+  it('attaches the document of an inspection type to its catalog entry', async () => {
+    const PDF = Buffer.from('%PDF-1.4\n% Prüfanleitung\n');
+    const entry = (await post('/equipment/inspection-types', { key: 'routine-document', name: { de: 'Prüfanleitung', en: 'Test instructions' }, intervalMonths: 12, form: { kind: 'document' } }).expect(201)).body;
+    const upload = (cookie: string) => test.http.post(`/api/core/attachments?type=equipment.inspection-type&id=${entry.id}`).set('Cookie', cookie).set(UI).attach('file', PDF, { filename: 'pruefanleitung.pdf', contentType: 'application/pdf' });
+    expect((await upload(reporter)).status).toBeGreaterThanOrEqual(400);
+    await upload(admin).expect(201);
+    const files = (await get(`/core/attachments?type=equipment.inspection-type&id=${entry.id}`, officer).expect(200)).body as { fileName: string }[];
+    expect(files.map((f) => f.fileName)).toEqual(['pruefanleitung.pdf']);
+    // Deleting the entry removes its document.
+    await del(`/equipment/inspection-types/${entry.id}`).expect(204);
+    expect((await get(`/core/attachments?type=equipment.inspection-type&id=${entry.id}`, officer).expect(200)).body).toEqual([]);
   });
 });

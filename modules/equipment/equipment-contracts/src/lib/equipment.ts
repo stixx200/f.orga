@@ -13,16 +13,80 @@ export type Inspector = z.infer<typeof Inspector>;
 export const InspectionTrigger = z.enum(['periodic', 'after-use', 'after-incident', 'after-washing']);
 export type InspectionTrigger = z.infer<typeof InspectionTrigger>;
 
+/** Kinds of input a fillable form asks for when the inspection is recorded. */
+export const InspectionFieldType = z.enum(['text', 'number', 'checkbox', 'choice']);
+export type InspectionFieldType = z.infer<typeof InspectionFieldType>;
+
+/**
+ * One field of a fillable form. Its position in the form is its order. Choice options are entered once and shown as
+ * entered (not translated).
+ */
+export const FormFieldBase = z.object({
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).max(60),
+    label: LocalizedText,
+    type: InspectionFieldType.default('text'),
+    /** Unit of a number, e.g. "mm" or "bar". */
+    unit: text,
+    /** Options of a choice list. */
+    choices: z.array(z.string().trim().min(1).max(120)).max(50).default([]),
+    required: z.boolean().default(false),
+});
+export const FormField = FormFieldBase.refine((f) => f.type !== 'choice' || f.choices.length > 0, { message: 'Choices required', path: ['choices'] });
+export type FormField = z.infer<typeof FormField>;
+
+/**
+ * Form of an inspection type: `document` (a file attached to the entry, e.g. the test routine), `fillable` (values per
+ * recording), `approval` (a text the approving person confirms with a button) or `none`.
+ */
+export const InspectionForm = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('none') }),
+  z.object({ kind: z.literal('document') }),
+  z.object({
+    kind: z.literal('fillable'),
+    fields: z
+      .array(FormField)
+      .min(1)
+      .max(30)
+      .refine((fields) => new Set(fields.map((f) => f.id)).size === fields.length, { message: 'Field IDs must be unique' }),
+  }),
+  z.object({ kind: z.literal('approval'), text: LocalizedText }),
+]);
+export type InspectionForm = z.infer<typeof InspectionForm>;
+
+/**
+ * Inspection type of the shared catalog (settings, "Prüfarten"). Equipment types and items reference it by `key`.
+ * `null` interval = no fixed interval (only after use, washing or by the manufacturer).
+ */
 export const InspectionType = z.object({
   key,
   name: LocalizedText,
-  /** `null` = no fixed interval (only after use, washing or by the manufacturer). */
   intervalMonths: z.number().int().min(1).max(240).nullable().default(null),
   trigger: InspectionTrigger.default('periodic'),
   inspector: Inspector.default('competent-person'),
   checklist: z.array(z.string().trim().min(1)).default([]),
+  form: InspectionForm.default({ kind: 'none' }),
 });
 export type InspectionType = z.infer<typeof InspectionType>;
+
+/** Entry of the catalog as the settings page lists and edits it. */
+export const InspectionCatalogEntry = InspectionType.extend({ id: z.uuid(), version: z.number(), inUse: z.number().int() });
+export type InspectionCatalogEntry = z.infer<typeof InspectionCatalogEntry>;
+
+/** Values of a fillable form; `id` is the field ID of the form. */
+export const FormAnswer = z.object({ id: z.string().min(1), value: z.union([z.string(), z.number(), z.boolean()]).nullable().default(null) });
+export type FormAnswer = z.input<typeof FormAnswer>;
+
+/**
+ * Recorded form of an inspection: the field definitions as they were when recorded (later changes of the catalog form
+ * do not rewrite old recordings) with the values, or the approval. `null` for inspections without a fillable form or approval.
+ */
+export const RecordedFillable = z.object({
+  kind: z.literal('fillable'),
+  fields: z.array(FormFieldBase.extend({ value: z.union([z.string(), z.number(), z.boolean()]).nullable().default(null) })),
+});
+export const RecordedApproval = z.object({ kind: z.literal('approval'), text: LocalizedText, approvedBy: z.string(), approvedAt: z.string() });
+export const RecordedForm = z.discriminatedUnion('kind', [RecordedFillable, RecordedApproval]);
+export type RecordedForm = z.infer<typeof RecordedForm>;
 
 /** Single items with number and history, or stock (e.g. 40 × B hose) per location. */
 export const Tracking = z.enum(['item', 'stock']);
@@ -51,12 +115,14 @@ export const EquipmentTypeInput = z.object({
   categoryKey: key,
   manufacturer: text,
   model: text,
-  inspections: z.array(InspectionType).default([]),
+  /** Keys of the inspection types of the shared catalog (in this order). */
+  inspectionKeys: z.array(key).max(100).default([]),
   /** Property names such as length or pressure; values per item. */
   properties: z.array(z.string().trim().min(1)).default([]),
 });
 export type EquipmentTypeInput = z.input<typeof EquipmentTypeInput>;
-export const EquipmentType = EquipmentTypeInput.extend({ id: z.uuid(), version: z.number() });
+/** Read-only: the inspection types of `inspectionKeys`, resolved from the catalog. */
+export const EquipmentType = EquipmentTypeInput.extend({ id: z.uuid(), version: z.number(), inspections: z.array(InspectionType) });
 export type EquipmentType = z.infer<typeof EquipmentType>;
 
 export const ItemStatus = z.enum(['ready', 'in-inspection', 'defective', 'in-repair', 'retired']);
@@ -93,8 +159,8 @@ export const ItemInput = z
     /** Stock: quantity instead of a single item. */
     quantity: z.number().int().min(0).default(1),
     expiresOn: date.nullable().default(null),
-    /** `null` = inspections of the type. */
-    inspections: z.array(InspectionType).nullable().default(null),
+    /** Keys of the own inspection types of the item; `null` = inspections of the type. */
+    inspectionKeys: z.array(key).max(100).nullable().default(null),
     /** Own interval in months per inspection type, e.g. a vehicle below 3.5 t with a longer roadworthiness test interval. */
     intervalOverrides: z.record(z.string(), z.number().int().min(1).max(240)).default({}),
     /** Only when creating: last inspection per inspection type. */
@@ -140,6 +206,8 @@ export const Item = z.object({
   expiresOn: z.string().nullable(),
   /** Effective inspection types (own or of the type, with the interval overrides of the item). */
   inspections: z.array(InspectionType),
+  /** Own inspection keys of the item, `null` = inspections of the type. */
+  inspectionKeys: z.array(key).nullable(),
   ownInspections: z.boolean(),
   intervalOverrides: z.record(z.string(), z.number()),
   status: ItemStatus,
@@ -185,6 +253,10 @@ export const InspectionInput = z.object({
   /** `null` = date + interval. */
   nextDueOn: date.nullable().default(null),
   notes: text,
+  /** Answers of a fillable form of the inspection type (required fields must be answered). */
+  formValues: z.array(FormAnswer).max(30).default([]),
+  /** The approving person confirms the test (inspection type with an approval form). */
+  approved: z.boolean().default(false),
 });
 export type InspectionInput = z.input<typeof InspectionInput>;
 
@@ -243,6 +315,8 @@ export const Inspection = z.object({
   cancelled: z.boolean(),
   /** Reason of the last correction or of the cancellation. */
   changeReason: z.string(),
+  /** Recorded fillable values or approval of the form (`null` without one). */
+  form: RecordedForm.nullable(),
 });
 export type Inspection = z.infer<typeof Inspection>;
 

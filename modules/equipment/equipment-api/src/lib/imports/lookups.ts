@@ -82,7 +82,7 @@ export class EquipmentLookups {
             categoryKey,
             manufacturer: '',
             model: '',
-            inspections: [],
+            inspectionKeys: [],
             properties: [],
           });
           await em.flush();

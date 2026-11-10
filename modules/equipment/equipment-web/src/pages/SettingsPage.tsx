@@ -1,11 +1,11 @@
-import { ActionIcon, Button, Checkbox, Group, NumberInput, Radio, Select, SimpleGrid, Stack, Table, Tabs, TagsInput, Text, TextInput } from '@mantine/core';
-import { IconTrash } from '@tabler/icons-react';
+import { Button, Checkbox, Group, MultiSelect, NumberInput, Radio, Select, SimpleGrid, Stack, Tabs, TagsInput, Text, TextInput } from '@mantine/core';
 import { useState } from 'react';
-import { type Category, type CategoryInput, EquipmentSettings, type EquipmentType, type EquipmentTypeInput, type InspectionType, type Tracking } from '@forga/equipment-contracts';
+import { type Category, type CategoryInput, EquipmentSettings, type EquipmentType, type EquipmentTypeInput, type InspectionCatalogEntry, type InspectionType, type Tracking } from '@forga/equipment-contracts';
 import type { LocalizedText } from '@forga/core-contracts';
 import { send, useLocalized, useTranslation } from '@forga/web-sdk';
-import { ConfirmDialog, DataTable, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, treeOptions, useAction } from '@forga/web-ui';
-import { keys, useCategories, useEquipmentSettings, useTypes } from '../api';
+import { Attachments, ConfirmDialog, DataTable, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, treeOptions, useAction } from '@forga/web-ui';
+import { keys, useCategories, useEquipmentSettings, useInspectionCatalog, useTypes } from '../api';
+import { FormEditor, formComplete, normalizeForm } from '../forms';
 
 /** Categories depth-first with their depth; categories of a cycle or with an unknown parent count as top level. */
 function treeOrder(categories: Category[]): { category: Category; depth: number }[] {
@@ -109,17 +109,80 @@ function CategoryDialog({ category, parentKey = null, onClose }: { category?: Ca
   );
 }
 
-const emptyInspection = (): InspectionType => ({ key: `check-${Date.now().toString(36)}`, name: { de: '', en: '' }, intervalMonths: 12, trigger: 'periodic', inspector: 'competent-person', checklist: [] });
-
-/** Copies of inspection types for another type; a key the type already uses gets a number suffix. */
-function copyInspections(source: InspectionType[], existing: { key: string }[]): InspectionType[] {
-  const used = new Set(existing.map((x) => x.key));
-  return source.map((x) => {
-    let key = x.key;
-    for (let n = 2; used.has(key); n++) key = `${x.key}-${n}`;
-    used.add(key);
-    return { ...x, key, checklist: [...x.checklist] };
-  });
+/** Inspection type of the shared catalog ("Prüfarten"): interval, trigger, inspector, checklist, form and its document. */
+function InspectionTypeDialog({ entry, onClose }: { entry?: InspectionCatalogEntry; onClose: () => void }) {
+  const { t } = useTranslation('equipment');
+  const { t: common } = useTranslation('common');
+  const localized = useLocalized();
+  const [form, setForm] = useState<InspectionType>(() => ({
+    key: entry?.key ?? '',
+    name: entry?.name ?? { de: '', en: '' },
+    intervalMonths: entry?.intervalMonths ?? 12,
+    trigger: entry?.trigger ?? 'periodic',
+    inspector: entry?.inspector ?? 'competent-person',
+    checklist: entry?.checklist ?? [],
+    form: entry?.form ?? { kind: 'none' },
+  }));
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const save = useAction(
+    () => {
+      const body = { ...form, name: { de: form.name.de, en: form.name.en || form.name.de }, intervalMonths: form.trigger === 'periodic' ? form.intervalMonths : null, form: normalizeForm(form.form) };
+      return entry ? send('PUT', `equipment/inspection-types/${entry.id}`, body) : send('POST', 'equipment/inspection-types', body);
+    },
+    { success: t('settings.saved'), invalidate: [keys.all], onSuccess: onClose },
+  );
+  const remove = useAction(() => send('DELETE', `equipment/inspection-types/${entry!.id}`), { success: t('catalog.deleted'), invalidate: [keys.all], onSuccess: onClose });
+  return (
+    <>
+      <ResponsiveDialog
+        opened
+        onClose={onClose}
+        title={entry ? t('catalog.edit') : t('catalog.newTitle')}
+        size="xl"
+        actions={
+          <Group justify="space-between">
+            {entry ? <Button variant="subtle" onClick={() => setConfirmDelete(true)}>{common('actions.delete')} …</Button> : <span />}
+            <Group>
+              <Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button>
+              <Button loading={save.isPending} disabled={!form.key || !form.name.de || !formComplete(form.form)} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
+            </Group>
+          </Group>
+        }
+      >
+        <Stack gap="sm">
+          <SimpleGrid cols={{ base: 1, sm: 3 }}>
+            <TextInput label={t('settings.key')} value={form.key} onChange={(e) => setForm({ ...form, key: e.currentTarget.value })} disabled={Boolean(entry)} required />
+            <TextInput label={t('settings.nameDe')} value={form.name.de} onChange={(e) => setForm({ ...form, name: { ...form.name, de: e.currentTarget.value } })} required />
+            <TextInput label={t('settings.nameEn')} value={form.name.en} onChange={(e) => setForm({ ...form, name: { ...form.name, en: e.currentTarget.value } })} />
+          </SimpleGrid>
+          <SimpleGrid cols={{ base: 1, sm: 3 }}>
+            <Select label={t('inspection.trigger')} data={(['periodic', 'after-use', 'after-incident', 'after-washing'] as const).map((v) => ({ value: v, label: t(`trigger.${v}`) }))} value={form.trigger} onChange={(v) => v && setForm({ ...form, trigger: v as InspectionType['trigger'] })} allowDeselect={false} />
+            <NumberInput label={t('settings.interval')} value={form.intervalMonths ?? ''} onChange={(v) => setForm({ ...form, intervalMonths: v === '' ? null : Number(v) })} min={1} max={240} disabled={form.trigger !== 'periodic'} />
+            <Select label={t('inspection.inspector')} data={(['user', 'competent-person', 'fall-protection-expert', 'electrician', 'expert'] as const).map((v) => ({ value: v, label: t(`inspector.${v}`) }))} value={form.inspector} onChange={(v) => v && setForm({ ...form, inspector: v as InspectionType['inspector'] })} allowDeselect={false} />
+          </SimpleGrid>
+          <TagsInput label={t('catalog.checklist')} description={t('catalog.checklistHint')} value={form.checklist} onChange={(checklist) => setForm({ ...form, checklist })} />
+          <FormEditor form={form.form} onChange={(next) => setForm({ ...form, form: next })} documentHint={entry ? undefined : t('catalog.documentSaveFirst')} />
+          {form.form.kind === 'document' && entry && (
+            <Stack gap={6}>
+              <Text size="sm" fw={700}>{t('form.document')}</Text>
+              <Attachments type="equipment.inspection-type" id={entry.id} editable />
+            </Stack>
+          )}
+        </Stack>
+      </ResponsiveDialog>
+      {entry && (
+        <ConfirmDialog
+          opened={confirmDelete}
+          onClose={() => setConfirmDelete(false)}
+          title={t('catalog.deleteTitle', { name: localized(entry.name) })}
+          description={t('catalog.deleteText')}
+          confirmLabel={common('actions.delete')}
+          loading={remove.isPending}
+          onConfirm={() => remove.mutate(undefined)}
+        />
+      )}
+    </>
+  );
 }
 
 function TypeDialog({ type, onClose }: { type?: EquipmentType; onClose: () => void }) {
@@ -127,22 +190,19 @@ function TypeDialog({ type, onClose }: { type?: EquipmentType; onClose: () => vo
   const { t: common } = useTranslation('common');
   const localized = useLocalized();
   const { data: categories = [] } = useCategories();
-  const { data: types = [] } = useTypes();
-  const [copyFrom, setCopyFrom] = useState<string | null>(null);
+  const { data: catalog = [] } = useInspectionCatalog();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [form, setForm] = useState<Required<EquipmentTypeInput>>(() => ({
-    key: type?.key ?? '', name: type?.name ?? { de: '', en: '' }, categoryKey: type?.categoryKey ?? '', manufacturer: type?.manufacturer ?? '', model: type?.model ?? '', inspections: type?.inspections ?? [], properties: type?.properties ?? [],
+    key: type?.key ?? '', name: type?.name ?? { de: '', en: '' }, categoryKey: type?.categoryKey ?? '', manufacturer: type?.manufacturer ?? '', model: type?.model ?? '', inspectionKeys: type?.inspectionKeys ?? [], properties: type?.properties ?? [],
   }));
-  const setInspection = (index: number, change: Partial<InspectionType>) => setForm({ ...form, inspections: form.inspections.map((x, i) => (i === index ? { ...x, ...change } : x)) });
   const save = useAction(() => {
-    const body = { ...form, name: { de: form.name.de, en: form.name.en || form.name.de }, inspections: form.inspections.map((x) => ({ ...x, name: { de: x.name.de, en: x.name.en || x.name.de } })) };
+    const body = { ...form, name: { de: form.name.de, en: form.name.en || form.name.de } };
     return type ? send('PUT', `equipment/types/${type.id}`, body) : send('POST', 'equipment/types', body);
   }, { success: t('settings.saved'), invalidate: [keys.all], onSuccess: onClose });
   const remove = useAction(() => send('DELETE', `equipment/types/${type!.id}`), { success: t('settings.typeDeleted'), invalidate: [keys.all], onSuccess: onClose });
-  const source = types.find((x) => x.id === copyFrom);
   return (
     <>
-    <ResponsiveDialog opened onClose={onClose} title={type ? t('settings.editType') : t('settings.newType')} size="xl" actions={<Group justify="space-between">{type ? <Button variant="subtle" onClick={() => setConfirmDelete(true)}>{common('actions.delete')} …</Button> : <span />}<Group><Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button><Button loading={save.isPending} disabled={!form.key || !form.name.de || !form.categoryKey || form.inspections.some((x) => !x.name.de)} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button></Group></Group>}>
+    <ResponsiveDialog opened onClose={onClose} title={type ? t('settings.editType') : t('settings.newType')} size="xl" actions={<Group justify="space-between">{type ? <Button variant="subtle" onClick={() => setConfirmDelete(true)}>{common('actions.delete')} …</Button> : <span />}<Group><Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button><Button loading={save.isPending} disabled={!form.key || !form.name.de || !form.categoryKey} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button></Group></Group>}>
       <Stack gap="sm">
         <SimpleGrid cols={{ base: 1, sm: 3 }}>
           <TextInput label={t('settings.key')} value={form.key} onChange={(e) => setForm({ ...form, key: e.currentTarget.value })} disabled={Boolean(type)} required />
@@ -153,35 +213,16 @@ function TypeDialog({ type, onClose }: { type?: EquipmentType; onClose: () => vo
           <TextInput label={t('settings.model')} value={form.model} onChange={(e) => setForm({ ...form, model: e.currentTarget.value })} />
         </SimpleGrid>
         <TextInput label={t('settings.properties')} description={t('settings.propertiesHint')} value={form.properties.join(', ')} onChange={(e) => setForm({ ...form, properties: e.currentTarget.value.split(',').map((x) => x.trim()).filter(Boolean) })} />
-        <Text size="sm" fw={700}>{t('settings.inspections')}</Text>
-        <Table>
-          <Table.Thead><Table.Tr><Table.Th>{t('settings.nameDe')}</Table.Th><Table.Th>{t('settings.interval')}</Table.Th><Table.Th>{t('inspection.trigger')}</Table.Th><Table.Th>{t('inspection.inspector')}</Table.Th><Table.Th /></Table.Tr></Table.Thead>
-          <Table.Tbody>
-            {form.inspections.map((x, index) => (
-              <Table.Tr key={x.key}>
-                <Table.Td><TextInput aria-label={t('settings.nameDe')} value={x.name.de} onChange={(e) => setInspection(index, { name: { ...x.name, de: e.currentTarget.value } })} /></Table.Td>
-                <Table.Td><NumberInput aria-label={t('settings.interval')} w={90} value={x.intervalMonths ?? ''} onChange={(v) => setInspection(index, { intervalMonths: v === '' ? null : Number(v) })} min={1} /></Table.Td>
-                <Table.Td><Select aria-label={t('inspection.trigger')} data={(['periodic', 'after-use', 'after-incident', 'after-washing'] as const).map((v) => ({ value: v, label: t(`trigger.${v}`) }))} value={x.trigger} onChange={(v) => v && setInspection(index, { trigger: v as InspectionType['trigger'] })} allowDeselect={false} /></Table.Td>
-                <Table.Td><Select aria-label={t('inspection.inspector')} data={(['user', 'competent-person', 'fall-protection-expert', 'electrician', 'expert'] as const).map((v) => ({ value: v, label: t(`inspector.${v}`) }))} value={x.inspector} onChange={(v) => v && setInspection(index, { inspector: v as InspectionType['inspector'] })} allowDeselect={false} /></Table.Td>
-                <Table.Td><ActionIcon variant="subtle" color="red" aria-label={t('settings.remove')} onClick={() => setForm({ ...form, inspections: form.inspections.filter((_, i) => i !== index) })}><IconTrash size={16} /></ActionIcon></Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-        <Group align="end" wrap="nowrap">
-          <Select
-            style={{ flex: 1 }}
-            label={t('settings.copyInspections')}
-            data={types.filter((x) => x.id !== type?.id && x.inspections.length > 0).map((x) => ({ value: x.id, label: localized(x.name) }))}
-            value={copyFrom}
-            onChange={setCopyFrom}
-            placeholder={t('settings.copyInspectionsFrom')}
-            clearable
-            searchable
-          />
-          <Button variant="default" disabled={!source} onClick={() => { setForm({ ...form, inspections: [...form.inspections, ...copyInspections(source!.inspections, form.inspections)] }); setCopyFrom(null); }}>{t('settings.copyInspectionsAction')}</Button>
-        </Group>
-        <Group><Button size="xs" variant="default" onClick={() => setForm({ ...form, inspections: [...form.inspections, emptyInspection()] })}>{t('settings.addInspection')}</Button></Group>
+        <MultiSelect
+          label={t('settings.inspections')}
+          description={t('catalog.subtitle')}
+          data={catalog.map((x) => ({ value: x.key, label: `${localized(x.name)}${x.intervalMonths ? ` (${x.intervalMonths} M.)` : ''}` }))}
+          value={form.inspectionKeys}
+          onChange={(inspectionKeys) => setForm({ ...form, inspectionKeys })}
+          searchable
+          clearable
+          hidePickedOptions
+        />
       </Stack>
     </ResponsiveDialog>
     {type && (
@@ -200,11 +241,11 @@ function TypeDialog({ type, onClose }: { type?: EquipmentType; onClose: () => vo
 }
 
 /** Adds the DGUV template; hoses as single items (own inspection record per hose) or as stock. */
-function TemplateDialog({ onDone, onClose }: { onDone: (r: { categories: number; types: number }) => void; onClose: () => void }) {
+function TemplateDialog({ onDone, onClose }: { onDone: (r: { categories: number; inspections: number; types: number }) => void; onClose: () => void }) {
   const { t } = useTranslation('equipment');
   const { t: common } = useTranslation('common');
   const [hoseTracking, setHoseTracking] = useState<Tracking>('item');
-  const template = useAction(() => send<{ categories: number; types: number }>('POST', 'equipment/templates/dguv', { hoseTracking }), {
+  const template = useAction(() => send<{ categories: number; inspections: number; types: number }>('POST', 'equipment/templates/dguv', { hoseTracking }), {
     invalidate: [keys.all],
     onSuccess: (r) => {
       onDone(r);
@@ -272,7 +313,32 @@ function TypeTable({ rows, onRowClick, exportName }: { rows: EquipmentType[]; on
   );
 }
 
-/** Administration: categories, equipment types with inspection types, DGUV template, lead times. */
+const FORM_LABEL = { none: 'catalog.kindNone', document: 'catalog.kindDocument', fillable: 'catalog.kindFillable', approval: 'catalog.kindApproval' } as const;
+
+/** The shared catalog of inspection types, with the number of equipment types and items that use each one. */
+function InspectionCatalogTable({ onEdit }: { onEdit: (entry: InspectionCatalogEntry) => void }) {
+  const { t } = useTranslation('equipment');
+  const localized = useLocalized();
+  const { data: catalog = [] } = useInspectionCatalog();
+  return (
+    <DataTable<InspectionCatalogEntry>
+      rows={catalog}
+      rowKey={(x) => x.id}
+      onRowClick={onEdit}
+      exportName={t('catalog.title')}
+      empty={t('catalog.empty')}
+      columns={[
+        { key: 'name', header: t('fields.name'), render: (x) => <><Text size="sm" fw={700}>{localized(x.name)}</Text><Text size="xs" c="dimmed">{x.key}</Text></> },
+        { key: 'interval', header: t('settings.interval'), render: (x) => (x.trigger === 'periodic' && x.intervalMonths ? t('inspection.months', { count: x.intervalMonths }) : '–') },
+        { key: 'trigger', header: t('inspection.trigger'), render: (x) => t(`trigger.${x.trigger}`) },
+        { key: 'form', header: t('catalog.formShort'), render: (x) => t(FORM_LABEL[x.form.kind]) },
+        { key: 'inUse', header: t('catalog.inUse'), align: 'right', render: (x) => (x.inUse ? <StatusBadge tone="primary">{x.inUse}</StatusBadge> : <Text size="sm" c="dimmed">0</Text>) },
+      ]}
+    />
+  );
+}
+
+/** Administration: categories, equipment types with inspection types, inspection types (catalog), DGUV template, lead times. */
 export function SettingsPage() {
   const { t } = useTranslation('equipment');
   const localized = useLocalized();
@@ -281,6 +347,7 @@ export function SettingsPage() {
   const [editCategory, setEditCategory] = useState<Category | 'new' | null>(null);
   const [newParent, setNewParent] = useState<string | null>(null);
   const [editType, setEditType] = useState<EquipmentType | 'new' | null>(null);
+  const [editInspection, setEditInspection] = useState<InspectionCatalogEntry | 'new' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [template, setTemplate] = useState(false);
   const { groups, loose } = typeGroups(categories, types, localized);
@@ -299,6 +366,7 @@ export function SettingsPage() {
       <Tabs defaultValue="types">
         <Tabs.List mb="md">
           <Tabs.Tab value="types">{t('settings.types')}</Tabs.Tab>
+          <Tabs.Tab value="inspections">{t('catalog.title')}</Tabs.Tab>
           <Tabs.Tab value="categories">{t('settings.categories')}</Tabs.Tab>
           <Tabs.Tab value="lead-times">{t('settings.leadTimes')}</Tabs.Tab>
         </Tabs.List>
@@ -331,6 +399,14 @@ export function SettingsPage() {
               </Panel>
             )}
           </Stack>
+        </Tabs.Panel>
+        <Tabs.Panel value="inspections">
+          <Panel title={t('catalog.title')} aside={<Button size="xs" onClick={() => setEditInspection('new')}>{t('catalog.new')}</Button>}>
+            <Stack gap="sm">
+              <Text size="sm" c="dimmed">{t('catalog.subtitle')}</Text>
+              <InspectionCatalogTable onEdit={setEditInspection} />
+            </Stack>
+          </Panel>
         </Tabs.Panel>
         <Tabs.Panel value="categories">
           <Panel aside={<Button size="xs" onClick={() => { setNewParent(null); setEditCategory('new'); }}>{t('settings.newCategory')}</Button>}>
@@ -387,6 +463,7 @@ export function SettingsPage() {
       )}
       {template && <TemplateDialog onDone={(r) => setNotice(t('settings.templateDone', r))} onClose={() => setTemplate(false)} />}
       {editType && <TypeDialog type={editType === 'new' ? undefined : editType} onClose={() => setEditType(null)} />}
+      {editInspection && <InspectionTypeDialog entry={editInspection === 'new' ? undefined : editInspection} onClose={() => setEditInspection(null)} />}
     </Stack>
   );
 }

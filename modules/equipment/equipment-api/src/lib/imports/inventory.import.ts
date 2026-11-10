@@ -3,7 +3,7 @@ import { EntityManager } from '@mikro-orm/core';
 import { berlinDate, type ImportContext, type ImportProfile, type ImportRow, type ImportRunResult, normalizeHeading, parseDate } from '@forga/core-api';
 import { type ImportRowResult, normalizeRfid } from '@forga/core-contracts';
 import { ORGANIZATION, type Organization } from '@forga/masterdata-contracts';
-import { CategoryEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity } from '../equipment.entities.js';
+import { CategoryEntity, EquipmentItemEntity, EquipmentTypeEntity, InspectionEntity, InspectionTypeEntity } from '../equipment.entities.js';
 import { WRITE } from '../items/items.service.js';
 
 function match<T>(list: T[], value: string | undefined, names: (x: T) => string[]): T | undefined {
@@ -69,6 +69,7 @@ export class InventoryImport {
     const vehicles = await this.organization.vehicles();
     const categories = await em.find(CategoryEntity, {});
     const types = await em.find(EquipmentTypeEntity, {});
+    const catalog = new Map((await em.find(InspectionTypeEntity, {})).map((t) => [t.key, t]));
     const results: ImportRowResult[] = [];
     // Codes claimed by earlier rows of the same file; items created by earlier rows (not flushed yet).
     const claimed = new Map<string, string>();
@@ -119,7 +120,7 @@ export class InventoryImport {
       const lastInspection = given('lastInspection') ? parseDate(values['lastInspection']!) : null;
       const nextInspection = given('nextInspection') ? parseDate(values['nextInspection']!) : null;
       if ((given('lastInspection') && !lastInspection) || (given('nextInspection') && !nextInspection)) { error('imports.invalidDate'); continue; }
-      const inspections = type?.inspections ?? [];
+      const inspections = (type?.inspectionKeys ?? []).flatMap((key) => catalog.get(key) ?? []);
       const inspectionType = given('inspectionType')
         ? match(inspections, values['inspectionType'], (t) => [t.key, t.name.de, t.name.en])
         : inspections.find((t) => t.trigger === 'periodic' && t.intervalMonths);

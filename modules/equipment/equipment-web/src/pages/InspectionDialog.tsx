@@ -6,6 +6,7 @@ import type { Inspection, InspectionInput, Item } from '@forga/equipment-contrac
 import { localDate, send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { Notice, ResponsiveDialog, useAction } from '@forga/web-ui';
 import { keys, usePersons } from '../api';
+import { FormInputs, type FormValues, missingRequired, RoutineDocumentButton, toAnswers } from '../forms';
 import { InspectionResultField, ProtocolInput, uploadInspectionProtocol } from '../parts';
 
 /** The day after an ISO date (earliest next due date). */
@@ -17,7 +18,8 @@ const dayAfter = (date: string) => {
 
 /**
  * Records an inspection of an item with checklist, or corrects a recorded one (`inspection`, with reason).
- * "Failed" marks the item as defective and leaves the inspection due.
+ * "Failed" marks the item as defective and leaves the inspection due. A fillable form of the inspection type is
+ * filled in here; an approval form is confirmed here (bulk booking leaves both out, see `BulkPage`).
  */
 export function InspectionDialog({ item, inspectionKey, inspection, onClose }: { item: Item; inspectionKey?: string; inspection?: Inspection; onClose: () => void }) {
   const { t } = useTranslation('equipment');
@@ -26,7 +28,7 @@ export function InspectionDialog({ item, inspectionKey, inspection, onClose }: {
   const phone = useMediaQuery('(max-width: 48em)');
   const { data: persons = [] } = usePersons();
   const today = localDate();
-  const [form, setForm] = useState<Required<InspectionInput>>(() => ({
+  const [form, setForm] = useState<Required<Omit<InspectionInput, 'formValues' | 'approved'>>>(() => ({
     inspectionKey: inspection?.inspectionKey ?? inspectionKey ?? item.dues.find((d) => d.overdue)?.key ?? item.inspections[0]?.key ?? '',
     date: inspection?.date ?? today,
     inspectorPersonId: inspection?.inspectorPersonId ?? null,
@@ -39,10 +41,20 @@ export function InspectionDialog({ item, inspectionKey, inspection, onClose }: {
   }));
   const [reason, setReason] = useState('');
   const [protocol, setProtocol] = useState<File | null>(null);
+  // Values of a fillable form (by field ID) and the approval; a correction starts from what was recorded.
+  const [values, setValues] = useState<FormValues>(() => (inspection?.form?.kind === 'fillable' ? Object.fromEntries(inspection.form.fields.map((f) => [f.id, f.value])) : {}));
+  const [approved, setApproved] = useState(inspection?.form?.kind === 'approval');
   const type = item.inspections.find((x) => x.key === form.inspectionKey);
   const [points, setPoints] = useState<Record<string, 'ok' | 'not-ok'>>(() => Object.fromEntries((inspection?.checklist ?? []).map((c) => [c.point, c.state === 'not-ok' ? 'not-ok' : 'ok'])));
   const failed = form.result === 'failed';
-  const body = { ...form, nextDueOn: failed ? null : form.nextDueOn, checklist: (type?.checklist ?? []).map((point) => ({ point, state: points[point] ?? 'ok', value: '' })) };
+  const fields = type?.form.kind === 'fillable' ? type.form.fields : [];
+  const body = {
+    ...form,
+    nextDueOn: failed ? null : form.nextDueOn,
+    checklist: (type?.checklist ?? []).map((point) => ({ point, state: points[point] ?? 'ok', value: '' })),
+    formValues: toAnswers(fields, values),
+    approved,
+  };
   const save = useAction(
     async () => {
       if (inspection) {
@@ -56,6 +68,7 @@ export function InspectionDialog({ item, inspectionKey, inspection, onClose }: {
     { success: t(inspection ? 'inspection.corrected' : 'inspection.saved'), invalidate: [keys.all], onSuccess: onClose },
   );
   const invalidDates = form.date > today || (!failed && form.nextDueOn !== null && form.nextDueOn <= form.date);
+  const incomplete = missingRequired(fields, values) || (type?.form.kind === 'approval' && !approved);
   return (
     <ResponsiveDialog
       opened
@@ -65,7 +78,7 @@ export function InspectionDialog({ item, inspectionKey, inspection, onClose }: {
       actions={
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{common('actions.cancel')}</Button>
-          <Button loading={save.isPending} disabled={!form.inspectionKey || invalidDates || (Boolean(inspection) && reason.trim().length < 3)} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
+          <Button loading={save.isPending} disabled={!form.inspectionKey || invalidDates || incomplete || (Boolean(inspection) && reason.trim().length < 3)} onClick={() => save.mutate(undefined)}>{common('actions.save')}</Button>
         </Group>
       }
     >
@@ -93,6 +106,31 @@ export function InspectionDialog({ item, inspectionKey, inspection, onClose }: {
               );
             })}
           </Stack>
+        )}
+        {type?.form.kind === 'fillable' && (
+          <Stack gap={6}>
+            <Text size="sm" fw={700}>{t('form.values')}</Text>
+            <Text size="xs" c="dimmed">{t('form.fillableHint')}</Text>
+            <FormInputs fields={fields} values={values} onChange={setValues} />
+          </Stack>
+        )}
+        {type?.form.kind === 'approval' && (
+          <Stack gap={6}>
+            <Text size="sm" fw={700}>{t('form.approvalText')}</Text>
+            <Text size="sm" style={{ whiteSpace: 'pre-line' }}>{localized(type.form.text)}</Text>
+            <Text size="xs" c="dimmed">{t('form.approvalHint')}</Text>
+            <Group>
+              <Button variant={approved ? 'light' : 'default'} color={approved ? 'teal' : undefined} aria-pressed={approved} onClick={() => setApproved(!approved)}>
+                {approved ? t('form.approved') : t('form.approve')}
+              </Button>
+            </Group>
+          </Stack>
+        )}
+        {type?.form.kind === 'document' && (
+          <Group gap="sm">
+            <Text size="sm" c="dimmed">{t('form.documentHint')}</Text>
+            <RoutineDocumentButton inspectionKey={form.inspectionKey} />
+          </Group>
         )}
         <InspectionResultField value={form.result} onChange={(result) => setForm({ ...form, result })} />
         {form.result !== 'passed' && <Notice kind="warning">{t(failed ? 'inspection.failedHint' : 'inspection.withDefectsHint')}</Notice>}

@@ -1,7 +1,7 @@
 import { addMonths, computeDues, isBlocked, withIntervals } from './due.js';
 import type { InspectionType } from './equipment.js';
 
-const type = (key: string, intervalMonths: number | null, trigger: InspectionType['trigger'] = 'periodic'): InspectionType => ({ key, name: { de: key, en: key }, intervalMonths, trigger, inspector: 'competent-person', checklist: [] });
+const type = (key: string, intervalMonths: number | null, trigger: InspectionType['trigger'] = 'periodic'): InspectionType => ({ key, name: { de: key, en: key }, intervalMonths, trigger, inspector: 'competent-person', checklist: [], form: { kind: 'none' } });
 
 describe('computeDues', () => {
   const today = '2026-10-24';
