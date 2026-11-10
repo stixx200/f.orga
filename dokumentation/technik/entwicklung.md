@@ -264,13 +264,13 @@ Details zu den E2E-Shards stehen unter [E2E-Tests – CI](#ci). Lokal: `pnpm exe
 
 ## Release
 
-Versions-Tags und das Produktions-Image entstehen mit Nx Release (feste Semver-Version für den Workspace, Image nach `ghcr.io/stixx200/f.orga`). Private Workspace-Pakete werden nicht nach npm veröffentlicht.
+Nx Release legt die feste Semver-Version für den Workspace fest, schreibt den Changelog, erstellt Commit und Git-Tag `vX.Y.Z`. Veröffentlicht wird nichts aus Nx Release selbst: `--skip-publish` schaltet das aus, das Image entsteht im Workflow `.github/workflows/release.yml` beim Push des Tags. Private Workspace-Pakete werden nicht nach npm veröffentlicht.
 
-1. Bei GitHub Container Registry anmelden: `docker login ghcr.io` (Benutzername und Personal Access Token mit `write:packages`).
-2. Trockenlauf: `pnpm exec nx release --dry-run --first-release` (beim ersten Release) bzw. `pnpm exec nx release --dry-run`.
-3. Release ausführen: `pnpm exec nx release --first-release` bzw. `pnpm exec nx release` (fragt nach Bestätigung; mit `--yes` ohne Rückfrage).
+1. Trockenlauf: `pnpm exec nx release --dry-run --first-release --yes --specifier=X.Y.Z` (beim ersten Release) bzw. `pnpm exec nx release --dry-run --yes`.
+2. Release ausführen: `pnpm exec nx release --first-release --skip-publish --specifier=X.Y.Z` bzw. `pnpm exec nx release --skip-publish --specifier=X.Y.Z` (`--yes` geht hier nicht, es schließt `--skip-publish` aus).
+3. Commit und Tag hochladen: `git push origin main vX.Y.Z`.
 
-Das Image wird vorher gebaut (`preVersionCommand` → `@forga/image:docker:build`), mit `ghcr.io/stixx200/f.orga:X.Y.Z` getaggt und veröffentlicht. Git-Tag: `vX.Y.Z`. Fortlaufende Tags `:main` / `:<Commit>` kommen weiter aus `.github/workflows/image.yml`, siehe [Betrieb](betrieb.md).
+Der Workflow prüft, dass der Tag zur Version von `apps/server` passt und auf `main` liegt, baut das Image aus `docker/Dockerfile` und veröffentlicht es als `ghcr.io/stixx200/f.orga:X.Y.Z`. Lokal ist kein Login bei der Registry nötig. Fortlaufende Tags `:main` / `:<Commit>` kommen weiter aus `.github/workflows/image.yml`, siehe [Betrieb](betrieb.md).
 
 ## Neues Modul anlegen
 
