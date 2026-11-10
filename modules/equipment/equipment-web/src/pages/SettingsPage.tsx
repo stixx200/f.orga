@@ -5,7 +5,7 @@ import type { LocalizedText } from '@forga/core-contracts';
 import { send, useLocalized, useTranslation } from '@forga/web-sdk';
 import { Attachments, ConfirmDialog, DataTable, Notice, PageHeader, Panel, ResponsiveDialog, StatusBadge, treeOptions, useAction } from '@forga/web-ui';
 import { keys, useCategories, useEquipmentSettings, useInspectionCatalog, useTypes } from '../api';
-import { FormEditor, formComplete } from '../forms';
+import { FormEditor, formComplete, normalizeForm } from '../forms';
 
 /** Categories depth-first with their depth; categories of a cycle or with an unknown parent count as top level. */
 function treeOrder(categories: Category[]): { category: Category; depth: number }[] {
@@ -126,7 +126,7 @@ function InspectionTypeDialog({ entry, onClose }: { entry?: InspectionCatalogEnt
   const [confirmDelete, setConfirmDelete] = useState(false);
   const save = useAction(
     () => {
-      const body = { ...form, name: { de: form.name.de, en: form.name.en || form.name.de }, intervalMonths: form.trigger === 'periodic' ? form.intervalMonths : null };
+      const body = { ...form, name: { de: form.name.de, en: form.name.en || form.name.de }, intervalMonths: form.trigger === 'periodic' ? form.intervalMonths : null, form: normalizeForm(form.form) };
       return entry ? send('PUT', `equipment/inspection-types/${entry.id}`, body) : send('POST', 'equipment/inspection-types', body);
     },
     { success: t('settings.saved'), invalidate: [keys.all], onSuccess: onClose },

@@ -179,6 +179,13 @@ function FieldsEditor({ fields, onChange }: { fields: FormField[]; onChange: (fi
   );
 }
 
+/** English texts that are left empty take the German text (as the names of types and inspection types do). */
+export function normalizeForm(form: InspectionForm): InspectionForm {
+  if (form.kind === 'fillable') return { kind: 'fillable', fields: form.fields.map((field) => ({ ...field, label: { de: field.label.de, en: field.label.en || field.label.de } })) };
+  if (form.kind === 'approval') return { kind: 'approval', text: { de: form.text.de, en: form.text.en || form.text.de } };
+  return form;
+}
+
 /** Whether the form can be saved: labels, approval text and choices filled in. */
 export function formComplete(form: InspectionForm): boolean {
   if (form.kind === 'approval') return Boolean(form.text.de.trim());
