@@ -14,7 +14,7 @@
     "./forga.css": "./src/lib/forga.css"
   },
   "dependencies": {
-    "@mantine/core": "^9.7.4",
+    "@mantine/core": "^9.8.0",
     "react": "^19.0.0",
     "@forga/web-sdk": "workspace:*",
     "@forga/core-contracts": "workspace:*",
