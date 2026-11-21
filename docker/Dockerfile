@@ -1,5 +1,5 @@
 # Builds server, shell and all module frontends into one image.
-FROM node:24-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps apps
@@ -17,7 +17,7 @@ RUN mkdir -p /web/modules \
  && cp -r apps/shell/dist /web/shell \
  && for m in modules/*/*-web; do cp -r "$m/dist" "/web/modules/$(basename "$m" -web)"; done
 
-FROM node:24-alpine
+FROM node:26-alpine
 # pg_dump, pg_restore and psql in the version of the database server (module backup).
 RUN apk add --no-cache postgresql17-client
 WORKDIR /app
