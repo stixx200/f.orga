@@ -52,6 +52,15 @@ function RulesForm({ value }: { value: Rules }) {
             searchable
             clearable
           />
+          <MultiSelect
+            label={t('settings.headerQualifications')}
+            description={t('settings.headerQualificationsHint')}
+            data={qualifications.map((q) => ({ value: q.key, label: localized(q.name) }))}
+            value={form.headerQualifications}
+            onChange={(v) => set('headerQualifications', v)}
+            searchable
+            clearable
+          />
         </SimpleGrid>
       </Panel>
       <Panel title={t('settings.ages')}>

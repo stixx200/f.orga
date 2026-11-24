@@ -6,7 +6,7 @@ import { Link, useNavigate } from 'react-router';
 import type { Item } from '@forga/equipment-contracts';
 import { can, useLocalized, useSession, useTranslation } from '@forga/web-sdk';
 import { DataTable, PageHeader, StatusBadge, treeOptions } from '@forga/web-ui';
-import { BREATHING_WRITE, useCategories, useCategoryName, useDepartments, useDueSoon, useItems, usePlace, WRITE } from '../api';
+import { BREATHING_WRITE, useCategories, useCategoryName, useDepartments, useDueSoon, useItems, usePlace, useTypes, WRITE } from '../api';
 import { DueDate, ItemStatusBadge } from '../parts';
 import { ItemDialog } from './ItemDialog';
 import { matchesCode, ScanDialog, scannedCode } from './ScanDialog';
@@ -21,9 +21,11 @@ export function ItemsPage() {
   const place = usePlace();
   const { data: categories = [] } = useCategories();
   const { data: departments = [] } = useDepartments();
+  const { data: types = [] } = useTypes();
   const [q, setQ] = useState('');
   const [debounced] = useDebouncedValue(q, 250);
   const [categoryKey, setCategoryKey] = useState<string | null>(null);
+  const [typeKey, setTypeKey] = useState<string | null>(null);
   const [departmentId, setDepartmentId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [due, setDue] = useState<string | null>(null);
@@ -32,6 +34,7 @@ export function ItemsPage() {
   const { data = [], isLoading } = useItems({
     q: debounced.trim() || undefined,
     categoryKey: categoryKey ?? undefined,
+    typeKey: typeKey ?? undefined,
     departmentId: departmentId ?? undefined,
     status: status ?? undefined,
     dueBefore: due === 'overdue' ? today : due === 'soon' ? soon : undefined,
@@ -63,6 +66,7 @@ export function ItemsPage() {
       <Group align="end">
         <TextInput label={t('items.search')} leftSection={<IconSearch size={16} />} value={q} onChange={(e) => setQ(e.currentTarget.value)} w={260} />
         <Select label={t('fields.category')} placeholder={t('items.all')} data={treeOptions(categories, (c) => localized(c.name))} value={categoryKey} onChange={setCategoryKey} clearable searchable miw={280} />
+        <Select label={t('fields.type')} placeholder={t('items.all')} data={types.map((x) => ({ value: x.key, label: localized(x.name) })).toSorted((a, b) => a.label.localeCompare(b.label, 'de'))} value={typeKey} onChange={setTypeKey} clearable searchable miw={220} />
         <Select label={t('fields.department')} placeholder={t('items.all')} data={departments.map((d) => ({ value: d.id, label: d.name }))} value={departmentId} onChange={setDepartmentId} clearable />
         <Select label={t('fields.status')} placeholder={t('items.active')} data={(['ready', 'in-inspection', 'defective', 'in-repair', 'retired'] as const).map((s) => ({ value: s, label: t(`status.${s}`) }))} value={status} onChange={setStatus} clearable />
         <Select label={t('items.due')} placeholder={t('items.all')} data={[{ value: 'overdue', label: t('items.overdue') }, { value: 'soon', label: t('items.dueSoon', { count: days }) }]} value={due} onChange={setDue} clearable />

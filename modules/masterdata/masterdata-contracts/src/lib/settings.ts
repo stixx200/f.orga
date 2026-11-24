@@ -32,6 +32,8 @@ export const MembershipSettings = z.object({
   youthEndAge: age('youthEndAge', 18),
   /** Qualifications to acquire during the probation (catalog keys), e.g. basic training part 1; empty = none. */
   probationQualifications: z.array(z.string()).default([]),
+  /** Qualifications shown as labels next to the name on the person page (catalog keys); empty = none. */
+  headerQualifications: z.array(z.string()).default([]),
   /** Years of service listed as anniversaries. */
   jubileeYears: z.array(z.number().int().min(1).max(100)).default([10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70]),
   /** Deputies per department commander. */

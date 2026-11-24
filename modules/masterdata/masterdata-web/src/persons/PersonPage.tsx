@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from 'react-router';
 import { classNames, isValidIban, type Person, type PersonInput } from '@forga/masterdata-contracts';
 import { ApiError, can, extensionsOf, send, useLocalized, useSession, useTranslation, type Extension } from '@forga/web-sdk';
 import { ActionBar, EmptyState, HistoryTimeline, Notice, PageHeader, Panel, StatusBadge, StepUpButton, useAction } from '@forga/web-ui';
-import { keys, today as todayDate, useCatalogNames, useDepartments, usePerson, WRITE } from '../api';
+import { keys, today as todayDate, useCatalogNames, useDepartments, useMembershipRules, usePerson, WRITE } from '../api';
 import { BrigadeTab } from './BrigadeTab';
 import { CoursesTab, PLAN } from './CoursesTab';
 import { EntriesTab } from './EntriesTab';
@@ -54,6 +54,8 @@ function PersonFile({ person }: { person: Person }) {
   const { data: departments = [] } = useDepartments();
   const rankName = useCatalogNames('rank');
   const qualificationName = useCatalogNames('qualification');
+  const { data: rules } = useMembershipRules();
+  const headerQualifications = rules?.headerQualifications ?? [];
   const [form, setForm] = useState<PersonForm>(() => toForm(person));
   const [search, setSearch] = useSearchParams();
   const editable = person.memberships.some((m) => can(session, WRITE, m.departmentId)) || session?.permissions[WRITE] === 'brigade';
@@ -118,7 +120,7 @@ function PersonFile({ person }: { person: Person }) {
             <Group gap={4} wrap="wrap">
               <StatusBadge tone={STATUS_TONES[person.status]}>{t(`status.${person.status}`)}</StatusBadge>
               {person.processingRestricted && <StatusBadge tone="error">{t('person.restrictedBadge')}</StatusBadge>}
-              {person.qualifications.map((q) => <StatusBadge key={q.id}>{qualificationName(q.qualification, i18n.language)}</StatusBadge>)}
+              {person.qualifications.filter((q) => headerQualifications.includes(q.qualification)).map((q) => <StatusBadge key={q.id}>{qualificationName(q.qualification, i18n.language)}</StatusBadge>)}
               {person.driverLicense.classes.length > 0 && <StatusBadge>{t('person.licenseBadge', { classes: classNames(person.driverLicense.classes) })}</StatusBadge>}
             </Group>
           </Stack>

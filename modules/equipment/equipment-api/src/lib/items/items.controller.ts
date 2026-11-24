@@ -37,6 +37,7 @@ export class ItemsController {
   list(
     @CurrentUser() user: AuthenticatedUser,
     @Query('categoryKey') categoryKey?: string,
+    @Query('typeKey') typeKey?: string,
     @Query('departmentId') departmentId?: string,
     @Query('vehicleId') vehicleId?: string,
     @Query('status') status?: string,
@@ -45,7 +46,7 @@ export class ItemsController {
     @Query('dueBefore') dueBefore?: string,
     @Query('withoutLabel') withoutLabel?: string,
   ): Promise<Item[]> {
-    return this.items.list(user, { categoryKey, departmentId, vehicleId, status, q, includeRetired: includeRetired === 'true', dueBefore, withoutLabel: withoutLabel === 'true' });
+    return this.items.list(user, { categoryKey, typeKey, departmentId, vehicleId, status, q, includeRetired: includeRetired === 'true', dueBefore, withoutLabel: withoutLabel === 'true' });
   }
 
   /** Labels of these items printed; write permission for each item (breathing apparatus: also `equipment.breathing.write`). */

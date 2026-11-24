@@ -88,11 +88,9 @@ textarea.mantine-Input-input:disabled,
     min-height: 44px;
     padding-block: 8px;
   }
-  /* Many tabs on a person file: scroll horizontally instead of wrapping into a tall stack. */
+  /* Many tabs (e.g. on a person file) wrap into several rows instead of scrolling horizontally. */
   .mantine-Tabs-list {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    flex-wrap: wrap;
   }
 }
 

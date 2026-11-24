@@ -36,12 +36,13 @@ const cell = (row: Record<string, string>, column: string) => (row[column] ?? ''
  * Rows for `equipment.inventory`: one row per device that is still in service, plus its latest inspection.
  * The inventory number is the one from MP-Feuer, else the barcode, else a stable number from the MP-Feuer id,
  * because the device number is only unique inside one list. The category is the German name of the f.orga
- * category the family (and, where it is clearer, the group) belongs to. The product name is also the
- * equipment type, so a remembered mapping can replace a model name with an abstract type. The latest
- * inspection is the newest date that is not in the future; a later date would drop the whole device.
+ * category the family (and, where it is clearer, the group) belongs to. The product name is also the equipment type
+ * (with the model where a designation has several), so a remembered mapping can replace it with an abstract type.
+ * The latest inspection is the newest date that is not in the future; a later date would drop the whole device.
  */
 export function readEquipment(archives: readonly TransferArchive[]): TransferRow[] {
   const rows: TransferRow[] = [];
+  const models = modelsOf(archives);
   for (const archive of archives) {
     for (const family of FAMILIES) {
       const table = `${family.prefix}_STAMM`;
@@ -58,7 +59,7 @@ export function readEquipment(archives: readonly TransferArchive[]): TransferRow
           values: {
             inventoryNumber: inventoryNumber(family.prefix, item),
             name,
-            type: name,
+            type: typeName(name, cell(item, `${family.prefix}_TYP`), models),
             category: GROUP_CATEGORY[group] ?? family.category,
             department: archive.label,
             manufacturer: cell(item, `${family.prefix}_HERSTELLER`),
@@ -75,6 +76,32 @@ export function readEquipment(archives: readonly TransferArchive[]): TransferRow
     }
   }
   return rows;
+}
+
+/**
+ * Models per product designation over all archives: a product with more than one model (TYP, e.g. the extinguishers
+ * "12kg ABC Pulver" and "5kg B Kohlendioxid") gets one type per model; a product with one model or none keeps one type.
+ */
+function modelsOf(archives: readonly TransferArchive[]): Map<string, Set<string>> {
+  const models = new Map<string, Set<string>>();
+  for (const archive of archives) {
+    for (const family of FAMILIES) {
+      if (!archive.has(`${family.prefix}_STAMM`)) continue;
+      for (const item of archive.query(`select * from ${family.prefix}_STAMM`)) {
+        if (retired(item, family.prefix)) continue;
+        const name = cell(item, `${family.prefix}_BEZEICHNUNG`);
+        const model = cell(item, `${family.prefix}_TYP`);
+        if (!name || !model) continue;
+        models.set(name, (models.get(name) ?? new Set<string>()).add(model));
+      }
+    }
+  }
+  return models;
+}
+
+/** The equipment type of a device: its designation, with the model when the designation has several models. */
+function typeName(name: string, model: string, models: Map<string, Set<string>>): string {
+  return model && (models.get(name)?.size ?? 0) > 1 ? `${name} ${model}` : name;
 }
 
 function retired(item: Record<string, string>, prefix: string): boolean {

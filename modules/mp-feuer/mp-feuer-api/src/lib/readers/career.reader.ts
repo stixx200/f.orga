@@ -36,11 +36,17 @@ export function readCareer(archives: readonly TransferArchive[]): TransferRow[] 
       for (const h of archive.query(`select * from PER_HIST where PER_HIST_KATEGORIE_OW in ('Dienstgrad', 'Ehrung', 'Funktion')`)) {
         const name = h['PER_HIST_LANG'] || h['PER_HIST_KURZ'];
         const office = h['PER_HIST_KATEGORIE_OW'] === 'Funktion';
-        push(archive, h['PER_INDEX'], office ? 'Amt' : h['PER_HIST_KATEGORIE_OW'], name, h['PER_ZEITRAUM_VD'], office ? h['PER_ZEITRAUM_BD'] : '', office && brigadeWide(name));
+        // EvD is a task of a person (duty officer) and goes to the qualification catalog, not to the offices.
+        const evd = office && isEvd(name);
+        push(archive, h['PER_INDEX'], evd ? 'Lehrgang' : office ? 'Amt' : h['PER_HIST_KATEGORIE_OW'], name, h['PER_ZEITRAUM_VD'], office && !evd ? h['PER_ZEITRAUM_BD'] : '', office && !evd && brigadeWide(name));
       }
     }
   }
   return rows;
+}
+
+function isEvd(name: string): boolean {
+  return /^evd$/i.test(name.trim());
 }
 
 function brigadeWide(name: string): boolean {

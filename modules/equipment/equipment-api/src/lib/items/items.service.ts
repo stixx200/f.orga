@@ -271,11 +271,12 @@ export class ItemsService implements OnModuleInit, EquipmentUsageLookup {
     });
   }
 
-  async list(user: AuthenticatedUser, filter: { categoryKey?: string; departmentId?: string; vehicleId?: string; status?: string; q?: string; includeRetired?: boolean; dueBefore?: string; withoutLabel?: boolean }): Promise<Item[]> {
+  async list(user: AuthenticatedUser, filter: { categoryKey?: string; typeKey?: string; departmentId?: string; vehicleId?: string; status?: string; q?: string; includeRetired?: boolean; dueBefore?: string; withoutLabel?: boolean }): Promise<Item[]> {
     const visible = this.visible(user);
     if (!visible) return [];
     const where: FilterQuery<EquipmentItemEntity>[] = [visible];
     if (filter.categoryKey) where.push({ categoryKey: filter.categoryKey });
+    if (filter.typeKey) where.push({ typeKey: filter.typeKey });
     if (filter.departmentId) where.push({ departmentId: filter.departmentId });
     if (filter.vehicleId) where.push({ vehicleId: filter.vehicleId });
     if (filter.withoutLabel) where.push({ labelPrintedAt: null });

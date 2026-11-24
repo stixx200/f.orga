@@ -1,6 +1,6 @@
-import { type ReactNode, useRef } from 'react';
-import { Button, Checkbox, Group, Text } from '@mantine/core';
-import { IconFileSpreadsheet } from '@tabler/icons-react';
+import { type ReactNode, useRef, useState } from 'react';
+import { Button, Checkbox, Group, Stack, Text } from '@mantine/core';
+import { IconFileSpreadsheet, IconInfoCircle } from '@tabler/icons-react';
 import { useTranslation } from '@forga/web-sdk';
 import classes from './components.module.css';
 import { EmptyState } from './EmptyState';
@@ -91,6 +91,7 @@ export function DataTable<T>({
   exportName,
   exportable = true,
   scroll = false,
+  summary,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -106,9 +107,12 @@ export function DataTable<T>({
   exportable?: boolean;
   /** The row list scrolls inside the table and the header stays put. */
   scroll?: boolean;
+  /** Extra lines of the short info above the table, e.g. totals; the number of rows is always there. */
+  summary?: ReactNode;
 }) {
   const { t } = useTranslation('common');
   const table = useRef<HTMLTableElement>(null);
+  const [info, setInfo] = useState(false);
   const included = columns.map((c) => c.export !== false && !!c.header.trim());
   // Exports the table as shown: the cell texts of all rows, without columns lacking a header.
   const exportTable = () => {
@@ -119,13 +123,32 @@ export function DataTable<T>({
   };
   if (!rows.length) {
     return (
+      <>
+      <Group justify="flex-start" mb={4}>
+        <Button variant="subtle" size="compact-xs" leftSection={<IconInfoCircle size={14} />} aria-expanded={info} onClick={() => setInfo(!info)}>
+          {t('table.info')}
+        </Button>
+      </Group>
+      {info && <Text size="sm" fw={600} mb={6}>{t('table.count', { count: 0 })}</Text>}
       <div className={`${classes.tableWrap} ${scroll ? classes.tableScroll : ''}`}>
         {typeof empty === 'string' ? <Text size="sm" c="dimmed" p="md">{empty}</Text> : (empty ?? <EmptyState title={t('table.empty')} />)}
       </div>
+      </>
     );
   }
   return (
     <>
+    <Group justify="flex-start" mb={4}>
+      <Button variant="subtle" size="compact-xs" leftSection={<IconInfoCircle size={14} />} aria-expanded={info} onClick={() => setInfo(!info)}>
+        {t('table.info')}
+      </Button>
+    </Group>
+    {info && (
+      <Stack gap={2} mb={6}>
+        <Text size="sm" fw={600}>{t('table.count', { count: rows.length })}</Text>
+        {summary && <Text size="sm" c="dimmed" component="div">{summary}</Text>}
+      </Stack>
+    )}
     <div className={`${classes.tableWrap} ${scroll ? classes.tableScroll : ''}`}>
       <table ref={table} className={`${classes.table} ${classes.stack}`}>
         {caption && <caption className="visually-hidden">{caption}</caption>}

@@ -165,13 +165,14 @@ function DatasetsStep({ run, editable, onBack, onMapping }: { run: MpFeuerRun; e
   const localized = useLocalized();
   const select = useSelect(run.id);
   const [confirmApply, setConfirmApply] = useState(false);
-  const change = useAction((input: { dataset: RunDataset; enabled?: boolean; option?: [string, boolean]; from?: string | null }) =>
+  const change = useAction((input: { dataset: RunDataset; enabled?: boolean; option?: [string, boolean]; from?: string | null; to?: string | null }) =>
     select({
       datasets: {
         [input.dataset.profile]: {
           enabled: input.enabled ?? input.dataset.enabled,
           options: input.option ? { ...input.dataset.options, [input.option[0]]: input.option[1] } : input.dataset.options,
           from: input.from === undefined ? input.dataset.from : input.from,
+          to: input.to === undefined ? input.dataset.to : input.to,
         },
       },
     }),
@@ -227,6 +228,19 @@ function DatasetsStep({ run, editable, onBack, onMapping }: { run: MpFeuerRun; e
                         value={d.from}
                         disabled={!editable || d.locked}
                         onChange={(value) => change.mutate({ dataset: d, from: value || null })}
+                        maw={180}
+                      />
+                    )}
+                    {d.fromAvailable && (
+                      <DateInput
+                        size="xs"
+                        label={t('datasets.to')}
+                        placeholder={t('datasets.toHint')}
+                        valueFormat="DD.MM.YYYY"
+                        clearable
+                        value={d.to}
+                        disabled={!editable || d.locked}
+                        onChange={(value) => change.mutate({ dataset: d, to: value || null })}
                         maw={180}
                       />
                     )}

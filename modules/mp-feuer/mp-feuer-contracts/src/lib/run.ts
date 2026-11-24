@@ -54,7 +54,9 @@ export const RunDataset = z.object({
   optionInfo: z.array(ImportOption),
   /** Only rows from this date on (`YYYY-MM-DD`), e.g. incidents since 01.01.2025; `null`: all. */
   from: z.iso.date().nullable(),
-  /** Whether the dataset can be limited by date (`from`). */
+  /** Only rows up to this date (`YYYY-MM-DD`), e.g. incidents until 30.06.2026; `null`: no end. */
+  to: z.iso.date().nullable(),
+  /** Whether the dataset can be limited by date (`from`, `to`). */
   fromAvailable: z.boolean(),
   /** Without the permission of the profile or with its module switched off. */
   locked: z.boolean(),
@@ -131,7 +133,7 @@ export const RunSelection = z.object({
     .record(z.string(), z.object({ department: z.string().nullable(), unit: z.string().min(1).nullable().default(null), skip: z.boolean().default(false) }))
     .optional(),
   datasets: z
-    .record(z.string(), z.object({ enabled: z.boolean(), options: z.record(z.string(), z.boolean()).default({}), from: z.iso.date().nullable().optional() }))
+    .record(z.string(), z.object({ enabled: z.boolean(), options: z.record(z.string(), z.boolean()).default({}), from: z.iso.date().nullable().optional(), to: z.iso.date().nullable().optional() }))
     .optional(),
   mappings: ImportValueMappings.optional(),
 });
@@ -178,7 +180,7 @@ export const MpFeuerRemembered = z.object({
   archives: z
     .record(z.string(), z.object({ label: z.string(), department: z.string().nullable(), unit: z.string().nullable(), skip: z.boolean(), at: z.string() }))
     .default({}),
-  datasets: z.record(z.string(), z.object({ enabled: z.boolean(), options: z.record(z.string(), z.boolean()), from: z.iso.date().nullable().default(null) })).default({}),
+  datasets: z.record(z.string(), z.object({ enabled: z.boolean(), options: z.record(z.string(), z.boolean()), from: z.iso.date().nullable().default(null), to: z.iso.date().nullable().default(null) })).default({}),
 });
 export type MpFeuerRemembered = z.infer<typeof MpFeuerRemembered>;
 

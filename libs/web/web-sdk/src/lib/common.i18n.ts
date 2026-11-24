@@ -16,7 +16,7 @@ export const common = {
       restore: 'Wiederherstellen',
     },
     notice: { error: 'Fehler:', warning: 'Warnung:' },
-    table: { empty: 'Keine Einträge', export: 'Als Excel exportieren', select: 'Auswählen' },
+    table: { empty: 'Keine Einträge', export: 'Als Excel exportieren', select: 'Auswählen', info: 'Kurzinfo', count: 'Einträge: {{count}}' },
     history: {
       empty: 'Noch keine Änderungen.',
       system: 'System',
@@ -286,7 +286,7 @@ export const common = {
       restore: 'Restore',
     },
     notice: { error: 'Error:', warning: 'Warning:' },
-    table: { empty: 'No entries', export: 'Export to Excel', select: 'Select' },
+    table: { empty: 'No entries', export: 'Export to Excel', select: 'Select', info: 'Summary', count: 'Entries: {{count}}' },
     history: {
       empty: 'No changes yet.',
       system: 'System',

@@ -1,8 +1,8 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261031202813_initial extends Migration {
+export class Migration20261123192859_initial extends Migration {
 
-  override name = 'Migration20261031202813_initial';
+  override name = 'Migration20261123192859_initial';
 
   override up(): void {
     this.addSql("create schema if not exists \"masterdata\";");
@@ -25,6 +25,8 @@ export class Migration20261031202813_initial extends Migration {
     this.addSql("create table \"masterdata\".\"department_group\" (\"id\" uuid not null, \"department_id\" uuid not null, \"name\" varchar(255) not null, \"leader_id\" uuid null, \"member_ids\" jsonb not null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"course_nomination\" (\"id\" uuid not null, \"person_id\" uuid not null, \"course_id\" uuid not null, \"priority\" int not null default 2, \"desired_period\" varchar(255) not null default '', \"status\" varchar(255) not null default 'nominated', \"notes\" text not null default '', \"run_id\" uuid null, \"attendance_id\" varchar(255) null, \"created_at\" timestamptz not null, \"version\" int not null default 1, primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"course_attendance\" (\"id\" uuid not null, \"person_id\" uuid not null, \"course_id\" uuid not null, \"run_id\" uuid null, \"starts_on\" date not null, \"ends_on\" date null, \"result\" varchar(255) not null, \"location\" varchar(255) not null default '', \"notes\" text not null default '', \"description\" varchar(255) not null default '', primary key (\"id\"));");
+    this.addSql("create table \"masterdata\".\"person_device_token\" (\"id\" uuid not null, \"person_id\" uuid not null, \"kind\" varchar(255) not null, \"code_hash\" varchar(255) not null, \"suffix\" varchar(255) not null, \"registered_at\" timestamptz not null, \"registered_by\" varchar(255) not null, \"revoked_at\" timestamptz null, \"revoked_by\" varchar(255) null, \"revoke_reason\" text null, primary key (\"id\"));");
+    this.addSql("create index \"person_device_token_code_hash_index\" on \"masterdata\".\"person_device_token\" (\"code_hash\");");
     this.addSql("create table \"masterdata\".\"person_qualification\" (\"id\" uuid not null, \"person_id\" uuid not null, \"qualification\" varchar(255) not null, \"acquired_on\" date not null, \"valid_until\" date null, \"course_attendance_id\" varchar(255) null, \"notes\" text not null default '', primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"rank_assignment\" (\"id\" uuid not null, \"person_id\" uuid not null, \"rank\" varchar(255) not null, \"since\" date not null, \"notes\" text not null default '', primary key (\"id\"));");
     this.addSql("create table \"masterdata\".\"rest_period\" (\"id\" uuid not null, \"person_id\" uuid not null, \"reason\" varchar(255) not null, \"from\" date not null, \"to\" date null, \"notes\" text not null default '', primary key (\"id\"));");
@@ -49,6 +51,7 @@ export class Migration20261031202813_initial extends Migration {
     this.addSql("alter table \"masterdata\".\"course_attendance\" add constraint \"course_attendance_person_id_foreign\" foreign key (\"person_id\") references \"masterdata\".\"person\" (\"id\") on delete cascade;");
     this.addSql("alter table \"masterdata\".\"course_attendance\" add constraint \"course_attendance_course_id_foreign\" foreign key (\"course_id\") references \"masterdata\".\"course\" (\"id\");");
     this.addSql("alter table \"masterdata\".\"course_attendance\" add constraint \"course_attendance_run_id_foreign\" foreign key (\"run_id\") references \"masterdata\".\"course_run\" (\"id\") on delete set null;");
+    this.addSql("alter table \"masterdata\".\"person_device_token\" add constraint \"person_device_token_person_id_foreign\" foreign key (\"person_id\") references \"masterdata\".\"person\" (\"id\") on delete cascade;");
     this.addSql("alter table \"masterdata\".\"person_qualification\" add constraint \"person_qualification_person_id_foreign\" foreign key (\"person_id\") references \"masterdata\".\"person\" (\"id\") on delete cascade;");
     this.addSql("alter table \"masterdata\".\"rank_assignment\" add constraint \"rank_assignment_person_id_foreign\" foreign key (\"person_id\") references \"masterdata\".\"person\" (\"id\") on delete cascade;");
     this.addSql("alter table \"masterdata\".\"rest_period\" add constraint \"rest_period_person_id_foreign\" foreign key (\"person_id\") references \"masterdata\".\"person\" (\"id\") on delete cascade;");
@@ -74,6 +77,7 @@ export class Migration20261031202813_initial extends Migration {
     this.addSql("alter table \"masterdata\".\"department_group\" drop constraint \"department_group_leader_id_foreign\";");
     this.addSql("alter table \"masterdata\".\"course_nomination\" drop constraint \"course_nomination_person_id_foreign\";");
     this.addSql("alter table \"masterdata\".\"course_attendance\" drop constraint \"course_attendance_person_id_foreign\";");
+    this.addSql("alter table \"masterdata\".\"person_device_token\" drop constraint \"person_device_token_person_id_foreign\";");
     this.addSql("alter table \"masterdata\".\"person_qualification\" drop constraint \"person_qualification_person_id_foreign\";");
     this.addSql("alter table \"masterdata\".\"rank_assignment\" drop constraint \"rank_assignment_person_id_foreign\";");
     this.addSql("alter table \"masterdata\".\"rest_period\" drop constraint \"rest_period_person_id_foreign\";");
@@ -97,6 +101,7 @@ export class Migration20261031202813_initial extends Migration {
     this.addSql("drop table if exists \"masterdata\".\"department_group\" cascade;");
     this.addSql("drop table if exists \"masterdata\".\"course_nomination\" cascade;");
     this.addSql("drop table if exists \"masterdata\".\"course_attendance\" cascade;");
+    this.addSql("drop table if exists \"masterdata\".\"person_device_token\" cascade;");
     this.addSql("drop table if exists \"masterdata\".\"person_qualification\" cascade;");
     this.addSql("drop table if exists \"masterdata\".\"rank_assignment\" cascade;");
     this.addSql("drop table if exists \"masterdata\".\"rest_period\" cascade;");

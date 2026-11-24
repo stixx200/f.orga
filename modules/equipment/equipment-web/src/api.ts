@@ -23,7 +23,7 @@ export const keys = {
 
 const LONG = 5 * 60_000;
 
-export type ItemFilter = { categoryKey?: string; departmentId?: string; vehicleId?: string; status?: string; q?: string; includeRetired?: string; dueBefore?: string; withoutLabel?: string };
+export type ItemFilter = { categoryKey?: string; typeKey?: string; departmentId?: string; vehicleId?: string; status?: string; q?: string; includeRetired?: string; dueBefore?: string; withoutLabel?: string };
 
 export const useItems = (filter: ItemFilter, enabled = true) => useQuery({ queryKey: [...keys.all, 'items', filter], queryFn: () => api<Item[]>(withQuery('equipment/items', filter)), enabled });
 /** The item, or its summary for members who may only report defects. */
